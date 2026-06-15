@@ -10,12 +10,6 @@ const WALLPAPER_NAMES: Record<string, string> = {
 	paper: 'Paper',
 	mono: 'Mono',
 }
-const STYLE_NAMES: Record<string, string> = {
-	concise: 'Concise',
-	direct: 'Direct',
-	detailed: 'Detailed',
-}
-
 type Props = {
 	data: OnboardingData
 	onEnter: () => void
@@ -42,7 +36,7 @@ export function DoneStep({data, onEnter, isActive}: Props) {
 				<span className='done-brand-word'>Livinity</span>
 			</div>
 			<div className='onb-eyebrow fade-up d1' style={{marginTop: 28}}>
-				06 · You're all set
+				05 · You're all set
 			</div>
 			<h1 className='onb-title fade-up d2' style={{marginTop: 8}}>
 				You're all set, <span className='done-name'>{firstName}</span>.
@@ -61,12 +55,6 @@ export function DoneStep({data, onEnter, isActive}: Props) {
 				<div className='done-row'>
 					<div className='lbl'>Wallpaper</div>
 					<div className='val'>{WALLPAPER_NAMES[data.wallpaper] || 'Fluid'}</div>
-				</div>
-				<div className='done-row'>
-					<div className='lbl'>AI Role</div>
-					<div className='val'>
-						{data.role || 'General'} <span className='val-sub'>· {STYLE_NAMES[data.style] || 'Direct'}</span>
-					</div>
 				</div>
 				<div className='done-row'>
 					<div className='lbl'>Engine</div>

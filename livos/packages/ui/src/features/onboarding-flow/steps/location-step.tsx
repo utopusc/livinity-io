@@ -168,7 +168,7 @@ export function LocationStep({data, setData, onContinue, onSkip, onBack}: Props)
 	return (
 		<div style={{display: 'flex', flexDirection: 'column', gap: 18}}>
 			<div className='fade-up'>
-				<div className='onb-eyebrow'>05 · Location</div>
+				<div className='onb-eyebrow'>04 · Location</div>
 				<h1 className='onb-title' style={{marginTop: 8}}>
 					Where are you?
 				</h1>

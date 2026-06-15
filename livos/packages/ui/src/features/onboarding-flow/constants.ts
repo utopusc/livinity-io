@@ -6,15 +6,16 @@ import type {Region} from '../../../../livinityd/source/modules/locale/region-su
  *   - Region + Locale & Time merged into single Location step (Country + City)
  * Phase 239 — slot 4 (Provider) replaced by CLI Tools; auth deferred post-onboarding.
  * Phase 271 — CLI Tools step REMOVED entirely (agent install is post-onboarding
- *   only). Sequence is now 6 contiguous steps.
+ *   only).
+ * Phase 272 — Personalize step REMOVED (the ai_* prefs it wrote were never read
+ *   by the backend). Sequence is now 5 contiguous steps.
  */
-export const TOTAL = 6
+export const TOTAL = 5
 
 export const STEP_NAMES = [
 	'Welcome',
 	'Account',
 	'Wallpaper',
-	'Personalize',
 	'Location',
 	'All set',
 ] as const
@@ -22,10 +23,9 @@ export const STEP_NAMES = [
 /**
  * Rough seconds per remaining step — used for the ETA pill.
  * Order mirrors STEP_NAMES exactly:
- *   Welcome 15, Account 60, Wallpaper 20, Personalize 45,
- *   Location 20, All set 5.
+ *   Welcome 15, Account 60, Wallpaper 20, Location 20, All set 5.
  */
-export const STEP_WEIGHT = [15, 60, 20, 45, 20, 5] as const
+export const STEP_WEIGHT = [15, 60, 20, 20, 5] as const
 
 export function etaSeconds(idx: number): number {
 	let total = 0
@@ -46,12 +46,6 @@ export type OnboardingData = {
 	password: string
 	confirm: string
 	wallpaper: string
-	role: string
-	style: 'concise' | 'direct' | 'detailed'
-	useCases: string[]
-	useCasesTouched: boolean
-	tone: number
-	memory: 'off' | 'session' | 'persistent'
 	/** Phase 196-04 — region selection (continent-level). Derived in 196.1 from country. */
 	region?: Region
 	/** Phase 196-04 — optional country sub-pick (ISO-3166-1 alpha-2). Required in 196.1. */
@@ -75,10 +69,4 @@ export const DEFAULT_DATA: OnboardingData = {
 	password: '',
 	confirm: '',
 	wallpaper: 'fluid',
-	role: 'Developer',
-	style: 'direct',
-	useCases: [],
-	useCasesTouched: false,
-	tone: 55,
-	memory: 'session',
 }
