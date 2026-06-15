@@ -78,28 +78,28 @@
     'claude-code':    { label: 'Claude Code',    icon: 'CC', color: '#d97757', logo: 'claude',         aionuiLogo: 'ai-major/claude.svg' },
     'opencode':       { label: 'OpenCode',       icon: 'OC', color: '#0f766e', logo: 'opencode',       aionuiLogo: 'tools/coding/opencode.svg' },
     'gemini':         { label: 'Gemini',         icon: 'G',  color: '#4285f4', logo: 'gemini',         aionuiLogo: 'ai-major/gemini.svg' },
-    'openclaw':       { label: 'OpenClaw',       icon: 'CL', color: '#f59e0b',                         aionuiLogo: 'tools/coding/openclaw.svg' },
+    'openclaw':       { label: 'OpenClaw',       icon: 'CL', color: '#f59e0b', logo: 'openclaw',       aionuiLogo: 'tools/coding/openclaw.svg' },
     'aion-cli':       { label: 'Aion CLI',       icon: 'AI', color: '#7c3aed', authHidden: true,       aionuiLogo: 'brand/aion.svg' },
     // Wave A
     'codex':          { label: 'Codex',          icon: 'CX', color: '#10a37f', logo: 'codex',          aionuiLogo: 'tools/coding/codex.svg' },
     'qwen-code':      { label: 'Qwen Code',      icon: 'QW', color: '#6d28d9', logo: 'qwen',           aionuiLogo: 'tools/coding/qwen.svg' },
-    'augment':        { label: 'Augment',        icon: 'AG', color: '#0ea5e9',                         aionuiLogo: 'tools/coding/auggie.svg' },
+    'augment':        { label: 'Augment',        icon: 'AG', color: '#0ea5e9', logo: 'auggie',         aionuiLogo: 'tools/coding/auggie.svg' },
     'github-copilot': { label: 'GitHub Copilot', icon: 'GH', color: '#24292f', logo: 'github-copilot', aionuiLogo: 'tools/coding/copilot.svg' },
-    'codebuddy':      { label: 'CodeBuddy',      icon: 'CB', color: '#e11d48',                         aionuiLogo: 'tools/coding/codebuddy.svg' },
-    'qoder-cli':      { label: 'Qoder',          icon: 'QO', color: '#2563eb',                         aionuiLogo: 'tools/coding/qodercli.svg' },
+    'codebuddy':      { label: 'CodeBuddy',      icon: 'CB', color: '#e11d48', logo: 'codebuddy',      aionuiLogo: 'tools/coding/codebuddy.svg' },
+    'qoder-cli':      { label: 'Qoder',          icon: 'QO', color: '#2563eb', logo: 'qodercli',       aionuiLogo: 'tools/coding/qodercli.svg' },
     // Wave B
     'goose':          { label: 'Goose',          icon: 'GS', color: '#16a34a', logo: 'goose',          aionuiLogo: 'tools/coding/goose.svg' },
-    'factory-droid':  { label: 'Factory Droid',  icon: 'FD', color: '#db2777',                         aionuiLogo: 'tools/coding/droid.svg' },
+    'factory-droid':  { label: 'Factory Droid',  icon: 'FD', color: '#db2777', logo: 'droid',          aionuiLogo: 'tools/coding/droid.svg' },
     'cursor-agent':   { label: 'Cursor Agent',   icon: 'CA', color: '#334155', logo: 'cursor',         aionuiLogo: 'tools/coding/cursor.png' },
     // Wave C — Phase 267-02: real auth method via the no-terminal dialog
     // (device for kimi-cli/kiro; apikey via setApiKey for the rest). Auth
     // button now RENDERED (authHidden removed). aion-cli above stays hidden.
     'kimi-cli':       { label: 'Kimi CLI',       icon: 'KM', color: '#4f46e5', logo: 'kimi',           aionuiLogo: 'brand/kimi.svg' },
     'mistral-vibe':   { label: 'Mistral Vibe',   icon: 'MV', color: '#f97316', logo: 'mistral',        aionuiLogo: 'tools/coding/vibe.svg' },
-    'hermes-agent':   { label: 'Hermes Agent',   icon: 'HM', color: '#0d9488',                         aionuiLogo: 'tools/coding/hermes.svg' },
-    'nanobot':        { label: 'Nanobot',        icon: 'NB', color: '#475569',                         aionuiLogo: 'tools/coding/nanobot.svg' },
-    'snow-cli':       { label: 'Snow CLI',       icon: 'SN', color: '#0891b2',                         aionuiLogo: 'tools/coding/snow.svg' },
-    'kiro':           { label: 'Kiro',           icon: 'KI', color: '#9333ea',                         aionuiLogo: 'tools/coding/kiro.svg' }
+    'hermes-agent':   { label: 'Hermes Agent',   icon: 'HM', color: '#0d9488', logo: 'hermes',         aionuiLogo: 'tools/coding/hermes.svg' },
+    'nanobot':        { label: 'Nanobot',        icon: 'NB', color: '#475569', logo: 'nanobot',        aionuiLogo: 'tools/coding/nanobot.svg' },
+    'snow-cli':       { label: 'Snow CLI',       icon: 'SN', color: '#0891b2', logo: 'snow',           aionuiLogo: 'tools/coding/snow.svg' },
+    'kiro':           { label: 'Kiro',           icon: 'KI', color: '#9333ea', logo: 'kiro',           aionuiLogo: 'tools/coding/kiro.svg' }
   };
 
   // Phase 267-04 — base path of the static brand SVGs. They live in the LivOS
