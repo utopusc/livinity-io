@@ -3,12 +3,17 @@
  *
  * Two-layer defense for `sudo /usr/bin/timedatectl set-timezone <zone>`:
  *
- *   1. `validate(zone)` — Set-membership against
- *      `Intl.supportedValuesOf('timeZone')`. Cached on module load so the
- *      ~600-entry IANA list is materialized exactly once per process.
- *      Returns false on empty / undefined / unknown / shell-metacharacter
- *      input (the latter trivially because such strings are not real
- *      IANA zones).
+ *   1. `validate(zone)` — resolve-check via `new Intl.DateTimeFormat('en-US',
+ *      {timeZone: zone})`. The constructor throws `RangeError` on any zone the
+ *      ICU/tz database does not recognize, so a successful construction is the
+ *      authoritative "this is a real IANA zone" signal. We deliberately do NOT
+ *      use `Intl.supportedValuesOf('timeZone')` set-membership: that list omits
+ *      backward-compat IANA *links* such as `America/Indiana/Indianapolis` and
+ *      `America/Kentucky/Louisville` (the split-state county zones the
+ *      countrystatecity dataset ships), which the old check WRONGLY rejected.
+ *      The DateTimeFormat resolve accepts every zone timedatectl will accept.
+ *      Returns false on empty / undefined / non-string / unknown / shell-
+ *      metacharacter input (the latter trivially because such strings throw).
  *
  *   2. `setSystemTimezone(zone)` — re-validates BEFORE shelling out
  *      (defense-in-depth: even if a caller bypasses zod the Intl gate
@@ -35,10 +40,10 @@ import {execFile as nodeExecFile, type ExecFileException} from 'node:child_proce
 // ─── Typed error ────────────────────────────────────────────────────────────
 
 /**
- * Thrown when the caller hands `setSystemTimezone` a zone that
- * `Intl.supportedValuesOf('timeZone')` does not recognize. This is the
- * gate that fires BEFORE execFile so no shell-flavoured input ever
- * reaches the sudo command line.
+ * Thrown when the caller hands `setSystemTimezone` a zone that the
+ * `Intl.DateTimeFormat` resolve does not recognize. This is the gate that
+ * fires BEFORE execFile so no shell-flavoured input ever reaches the sudo
+ * command line.
  */
 export class InvalidTimezoneError extends Error {
 	readonly code = 'INVALID_TIMEZONE' as const
@@ -79,25 +84,6 @@ export interface TimezoneService {
 // ─── Implementation ─────────────────────────────────────────────────────────
 
 /**
- * Lazy-resolve the supported-zones Set on first access. Materialized
- * exactly once per process. We do NOT freeze a top-level constant
- * because `Intl.supportedValuesOf` may be missing in old Node runtimes
- * (the catch returns an empty Set + leaves the gate effectively closed,
- * which is the safe failure mode — better than letting a bypass slip).
- */
-let _zonesCache: Set<string> | null = null
-function getSupportedZones(): Set<string> {
-	if (_zonesCache !== null) return _zonesCache
-	try {
-		const list = Intl.supportedValuesOf('timeZone')
-		_zonesCache = new Set(list)
-	} catch {
-		_zonesCache = new Set<string>()
-	}
-	return _zonesCache
-}
-
-/**
  * Build a TimezoneService. The optional `opts.execFile` parameter is
  * the test seam — vitest passes a mock that records argv invocations
  * without actually launching sudo.
@@ -111,7 +97,19 @@ export function createTimezoneService(opts?: {
 		if (zone === null || zone === undefined) return false
 		if (typeof zone !== 'string') return false
 		if (zone.length === 0) return false
-		return getSupportedZones().has(zone)
+		// Resolve-check: `Intl.DateTimeFormat` throws RangeError on any zone the
+		// ICU/tz database doesn't know — so a successful construction is the
+		// authoritative "real IANA zone" signal. Unlike the old
+		// supportedValuesOf() set, this ACCEPTS backward-compat IANA links like
+		// America/Indiana/Indianapolis. Shell-metacharacter strings (`; rm -rf /`)
+		// throw, so they're rejected here before reaching execFile.
+		try {
+			// eslint-disable-next-line no-new
+			new Intl.DateTimeFormat('en-US', {timeZone: zone})
+			return true
+		} catch {
+			return false
+		}
 	}
 
 	function setSystemTimezone(zone: string): Promise<{ok: true}> {

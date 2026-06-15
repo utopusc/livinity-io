@@ -4,7 +4,11 @@
  * Coverage (8 cases):
  *
  *   T1 validate('Europe/Istanbul') → true (happy path)
- *   T2 validate('Mars/Olympus')    → false (unknown zone)
+ *   T2 validate('Not/AZone')       → false (unknown zone)
+ *   T2b validate('America/Indiana/Indianapolis') → true — split-state IANA
+ *       *link* zone. The old supportedValuesOf() set wrongly rejected these;
+ *       the Intl.DateTimeFormat resolve accepts them (regression-lock for the
+ *       countrystatecity dataset, whose US split-state cities ship these zones).
  *   T3 validate('')                → false (empty input)
  *   T4 validate(undefined)         → false (defensive null/undefined gate)
  *   T5 setSystemTimezone('Europe/Istanbul') with mock execFile that
@@ -45,9 +49,18 @@ describe('Phase 196-05 timezone-service — validate()', () => {
 		expect(svc.validate('Europe/Istanbul')).toBe(true)
 	})
 
-	test('T2 — validate("Mars/Olympus") returns false (unknown IANA zone)', () => {
+	test('T2 — validate("Not/AZone") returns false (unknown IANA zone)', () => {
 		const svc = createTimezoneService({execFile: execFileMock as any})
+		expect(svc.validate('Not/AZone')).toBe(false)
 		expect(svc.validate('Mars/Olympus')).toBe(false)
+	})
+
+	test('T2b — validate("America/Indiana/Indianapolis") returns true (split-state IANA link)', () => {
+		const svc = createTimezoneService({execFile: execFileMock as any})
+		// Regression-lock: the old supportedValuesOf() set WRONGLY rejected these
+		// backward-compat link zones; the Intl.DateTimeFormat resolve accepts them.
+		expect(svc.validate('America/Indiana/Indianapolis')).toBe(true)
+		expect(svc.validate('America/Kentucky/Louisville')).toBe(true)
 	})
 
 	test('T3 — validate("") returns false (empty-string defensive gate)', () => {

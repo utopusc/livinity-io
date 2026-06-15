@@ -1,15 +1,30 @@
 /**
- * Phase 196.1 / 271 — setup-router.ts unit tests.
+ * setup-router.ts unit tests (country → state → city refactor + Phase 271).
+ *
+ * The @countrystatecity dataset is mocked at the `../../locale/index.js` module
+ * boundary so the resolve mapping is tested deterministically without loading
+ * the 156k-city JSON files. The mock returns a tiny fixed table.
  *
  * Coverage:
- *   --- setup.setLocation (Phase 196.1) ---
- *   L1 — setLocation({country:'TR', city:'Istanbul'}) → resolves via catalog,
- *        validates the IANA zone, sets the system clock, then writes all five
- *        Redis keys; returns {ok:true, ...resolved}.
- *   L2 — setLocation({country:'XX', ...}) → zod refine rejects unknown country
+ *   --- setup.getCountries / getStates / getCities ---
+ *   Q1 — getCountries → returns the (sorted) list from listCountries.
+ *   Q2 — getStates({country:'US'}) → returns the states from listStates.
+ *   Q3 — getCities({country:'US', state:'IN'}) → returns {id,name,timezone}[].
+ *   Q4 — getStates({country:'XX'}) → zod regex rejects malformed lowercase?
+ *        (we assert a non-2-letter code is rejected before listStates runs).
+ *   Q5 — adminProcedure gate (EoP): non-admin ctx → throws.
+ *
+ *   --- setup.setLocation (cityId refactor) ---
+ *   L1 — setLocation({country:'TR', cityId:'1'}) → resolves via resolveCity,
+ *        validates the IANA zone, sets the system clock, then writes the Redis
+ *        keys; returns {ok:true, ...resolved}.
+ *   L1b — setLocation with a state → also writes liv:user:state.
+ *   L2 — setLocation({country:'XX', ...}) → zod regex rejects malformed country
  *        BEFORE the body runs; redis + timezoneService untouched.
- *   L3 — setLocation with a catalog zone the Intl gate rejects → BAD_REQUEST,
+ *   L2b — setLocation with a non-numeric cityId → BAD_REQUEST; nothing touched.
+ *   L3 — setLocation where resolveCity's zone fails the Intl gate → BAD_REQUEST,
  *        setSystemTimezone NOT called, redis untouched.
+ *   L3b — setLocation where resolveCity returns null → BAD_REQUEST.
  *   L4 — adminProcedure gate (EoP): non-admin ctx → throws; nothing touched.
  *
  *   --- setup.getLocation (Phase 271) ---
@@ -38,6 +53,62 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import {beforeEach, describe, expect, test, vi} from 'vitest'
+
+// Mock the locale barrel so resolveCity / listCountries / listStates / listCities
+// are deterministic fixtures (no 156k-city JSON load). TimezoneService is a type
+// only — left to the real export shape via importActual.
+vi.mock('../../locale/index.js', async (importActual) => {
+	const actual = await importActual<typeof import('../../locale/index.js')>()
+	return {
+		...actual,
+		listCountries: vi.fn(async () => [
+			{code: 'TR', name: 'Turkey', region: 'asia'},
+			{code: 'US', name: 'United States', region: 'north-america'},
+		]),
+		listStates: vi.fn(async (country: string) =>
+			country === 'US'
+				? [
+						{code: 'CA', name: 'California'},
+						{code: 'IN', name: 'Indiana'},
+					]
+				: [],
+		),
+		listCities: vi.fn(async (country: string, state?: string) => {
+			if (country === 'US' && state === 'IN')
+				return [
+					{
+						id: 118924,
+						name: 'Indianapolis',
+						timezone: 'America/Indiana/Indianapolis',
+					},
+				]
+			if (country === 'TR')
+				return [{id: 1, name: 'Istanbul', timezone: 'Europe/Istanbul'}]
+			return []
+		}),
+		resolveCity: vi.fn(
+			async (country: string, state: string | undefined, cityId: number) => {
+				if (country === 'TR' && cityId === 1)
+					return {
+						country: 'TR',
+						city: 'Istanbul',
+						region: 'asia',
+						timezone: 'Europe/Istanbul',
+						locale: 'tr-TR',
+					}
+				if (country === 'US' && state === 'IN' && cityId === 118924)
+					return {
+						country: 'US',
+						city: 'Indianapolis',
+						region: 'north-america',
+						timezone: 'America/Indiana/Indianapolis',
+						locale: 'en-US',
+					}
+				return null
+			},
+		),
+	}
+})
 
 import type {TimezoneService} from '../../locale/index.js'
 import {createSetupRouter, setupRouter} from './setup-router.js'
@@ -119,52 +190,153 @@ function build() {
 	})
 }
 
-describe('setup-router — setup.setLocation (Phase 196.1)', () => {
-	test('L1 — resolves, validates, sets the clock, then writes 5 Redis keys', async () => {
+describe('setup-router — country/state/city queries', () => {
+	test('Q1 — getCountries returns the sorted list', async () => {
 		const r = build()
 		const caller = r.createCaller(makeAdminCtx() as any)
 
-		const result = await caller.setLocation({country: 'TR', city: 'Istanbul'})
+		const result = await caller.getCountries()
+		expect(result).toEqual([
+			{code: 'TR', name: 'Turkey', region: 'asia'},
+			{code: 'US', name: 'United States', region: 'north-america'},
+		])
+	})
+
+	test('Q2 — getStates({country:"US"}) returns the states', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+
+		const result = await caller.getStates({country: 'US'})
+		expect(result).toEqual([
+			{code: 'CA', name: 'California'},
+			{code: 'IN', name: 'Indiana'},
+		])
+	})
+
+	test('Q3 — getCities({country:"US", state:"IN"}) returns {id,name,timezone}[]', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+
+		const result = await caller.getCities({country: 'US', state: 'IN'})
+		expect(result).toEqual([
+			{
+				id: 118924,
+				name: 'Indianapolis',
+				timezone: 'America/Indiana/Indianapolis',
+			},
+		])
+	})
+
+	test('Q4 — getStates with a malformed (non-2-letter) country → zod rejects', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+
+		await expect(caller.getStates({country: 'USA'})).rejects.toThrow()
+	})
+
+	test('Q5 — adminProcedure gate (EoP): non-admin getCountries → throws', async () => {
+		const r = build()
+		const caller = r.createCaller(makeNonAdminCtx() as any)
+
+		await expect(caller.getCountries()).rejects.toThrow()
+	})
+})
+
+describe('setup-router — setup.setLocation (cityId refactor)', () => {
+	test('L1 — resolves, validates, sets the clock, then writes Redis keys', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+
+		const result = await caller.setLocation({country: 'TR', cityId: '1'})
 
 		expect(result).toMatchObject({
 			ok: true,
 			country: 'TR',
 			city: 'Istanbul',
-			region: 'europe',
+			region: 'asia',
 			timezone: 'Europe/Istanbul',
 			locale: 'tr-TR',
+			state: null,
 		})
 
 		expect(timezoneService.validate).toHaveBeenCalledWith('Europe/Istanbul')
 		expect(timezoneService.setSystemTimezone).toHaveBeenCalledWith('Europe/Istanbul')
 
-		// All five location keys written.
 		expect(redis.set).toHaveBeenCalledWith('liv:user:country', 'TR')
 		expect(redis.set).toHaveBeenCalledWith('liv:user:city', 'Istanbul')
-		expect(redis.set).toHaveBeenCalledWith('liv:user:region', 'europe')
+		expect(redis.set).toHaveBeenCalledWith('liv:user:region', 'asia')
 		expect(redis.set).toHaveBeenCalledWith('liv:user:timezone', 'Europe/Istanbul')
 		expect(redis.set).toHaveBeenCalledWith('liv:user:locale', 'tr-TR')
+		// No state passed → liv:user:state NOT written.
+		expect(redis.set).not.toHaveBeenCalledWith('liv:user:state', expect.anything())
 	})
 
-	test('L2 — unknown country rejected by zod refine; nothing touched', async () => {
+	test('L1b — with a state, also writes liv:user:state', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+
+		const result = await caller.setLocation({
+			country: 'US',
+			state: 'IN',
+			cityId: '118924',
+		})
+
+		expect(result).toMatchObject({
+			ok: true,
+			country: 'US',
+			city: 'Indianapolis',
+			region: 'north-america',
+			timezone: 'America/Indiana/Indianapolis',
+			locale: 'en-US',
+			state: 'IN',
+		})
+		expect(redis.set).toHaveBeenCalledWith('liv:user:state', 'IN')
+	})
+
+	test('L2 — malformed country rejected by zod regex; nothing touched', async () => {
 		const r = build()
 		const caller = r.createCaller(makeAdminCtx() as any)
 
 		await expect(
-			caller.setLocation({country: 'XX', city: 'Nowhere'}),
+			caller.setLocation({country: 'XXX', cityId: '1'}),
 		).rejects.toThrow()
 
 		expect(timezoneService.setSystemTimezone).not.toHaveBeenCalled()
 		expect(redis.set).not.toHaveBeenCalled()
 	})
 
-	test('L3 — Intl gate rejects the catalog zone → BAD_REQUEST; clock + redis untouched', async () => {
+	test('L2b — non-numeric cityId → BAD_REQUEST; nothing touched', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+
+		await expect(
+			caller.setLocation({country: 'TR', cityId: 'notanumber'}),
+		).rejects.toMatchObject({code: 'BAD_REQUEST'})
+
+		expect(timezoneService.setSystemTimezone).not.toHaveBeenCalled()
+		expect(redis.set).not.toHaveBeenCalled()
+	})
+
+	test('L3 — Intl gate rejects the resolved zone → BAD_REQUEST; clock + redis untouched', async () => {
 		timezoneService.validate.mockReturnValue(false)
 		const r = build()
 		const caller = r.createCaller(makeAdminCtx() as any)
 
 		await expect(
-			caller.setLocation({country: 'TR', city: 'Istanbul'}),
+			caller.setLocation({country: 'TR', cityId: '1'}),
+		).rejects.toMatchObject({code: 'BAD_REQUEST'})
+
+		expect(timezoneService.setSystemTimezone).not.toHaveBeenCalled()
+		expect(redis.set).not.toHaveBeenCalled()
+	})
+
+	test('L3b — unresolvable (country, cityId) → BAD_REQUEST', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+
+		// cityId 999 is not in the resolveCity mock → null → BAD_REQUEST.
+		await expect(
+			caller.setLocation({country: 'TR', cityId: '999'}),
 		).rejects.toMatchObject({code: 'BAD_REQUEST'})
 
 		expect(timezoneService.setSystemTimezone).not.toHaveBeenCalled()
@@ -176,7 +348,7 @@ describe('setup-router — setup.setLocation (Phase 196.1)', () => {
 		const caller = r.createCaller(makeNonAdminCtx() as any)
 
 		await expect(
-			caller.setLocation({country: 'TR', city: 'Istanbul'}),
+			caller.setLocation({country: 'TR', cityId: '1'}),
 		).rejects.toThrow()
 
 		expect(timezoneService.setSystemTimezone).not.toHaveBeenCalled()
@@ -189,6 +361,7 @@ describe('setup-router — setup.getLocation (Phase 271)', () => {
 		redis.get.mockImplementation(async (key: string) => {
 			const map: Record<string, string> = {
 				'liv:user:country': 'US',
+				'liv:user:state': 'CA',
 				'liv:user:city': 'San Francisco',
 				'liv:user:region': 'north-america',
 				'liv:user:timezone': 'America/Los_Angeles',
@@ -204,6 +377,7 @@ describe('setup-router — setup.getLocation (Phase 271)', () => {
 
 		expect(result).toEqual({
 			country: 'US',
+			state: 'CA',
 			city: 'San Francisco',
 			region: 'north-america',
 			timezone: 'America/Los_Angeles',
@@ -242,6 +416,7 @@ describe('setup-router — setup.getLocation (Phase 271)', () => {
 		const result = await caller.getLocation()
 		expect(result).toEqual({
 			country: null,
+			state: null,
 			city: null,
 			region: null,
 			timezone: null,

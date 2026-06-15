@@ -27,16 +27,23 @@ export {
 } from './timezone-service.js'
 export type {TimezoneService} from './timezone-service.js'
 
-// Phase 196.1 — curated country/city catalog for the merged LocationStep.
+// Country → (state) → city picker backed by @countrystatecity/countries.
+// Dataset stays backend-only; the UI reaches it via setup.* tRPC queries.
 export {
-	COUNTRIES,
 	SUPPORTED_LOCALES,
-	getCountry,
-	resolveLocation,
+	COUNTRY_LOCALE,
+	localeFor,
+	regionFor,
+	listCountries,
+	listStates,
+	listCities,
+	resolveCity,
 } from './location-data.js'
 export type {
-	CountryEntry,
-	CityEntry,
 	LocationRegion,
 	SupportedLocale,
+	CountryListItem,
+	StateListItem,
+	CityListItem,
+	ResolvedCity,
 } from './location-data.js'
