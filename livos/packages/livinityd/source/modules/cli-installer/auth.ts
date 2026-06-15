@@ -289,10 +289,10 @@ function parseDeviceCode(text: string): {url: string; code: string} | null {
  *   claude-code → ['claude', ['auth', 'login']]    // verified: `claude auth {login,logout,status}`
  *   opencode    → ['opencode', ['auth', 'login']]  // Phase 195/196 reference
  *   gemini      → ['gemini',   ['auth', 'login']]  // best-effort
- *   openclaw    → ['openclaw', ['auth', 'login']]  // best-effort
+ *   openclaw    → ['openclaw', ['onboard']]        // 271-A: no `auth login` upstream
  *   aion-cli    → null                             // EXPLICITLY UNSUPPORTED
  *   --- Wave A ---
- *   codex          → ['codex', ['auth','login']]
+ *   codex          → ['codex', ['login','--device-auth']]  // 271-A: `codex login` (headless)
  *   qwen-code      → ['qwen', ['auth']]
  *   augment        → ['auggie', ['login']]
  *   github-copilot → ['copilot', []]    // bare TUI → operator types /login
@@ -315,10 +315,16 @@ export const CLI_AUTH_COMMANDS: Readonly<
 	'claude-code': ['claude', []],
 	opencode: ['opencode', ['auth', 'login']],
 	gemini: ['gemini', ['auth', 'login']],
-	openclaw: ['openclaw', ['auth', 'login']],
+	// 271-A — upstream has NO top-level `openclaw auth login`; the canonical
+	// interactive first-run login is `openclaw onboard` (auth subcmds are nested
+	// under `openclaw infer auth …`). Now mirrors auth-methods.ts loginArgv.
+	openclaw: ['openclaw', ['onboard']],
 	'aion-cli': null,
 	// Wave A
-	codex: ['codex', ['auth', 'login']],
+	// 271-A — `codex auth login` is not a real subcommand; the verified login is
+	// `codex login`, and `--device-auth` is the headless/SSH-correct variant for
+	// the LivOS server (no localhost browser callback). Mirrors auth-methods.ts.
+	codex: ['codex', ['login', '--device-auth']],
 	'qwen-code': ['qwen', ['auth']],
 	augment: ['auggie', ['login']],
 	'github-copilot': ['copilot', []],

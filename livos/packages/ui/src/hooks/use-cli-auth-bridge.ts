@@ -46,13 +46,17 @@ type WindowManager = ReturnType<typeof useWindowManagerOptional>
 // auth-method branch (apikey vs device vs browser) is decided server-side by
 // cliInstaller.getAuthMethod inside the dialog, NOT here.
 const CLI_AUTH_COMMANDS: Readonly<Record<string, string>> = {
-	'claude-code': 'claude auth login',
+	// 271-A — drift fix: server auth.ts spawns BARE `claude` (paste-back device
+	// flow); the old 'claude auth login' here was stale. Keep byte-consistent.
+	'claude-code': 'claude',
 	opencode: 'opencode auth login',
 	gemini: 'gemini auth login',
-	openclaw: 'openclaw auth login',
+	// 271-A — `openclaw onboard` (no top-level `auth login` upstream); mirror auth.ts.
+	openclaw: 'openclaw onboard',
 	// Phase 253-04 — 9 auth-capable Local Agents CLIs (mirror auth.ts)
 	// Wave A
-	codex: 'codex auth login',
+	// 271-A — `codex login --device-auth` (headless/SSH); mirror auth.ts.
+	codex: 'codex login --device-auth',
 	'qwen-code': 'qwen auth',
 	augment: 'auggie login',
 	'github-copilot': 'copilot',
