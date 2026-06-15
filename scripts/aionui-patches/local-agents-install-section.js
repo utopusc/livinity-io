@@ -427,9 +427,19 @@
   function refreshApplyBar(section) {
     var bar = section.querySelector('#liv-269-apply-bar');
     if (!bar) return;
+    // Phase 272 — the bar is ALWAYS visible now; we only change its emphasis +
+    // copy based on whether the server has pending changes queued.
+    bar.style.display = '';
+    var status = bar.querySelector('#liv-269-apply-status');
     hasPendingAgentChanges().then(function (out) {
-      bar.style.display = out && out.pending ? '' : 'none';
-    }).catch(function () { /* leave as-is on error */ });
+      var pending = !!(out && out.pending);
+      if (bar.classList) bar.classList.toggle('liv-240-apply-pending', pending);
+      if (status) {
+        status.textContent = pending
+          ? 'New install/sign-in queued — click Refresh so Liv AI picks it up.'
+          : 'Installed or signed in via the Terminal? Click Refresh so Liv AI detects it.';
+      }
+    }).catch(function () { /* leave copy as-is on error */ });
   }
 
   function wireApplyBar(section) {
@@ -440,25 +450,50 @@
     if (!btn) return;
     btn.addEventListener('click', function () {
       btn.disabled = true;
-      btn.textContent = 'Applying…';
-      if (status) status.textContent = 'Applying… Liv AI is refreshing.';
+      btn.textContent = 'Refreshing…';
+      if (status) status.textContent = 'Refreshing… Liv AI is re-scanning your CLIs (a few seconds).';
       applyAgentChanges().then(function () {
-        // The restart was scheduled + the flag cleared server-side; re-check to
-        // hide the bar (and reset the button for any future pending changes).
-        btn.disabled = false;
-        btn.textContent = 'Apply changes';
-        if (status) status.textContent = 'Changes pending — apply to refresh Liv AI.';
-        refreshApplyBar(section);
+        // Phase 272 — the restart fired; AionUi needs ~3-5s to re-scan + come back.
+        // Re-detect the rows after a short delay so installed CLIs flip to "ready"
+        // and re-sync the bar copy. The bar stays visible (always-on refresh).
+        if (status) status.textContent = 'Refreshed — Liv AI is re-scanning. New agents appear in the picker shortly.';
+        setTimeout(function () {
+          btn.disabled = false;
+          btn.textContent = 'Refresh agents';
+          refreshApplyBar(section);
+        }, 5000);
       }).catch(function () {
         // Best-effort: re-enable so the operator can retry. Re-sync the bar with
-        // the real server state (WR-04) — if the flag was in fact cleared despite
-        // a transient blip, refreshApplyBar hides the bar instead of stranding it.
+        // the real server state (WR-04).
         btn.disabled = false;
-        btn.textContent = 'Apply changes';
-        if (status) status.textContent = 'Could not apply — try again.';
+        btn.textContent = 'Refresh agents';
+        if (status) status.textContent = 'Could not refresh — try again.';
         refreshApplyBar(section);
       });
     });
+  }
+
+  // Phase 272 — bounded-concurrency runner. The old hydrate fired ALL 20 rows'
+  // detectCli() in PARALLEL on mount → 20×2 `bash -lc`/`--version` subprocess
+  // probes hit livinityd at once. Under that contention some probes exceeded the
+  // 5s detector timeout → returned detected:false → the row flipped to "Not
+  // installed", and a re-mount (AionUi re-renders the tab) re-rolled WHICH rows
+  // timed out → the operator's "Installed one refresh, Not-installed the next"
+  // flicker. Running detections through a small pool (≤3 in flight) keeps the
+  // probe load low + consistent, so a row's state stops flapping. Each task is a
+  // function returning a promise; failures advance the pool (never wedge it).
+  function runPool(tasks, concurrency) {
+    var i = 0;
+    function worker() {
+      if (i >= tasks.length) return Promise.resolve();
+      var t = tasks[i++];
+      var p;
+      try { p = t(); } catch (e) { p = Promise.resolve(); }
+      return Promise.resolve(p).then(worker, worker);
+    }
+    var workers = [];
+    for (var w = 0; w < concurrency && w < tasks.length; w++) workers.push(worker());
+    return Promise.all(workers);
   }
 
   function hydrate(section) {
@@ -468,23 +503,27 @@
     wireApplyBar(section);
     refreshApplyBar(section);
     window.addEventListener('focus', function () { refreshApplyBar(section); });
+    var detectTasks = [];
     for (var i = 0; i < VISIBLE_CLIS.length; i++) {
       (function (name) {
         var row = section.querySelector('[data-cli="' + name + '"]');
         if (!row) return;
 
+        // Returns the detect promise so the pool can chain on it (Phase 272).
         function reDetect() {
           var st = row.querySelector('.liv-240-status');
           if (st) st.textContent = 'checking…';
-          detectCli(name).then(function (out) {
+          return detectCli(name).then(function (out) {
             setRowState(row, out && out.detected ? 'detected' : 'undetected');
           }).catch(function (e) {
             setRowState(row, 'failed', e && e.message);
           });
         }
 
-        // Initial detect
-        reDetect();
+        // Phase 272 — defer the initial detect into the bounded pool instead of
+        // firing it inline (parallel). The manual Re-detect button still calls
+        // reDetect() directly (a single probe is fine).
+        detectTasks.push(reDetect);
 
         // Install handler — Phase 267-02: posts the CLI NAME to the shell,
         // which opens the no-terminal CliAuthDialog (install + auth in one
@@ -549,6 +588,11 @@
         }
       })(VISIBLE_CLIS[i]);
     }
+    // Phase 272 — drain the initial detections through a ≤3-in-flight pool so the
+    // 20 rows no longer hammer livinityd with 40 simultaneous probes (the flicker
+    // cause). Rows show "checking…" until the pool reaches them; state is then
+    // stable across re-mounts.
+    runPool(detectTasks, 3);
   }
 
   // -------------------------------------------------------------------------
@@ -556,9 +600,9 @@
   // -------------------------------------------------------------------------
   function renderSection() {
     var section = el('section', { id: SENTINEL_ID, className: 'liv-240-section' });
-    section.appendChild(el('h3', { className: 'liv-240-heading' }, ['Available to Install']));
+    section.appendChild(el('h3', { className: 'liv-240-heading' }, ['Agents']));
     section.appendChild(el('p', { className: 'liv-240-hint' }, [
-      'One-click install + sign-in for the 20 supported CLI agents. Install and Auth open a guided setup dialog (no Terminal) — paste an API key or follow a device-code link right there; click Re-detect when you are done.'
+      'Install or sign in to any of the 20 supported CLI agents. After installing or signing in — here OR in the Terminal — click "Refresh agents" so Liv AI re-scans and the agent appears in the chat picker. (AionUi only re-detects CLIs when it restarts, so a fresh install stays invisible until you refresh.)'
     ]));
     // Phase 269-01 — panel-level "Apply changes" bar (NOT per-row). Auth /
     // install-dialog / uninstall actions no longer auto-restart Liv AI (that
@@ -566,16 +610,23 @@
     // ONCE here. Hidden until hasPendingAgentChanges reports true; clicking it
     // fires the single debounced restart, then the bar shows a brief "Applying…"
     // status and re-checks the flag to hide itself when cleared.
-    var applyBar = el('div', { className: 'liv-240-apply-bar', id: 'liv-269-apply-bar', style: 'display:none' }, [
+    // Phase 272 — ALWAYS-visible "Refresh agents" bar (was hidden until a
+    // LivOS-flow change set the pending flag — so a Terminal install/auth, which
+    // never sets that flag, left the operator with no way to make AionUi re-scan,
+    // and the freshly-installed agent never showed in chat). Now the refresh is
+    // always one click away. refreshApplyBar() just emphasises it when the server
+    // reports pending changes; the underlying applyAgentChanges restart fires
+    // unconditionally either way (cli-installer-router applyAgentChanges).
+    var applyBar = el('div', { className: 'liv-240-apply-bar', id: 'liv-269-apply-bar' }, [
       el('span', { className: 'liv-240-apply-status', id: 'liv-269-apply-status' }, [
-        'Changes pending — apply to refresh Liv AI.'
+        'Installed or signed in via the Terminal? Click Refresh so Liv AI detects it.'
       ]),
       el('button', {
         className: 'liv-240-btn liv-240-btn-apply',
         id: 'liv-269-apply-btn',
         type: 'button',
-        title: 'Refresh Liv AI once so your installed/authed/removed agents take effect'
-      }, ['Apply changes'])
+        title: 'Restart Liv AI once so it re-scans installed CLIs — newly installed/signed-in agents then appear in the chat picker'
+      }, ['Refresh agents'])
     ]);
     section.appendChild(applyBar);
     for (var i = 0; i < VISIBLE_CLIS.length; i++) {
