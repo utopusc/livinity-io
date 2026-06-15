@@ -35,14 +35,6 @@ import {
 	WindowNotFoundError,
 } from './window-manager.js'
 import {
-	dispatchPointer,
-	dispatchMove,
-	dispatchKey,
-	dispatchType,
-	dispatchScroll,
-	type ClickKind,
-} from './input-dispatcher.js'
-import {
 	createWebApp,
 	listWebApps,
 	deleteWebApp,
@@ -170,194 +162,6 @@ const windowRouter = router({
 		if (!wm) return []
 		return wm.list({userId})
 	}),
-})
-
-// Phase 100-07 — webapp.input.* sub-router.
-//
-// Every input event for a WebApp stream window comes here and is dispatched
-// via `xdotool --window <wid>` to the captured Chrome wid (NOT via x11vnc's
-// XTestFakeKey/MotionEvent which routes to the X11 focused window — wrong
-// wid for multi-stream). The frontend disables RFB input forwarding
-// (`viewOnly: true`) and intercepts canvas mouse/keyboard events.
-//
-// Coordinates are in the captured framebuffer pixel space (0..1280, 0..720)
-// — Chrome spawn forces `--window-size=1280,720` (Phase 100-06.1), and the
-// frontend translates from canvas-relative pixels using getBoundingClientRect.
-const inputClickInput = z.object({
-	webappId: z.string().min(1).max(64),
-	x: z.number().int().nonnegative().max(8192),
-	y: z.number().int().nonnegative().max(8192),
-	button: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(1),
-	kind: z
-		.enum(['click', 'mousedown', 'mouseup', 'doubleclick'])
-		.default('click'),
-})
-
-// Phase 270-DRAG — bare pointer-move input (no button). Sent mid-drag (the
-// button is already held by a prior input.click{kind:'mousedown'}). Same
-// wid/coords shape as input.click; throttled by the frontend so xdotool
-// isn't flooded.
-const inputMoveInput = z.object({
-	webappId: z.string().min(1).max(64),
-	x: z.number().int().nonnegative().max(8192),
-	y: z.number().int().nonnegative().max(8192),
-})
-
-const inputKeyInput = z.object({
-	webappId: z.string().min(1).max(64),
-	key: z
-		.string()
-		.min(1)
-		.max(64)
-		.regex(/^[A-Za-z0-9_+\-]+$/, 'key must be an X11 keysym (alphanumeric, +, -, _)'),
-	kind: z.enum(['key', 'keydown', 'keyup']).default('key'),
-})
-
-const inputTypeInput = z.object({
-	webappId: z.string().min(1).max(64),
-	text: z.string().max(4096),
-})
-
-// Phase 100-09-02 — wheel scroll input. Maps to xdotool click 4/5/6/7 with
-// activate-first chain (same Chrome XSendEvent filter as click — see
-// dispatchScroll docstring). Frontend wheel handler emits deltaY > 0 → 5
-// (down), deltaY < 0 → 4 (up), deltaX > 0 → 7, deltaX < 0 → 6.
-const inputScrollInput = z.object({
-	webappId: z.string().min(1).max(64),
-	x: z.number().int().nonnegative().max(8192),
-	y: z.number().int().nonnegative().max(8192),
-	button: z.union([
-		z.literal(4),  // scroll up
-		z.literal(5),  // scroll down
-		z.literal(6),  // scroll left
-		z.literal(7),  // scroll right
-	]),
-})
-
-const inputRouter = router({
-	click: privateProcedure
-		.input(inputClickInput)
-		.mutation(async ({ctx, input}) => {
-			const userId = ctx.currentUser?.id
-			if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
-			const wm = ctx.livinityd?.webappWindowManager
-			if (!wm) {
-				throw new TRPCError({code: 'SERVICE_UNAVAILABLE', message: 'WebAppWindowManager not initialised'})
-			}
-			const wid = wm.getWidForWebapp(input.webappId, userId)
-			if (wid == null) {
-				throw new TRPCError({code: 'NOT_FOUND', message: `no live window for webapp ${input.webappId}`})
-			}
-			// Phase 102 — display-mode dispatch when wid is 0 (per-app Xvfb).
-			const display = wm.getDisplayForWebapp(input.webappId, userId) ?? undefined
-			ctx.logger?.info?.(`[102] webapp.input.click webappId=${input.webappId} wid=${wid} display=${display} x=${input.x} y=${input.y} btn=${input.button} kind=${input.kind}`)
-			try {
-				await dispatchPointer(wid, input.x, input.y, input.button, input.kind as ClickKind, display)
-				return {ok: true as const}
-			} catch (err) {
-				ctx.logger?.warn?.(`webapp.input.click failed user=${userId} webappId=${input.webappId} wid=${wid} display=${display}`, err)
-				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'xdotool dispatch failed', cause: err})
-			}
-		}),
-
-	// Phase 270-DRAG — bare pointer move (no button). Sent throttled while a
-	// drag is in progress (button already held by a prior click{mousedown}).
-	// Same wid/display resolution as click. We deliberately keep failures
-	// quiet-ish (warn + INTERNAL_SERVER_ERROR) so a single dropped move
-	// doesn't break the gesture; the frontend still sends the terminal
-	// mouseup so the held button never sticks.
-	move: privateProcedure
-		.input(inputMoveInput)
-		.mutation(async ({ctx, input}) => {
-			const userId = ctx.currentUser?.id
-			if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
-			const wm = ctx.livinityd?.webappWindowManager
-			if (!wm) {
-				throw new TRPCError({code: 'SERVICE_UNAVAILABLE', message: 'WebAppWindowManager not initialised'})
-			}
-			const wid = wm.getWidForWebapp(input.webappId, userId)
-			if (wid == null) {
-				throw new TRPCError({code: 'NOT_FOUND', message: `no live window for webapp ${input.webappId}`})
-			}
-			const display = wm.getDisplayForWebapp(input.webappId, userId) ?? undefined
-			try {
-				await dispatchMove(wid, input.x, input.y, display)
-				return {ok: true as const}
-			} catch (err) {
-				ctx.logger?.warn?.(`webapp.input.move failed user=${userId} webappId=${input.webappId} wid=${wid} display=${display}`, err)
-				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'xdotool dispatch failed', cause: err})
-			}
-		}),
-
-	keypress: privateProcedure
-		.input(inputKeyInput)
-		.mutation(async ({ctx, input}) => {
-			const userId = ctx.currentUser?.id
-			if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
-			const wm = ctx.livinityd?.webappWindowManager
-			if (!wm) throw new TRPCError({code: 'SERVICE_UNAVAILABLE'})
-			const wid = wm.getWidForWebapp(input.webappId, userId)
-			if (wid == null) {
-				throw new TRPCError({code: 'NOT_FOUND'})
-			}
-			const display = wm.getDisplayForWebapp(input.webappId, userId) ?? undefined
-			try {
-				await dispatchKey(wid, input.key, input.kind, display)
-				return {ok: true as const}
-			} catch (err) {
-				ctx.logger?.warn?.(`webapp.input.keypress failed user=${userId} webappId=${input.webappId} wid=${wid} display=${display}`, err)
-				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'xdotool dispatch failed', cause: err})
-			}
-		}),
-
-	type: privateProcedure
-		.input(inputTypeInput)
-		.mutation(async ({ctx, input}) => {
-			const userId = ctx.currentUser?.id
-			if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
-			const wm = ctx.livinityd?.webappWindowManager
-			if (!wm) throw new TRPCError({code: 'SERVICE_UNAVAILABLE'})
-			const wid = wm.getWidForWebapp(input.webappId, userId)
-			if (wid == null) {
-				throw new TRPCError({code: 'NOT_FOUND'})
-			}
-			const display = wm.getDisplayForWebapp(input.webappId, userId) ?? undefined
-			try {
-				await dispatchType(wid, input.text, display)
-				return {ok: true as const}
-			} catch (err) {
-				ctx.logger?.warn?.(`webapp.input.type failed user=${userId} webappId=${input.webappId} wid=${wid} display=${display}`, err)
-				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'xdotool dispatch failed', cause: err})
-			}
-		}),
-
-	// Phase 100-09-02 — wheel scroll. Closes Bug 2 from 100-08 deploy live
-	// test (scroll-down didn't work). Frontend (webapp-stream-window.tsx)
-	// attaches a `wheel` capture-phase listener and routes deltaY/deltaX
-	// here as button 4/5/6/7 (X11 wheel convention).
-	scroll: privateProcedure
-		.input(inputScrollInput)
-		.mutation(async ({ctx, input}) => {
-			const userId = ctx.currentUser?.id
-			if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
-			const wm = ctx.livinityd?.webappWindowManager
-			if (!wm) throw new TRPCError({code: 'SERVICE_UNAVAILABLE'})
-			const wid = wm.getWidForWebapp(input.webappId, userId)
-			if (wid == null) {
-				throw new TRPCError({code: 'NOT_FOUND', message: `no live window for webapp ${input.webappId}`})
-			}
-			const display = wm.getDisplayForWebapp(input.webappId, userId) ?? undefined
-			ctx.logger?.info?.(
-				`[102] webapp.input.scroll webappId=${input.webappId} wid=${wid} display=${display} x=${input.x} y=${input.y} btn=${input.button}`,
-			)
-			try {
-				await dispatchScroll(wid, input.x, input.y, input.button, display)
-				return {ok: true as const}
-			} catch (err) {
-				ctx.logger?.warn?.(`webapp.input.scroll failed user=${userId} webappId=${input.webappId} wid=${wid} display=${display}`, err)
-				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'xdotool dispatch failed', cause: err})
-			}
-		}),
 })
 
 // Phase 94-01 — CRUD inputs.
@@ -586,10 +390,12 @@ const webappRouter = router({
 	// Phase 93-11 — window manager sub-router (webapp.window.*)
 	window: windowRouter,
 
-	// Phase 100-07 — input dispatch sub-router (webapp.input.{click, keypress, type}).
-	// Routes mouse + keyboard events to the captured wid via xdotool --window.
-	// Bypasses x11vnc input forwarding which always targets the X11 focused window.
-	input: inputRouter,
+	// Phase 270-RFB — the webapp.input.* sub-router (click/move/keypress/
+	// type/scroll → xdotool dispatch) was REMOVED. WebApp streams now use
+	// real RFB input (noVNC viewOnly:false) straight into the per-WebApp
+	// Xvfb via x11vnc XTest — same model as native app streams. The
+	// client-side coordinate-mapping + xdotool-forwarding layer (and the
+	// 270-DRAG drag patch) are retired.
 
 	// Phase 95-05 — per-WebApp agent session state (webapp.agent.session.{get, upsert}).
 	agent: agentRouter,
