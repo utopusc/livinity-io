@@ -86,9 +86,9 @@ import {startXfceShell, type XfceShellHandle} from './modules/shell/xfce-shell.j
 // xvfb-spawner.ts` for per-app X display orchestration). Phase 102-04 wires
 // `new DisplayAllocator()` into `WebAppWindowManager` ctor (below).
 import {
-	DisplayAllocator,
-	// Phase 255-03 — disjoint webapp ↔ MCP-create allocator ranges (Pitfall 2).
-	WEBAPP_DISPLAY_ALLOCATOR_RANGE,
+	// Cross-pool fix — the single shared webapp+native display allocator.
+	appDisplayAllocator,
+	// Phase 255-03 — MCP-create allocator floor (disjoint from the webapp range).
 	MCP_CREATE_ALLOCATOR_START,
 } from './modules/streaming/display-allocator.js'
 // Phase 100-08-04 — McpConfigManager + Luse server path threaded into
@@ -1199,10 +1199,11 @@ export default class Livinityd {
 			// Phase 255-03: disjoint range [10,60) so webapp registerExisting :N
 			// can never collide with MCP create() within a boot (Pitfall 2). The
 			// MCP create() displayManager floor is MCP_CREATE_ALLOCATOR_START (60).
-			const webappDisplayAllocator = new DisplayAllocator({
-				min: WEBAPP_DISPLAY_ALLOCATOR_RANGE.min,
-				max: WEBAPP_DISPLAY_ALLOCATOR_RANGE.max,
-			})
+			// Cross-pool fix — the SINGLE shared appDisplayAllocator (also aliased
+			// by native-routes' nativeDisplayAllocator) so webapp + native spawns
+			// share one in-use Set and can NEVER hand out the same `:N`. Range
+			// [10,60), disjoint from MCP create (floor MCP_CREATE_ALLOCATOR_START=60).
+			const webappDisplayAllocator = appDisplayAllocator
 			this.webappWindowManager = new WebAppWindowManager({
 				streamManager: this.streamManager,
 				spawn: x11Spawn as unknown as ConstructorParameters<

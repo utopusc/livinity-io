@@ -195,7 +195,7 @@ import {
 import {spawnNativeApp} from './native-app-spawner.js'
 import {bind, closeNativeApp, inferWmClass, type StreamStartFn} from './native-app-binder.js'
 import {
-	DisplayAllocator,
+	appDisplayAllocator,
 	spawnXvfb,
 	type XvfbHandle,
 } from '../streaming/index.js'
@@ -204,18 +204,19 @@ import type {StreamManager} from '../streaming/stream-manager.js'
 // Module-scope singletons
 
 /**
- * Shared DisplayAllocator for native-app spawns. Range [10, 100) (90 slots)
- * matches D-102-DISPLAY-ALLOCATOR. Module-scope rather than ctx-injected
- * because the allocator is a process-global resource — every spawn from
- * every user shares the same display-number pool. Wave 2 102-04 mirrors
- * this for the WebApp side.
+ * DisplayAllocator for native-app spawns.
  *
- * Phase 159 — exported for the idle reaper wire-up in
- * livinityd/source/index.ts. Reaper passes this allocator to
- * `closeNativeApp` so released display slots are freed back to the
- * shared pool.
+ * CROSS-POOL FIX: this is now an ALIAS for the single process-global
+ * `appDisplayAllocator` (streaming/display-allocator.ts), SHARED with the WebApp
+ * window-manager. Both webapp and native spawns target the same X-server `:N`
+ * namespace, so they must draw from ONE in-use Set — the old separate
+ * `new DisplayAllocator()` (default [10,100)) overlapped the webapp range
+ * [10,60) and handed out the same `:N`, so a native app would open inside a
+ * WebApp's screen (and vice-versa). Range is [10,60), disjoint from MCP create
+ * (>=60). Re-exported (same name) so the idle reaper + close paths in
+ * livinityd/source/index.ts keep working unchanged.
  */
-export const nativeDisplayAllocator = new DisplayAllocator()
+export const nativeDisplayAllocator = appDisplayAllocator
 
 /** Default Xvfb spawn factory. Tests override via _setXvfbSpawnFnForTest. */
 let xvfbSpawnFn: typeof spawnXvfb = spawnXvfb
