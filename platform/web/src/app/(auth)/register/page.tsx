@@ -30,7 +30,15 @@ export default function RegisterPage() {
         return;
       }
 
-      router.push('/dashboard');
+      // Email-verify-first: no user/session yet — go to the "check your email"
+      // pending screen. Stash the email so /verify can show it + drive the
+      // (session-less) resend button.
+      try {
+        sessionStorage.setItem('liv_pending_email', email.toLowerCase().trim());
+      } catch {
+        /* sessionStorage unavailable (private mode) — /verify falls back gracefully */
+      }
+      router.push('/verify');
     } catch {
       setError('Something went wrong');
     } finally {
@@ -55,10 +63,10 @@ export default function RegisterPage() {
               type="text"
               placeholder="Username"
               value={username}
-              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''))}
               required
               minLength={3}
-              maxLength={30}
+              maxLength={32}
               className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50"
             />
             <p className="mt-1 text-xs text-zinc-400">Your URL: {username || 'username'}.livinity.io</p>

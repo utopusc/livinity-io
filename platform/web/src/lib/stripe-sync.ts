@@ -10,6 +10,7 @@ import { stripe } from '@/lib/stripe';
 import { restoreUserAccess, revokeUserAccess } from '@/lib/billing-enforcement';
 import { hasActiveAccess } from '@/lib/subscription';
 import { sendAccessPausedEmail } from '@/lib/email';
+import { ensureProvisionedByCustomerId } from '@/lib/user-provisioning';
 
 /** Statuses that mean "this account is (or was) a real paying/trialing sub". */
 export const LIVE_STATUSES = ['trialing', 'active', 'past_due'];
@@ -98,6 +99,14 @@ export async function mirrorSubscription(sub: Stripe.Subscription): Promise<void
         console.error('[stripe-sync] inline restore failed (cron will retry):', err);
       }
     }
+
+    // Stage 3 of the email-verify-first signup: provision the user's CF tunnel
+    // + apex DNS the moment a subscription (trial or paid) is live. Idempotent
+    // (guarded on cf_provisioned_at IS NULL) and best-effort — this never throws
+    // out of mirrorSubscription, so a CF hiccup can't 500 the webhook; the next
+    // webhook/dashboard reconcile re-attempts. A no-op for already-provisioned
+    // users (legacy_free grandfathered accounts, re-subscribes).
+    await ensureProvisionedByCustomerId(customerId);
   }
 
   // Instant revoke: when a sub goes canceled/unpaid/incomplete_expired/paused

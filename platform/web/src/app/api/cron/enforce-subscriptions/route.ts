@@ -105,6 +105,18 @@ export async function GET(req: NextRequest) {
     console.error('[billing-enforce] stripe_events cleanup failed:', err);
   }
 
+  // ── Housekeeping: drop abandoned pending_registrations whose verification
+  // link has expired, so unconfirmed signups don't accumulate (and free up the
+  // email/username slots they were holding). Tolerate the table not existing
+  // yet (migration 0018 applied separately). ───────────────────────────────
+  try {
+    await pool.query(`DELETE FROM pending_registrations WHERE verification_expires < NOW()`);
+  } catch (err) {
+    if ((err as { code?: string })?.code !== '42P01') {
+      console.error('[billing-enforce] pending_registrations cleanup failed:', err);
+    }
+  }
+
   console.info(
     `[billing-enforce] sweep done: checked=${candidates.rows.length} revoked=${revoked.length} restored=${restored.length} errors=${errors.length}`,
   );
