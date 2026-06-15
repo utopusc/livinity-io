@@ -17,12 +17,25 @@ set -euo pipefail
 # below kills the entire cgroup mid-call — taking this script with it before the
 # Phase 33 finalize trap can rename -pending → -success and write .deployed-sha.
 # detached:true on the spawn side only escapes the process group, not the cgroup.
-# Re-exec into a transient systemd .scope under system.slice so we survive the
-# livos restart. Idempotency guard via LIVOS_UPDATE_SCOPED env var.
+# Re-exec into a transient systemd .scope so we survive the livos restart.
+# Idempotency guard via LIVOS_UPDATE_SCOPED env var.
 # IMPORTANT: must come BEFORE Phase 33 tee setup so the new scope owns the log fd.
+#
+# 2026-06-15 root-cause fix — `--slice=system.slice` is LOAD-BEARING: without it,
+# when livinityd (in livos.service) spawns this script, systemd-run --scope
+# creates the scope NESTED UNDER livos.service's cgroup (it inherits the caller's
+# slice). `systemctl restart livos.service` then SIGKILLs the whole control-group
+# INCLUDING the nested scope → update.sh dies mid-restart with NO trap (SIGKILL),
+# so no success/failed.json is ever written and the UI hangs forever on "waiting".
+# (Proven live on the Mini PC: the scope deactivated at the exact instant
+# livos.service was SIGKILLed.) Pinning the scope to system.slice makes it a
+# SIBLING of livos.service, so the restart's cgroup-kill can no longer reach it.
+# SSH-launched deploys worked by luck — they inherited the SSH session scope, not
+# livos.service. `--slice=system.slice` makes BOTH paths escape deterministically.
 if [[ -z "${LIVOS_UPDATE_SCOPED:-}" ]] && command -v systemd-run >/dev/null 2>&1 && [[ $EUID -eq 0 ]]; then
     export LIVOS_UPDATE_SCOPED=1
     exec systemd-run --scope --collect --quiet \
+        --slice=system.slice \
         --unit="livos-update-$$-$(date +%s)" \
         --description="LivOS Update (cgroup-escaped)" \
         -- "$0" "$@"
