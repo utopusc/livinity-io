@@ -695,7 +695,9 @@ describe('Phase 159-05 — registry-mediated close (Workstream B)', () => {
 		expect(SRC).toMatch(/import\s*\{\s*useWindowManagerOptional\s*\}\s*from\s*['"]@\/providers\/window-manager['"]/)
 		expect(SRC).toMatch(/wm\.registerCloseHandler\(windowId,\s*handler\)/)
 		expect(SRC).toMatch(/wm\.unregisterCloseHandler\(windowId\)/)
-		expect(SRC).toMatch(/closeMutationRef\.current\.mutateAsync\(\{webappId\}\)/)
+		// WS2 — the registry-path close now carries the per-window instanceId
+		// (windowId) so it tears down THIS window's instance, not all of them.
+		expect(SRC).toMatch(/closeMutationRef\.current\.mutateAsync\(\{webappId,\s*instanceId:\s*windowId\}\)/)
 	})
 
 	it('Phase 159 — keeps the defensive D-95-CLEANUP fallback for missing windowId', () => {

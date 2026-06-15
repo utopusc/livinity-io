@@ -84,12 +84,18 @@ const windowSpawnInput = z.object({
 	webappId: z.string().min(1).max(64),
 	url: z.string().url().max(2048),
 	expectedTitle: z.string().max(256).optional(),
+	// WS2 (WebApp multi-instance) — per-window id (the UI windowId). Each window
+	// of the same webappId spawns its own Xvfb/Chrome/stream. Omitted → backend
+	// keys on webappId (legacy single-instance).
+	instanceId: z.string().min(1).max(128).optional(),
 })
 
 const windowFocusInput = z.object({webappId: z.string().min(1).max(64)})
 const windowCloseInput = z.object({
 	webappId: z.string().min(1).max(64),
 	killWindow: z.boolean().optional(),
+	// WS2 — close a specific window instance (mirrors spawn's instanceId).
+	instanceId: z.string().min(1).max(128).optional(),
 })
 
 const windowRouter = router({
@@ -100,13 +106,16 @@ const windowRouter = router({
 		if (!wm) {
 			throw new TRPCError({code: 'SERVICE_UNAVAILABLE', message: 'WebAppWindowManager not initialised'})
 		}
-		ctx.logger?.info?.(`webapp.window.spawn user=${userId} webappId=${input.webappId}`)
+		ctx.logger?.log?.(
+			`webapp.window.spawn user=${userId} webappId=${input.webappId} instanceId=${input.instanceId ?? '(default)'}`,
+		)
 		try {
 			return await wm.spawn({
 				userId,
 				webappId: input.webappId,
 				url: input.url,
 				expectedTitle: input.expectedTitle,
+				instanceId: input.instanceId,
 			})
 		} catch (err) {
 			if (err instanceof WindowNotFoundError) {
@@ -130,7 +139,7 @@ const windowRouter = router({
 		if (!wm) {
 			throw new TRPCError({code: 'SERVICE_UNAVAILABLE'})
 		}
-		ctx.logger?.info?.(`webapp.window.focus user=${userId} webappId=${input.webappId}`)
+		ctx.logger?.log?.(`webapp.window.focus user=${userId} webappId=${input.webappId}`)
 		const r = await wm.focus({webappId: input.webappId, userId})
 		if (!r.ok && r.code === 'NOT_FOUND') {
 			throw new TRPCError({code: 'NOT_FOUND'})
@@ -145,11 +154,14 @@ const windowRouter = router({
 		if (!wm) {
 			throw new TRPCError({code: 'SERVICE_UNAVAILABLE'})
 		}
-		ctx.logger?.info?.(`webapp.window.close user=${userId} webappId=${input.webappId}`)
+		ctx.logger?.log?.(
+			`webapp.window.close user=${userId} webappId=${input.webappId} instanceId=${input.instanceId ?? '(default)'}`,
+		)
 		const r = await wm.close({
 			webappId: input.webappId,
 			userId,
 			killWindow: input.killWindow,
+			instanceId: input.instanceId,
 		})
 		if (!r.ok) throw new TRPCError({code: 'NOT_FOUND'})
 		return r

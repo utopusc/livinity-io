@@ -1063,16 +1063,31 @@ function makeFakeDisplayAllocator(opts: {nextN?: number} = {}) {
 
 function makeFakeProfileSeeder(opts: {seedUuid?: string} = {}): {
 	seeder: ProfileSeederHandle
-	seedCalls: Array<{uuid?: string}>
+	seedCalls: Array<{uuid?: string; persistent?: boolean; copyFromUuid?: string}>
 	cleanupCalls: string[]
 } {
-	const seedCalls: Array<{uuid?: string}> = []
+	const seedCalls: Array<{uuid?: string; persistent?: boolean; copyFromUuid?: string}> = []
 	const cleanupCalls: string[] = []
-	const seed = vi.fn(async (seedOpts: {uuid?: string} = {}) => {
-		seedCalls.push({uuid: seedOpts.uuid})
-		const uuid = seedOpts.uuid ?? opts.seedUuid ?? 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
-		return {uuid, appDir: `/tmp/livos-chrome-app-${uuid}`}
-	})
+	// WS2 — records persistent + copyFromUuid (additive; legacy tests read .uuid).
+	// Return shape intentionally OMITS `persistent` so legacy close tests (which
+	// expect cleanup to run) keep passing; the multi-instance test asserts the
+	// seed-call ARGS distinguish primary (persistent) vs copy (copyFromUuid).
+	let genN = 0
+	const seed = vi.fn(
+		async (seedOpts: {uuid?: string; persistent?: boolean; copyFromUuid?: string} = {}) => {
+			seedCalls.push({
+				uuid: seedOpts.uuid,
+				persistent: seedOpts.persistent,
+				copyFromUuid: seedOpts.copyFromUuid,
+			})
+			const fallback = `bbbbbbbb-bbbb-bbbb-bbbb-${String(genN++).padStart(12, '0')}`
+			const uuid = seedOpts.uuid ?? opts.seedUuid ?? fallback
+			// persistent:false satisfies the ProfileSeederHandle return type AND
+			// keeps entry.profilePersistent falsy (so close() cleanup runs in the
+			// legacy close tests — identical to the prior undefined behavior).
+			return {uuid, appDir: `/tmp/livos-chrome-app-${uuid}`, persistent: false}
+		},
+	)
 	const cleanup = vi.fn(async (uuid: string) => {
 		cleanupCalls.push(uuid)
 	})
@@ -1239,6 +1254,91 @@ function makeFakeDisplayManager(
 	})
 	return {registerExisting, kill}
 }
+
+describe('WebAppWindowManager — WS2 WebApp multi-instance (Option A)', () => {
+	beforeEach(() => {
+		vi.useRealTimers()
+	})
+	afterEach(() => {
+		vi.useRealTimers()
+	})
+
+	it('WS2-01: two windows of the same webappId (distinct instanceId) spawn TWO independent instances', async () => {
+		const {mgr, streamManager, displayBundle} = makeManager102()
+		const a = await mgr.spawn({
+			userId: 'u1',
+			webappId: 'app1',
+			url: 'https://github.com',
+			instanceId: 'win-1',
+		})
+		const b = await mgr.spawn({
+			userId: 'u1',
+			webappId: 'app1',
+			url: 'https://github.com',
+			instanceId: 'win-2',
+		})
+		// Distinct streams + displays — NOT mirrored (the pre-WS2 bug where the
+		// 2nd window returned the 1st window's stream).
+		expect(a.streamId).not.toBe(b.streamId)
+		expect(streamManager.startStream).toHaveBeenCalledTimes(2)
+		expect(displayBundle.allocCalls).toEqual([10, 11])
+		// Two live entries for the same webappId.
+		const list = mgr.list({userId: 'u1'})
+		expect(list).toHaveLength(2)
+		expect(list.map((e) => e.instanceId).sort()).toEqual(['win-1', 'win-2'])
+		expect(list.every((e) => e.webappId === 'app1')).toBe(true)
+		mgr._clearForTests()
+	})
+
+	it('WS2-02: PRIMARY binds the persistent base profile; ADDITIONAL copies it (copyFromUuid)', async () => {
+		const {mgr, profileBundle} = makeManager102()
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com', instanceId: 'win-1'})
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com', instanceId: 'win-2'})
+		// Primary: persistent base keyed by webappId, no copy source.
+		expect(profileBundle.seedCalls[0]!.uuid).toBe('app1')
+		expect(profileBundle.seedCalls[0]!.persistent).toBe(true)
+		expect(profileBundle.seedCalls[0]!.copyFromUuid).toBeUndefined()
+		// Additional: throwaway copy seeded FROM the base webappId.
+		expect(profileBundle.seedCalls[1]!.persistent).not.toBe(true)
+		expect(profileBundle.seedCalls[1]!.copyFromUuid).toBe('app1')
+		expect(profileBundle.seedCalls[1]!.uuid).toBeUndefined()
+		mgr._clearForTests()
+	})
+
+	it('WS2-03: re-spawn for the SAME instanceId is idempotent (component remount reuses the handle)', async () => {
+		const {mgr, streamManager} = makeManager102()
+		const a = await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com', instanceId: 'win-1'})
+		const a2 = await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com', instanceId: 'win-1'})
+		expect(a.streamId).toBe(a2.streamId)
+		expect(streamManager.startStream).toHaveBeenCalledTimes(1)
+		expect(mgr.list({userId: 'u1'})).toHaveLength(1)
+		mgr._clearForTests()
+	})
+
+	it('WS2-04: closing ONE instance leaves the other live (per-window teardown)', async () => {
+		const {mgr} = makeManager102()
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com', instanceId: 'win-1'})
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com', instanceId: 'win-2'})
+		const r = await mgr.close({webappId: 'app1', userId: 'u1', instanceId: 'win-2'})
+		expect(r.ok).toBe(true)
+		const list = mgr.list({userId: 'u1'})
+		expect(list).toHaveLength(1)
+		expect(list[0]!.instanceId).toBe('win-1')
+		mgr._clearForTests()
+	})
+
+	it('WS2-05: legacy callers (no instanceId) keep single-instance idempotency on webappId', async () => {
+		const {mgr, streamManager, profileBundle} = makeManager102()
+		const a = await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com'})
+		const b = await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com'})
+		expect(a.streamId).toBe(b.streamId)
+		expect(streamManager.startStream).toHaveBeenCalledTimes(1)
+		// The single seed is the persistent primary.
+		expect(profileBundle.seedCalls[0]!.uuid).toBe('app1')
+		expect(profileBundle.seedCalls[0]!.persistent).toBe(true)
+		mgr._clearForTests()
+	})
+})
 
 describe('Phase 102-04 — per-app Xvfb + Chrome subprocess spawn body', () => {
 	beforeEach(() => {
