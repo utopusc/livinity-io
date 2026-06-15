@@ -55,6 +55,7 @@ import type {
 	OpenclawMcpServerConfig,
 } from '../../openclawos/openclaw-config-store.js'
 import {MCP_CATALOG, type McpCatalogEntry} from './mcp-catalog-data.js'
+import {seedAionUiMcpConfig, type SeedRedisClient} from '../../mcp-registrar/index.js'
 import {adminProcedure, router} from './trpc.js'
 
 export const MCP_CONFIG_REDIS_HASH_KEY = 'liv:mcp:config'
@@ -567,6 +568,50 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 			return [...MCP_CATALOG]
 				.filter((entry) => !entry.system)
 				.sort((a, b) => a.name.localeCompare(b.name))
+		}),
+
+		// ── installLivTools ──────────────────────────────────────────────────
+		// One-click: push Liv's 5 system MCPs (luse, liv-system, liv-vault,
+		// liv-apps, liv-docker) into AionUi on demand + distribute them to every
+		// installed CLI agent. Reuses the Phase-241 boot seed in FORCE mode (skips
+		// the boot sentinel — neither read nor written — but the per-server
+		// GET-and-skip keeps it idempotent, so re-clicks never duplicate).
+		// Powers the "One-Click: Install Liv MCPs" button injected into AionUi's
+		// MCP config dialog by scripts/aionui-patches/install-liv-mcps-section.js.
+		//
+		// Source of truth = the Redis hash liv:mcp:config (same as the boot seed).
+		// An empty catalog (install seed never ran) returns emptyCatalog:true so
+		// the UI can tell the operator to reinstall instead of silently no-oping.
+		installLivTools: adminProcedure.mutation(async () => {
+			const aionUiBaseUrl = process.env.AIONUI_BASE_URL ?? 'http://127.0.0.1:3020'
+			// Adapt the router's Redis surface to the seed's SeedRedisClient. In
+			// force mode the seed never touches the sentinel, so the get/set
+			// fallbacks below are inert; only hgetall (catalog read) is exercised.
+			const seedRedis: SeedRedisClient = {
+				hgetall: (k) => deps.redis.hgetall(k),
+				get: (k) => (deps.redis.get ? deps.redis.get(k) : Promise.resolve(null)),
+				set: (k, v) => (deps.redis.set ? deps.redis.set(k, v) : Promise.resolve(undefined)),
+			}
+			const r = await seedAionUiMcpConfig({
+				redis: seedRedis,
+				aionUiBaseUrl,
+				force: true,
+				logger: {
+					info: (msg) => deps.logger.info(msg),
+					warn: (msg, err) => deps.logger.warn(msg, err),
+					error: (msg, err) => deps.logger.warn(msg, err),
+				},
+			})
+			deps.logger.info(
+				`[mcp-config] installLivTools (created=${r.created} skipped=${r.skipped} errored=${r.errored}${r.emptyCatalog ? ' EMPTY_CATALOG' : ''})`,
+			)
+			return {
+				ok: true as const,
+				created: r.created,
+				skipped: r.skipped,
+				errored: r.errored,
+				emptyCatalog: r.emptyCatalog === true,
+			}
 		}),
 
 		// ── getAutoApprove ─────────────────────────────────────────────────────

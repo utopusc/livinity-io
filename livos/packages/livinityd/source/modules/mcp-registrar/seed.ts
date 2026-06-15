@@ -54,6 +54,14 @@ export interface SeedDeps {
 		opts?: ReadyPollOptions,
 	) => Promise<boolean>
 	readyOpts?: ReadyPollOptions
+	/**
+	 * Force mode (on-demand). When true, the boot sentinel is neither READ
+	 * (Stage 0 short-circuit skipped — always proceed) nor WRITTEN (Stage 6
+	 * skipped — a manual run must not suppress the boot-time seed). Powers the
+	 * "One-Click: Install Liv MCPs" button (mcpConfig.installLivTools). The
+	 * per-server GET-and-skip in Stage 4 keeps it idempotent regardless.
+	 */
+	force?: boolean
 }
 
 /**
@@ -68,16 +76,18 @@ export async function seedAionUiMcpConfig(deps: SeedDeps): Promise<SeedResult> {
 	const waitFn = deps.waitForReady ?? waitForAionUiReady
 
 	try {
-		// Stage 0 — sentinel short-circuit
-		let sentinel: string | null = null
-		try {
-			sentinel = await redis.get(MCP_SEED_SENTINEL_KEY)
-		} catch (err) {
-			logger.warn('failed to read sentinel — proceeding as unset', err)
-		}
-		if (sentinel === '1') {
-			logger.info('sentinel set — skip')
-			return result
+		// Stage 0 — sentinel short-circuit (skipped in force mode = on-demand button)
+		if (!deps.force) {
+			let sentinel: string | null = null
+			try {
+				sentinel = await redis.get(MCP_SEED_SENTINEL_KEY)
+			} catch (err) {
+				logger.warn('failed to read sentinel — proceeding as unset', err)
+			}
+			if (sentinel === '1') {
+				logger.info('sentinel set — skip')
+				return result
+			}
 		}
 
 		// Stage 1 — AionUi readiness probe (D-241-06)
@@ -180,8 +190,12 @@ export async function seedAionUiMcpConfig(deps: SeedDeps): Promise<SeedResult> {
 			result.errored++
 		}
 
-		// Stage 6 — sentinel ONLY on full success (Pitfall 2)
-		if (result.errored === 0) {
+		// Stage 6 — sentinel ONLY on full success (Pitfall 2). Skipped entirely in
+		// force mode: the on-demand button must NOT write the boot sentinel (that
+		// would suppress the boot-time auto-seed on the next restart).
+		if (deps.force) {
+			logger.info('force mode — boot sentinel left untouched')
+		} else if (result.errored === 0) {
 			try {
 				await redis.set(MCP_SEED_SENTINEL_KEY, '1')
 				result.sentinelSet = true

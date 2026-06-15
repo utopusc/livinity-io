@@ -243,7 +243,7 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   PRE_HITS="$(grep -ril 'AionUi\|aionui' "${REBRAND_TARGET}" --include='*.html' --include='*.js' --include='*.css' 2>/dev/null | wc -l)"
   if [[ "${PRE_HITS}" -gt 0 ]]; then
     log "Rebrand: applying AionUi -> Liv AI / aionui-web -> liv-ai-web / aionui -> livai (key-safe) sed pass on ${PRE_HITS} files"
-    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' ! -name 'CapabilitiesSettings-*' \
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' ! -name 'liv-mcp-*' ! -name 'CapabilitiesSettings-*' \
          -exec sed -i 's/AionUi/Liv AI/g; s/aionui-web/liv-ai-web/g; s/aionui/livai/g' {} +
     log "Rebrand: sed pass complete (lowercase aionui -> livai is identifier/object-key safe)"
   else
@@ -304,7 +304,7 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   PATH_PRE_HITS="$(count_unprefixed_paths "${REBRAND_TARGET}")"
   if [[ "${PATH_PRE_HITS}" -gt 0 ]]; then
     log "Path rewrite: applying /api/ -> /liv/api/ and /ws -> /liv/ws sed pass on ${PATH_PRE_HITS} files"
-    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' ! -name 'CapabilitiesSettings-*' \
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' ! -name 'liv-mcp-*' ! -name 'CapabilitiesSettings-*' \
          -exec sed -i \
            -e 's|"/api/|"/liv/api/|g' \
            -e "s|'/api/|'/liv/api/|g" \
@@ -396,6 +396,38 @@ if [[ -d "${PATCH_TARGET_DIR}" && -f "${PATCH_INDEX_HTML}" ]]; then
   fi
 else
   log "Phase 240-02: WARN ${PATCH_TARGET_DIR} or ${PATCH_INDEX_HTML} missing; skipping injection"
+fi
+
+# ---------------------------------------------------------------------------
+# [liv-mcp-oneclick] — inject "One-Click: Install Liv MCPs" section
+#
+# Ships scripts/aionui-patches/install-liv-mcps-section.js as
+# static/assets/liv-mcp-install-section.js + a cache-busted <script defer> ref
+# in static/index.html before </head>. The module injects a one-click card into
+# AionUi's "MCP Tools Configuration" / "Import MCP configurations" dialog that
+# calls livinityd's mcpConfig.installLivTools tRPC procedure (registers Liv's 5
+# system MCPs + syncs them to installed CLI agents) via the Phase 226 Caddy /liv
+# proxy. Same ALWAYS-copy + content-hash cache-bust idempotency contract as the
+# 240-02 block above. JS-only (styles are inline in the module).
+# ---------------------------------------------------------------------------
+if [[ -d "${PATCH_TARGET_DIR}" && -f "${PATCH_INDEX_HTML}" ]]; then
+  if [[ -f "${PATCH_SRC_DIR}/install-liv-mcps-section.js" ]]; then
+    install -m 0644 -o root -g root "${PATCH_SRC_DIR}/install-liv-mcps-section.js" "${PATCH_TARGET_DIR}/liv-mcp-install-section.js"
+    LIVMCP_JS_VER="$(sha256sum "${PATCH_TARGET_DIR}/liv-mcp-install-section.js" | cut -c1-12)"
+    if grep -q 'liv-mcp-install-section.js' "${PATCH_INDEX_HTML}" 2>/dev/null; then
+      sed -i -E "s#(liv-mcp-install-section\.js)(\?v=[0-9a-f]+)?#\1?v=${LIVMCP_JS_VER}#g" "${PATCH_INDEX_HTML}"
+      log "[liv-mcp-oneclick]: asset refreshed; cache-bust ?v=${LIVMCP_JS_VER}"
+    else
+      sed -i "/<\/head>/i \    <script src=\"./assets/liv-mcp-install-section.js?v=${LIVMCP_JS_VER}\" defer></script>" "${PATCH_INDEX_HTML}"
+      if grep -q 'liv-mcp-install-section.js' "${PATCH_INDEX_HTML}" 2>/dev/null; then
+        log "[liv-mcp-oneclick]: one-click section injected (JS + index.html ref, ?v=${LIVMCP_JS_VER})"
+      else
+        log "WARN: [liv-mcp-oneclick]: index.html injection sed pass did not register; investigate </head> anchor"
+      fi
+    fi
+  else
+    log "[liv-mcp-oneclick]: WARN patch source missing at ${PATCH_SRC_DIR}/install-liv-mcps-section.js; skipping injection"
+  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -520,7 +552,7 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   set -o pipefail
   if [[ "${WB_PRE_HITS}" -gt 0 ]]; then
     log "Word-boundary rebrand: applying \\b(Aion|AION|aion)\\b -> Liv sed pass on ${WB_PRE_HITS} files"
-    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' ! -name 'CapabilitiesSettings-*' \
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' ! -name 'liv-mcp-*' ! -name 'CapabilitiesSettings-*' \
          -exec sed -E -i 's/\b(Aion|AION|aion)\b/Liv/g' {} +
     set +o pipefail
     WB_POST_HITS="$(grep -rilE '\b(Aion|AION|aion)\b' "${REBRAND_TARGET}" \
@@ -580,7 +612,7 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   set -o pipefail
   if [[ "${IO_PRE_HITS}" -gt 0 ]]; then
     log "Footer redirect: applying iOfficeAI/* -> livinity.io sed pass on ${IO_PRE_HITS} files"
-    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' ! -name 'CapabilitiesSettings-*' \
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' ! -name 'liv-mcp-*' ! -name 'CapabilitiesSettings-*' \
          -exec sed -E -i 's|https?://github\.com/iOfficeAI/[A-Za-z0-9 ._/-]+|https://livinity.io|g' {} +
     set +o pipefail
     IO_POST_HITS="$(grep -rilE 'https?://github\.com/iOfficeAI/' "${REBRAND_TARGET}" \
