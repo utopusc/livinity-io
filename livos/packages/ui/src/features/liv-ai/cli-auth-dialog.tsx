@@ -52,7 +52,7 @@ import {
 	DialogTitle,
 } from '@/shadcn-components/ui/dialog'
 import {Button} from '@/shadcn-components/ui/button'
-import {PasswordInput} from '@/shadcn-components/ui/input'
+import {Input, PasswordInput, AnimatedInputError} from '@/shadcn-components/ui/input'
 import {useWindowManagerOptional} from '@/providers/window-manager'
 import {trpcReact, type RouterOutput} from '@/trpc/trpc'
 
@@ -678,14 +678,19 @@ function CliAuthDialogBody({
 					</div>
 				)}
 
-				{/* ── Paste-back branch (268-04) — URL open-link + masked code field ── */}
+				{/* ── Paste-back branch (268-04; AUTH-1/2/3 in 272-01) — open-link block
+				    (only when a URL is parsed) + an ALWAYS-visible code field ── */}
 				{phase.kind === 'auth-paste-back' && (
 					<div className='space-y-3'>
 						<p className='text-sm text-text-secondary'>
-							Sign in at the link below, then paste the code it shows back here.
+							Sign in at the link, then paste the code it shows back here.
 						</p>
-						{deviceCode ? (
-							<div className='space-y-3 rounded-radius-lg border border-border-default bg-surface-base p-3'>
+						<div className='space-y-3 rounded-radius-lg border border-border-default bg-surface-base p-3'>
+							{/* 1 · Open link — only when authCli has parsed a URL from the
+							    login's stdout. Bare `claude` may print no parseable URL/code,
+							    so this is OPTIONAL — the paste field below is always shown
+							    (AUTH-1: never strand the user on a spinner). */}
+							{deviceCode ? (
 								<div className='space-y-1'>
 									<div className='text-caption text-text-tertiary'>
 										1 · Open this link
@@ -703,50 +708,71 @@ function CliAuthDialogBody({
 										</Button>
 									</div>
 								</div>
-								<div className='space-y-2'>
-									<div className='text-caption text-text-tertiary'>
-										2 · Paste the code from your browser
-									</div>
-									<PasswordInput
-										label='Code'
-										value={pasteCode}
-										onValueChange={setPasteCode}
-										error={pasteError}
-										autoFocus
-										sizeVariant='short'
-									/>
+							) : (
+								<p className='text-caption text-text-tertiary'>
+									If a sign-in link appears here, open it — then paste the code
+									your browser shows below.
+								</p>
+							)}
+							{/* 2 · Paste the code — ALWAYS rendered (AUTH-1). Visible input +
+							    Enter-to-submit (AUTH-3). The code is still cleared on submit
+							    and never logged/persisted (handleSubmitPasteCode; E-9). */}
+							<div className='space-y-2'>
+								<div className='text-caption text-text-tertiary'>
+									{deviceCode ? '2 · ' : ''}Paste the code from your browser
 								</div>
+								<Input
+									placeholder='Code'
+									value={pasteCode}
+									onValueChange={setPasteCode}
+									variant={pasteError ? 'destructive' : undefined}
+									sizeVariant='short'
+									autoFocus
+									onKeyDown={(e) => {
+										if (e.key === 'Enter' && !e.shiftKey) {
+											e.preventDefault()
+											void handleSubmitPasteCode()
+										}
+									}}
+								/>
+								<AnimatedInputError>{pasteError}</AnimatedInputError>
 							</div>
-						) : (
-							<div className='flex items-center gap-2 text-sm text-text-tertiary'>
-								<Spinner /> Waiting for the sign-in link…
-							</div>
-						)}
-						{/* 268 (FIX 2) — graceful, user-initiated fallback. If the bare
-						    headless login never prints its URL/prompt under a pipe (TTY-only
-						    — RESEARCH Open Question 1), the poll above sits on "Waiting…"
-						    forever. This subtle secondary action switches to the API-key
-						    paste flow so claude auth still works. NOT auto-switched. */}
+						</div>
+						{/* AUTH-2 — first-class API-key fallback. If the headless login never
+						    prints a paste prompt (TTY-only — RESEARCH Open Question 1), the
+						    operator has an OBVIOUS button (not a buried gray link) to switch
+						    to the API-key flow so auth still works. NOT auto-switched. */}
 						{method?.apiKeyEnv ? (
-							<button
-								type='button'
-								className='block text-caption text-text-tertiary underline-offset-2 hover:underline'
-								onClick={() => {
-									pasteStarted.current = false
-									setPasteError(undefined)
-									setPasteCode('')
-									setPhase({kind: 'auth-apikey'})
-								}}
-							>
-								Use an API key instead
-							</button>
+							<div className='border-t border-border-default pt-3'>
+								<Button
+									variant='default'
+									className='w-full'
+									onClick={() => {
+										pasteStarted.current = false
+										setPasteError(undefined)
+										setPasteCode('')
+										setPhase({kind: 'auth-apikey'})
+									}}
+								>
+									Use an API key instead
+								</Button>
+							</div>
 						) : null}
 					</div>
 				)}
 
 				{/* ── API-key branch ── */}
 				{(phase.kind === 'auth-apikey' || phase.kind === 'authenticating') && (
-					<div className='space-y-2'>
+					<div
+						className='space-y-2'
+						onKeyDown={(e) => {
+							// AUTH-3 — Enter submits the API key (only on the editable phase).
+							if (e.key === 'Enter' && !e.shiftKey && phase.kind === 'auth-apikey') {
+								e.preventDefault()
+								void handleSubmitApiKey()
+							}
+						}}
+					>
 						<p className='text-sm text-text-secondary'>
 							Paste your {labelFor(cli)} API key
 							{method?.apiKeyEnv ? (
@@ -790,7 +816,16 @@ function CliAuthDialogBody({
 							</Button>
 						) : null}
 						{method?.apiKeyEnv ? (
-							<div className='space-y-2 border-t border-border-default pt-3'>
+							<div
+								className='space-y-2 border-t border-border-default pt-3'
+								onKeyDown={(e) => {
+									// AUTH-3 — Enter submits the API key in the browser-branch fallback.
+									if (e.key === 'Enter' && !e.shiftKey) {
+										e.preventDefault()
+										void handleSubmitApiKey()
+									}
+								}}
+							>
 								<p className='text-sm text-text-secondary'>
 									Or paste an API key (
 									<code className='text-xs'>{method.apiKeyEnv}</code>):
