@@ -173,7 +173,7 @@ const Nav = () => {
       </div>
       <div className="nav-cta">
         <a className="btn btn-ghost btn-icon" href="https://github.com/utopusc/livinity-io" target="_blank" rel="noreferrer" aria-label="GitHub">
-          <Icon name="github" size={16}/> <span className="nav-cta-count">4.2k</span>
+          <Icon name="github" size={16}/>
         </a>
         {authLoaded && user ? (
           <ProfileMenu user={user}/>
