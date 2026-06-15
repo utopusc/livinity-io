@@ -3,7 +3,7 @@
 // /pricing — Livinity Pro: $7.99/mo or $69.99/yr, 3-day free trial (card upfront).
 // [Start free trial] → POST /api/stripe/checkout { interval } → Stripe-hosted
 // Checkout. 401 → /register (not signed in), 409 → /dashboard (already subscribed).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Check } from 'lucide-react';
@@ -25,6 +25,23 @@ export default function PricingPage() {
   const [interval, setInterval] = useState<Interval>('monthly');
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Cosmetic only: surface the $3.99/mo .edu price to a logged-in .edu user.
+  // The checkout ROUTE is the real enforcement point (TLD-anchored, gated on a
+  // verified email) — it ignores anything the client sends.
+  const [isEdu, setIsEdu] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/auth/me', { credentials: 'same-origin' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const email: string | undefined = data?.user?.email;
+        const host = (email?.split('@')[1] ?? '').toLowerCase();
+        if (/\.edu$/.test(host)) setIsEdu(true);
+      })
+      .catch(() => {
+        /* not logged in / network — just show standard pricing */
+      });
+  }, []);
 
   async function startCheckout() {
     setStarting(true);
@@ -120,13 +137,19 @@ export default function PricingPage() {
           </div>
 
           <div className="mt-4 flex items-baseline gap-1">
+            {isEdu && !isYearly && (
+              <span className="mr-1 text-2xl font-medium text-zinc-400 line-through">$7.99</span>
+            )}
             <span className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-              {isYearly ? '$69.99' : '$7.99'}
+              {isYearly ? '$69.99' : isEdu ? '$3.99' : '$7.99'}
             </span>
             <span className="text-zinc-500">/{isYearly ? 'year' : 'month'}</span>
           </div>
           {isYearly && (
             <p className="mt-1 text-sm text-zinc-400">≈ $5.83/month — 2+ months free</p>
+          )}
+          {isEdu && !isYearly && (
+            <p className="mt-1 text-sm text-emerald-600 dark:text-emerald-400">🎓 .edu pricing applied</p>
           )}
 
           <ul className="mt-6 space-y-3">
@@ -148,7 +171,7 @@ export default function PricingPage() {
           {error && <p className="mt-3 text-center text-sm text-red-600 dark:text-red-400">{error}</p>}
 
           <p className="mt-4 text-center text-xs text-zinc-400">
-            Card required · {isYearly ? '$69.99/year' : '$7.99/month'} after the trial unless you cancel ·
+            Card required · {isYearly ? '$69.99/year' : isEdu ? '$3.99/month' : '$7.99/month'} after the trial unless you cancel ·
             Cancel anytime from your dashboard
           </p>
         </div>
