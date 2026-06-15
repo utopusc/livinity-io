@@ -154,14 +154,15 @@ export function runCliInTerminalFallback(
  * shell) decides install vs the device/apikey/browser auth branch over tRPC.
  */
 export function useCliAuthBridge(): void {
-	// Phase 272 — the operator wants Install/Auth to run IN the real Terminal (the
-	// no-terminal dialog's detection/paste flow was unreliable). The Terminal runs
-	// the CLI's own install script / native auth flow in a real TTY — device-code
-	// links, browser prompts, and API-key paste all work the way the upstream CLI
-	// intends, then "Refresh agents" makes AionUi re-scan. So cli-install/cli-auth
-	// now route to the Terminal (runCliInTerminalFallback) by default; the
-	// CliAuthDialog stays only for the cli-uninstall confirm (a destructive action
-	// is safer as an explicit modal than a Terminal command).
+	// GSD Phase 272-01 — the v44.22 pivot routed cli-auth to the Terminal because the
+	// no-terminal dialog's paste-back flow was unreliable (the AUTH-1 infinite
+	// "Waiting…" spinner). That blocker is now fixed (AUTH-1/2/3): the dialog surfaces
+	// the paste field immediately, the API-key fallback is a first-class button, and
+	// the code field is visible + Enter-submittable. So cli-auth opens the fixed dialog
+	// again (openCliAuthDialog) — which itself keeps a prominent "Advanced: run in
+	// Terminal instead" affordance one click away. cli-install STILL runs the install
+	// script in the Terminal (long, verbose output reads better in a real TTY);
+	// cli-uninstall STILL opens the dialog's destructive confirm.
 	const windowManager = useWindowManagerOptional()
 	useEffect(() => {
 		function handleMessage(event: MessageEvent) {
@@ -180,12 +181,12 @@ export function useCliAuthBridge(): void {
 
 			// Three message types share this bridge:
 			//   cli-install   → run the install script in a fresh Terminal tab
-			//   cli-auth      → run the CLI's native auth/login in a fresh Terminal tab
+			//   cli-auth      → open the fixed no-terminal CliAuthDialog (272-01)
 			//   cli-uninstall → open the dialog's Uninstall confirm (destructive)
 			if (data.type === 'cli-install') {
 				runCliInTerminalFallback(windowManager, 'cli-install', cli)
 			} else if (data.type === 'cli-auth') {
-				runCliInTerminalFallback(windowManager, 'cli-auth', cli)
+				openCliAuthDialog({cli, mode: 'auth'})
 			} else if (data.type === 'cli-uninstall') {
 				// Phase 268-04 — the Remove button posts cli-uninstall; keep the
 				// explicit modal confirm (it detects the CLI + calls
