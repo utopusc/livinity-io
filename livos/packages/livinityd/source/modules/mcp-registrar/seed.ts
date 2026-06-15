@@ -58,7 +58,7 @@ export interface SeedDeps {
 	 * Force mode (on-demand). When true, the boot sentinel is neither READ
 	 * (Stage 0 short-circuit skipped — always proceed) nor WRITTEN (Stage 6
 	 * skipped — a manual run must not suppress the boot-time seed). Powers the
-	 * "One-Click: Install Liv MCPs" button (mcpConfig.installLivTools). The
+	 * "One-Click: Install Liv MCPs" button (mcp.config.installLivTools). The
 	 * per-server GET-and-skip in Stage 4 keeps it idempotent regardless.
 	 */
 	force?: boolean
