@@ -28,6 +28,22 @@ if [[ -z "${LIVOS_UPDATE_SCOPED:-}" ]] && command -v systemd-run >/dev/null 2>&1
         -- "$0" "$@"
 fi
 
+# ── Single-flight guard (2026-06-15) ─────────────────────────────────────────
+# A stressed operator double-clicking "Update" would otherwise launch two
+# concurrent update.sh runs (each cgroup-escaped into its own unique scope) that
+# race on the same trees + the rollback snapshot. Take a non-blocking exclusive
+# lock; if another run already holds it, exit cleanly HERE — before the EXIT
+# trap below is installed — so no spurious failed.json is written. Fail-open if
+# flock is unavailable or the lock file can't be opened (never block a deploy on
+# the guard itself).
+exec 9>/run/lock/livos-update.lock 2>/dev/null || exec 9>/tmp/livos-update.lock 2>/dev/null || true
+if command -v flock >/dev/null 2>&1 && { : >&9; } 2>/dev/null; then
+    if ! flock -n 9; then
+        echo "[INFO] Another LivOS update is already in progress — exiting (no concurrent deploy)." >&2
+        exit 0
+    fi
+fi
+
 # ── v29.0-hotpatch: survive livinityd's death during livos.service restart ──
 # After cgroup-escape, the script lives in livos-update-*.scope, but stdout/stderr
 # are still piped back to livinityd (execa spawn without stdio:'ignore'). When
@@ -303,6 +319,153 @@ verify_build() {
 }
 
 step()  { echo -e "\n${CYAN}━━━ $* ━━━${NC}"; }
+
+# ── Atomic-update safety net (2026-06-15) ─────────────────────────────────────
+# Root cause of "update error → Cloudflare 502, UI inaccessible": update.sh
+# rsyncs the new livinityd source OVER the live tree (no build/typecheck gate —
+# livinityd runs tsx on source) and then UNCONDITIONALLY `systemctl restart
+# livos.service`. A bad import/syntax/dep in the new source → livinityd throws
+# on boot → :8080 never binds → Caddy has no origin → CF 502, with no probe and
+# no rollback (the box stays bricked; with no admin to recover, the user is
+# locked out). These helpers add: a last-good SNAPSHOT taken before the first
+# rsync, a post-restart HTTP HEALTH PROBE, and AUTO-ROLLBACK to the snapshot on
+# failure — so a failed update always lands back on a serving version.
+LAST_GOOD_DIR="/opt/.livos-last-good"
+
+# Capture the currently-deployed (working) runtime artifacts livinityd needs to
+# serve the UI: its tsx source, the built UI dist, and the liv-core dist it
+# imports. Taken at Step 2 BEFORE any in-place overwrite, so it reflects the
+# last version that actually booted. Best-effort; never aborts the run.
+snapshot_last_good() {
+    info "Snapshotting last-good runtime (rollback safety)..."
+    rm -rf "$LAST_GOOD_DIR" 2>/dev/null || true
+    mkdir -p "$LAST_GOOD_DIR" 2>/dev/null || true
+    local have_src=0
+    if [[ -d "$LIVOS_DIR/packages/livinityd/source" ]]; then
+        if rsync -a --delete "$LIVOS_DIR/packages/livinityd/source/" "$LAST_GOOD_DIR/livinityd-source/" 2>/dev/null; then
+            have_src=1
+        fi
+    fi
+    if [[ -d "$LIVOS_DIR/packages/ui/dist" ]]; then
+        rsync -a --delete "$LIVOS_DIR/packages/ui/dist/" "$LAST_GOOD_DIR/ui-dist/" 2>/dev/null || true
+    fi
+    if [[ -d "$LIV_DIR/packages/core/dist" ]]; then
+        rsync -a --delete "$LIV_DIR/packages/core/dist/" "$LAST_GOOD_DIR/liv-core-dist/" 2>/dev/null || true
+    fi
+    if (( have_src == 1 )); then
+        ok "Last-good snapshot saved to $LAST_GOOD_DIR"
+    else
+        warn "No existing livinityd source to snapshot (first deploy?) — rollback unavailable this run"
+    fi
+}
+
+# Restore the load-bearing runtime from the snapshot. Returns 1 (no rollback
+# possible) when no snapshot exists.
+restore_last_good() {
+    if [[ ! -d "$LAST_GOOD_DIR/livinityd-source" ]]; then
+        warn "No last-good snapshot present — cannot roll back"
+        return 1
+    fi
+    warn "Restoring last-good livinityd source + UI dist + liv-core dist from $LAST_GOOD_DIR..."
+    rsync -a --delete "$LAST_GOOD_DIR/livinityd-source/" "$LIVOS_DIR/packages/livinityd/source/" 2>/dev/null || true
+    if [[ -d "$LAST_GOOD_DIR/ui-dist" ]]; then
+        rm -rf "$LIVOS_DIR/packages/ui/dist" 2>/dev/null || true
+        rsync -a "$LAST_GOOD_DIR/ui-dist/" "$LIVOS_DIR/packages/ui/dist/" 2>/dev/null || true
+        ln -sf "$LIVOS_DIR/packages/ui/dist" "$LIVOS_DIR/packages/livinityd/ui" 2>/dev/null || true
+    fi
+    if [[ -d "$LAST_GOOD_DIR/liv-core-dist" && -d "$LIV_DIR/packages/core" ]]; then
+        rm -rf "$LIV_DIR/packages/core/dist" 2>/dev/null || true
+        rsync -a "$LAST_GOOD_DIR/liv-core-dist/" "$LIV_DIR/packages/core/dist/" 2>/dev/null || true
+        # Re-propagate to every pnpm-store @liv+core resolution dir (mirror Step 5).
+        local store_dir tgt
+        for store_dir in /opt/livos/node_modules/.pnpm/@liv+core*/; do
+            [[ -d "$store_dir" ]] || continue
+            tgt="${store_dir}node_modules/@liv/core/dist"
+            mkdir -p "$(dirname "$tgt")" 2>/dev/null || true
+            rm -rf "$tgt" 2>/dev/null || true
+            cp -r "$LAST_GOOD_DIR/liv-core-dist" "$tgt" 2>/dev/null || true
+        done
+    fi
+    # livos.service runs as bruce — restore ownership so it can read the tree.
+    if id bruce >/dev/null 2>&1; then
+        chown -R bruce:bruce "$LIVOS_DIR/packages/livinityd/source" "$LIVOS_DIR/packages/ui/dist" 2>/dev/null || true
+        [[ -d "$LIV_DIR/packages/core/dist" ]] && chown -R bruce:bruce "$LIV_DIR/packages/core/dist" 2>/dev/null || true
+    fi
+    ok "Last-good runtime restored"
+    return 0
+}
+
+# livinityd serves the UI on :8080. ANY normal HTTP status (2xx/3xx, or the
+# 401/403 auth gates) means it bound and is serving; connection-refused/timeout
+# (curl → 000), 404, or 5xx mean it's down or the UI dist is broken.
+livinityd_responding() {
+    local code
+    code=$(curl -s -o /dev/null -w '%{http_code}' -m 4 http://127.0.0.1:8080/ 2>/dev/null || echo 000)
+    [[ "$code" =~ ^(2|3)[0-9][0-9]$ ]] || [[ "$code" == "401" ]] || [[ "$code" == "403" ]]
+}
+
+# Poll livinityd for up to ~120s after restart. The budget is deliberately
+# generous because livinityd does substantial BLOCKING work before it binds
+# :8080 — `docker stop --time 30` in cleanDockerState (~30s worst case),
+# waitForSystemTime (up to 10s), DB migrations/seed, + an EADDRINUSE listen
+# retry. A budget shorter than that legitimate cold boot would roll back a
+# perfectly good update. On success: return 0 and continue. On failure: roll
+# back to last-good, restart, re-probe, and `fail` (the EXIT trap records
+# status=failed and .deployed-sha is NOT advanced, so the box correctly reports
+# it's still on the previous version) — the UI is restored either way.
+health_probe_or_rollback() {
+    local i
+    for i in $(seq 1 40); do
+        if livinityd_responding; then
+            ok "livinityd health probe OK (serving on :8080)"
+            return 0
+        fi
+        sleep 3
+    done
+    warn "livinityd did NOT respond on :8080 within ~120s after restart — AUTO-ROLLING BACK to last-good"
+    if ! restore_last_good; then
+        fail "Update failed AND there is no snapshot to roll back to — manual recovery needed (journalctl -u livos -n 50)"
+    fi
+    systemctl reset-failed livos.service 2>/dev/null || true
+    systemctl restart livos.service 2>/dev/null || true
+    # The rolled-back OLD code does the same slow pre-listen boot work — give it
+    # the same generous budget before declaring the box unrecoverable.
+    for i in $(seq 1 40); do
+        if livinityd_responding; then
+            warn "Rolled back to the previous working version — the UI is reachable again. This update did NOT apply; review the log and retry."
+            fail "Update failed and was ROLLED BACK to the last-good version (UI restored, box NOT bricked)"
+        fi
+        sleep 3
+    done
+    fail "Update failed AND rollback did not restore livinityd — manual recovery needed (journalctl -u livos -n 50)"
+}
+
+# Idempotent systemd drop-in so a crash-looping livos keeps getting retried
+# (RestartSec bounds the rate) instead of latching into permanent 'failed' after
+# 5 crashes/10s (systemd default) — which would leave a permanent 502 even after
+# the source is fixed/rolled back. Pairs with the rollback above as belt+braces.
+ensure_livos_startlimit_dropin() {
+    local dir="/etc/systemd/system/livos.service.d"
+    local f="$dir/10-livos-startlimit.conf"
+    mkdir -p "$dir" 2>/dev/null || true
+    local tmp; tmp=$(mktemp)
+    cat > "$tmp" <<'DROPIN'
+[Unit]
+# LivOS auto-recovery (atomic-update safety): never latch livos into permanent
+# 'failed' on a crash-loop, so a rolled-back / fixed source self-heals instead
+# of leaving the user on a permanent Cloudflare 502.
+StartLimitIntervalSec=0
+DROPIN
+    if [[ ! -f "$f" ]] || ! cmp -s "$tmp" "$f"; then
+        mv "$tmp" "$f" 2>/dev/null || { rm -f "$tmp"; return 0; }
+        chmod 644 "$f" 2>/dev/null || true
+        systemctl daemon-reload 2>/dev/null || true
+        ok "livos.service StartLimit drop-in installed (auto-recovery on crash-loop)"
+    else
+        rm -f "$tmp"
+        ok "livos.service StartLimit drop-in already current"
+    fi
+}
 
 # ── Phase 196-02 — opencode CLI version-pin warning ──
 # update.sh assumes install.sh has already provisioned opencode. If the
@@ -660,6 +823,11 @@ fi
 
 # ── Step 2: Update LivOS source files ─────────────────────
 step "Updating LivOS source files"
+
+# Atomic-update safety net: capture the current working runtime BEFORE the first
+# in-place rsync, so Step 8's health probe can roll back if the new code can't
+# boot. Must run before ANY overwrite below.
+snapshot_last_good
 
 # Update livinityd source (tsx runs directly, no compile needed)
 info "Updating livinityd source..."
@@ -1581,9 +1749,23 @@ step "Restarting services"
 
 systemctl daemon-reload
 
+# Auto-recovery: keep systemd retrying livos on crash-loop (never permanent-fail).
+ensure_livos_startlimit_dropin
+
 info "Restarting livos..."
+# Clear any latched failed-state FIRST — a box already crash-looping from a prior
+# bad deploy (the exact case this rescues) can refuse a plain `restart` with
+# "start request repeated too quickly" until reset-failed clears the latch.
+systemctl reset-failed livos.service 2>/dev/null || true
 systemctl restart livos.service
 sleep 2
+
+# ── Atomic-update safety net: probe livinityd; roll back to last-good on failure ──
+# livinityd serves the UI on :8080 (Caddy → :8080 → Cloudflare). If the freshly
+# rsynced source can't boot, restore the Step-2 snapshot + restart so a bad
+# update can NEVER leave the user on a permanent 502. On rollback this `fail`s
+# (deploy marked failed, .deployed-sha NOT advanced) but the UI stays reachable.
+health_probe_or_rollback
 
 info "Restarting liv-core..."
 systemctl restart liv-core.service
