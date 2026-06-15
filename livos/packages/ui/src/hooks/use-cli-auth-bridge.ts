@@ -150,6 +150,15 @@ export function runCliInTerminalFallback(
  * shell) decides install vs the device/apikey/browser auth branch over tRPC.
  */
 export function useCliAuthBridge(): void {
+	// Phase 272 — the operator wants Install/Auth to run IN the real Terminal (the
+	// no-terminal dialog's detection/paste flow was unreliable). The Terminal runs
+	// the CLI's own install script / native auth flow in a real TTY — device-code
+	// links, browser prompts, and API-key paste all work the way the upstream CLI
+	// intends, then "Refresh agents" makes AionUi re-scan. So cli-install/cli-auth
+	// now route to the Terminal (runCliInTerminalFallback) by default; the
+	// CliAuthDialog stays only for the cli-uninstall confirm (a destructive action
+	// is safer as an explicit modal than a Terminal command).
+	const windowManager = useWindowManagerOptional()
 	useEffect(() => {
 		function handleMessage(event: MessageEvent) {
 			if (!isAllowedOrigin(event.origin)) return
@@ -160,28 +169,23 @@ export function useCliAuthBridge(): void {
 			if (!data || data.source !== 'liv-240-local-agents') return
 			const cli = typeof data.cli === 'string' ? data.cli : ''
 
-			// NAME-only RCE boundary: validate against the same whitelist the
-			// Terminal fallback uses before we hand the name to the dialog. The
-			// dialog only ever sends the NAME to whitelist-guarded tRPC routes,
-			// but we gate here too so an unknown name never opens anything.
+			// NAME-only RCE boundary: validate against the install/auth whitelist
+			// before we map the NAME → a FIXED command. We never accept a raw
+			// command from the iframe — only a NAME we look up here.
 			if (!/^[a-z0-9-]+$/.test(cli) || !INSTALLABLE_CLIS.has(cli)) return
 
 			// Three message types share this bridge:
-			//   cli-install   → open the dialog on the install step
-			//   cli-auth      → open the dialog toward the auth branch
-			//   cli-uninstall → open the dialog on the detected CLI (it shows the
-			//                   Uninstall confirm)
+			//   cli-install   → run the install script in a fresh Terminal tab
+			//   cli-auth      → run the CLI's native auth/login in a fresh Terminal tab
+			//   cli-uninstall → open the dialog's Uninstall confirm (destructive)
 			if (data.type === 'cli-install') {
-				openCliAuthDialog({cli, mode: 'install'})
+				runCliInTerminalFallback(windowManager, 'cli-install', cli)
 			} else if (data.type === 'cli-auth') {
-				openCliAuthDialog({cli, mode: 'auth'})
+				runCliInTerminalFallback(windowManager, 'cli-auth', cli)
 			} else if (data.type === 'cli-uninstall') {
-				// Phase 268-04 — the Remove button in the panel posts cli-uninstall;
-				// we open the dialog on the detected CLI (it shows the Uninstall
-				// confirm + calls cliInstaller.uninstall). NAME-only RCE boundary
-				// unchanged: the /^[a-z0-9-]+$/ && INSTALLABLE_CLIS gate above already
-				// ran. mode:'auth' keeps the CliAuthDialogDetail union ('install'|'auth')
-				// unchanged — the dialog detects the CLI and surfaces Remove.
+				// Phase 268-04 — the Remove button posts cli-uninstall; keep the
+				// explicit modal confirm (it detects the CLI + calls
+				// cliInstaller.uninstall). mode:'auth' keeps the dialog union unchanged.
 				openCliAuthDialog({cli, mode: 'auth'})
 			} else {
 				// Unknown message type — ignore.
@@ -190,5 +194,5 @@ export function useCliAuthBridge(): void {
 
 		window.addEventListener('message', handleMessage)
 		return () => window.removeEventListener('message', handleMessage)
-	}, [])
+	}, [windowManager])
 }
