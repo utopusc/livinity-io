@@ -115,9 +115,36 @@ function computeAnalysis(data: Uint8ClampedArray): IconAnalysis {
 // One analysis per URL no matter how many surfaces render the same icon.
 const analysisCache = new Map<string, Promise<IconAnalysisState>>()
 
+// Phase 271-C — hosts that serve favicons WITHOUT `Access-Control-Allow-Origin`.
+// Loading them crossOrigin='anonymous' then calling getImageData() taints the
+// canvas and makes the browser log a cross-origin `favicon.ico` CORS error
+// (the Liv AI console-noise item). The analysis result for these is ALWAYS
+// 'blocked' (→ logo mode) anyway — so we short-circuit to 'blocked' WITHOUT
+// touching the canvas, killing the console error while keeping identical
+// rendering. Matched on hostname suffix so subdomains (e.g.
+// antigravity.google, www.google.com) are covered.
+const NO_CORS_FAVICON_HOSTS = ['google.com', 'antigravity.google', 'gstatic.com']
+
+function isNoCorsFaviconSrc(src: string): boolean {
+	try {
+		const host = new URL(src, window.location.origin).hostname
+		return NO_CORS_FAVICON_HOSTS.some((h) => host === h || host.endsWith('.' + h))
+	} catch {
+		return false
+	}
+}
+
 function analyzeIcon(src: string): Promise<IconAnalysisState> {
 	const cached = analysisCache.get(src)
 	if (cached) return cached
+	// Phase 271-C — skip canvas analysis for known no-ACAO favicon hosts: the
+	// result would be 'blocked' regardless, and attempting getImageData() is
+	// exactly what emits the cross-origin favicon CORS console error.
+	if (isNoCorsFaviconSrc(src)) {
+		const blocked = Promise.resolve<IconAnalysisState>({status: 'blocked'})
+		analysisCache.set(src, blocked)
+		return blocked
+	}
 	const p = new Promise<IconAnalysisState>((resolve) => {
 		const img = new Image()
 		img.crossOrigin = 'anonymous'

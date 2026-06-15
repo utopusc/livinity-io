@@ -48,6 +48,19 @@ export interface X11DisplayStreamWindowProps {
 	windowId?: string
 }
 
+/**
+ * Phase 271-C — client-side guard mirroring the server's displayIdSchema
+ * (`^:\d+(\.\d+)?$`, trpc-router.ts). The `displays.getVncUrl` mutation must
+ * NEVER fire with an empty/malformed displayId — that produced the
+ * `/trpc/displays.getVncUrl → 404`/400 console noise when a window mounted
+ * before its `DISPLAY_:N` appId resolved to a real display string. Gating the
+ * resolve on a valid display string keeps the (real, mounted) route from being
+ * hit with junk input on a normal Liv AI load.
+ */
+function isValidDisplayId(displayId: string): boolean {
+	return /^:\d+(\.\d+)?$/.test(displayId)
+}
+
 export default function X11DisplayStreamWindow({displayId}: X11DisplayStreamWindowProps) {
 	// Resolve this display's VNC websocket URL. Registered in httpOnlyPaths
 	// (Plan 01 / common.ts) because it spawns x11vnc via StreamManager and so
@@ -65,6 +78,12 @@ export default function X11DisplayStreamWindow({displayId}: X11DisplayStreamWind
 	const resolvedForRef = useRef<string | null>(null)
 
 	const triggerResolve = useCallback(() => {
+		// Phase 271-C — never call getVncUrl with a malformed/empty display
+		// string (the source of the /trpc/displays.getVncUrl 404/400 noise).
+		if (!isValidDisplayId(displayId)) {
+			setResolveError({code: 'BAD_REQUEST', message: 'Invalid display'})
+			return
+		}
 		setResolveError(null)
 		getVncUrlMutationRef.current.mutate(
 			{display: displayId},
