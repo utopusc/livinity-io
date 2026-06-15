@@ -405,7 +405,7 @@ fi
 # static/assets/liv-mcp-install-section.js + a cache-busted <script defer> ref
 # in static/index.html before </head>. The module injects a one-click card into
 # AionUi's "MCP Tools Configuration" / "Import MCP configurations" dialog that
-# calls livinityd's mcpConfig.installLivTools tRPC procedure (registers Liv's 5
+# calls livinityd's mcp.config.installLivTools tRPC procedure (registers Liv's 5
 # system MCPs + syncs them to installed CLI agents) via the Phase 226 Caddy /liv
 # proxy. Same ALWAYS-copy + content-hash cache-bust idempotency contract as the
 # 240-02 block above. JS-only (styles are inline in the module).

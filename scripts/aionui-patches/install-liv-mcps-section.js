@@ -7,7 +7,7 @@
  * and distributes them to every installed CLI agent — so users don't have to
  * add each tool by hand.
  *
- * Calls livinityd's `mcpConfig.installLivTools` tRPC procedure via the Phase 226
+ * Calls livinityd's `mcp.config.installLivTools` tRPC procedure via the Phase 226
  * Caddy `/liv` proxy. That procedure reuses the Phase-241 boot seed in FORCE
  * mode (idempotent GET-and-skip per server), so re-clicks never duplicate.
  *
@@ -24,11 +24,14 @@
   'use strict';
 
   var SENTINEL_ID = 'liv-mcp-oneclick';
-  // tRPC: mcpConfig is mounted flat in createAppRouter (sibling of cliInstaller,
-  // which the Local Agents patch reaches as /liv/trpc/cliInstaller.*), so the
-  // procedure path is mcpConfig.installLivTools. Raw httpLink (no transformer):
-  // POST body is the input ({} = no input); response is {result:{data}}|{error}.
-  var TRPC_URL = '/liv/trpc/mcpConfig.installLivTools';
+  // tRPC: the MCP config router is mounted NESTED as mcp → config in
+  // createAppRouter (server/trpc/index.ts: `mcp: mergeRouters(mcpRouter,
+  // router({config: mcpConfigRouter}))`), so the real procedure path is
+  // mcp.config.installLivTools — NOT the flat mcpConfig.* (that 404s with
+  // "No procedure found"). The LivOS UI McpTab reaches mcp.config.list the same
+  // way. Raw httpLink (no transformer): POST body is the input ({} = no input);
+  // response is {result:{data}}|{error}.
+  var TRPC_URL = '/liv/trpc/mcp.config.installLivTools';
 
   // Visible heading/label strings of AionUi's MCP config + CLI-agent import
   // dialog — the anchor we hang the card off. Substring match (locale-light;
