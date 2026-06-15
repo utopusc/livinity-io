@@ -4822,4 +4822,34 @@ Plans:
 Plans:
 - [ ] 270-01-PLAN.md — unify Local Agents into one list: exclude aion-cli from the LivOS grid (VISIBLE_CLIS, byte-consistent with 269.1) + hide AionUi native Detected strip (hideNativeStrip + .liv-270-native-hidden CSS); preserve Apply bar + Install/Auth/Remove/paste-back + icon cascade; node --check gate + operator live-UAT [wave 1, autonomous:false] — ⏸️ CODE DONE 2026-06-14 (Tasks 1&2: `3a278d85` JS + `b5d59991` CSS; node --check EXIT 0, CSS-RULE-OK, all greps green, ZERO livos/ diff); Task 3 = operator live-UAT checkpoint AWAITING DEPLOY+OPERATOR (box stays unchecked until "approved")
 
+### Phase 271: Liv AI agent polish — verified per-CLI Terminal install+auth command matrix (20 CLIs), real brand logos for the 9 monogram agents, and console-noise cleanup (googleAuth.status stub, displays.getVncUrl 404, favicon CORS)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 270
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 271 to break down)
+
+### Phase 272: OAuth completion — auth-dialog paste-back UX (AUTH-1/2/3), re-enable Apple Sign-In, add Microsoft OAuth with nOAuth mitigation (continues PLAN-oauth-signin; Google+GitHub shipped v44.19)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 271
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 272 to break down)
+
+### Phase 273: Update safety Layer-B — independent systemd transient rollback guard armed by update.sh (immune to update.sh SIGKILL) + failed.json deploy visibility; live-tested with a deliberate broken deploy (extends v44.21 KillMode fix)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 272
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 273 to break down)
+
 ---
