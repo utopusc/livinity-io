@@ -415,7 +415,13 @@ const LIV_GATE_BODY = `\t\tforward_auth 127.0.0.1:8080 {
 // the FULL tRPC API through the batch — exactly what LIVOS-054 closed. Exact
 // path matching makes a comma-bearing path fall through to @liv (:3020,
 // harmless SPA html). caddy.test.ts locks this (no wildcard form allowed).
-const LIV_CLI_INSTALLER_HANDLE = `\t@liv_cli_installer path /liv/trpc/cliInstaller.detect /liv/trpc/cliInstaller.install /liv/trpc/cliInstaller.auth /liv/trpc/cliInstaller.applyAgentChanges /liv/trpc/cliInstaller.hasPendingAgentChanges
+// Also carries mcpConfig.installLivTools — the "One-Click: Install Liv MCPs"
+// button (scripts/aionui-patches/install-liv-mcps-section.js). Same rationale:
+// it's an adminProcedure with NO untrusted input (zero args), and it MUST reach
+// livinityd :8080; without this exact-path carve-out it falls through to @liv
+// (:3020 AionUi) and returns the SPA index.html → `Unexpected token '<'` in the
+// panel. EXACT path (no wildcard) keeps the LIVOS-054 batch-path boundary intact.
+const LIV_CLI_INSTALLER_HANDLE = `\t@liv_cli_installer path /liv/trpc/cliInstaller.detect /liv/trpc/cliInstaller.install /liv/trpc/cliInstaller.auth /liv/trpc/cliInstaller.applyAgentChanges /liv/trpc/cliInstaller.hasPendingAgentChanges /liv/trpc/mcpConfig.installLivTools
 \thandle @liv_cli_installer {
 ${LIV_GATE_BODY}
 \t\turi strip_prefix /liv
