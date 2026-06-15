@@ -196,10 +196,10 @@
               </div>
 
               <div className="plan-price">
-                <span className="amount">{yearly ? "$69.99" : (isEdu ? "$3.99" : "$7.99")}</span>
+                <span className="amount">{yearly ? (isEdu ? "$34.99" : "$69.99") : (isEdu ? "$3.99" : "$7.99")}</span>
                 <span className="per">/{yearly ? "year" : "month"}</span>
               </div>
-              <div className="plan-price-note">{yearly ? "≈ $5.83/month — 2+ months free" : " "}</div>
+              <div className="plan-price-note">{yearly ? (isEdu ? "≈ $2.92/month — 2+ months free" : "≈ $5.83/month — 2+ months free") : " "}</div>
 
               <ul className="feat-list">
                 {FEATURES.map((f) => (
@@ -214,7 +214,7 @@
               {error && <div className="cta-err">{error}</div>}
 
               <p className="fine-print">
-                Card required · {yearly ? "$69.99/year" : (isEdu ? "$3.99/month" : "$7.99/month")} after the trial unless you cancel
+                Card required · {yearly ? (isEdu ? "$34.99/year" : "$69.99/year") : (isEdu ? "$3.99/month" : "$7.99/month")} after the trial unless you cancel
                 <br />Cancel anytime from your dashboard
               </p>
             </section>

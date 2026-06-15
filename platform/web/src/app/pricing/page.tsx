@@ -141,7 +141,7 @@ export default function PricingPage() {
               <span className="mr-1 text-2xl font-medium text-zinc-400 line-through">$7.99</span>
             )}
             <span className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-              {isYearly ? '$69.99' : isEdu ? '$3.99' : '$7.99'}
+              {isYearly ? (isEdu ? '$34.99' : '$69.99') : isEdu ? '$3.99' : '$7.99'}
             </span>
             <span className="text-zinc-500">/{isYearly ? 'year' : 'month'}</span>
           </div>
@@ -171,7 +171,7 @@ export default function PricingPage() {
           {error && <p className="mt-3 text-center text-sm text-red-600 dark:text-red-400">{error}</p>}
 
           <p className="mt-4 text-center text-xs text-zinc-400">
-            Card required · {isYearly ? '$69.99/year' : isEdu ? '$3.99/month' : '$7.99/month'} after the trial unless you cancel ·
+            Card required · {isYearly ? (isEdu ? '$34.99/year' : '$69.99/year') : isEdu ? '$3.99/month' : '$7.99/month'} after the trial unless you cancel ·
             Cancel anytime from your dashboard
           </p>
         </div>
