@@ -48,7 +48,6 @@ import {
 	TbDeviceSdCard,
 	TbShieldLock,
 	TbMessages,
-	TbRobot,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -117,8 +116,6 @@ const McpServersLazy = React.lazy(() => import('@/routes/settings/mcp-servers'))
 // Settings overhaul 2026-06-09 — Power / Date & Time / Storage & Drives / Security & Sessions.
 const PowerSectionLazy = React.lazy(() => import('./power-section').then((m) => ({default: m.PowerSection})))
 const DateTimeSectionLazy = React.lazy(() => import('./date-time-section').then((m) => ({default: m.DateTimeSection})))
-// Phase 272 — AI Personalize: change the onboarding personalization choices post-onboarding.
-const PersonalizeSectionLazy = React.lazy(() => import('./personalize-section').then((m) => ({default: m.PersonalizeSection})))
 const StorageDrivesSectionLazy = React.lazy(() => import('./storage-section').then((m) => ({default: m.StorageDrivesSection})))
 const SecuritySessionsSectionLazy = React.lazy(() => import('./security-sessions-section').then((m) => ({default: m.SecuritySessionsSection})))
 // Phase 246-05 — Settings → System section (hosts the v44 "Active terminals"
@@ -139,7 +136,6 @@ type SettingsSection =
 	| 'account'
 	| 'users'
 	| 'wallpaper'
-	| 'personalize'
 	| '2fa'
 	| 'chrome-master'
 	| 'power'
@@ -176,7 +172,6 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'account',          group: 'personal', icon: TbUser,          label: 'Account',          description: 'Name and password'},
 	{id: 'wallpaper',        group: 'personal', icon: TbPhoto,         label: 'Theme',             description: 'Wallpaper & accent color'},
 	{id: 'language',         group: 'personal', icon: TbLanguage,      label: 'Language',          description: 'Interface language'},
-	{id: 'personalize',      group: 'personal', icon: TbRobot,         label: 'Liv AI',            description: 'Role, tone, memory & use cases'},
 	{id: '2fa',              group: 'personal', icon: TbShield,        label: '2FA',               description: 'Two-factor authentication'},
 	// ── WORKSPACE ─────────────────────────────────────────────────────
 	{id: 'mcp-servers',      group: 'workspace', icon: TbPlugConnected, label: 'MCP Servers',      description: 'Manage Model Context Protocol servers',   adminOnly: true},
@@ -564,8 +559,6 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><UsersSectionLazy /></Suspense>
 		case 'wallpaper':
 			return <WallpaperSection />
-		case 'personalize':
-			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><PersonalizeSectionLazy /></Suspense>
 		case '2fa':
 			return <TwoFaSection />
 		case 'chrome-master':
