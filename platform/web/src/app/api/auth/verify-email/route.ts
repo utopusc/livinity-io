@@ -20,6 +20,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { createSession, SESSION_COOKIE_NAME, SESSION_MAX_AGE } from '@/lib/auth';
+import { createUser } from '@/lib/user-creation';
 
 async function issueSessionCookie(req: NextRequest, userId: string): Promise<NextResponse> {
   const sessionToken = await createSession(
@@ -92,13 +93,18 @@ export async function POST(req: NextRequest) {
       let userId: string;
       try {
         await client.query('BEGIN');
-        const ins = await client.query<{ id: string }>(
-          `INSERT INTO users (username, email, password_hash, email_verified)
-           VALUES ($1, $2, $3, TRUE)
-           RETURNING id`,
-          [normalizedUsername, normalizedEmail, p.password_hash],
+        // Shared helper (lib/user-creation.ts) so the email-verify path and the
+        // OAuth bridge create users identically. Runs inside this tx so the
+        // INSERT + pending-row DELETE stay atomic.
+        userId = await createUser(
+          {
+            username: normalizedUsername,
+            email: normalizedEmail,
+            passwordHash: p.password_hash,
+            emailVerified: true,
+          },
+          client,
         );
-        userId = ins.rows[0].id;
         await client.query('DELETE FROM pending_registrations WHERE id = $1', [p.id]);
         await client.query('COMMIT');
       } catch (txErr) {
