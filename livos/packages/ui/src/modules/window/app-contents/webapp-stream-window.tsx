@@ -449,7 +449,7 @@ export default function WebAppStreamWindow({webappId, windowId}: WebAppStreamWin
 
 	return (
 		<div className='relative flex h-full w-full flex-col bg-surface-base'>
-			<div className='relative flex-1 min-h-0 overflow-hidden bg-black pb-9'>
+			<div className='relative flex-1 min-h-0 overflow-hidden bg-black'>
 				{/* Phase 270-RFB — object-contain (parity with
 				    native-app-stream-window.tsx). With real RFB input
 				    (viewOnly:false) noVNC does its OWN pointer-coordinate
