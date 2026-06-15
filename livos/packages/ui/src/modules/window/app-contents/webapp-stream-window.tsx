@@ -266,6 +266,8 @@ export default function WebAppStreamWindow({webappId, windowId}: WebAppStreamWin
 
 	// Phase 100-07: tRPC input dispatch mutations.
 	const inputClickMutation = trpcReact.webapp.input.click.useMutation()
+	// Phase 270-DRAG: bare pointer-move (no button) — sent mid-drag.
+	const inputMoveMutation = trpcReact.webapp.input.move.useMutation()
 	const inputKeyMutation = trpcReact.webapp.input.keypress.useMutation()
 	const inputTypeMutation = trpcReact.webapp.input.type.useMutation()
 	// Phase 100-09-02: scroll wheel mutation (closes Bug 2 — scroll-down).
@@ -313,36 +315,138 @@ export default function WebAppStreamWindow({webappId, windowId}: WebAppStreamWin
 		// Map DOM MouseEvent.button (0/1/2) → xdotool 1/2/3.
 		const xdotoolButton = (b: number): 1 | 2 | 3 => (b === 2 ? 3 : b === 1 ? 2 : 1)
 
-		// Phase 100-07.1: dispatch a single combined click on mouseup (NOT
-		// separate mousedown+mouseup). xdotool's `click` is mousedown+mouseup
-		// in a single sub-command — atomic, doesn't double-thrash the
-		// `windowactivate --sync` step. Drag-and-double-click are out of MVP
-		// scope; can be re-added later if needed.
+		// Phase 100-07.1 / 270-DRAG: click-vs-drag reconstruction.
+		//
+		// Historically (100-07.1) we dispatched a single atomic xdotool
+		// `click` on mouseup and explicitly skipped drag ("out of MVP
+		// scope"). Phase 270-DRAG re-adds drag WITHOUT changing the click
+		// path: we defer all dispatch on mousedown, then decide on the first
+		// significant move whether this gesture is a tap or a drag.
+		//
+		//   - TAP  (pointer never moves ≥ DRAG_THRESHOLD_PX from the press
+		//     point): on mouseup we dispatch the SAME atomic
+		//     `kind:'click'` as before — byte-for-byte identical, zero
+		//     regression to the 100-07.1 behavior.
+		//   - DRAG (pointer moves past the threshold): we dispatch
+		//     `kind:'mousedown'` at the START coords (press & HOLD the
+		//     button at the X server), then throttled `input.move` calls
+		//     trace the path, then `kind:'mouseup'` at the release coords.
+		//
+		// State is held in refs so the document-level move/up listeners
+		// (attached on mousedown, removed on mouseup) see live values
+		// without re-binding. Right/middle drags are not meaningful for
+		// content drag-drop, so only the primary button (xdotool 1) arms a
+		// drag; non-primary buttons always take the atomic-click path.
+		const DRAG_THRESHOLD_PX = 4 // framebuffer px before a move becomes a drag
+		const MOVE_THROTTLE_MS = 33 // ~30 Hz cap on input.move dispatch
+
+		// Per-gesture mutable state. Reset on each mousedown.
+		const drag = {
+			pointerDown: false,
+			dragging: false,
+			button: 1 as 1 | 2 | 3,
+			startX: 0,
+			startY: 0,
+			lastMoveAt: 0,
+			lastX: 0,
+			lastY: 0,
+		}
+
+		// Safety-release: if a drag is somehow in progress when we tear down
+		// (unmount, stream teardown, or a mouseup we never saw), send a
+		// terminal mouseup so the remote button is never left stuck down.
+		const safetyReleaseIfDragging = () => {
+			if (drag.dragging) {
+				const x = drag.lastX
+				const y = drag.lastY
+				inputClickMutation.mutate({webappId, x, y, button: drag.button, kind: 'mouseup'})
+			}
+			drag.pointerDown = false
+			drag.dragging = false
+		}
+
+		const dispatchMoveThrottled = (x: number, y: number) => {
+			const now = Date.now()
+			drag.lastX = x
+			drag.lastY = y
+			if (now - drag.lastMoveAt < MOVE_THROTTLE_MS) return
+			drag.lastMoveAt = now
+			inputMoveMutation.mutate({webappId, x, y})
+		}
+
+		const onDocMouseMove = (ev: MouseEvent) => {
+			if (!drag.pointerDown) return
+			const {x, y} = eventToFbCoords(ev)
+			if (!drag.dragging) {
+				const dx = Math.abs(x - drag.startX)
+				const dy = Math.abs(y - drag.startY)
+				if (dx < DRAG_THRESHOLD_PX && dy < DRAG_THRESHOLD_PX) return
+				// Threshold crossed → begin the drag. Press & HOLD the button
+				// at the START coords (button goes down where the user pressed).
+				drag.dragging = true
+				// eslint-disable-next-line no-console
+				console.info(`[270-DRAG] drag start → mousedown webappId=${webappId} x=${drag.startX} y=${drag.startY} btn=${drag.button}`)
+				inputClickMutation.mutate({
+					webappId,
+					x: drag.startX,
+					y: drag.startY,
+					button: drag.button,
+					kind: 'mousedown',
+				})
+				drag.lastX = drag.startX
+				drag.lastY = drag.startY
+				drag.lastMoveAt = Date.now()
+			}
+			dispatchMoveThrottled(x, y)
+		}
+
+		const onDocMouseUp = (ev: MouseEvent) => {
+			if (!drag.pointerDown) return
+			ev.preventDefault()
+			const {x, y} = eventToFbCoords(ev)
+			document.removeEventListener('mousemove', onDocMouseMove, true)
+			document.removeEventListener('mouseup', onDocMouseUp, true)
+			if (drag.dragging) {
+				// End the drag — release the held button at the release coords.
+				// eslint-disable-next-line no-console
+				console.info(`[270-DRAG] drag end → mouseup webappId=${webappId} x=${x} y=${y} btn=${drag.button}`)
+				inputClickMutation.mutate({webappId, x, y, button: drag.button, kind: 'mouseup'})
+			} else {
+				// No significant move → atomic click (100-07.1 path, unchanged).
+				// eslint-disable-next-line no-console
+				console.info(`[100-07.2] click → tRPC webappId=${webappId} x=${x} y=${y} btn=${drag.button}`)
+				inputClickMutation.mutate(
+					{webappId, x, y, button: drag.button, kind: 'click'},
+					{
+						onError: (err) => {
+							// eslint-disable-next-line no-console
+							console.error(`[100-07.2] click mutation failed`, err)
+						},
+					},
+				)
+			}
+			drag.pointerDown = false
+			drag.dragging = false
+		}
+
 		const onMouseDown = (ev: MouseEvent) => {
 			ev.preventDefault()
 			container.focus()
-		}
-
-		const onMouseUp = (ev: MouseEvent) => {
-			ev.preventDefault()
 			const {x, y} = eventToFbCoords(ev)
-			// eslint-disable-next-line no-console
-			console.info(`[100-07.2] click → tRPC webappId=${webappId} x=${x} y=${y} btn=${xdotoolButton(ev.button)}`)
-			inputClickMutation.mutate(
-				{
-					webappId,
-					x,
-					y,
-					button: xdotoolButton(ev.button),
-					kind: 'click',
-				},
-				{
-					onError: (err) => {
-						// eslint-disable-next-line no-console
-						console.error(`[100-07.2] click mutation failed`, err)
-					},
-				},
-			)
+			drag.pointerDown = true
+			drag.dragging = false
+			drag.button = xdotoolButton(ev.button)
+			drag.startX = x
+			drag.startY = y
+			drag.lastX = x
+			drag.lastY = y
+			drag.lastMoveAt = 0
+			// Attach the move/up listeners on the DOCUMENT (capture phase) so a
+			// drag that ends OFF the canvas still delivers mouseup — we never
+			// leave the remote button stuck down. We dispatch NOTHING here:
+			// the click-vs-drag decision is deferred to the first move / up.
+			document.addEventListener('mousemove', onDocMouseMove, true)
+			document.addEventListener('mouseup', onDocMouseUp, true)
 		}
 
 		const onContextMenu = (ev: MouseEvent) => {
@@ -462,7 +566,9 @@ export default function WebAppStreamWindow({webappId, windowId}: WebAppStreamWin
 		// guarantee).
 		const opts = {capture: true} as const
 		container.addEventListener('mousedown', onMouseDown, opts)
-		container.addEventListener('mouseup', onMouseUp, opts)
+		// Phase 270-DRAG: mouseup is NOT bound on the container — it's attached
+		// on `document` (capture) in onMouseDown so a drag releasing OFF the
+		// canvas still delivers mouseup (button never sticks down).
 		container.addEventListener('contextmenu', onContextMenu, opts)
 		container.addEventListener('keydown', onKeyDown, opts)
 		// Phase 100-09-02: wheel listener — capture + passive:false so
@@ -479,12 +585,17 @@ export default function WebAppStreamWindow({webappId, windowId}: WebAppStreamWin
 
 		return () => {
 			container.removeEventListener('mousedown', onMouseDown, opts)
-			container.removeEventListener('mouseup', onMouseUp, opts)
 			container.removeEventListener('contextmenu', onContextMenu, opts)
 			container.removeEventListener('keydown', onKeyDown, opts)
 			container.removeEventListener('wheel', onWheel, wheelOpts)
+			// Phase 270-DRAG: tear down the document-level drag listeners and,
+			// if a drag was mid-flight when the stream/component unmounted,
+			// send a safety mouseup so the remote button is never stuck down.
+			document.removeEventListener('mousemove', onDocMouseMove, true)
+			document.removeEventListener('mouseup', onDocMouseUp, true)
+			safetyReleaseIfDragging()
 		}
-	}, [vnc.containerRef, webappId, inputClickMutation, inputKeyMutation, inputTypeMutation, inputScrollMutation])
+	}, [vnc.containerRef, webappId, inputClickMutation, inputMoveMutation, inputKeyMutation, inputTypeMutation, inputScrollMutation])
 
 	// 5. Mode (D-95-10 default 'chat'; D-95-MODE-LOCAL = local state only).
 	//

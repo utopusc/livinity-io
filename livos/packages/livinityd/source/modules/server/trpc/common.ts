@@ -454,6 +454,7 @@ export const httpOnlyPaths = [
 	// cluster). High call rate during interactive use is OK — each call is
 	// a small POST.
 	'webapp.input.click',
+	'webapp.input.move',    // Phase 270-DRAG — bare pointer-move during a drag gesture (button held by prior mousedown)
 	'webapp.input.keypress',
 	'webapp.input.type',
 	'webapp.input.scroll',  // Phase 100-09-02 — wheel scroll events (deltaY/deltaX → button 4/5/6/7)

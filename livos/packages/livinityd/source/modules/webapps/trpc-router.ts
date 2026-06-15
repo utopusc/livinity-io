@@ -36,6 +36,7 @@ import {
 } from './window-manager.js'
 import {
 	dispatchPointer,
+	dispatchMove,
 	dispatchKey,
 	dispatchType,
 	dispatchScroll,
@@ -192,6 +193,16 @@ const inputClickInput = z.object({
 		.default('click'),
 })
 
+// Phase 270-DRAG — bare pointer-move input (no button). Sent mid-drag (the
+// button is already held by a prior input.click{kind:'mousedown'}). Same
+// wid/coords shape as input.click; throttled by the frontend so xdotool
+// isn't flooded.
+const inputMoveInput = z.object({
+	webappId: z.string().min(1).max(64),
+	x: z.number().int().nonnegative().max(8192),
+	y: z.number().int().nonnegative().max(8192),
+})
+
 const inputKeyInput = z.object({
 	webappId: z.string().min(1).max(64),
 	key: z
@@ -245,6 +256,35 @@ const inputRouter = router({
 				return {ok: true as const}
 			} catch (err) {
 				ctx.logger?.warn?.(`webapp.input.click failed user=${userId} webappId=${input.webappId} wid=${wid} display=${display}`, err)
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'xdotool dispatch failed', cause: err})
+			}
+		}),
+
+	// Phase 270-DRAG — bare pointer move (no button). Sent throttled while a
+	// drag is in progress (button already held by a prior click{mousedown}).
+	// Same wid/display resolution as click. We deliberately keep failures
+	// quiet-ish (warn + INTERNAL_SERVER_ERROR) so a single dropped move
+	// doesn't break the gesture; the frontend still sends the terminal
+	// mouseup so the held button never sticks.
+	move: privateProcedure
+		.input(inputMoveInput)
+		.mutation(async ({ctx, input}) => {
+			const userId = ctx.currentUser?.id
+			if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+			const wm = ctx.livinityd?.webappWindowManager
+			if (!wm) {
+				throw new TRPCError({code: 'SERVICE_UNAVAILABLE', message: 'WebAppWindowManager not initialised'})
+			}
+			const wid = wm.getWidForWebapp(input.webappId, userId)
+			if (wid == null) {
+				throw new TRPCError({code: 'NOT_FOUND', message: `no live window for webapp ${input.webappId}`})
+			}
+			const display = wm.getDisplayForWebapp(input.webappId, userId) ?? undefined
+			try {
+				await dispatchMove(wid, input.x, input.y, display)
+				return {ok: true as const}
+			} catch (err) {
+				ctx.logger?.warn?.(`webapp.input.move failed user=${userId} webappId=${input.webappId} wid=${wid} display=${display}`, err)
 				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'xdotool dispatch failed', cause: err})
 			}
 		}),
