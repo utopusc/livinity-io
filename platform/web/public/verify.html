@@ -103,6 +103,12 @@
         const [resending, setResending] = useState(false);
         const [resendMsg, setResendMsg] = useState(null);
         const [resendOk, setResendOk] = useState(false);
+        // Email-verify-first: a brand-new signup has NO session yet. sessionMode
+        // = true only for a legacy logged-in unverified user. When false we
+        // resend by email (pendingEmail, recovered from sessionStorage or typed).
+        const [sessionMode, setSessionMode] = useState(false);
+        const [pendingEmail, setPendingEmail] = useState("");
+        const [knownEmail, setKnownEmail] = useState(false);
 
         const token = getQueryParam("token");
 
@@ -133,31 +139,54 @@
           })();
         }, [token]);
 
-        // Branch 2: no token → check session; show pending state if unverified
+        // Branch 2: no token → "check your email" pending state. A new signup
+        // has no session, so we recover the email from sessionStorage (set by
+        // auth.html) instead of bouncing to /login (a pending account can't log
+        // in yet). A legacy logged-in unverified user still uses session mode.
         useEffect(() => {
           if (token) return;
           (async () => {
+            function fallbackToPending() {
+              let e = null;
+              try { e = sessionStorage.getItem("liv_pending_email"); } catch (err) {}
+              setSessionMode(false);
+              if (e) { setPendingEmail(e); setKnownEmail(true); }
+              else { setPendingEmail(""); setKnownEmail(false); }
+              setStatus("pending");
+            }
             try {
               const me = await fetch("/api/auth/me", { credentials: "same-origin" });
-              if (!me.ok) { window.location.href = "/login?redirect=/verify"; return; }
+              if (!me.ok) { fallbackToPending(); return; }
               const data = await me.json();
-              if (!data.user) { window.location.href = "/login?redirect=/verify"; return; }
+              if (!data.user) { fallbackToPending(); return; }
               if (data.user.emailVerified) { window.location.href = "/dashboard/install"; return; }
               setUser(data.user);
+              setSessionMode(true);
+              setKnownEmail(true);
               setStatus("pending");
             } catch (e) {
-              window.location.href = "/login?redirect=/verify";
+              fallbackToPending();
             }
           })();
         }, [token]);
 
         async function handleResend() {
+          const emailForResend = sessionMode ? null : (pendingEmail || "").trim();
+          if (!sessionMode && !emailForResend) {
+            setResendOk(false);
+            setResendMsg("Enter your email to resend the link.");
+            return;
+          }
           setResending(true);
           setResendMsg(null);
           try {
             const res = await fetch("/api/auth/resend-verification", {
               method: "POST",
               credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              // Session mode: no body → server uses the session. New-signup mode:
+              // identify the pending row by email.
+              body: sessionMode ? undefined : JSON.stringify({ email: emailForResend }),
             });
             const data = await res.json().catch(() => ({}));
             if (res.ok && data.success) {
@@ -188,7 +217,7 @@
               <a href="/" className="brand">Livinity</a>
               <div className="right">
                 {user && <span className="uname">{user.username}</span>}
-                <button onClick={handleLogout} className="h-btn">Sign out</button>
+                {user && <button onClick={handleLogout} className="h-btn">Sign out</button>}
               </div>
             </nav>
 
@@ -204,13 +233,23 @@
                   <h2>Awaiting verification</h2>
                   <p className="sub">We just emailed a one-time confirmation link to the address you signed up with. The link expires in 24 hours.</p>
 
-                  <div className="email-pill">{user && user.email}</div>
+                  {knownEmail ? (
+                    <div className="email-pill">{sessionMode ? (user && user.email) : pendingEmail}</div>
+                  ) : (
+                    <input
+                      type="email"
+                      placeholder="you@livinity.io"
+                      value={pendingEmail}
+                      onChange={e => setPendingEmail(e.target.value)}
+                      style={{ display: "block", width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 12, border: "1px solid var(--dash-line-strong)", background: "var(--card-bg-2)", color: "var(--fg)", fontFamily: "var(--font-mono)", fontSize: "13.5px", margin: "4px 0 18px" }}
+                    />
+                  )}
 
                   <div className="warn-card">
                     ⚠ Can't find the email? Check your spam folder. Some email providers (Gmail, Outlook) sometimes route the first delivery there. Whitelist <strong>noreply@livinity.io</strong> so the next ones land in your inbox.
                   </div>
 
-                  <button className="h-btn" onClick={handleResend} disabled={resending}>
+                  <button className="h-btn" onClick={handleResend} disabled={resending || (!sessionMode && !pendingEmail)}>
                     {resending && <span className="spinner"></span>}
                     {resending ? "Sending…" : "Resend verification email"}
                   </button>
