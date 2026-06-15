@@ -540,8 +540,8 @@
         if (installBtn) {
           installBtn.addEventListener('click', function () {
             if (postToShell('cli-install', name)) {
-              setTerminalPending(row, 'Setup opened — finish in the dialog, then Re-detect');
-              installBtn.textContent = 'Open setup again';
+              setTerminalPending(row, 'Opened in the Terminal — finish the install there, then click "Refresh agents"');
+              installBtn.textContent = 'Open in Terminal again';
               // Phase 269-01 — the dialog's install/auth may mark changes pending;
               // re-check the Apply bar shortly after (the focus listener also covers it).
               setTimeout(function () { refreshApplyBar(section); }, 4000);
@@ -560,8 +560,8 @@
         if (authBtn) {
           authBtn.addEventListener('click', function () {
             if (postToShell('cli-auth', name)) {
-              setTerminalPending(row, 'Sign-in opened — finish in the dialog, then Re-detect');
-              authBtn.textContent = 'Open setup again';
+              setTerminalPending(row, 'Opened in the Terminal — sign in there, then click "Refresh agents"');
+              authBtn.textContent = 'Open in Terminal again';
               authBtn.disabled = false;
               // Phase 269-01 — re-check the Apply bar after the dialog's auth runs.
               setTimeout(function () { refreshApplyBar(section); }, 4000);
