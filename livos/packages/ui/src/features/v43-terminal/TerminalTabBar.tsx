@@ -83,7 +83,7 @@ export function TerminalTabBar({
 					data-test-tab={tab.tabKey}
 					onClick={() => onActivate(tab.tabKey)}
 					onContextMenu={(e) => handleContextMenu(e, tab.tabKey)}
-					className={`relative cursor-pointer rounded px-3 py-1 text-xs text-[#e7e7e8] ${
+					className={`group relative flex cursor-pointer items-center gap-1.5 rounded py-1 pl-3 pr-1.5 text-xs text-[#e7e7e8] ${
 						tab.tabKey === activeTabKey ? 'bg-[#1f2937]' : 'hover:bg-[#15171b]'
 					}`}
 				>
@@ -116,6 +116,31 @@ export function TerminalTabBar({
 								<span className='ml-1 text-[#9ca3af]'>·…</span>
 							)}
 						</span>
+					)}
+					{/* Phase 272 — visible close (X) on every tab, like the LivOS window
+					    tabs. Was right-click-menu-only before, which the operator
+					    couldn't find. Active tab shows it always; inactive tabs reveal
+					    it on hover to keep the strip clean. stopPropagation so closing
+					    doesn't first activate the tab. */}
+					{renamingKey !== tab.tabKey && (
+						<button
+							type='button'
+							data-test-tab-close={tab.tabKey}
+							title='Close tab'
+							aria-label={`Close ${tab.name}`}
+							onClick={(e) => {
+								e.stopPropagation()
+								onClose(tab.tabKey)
+								setMenuFor(null)
+							}}
+							className={`flex h-4 w-4 items-center justify-center rounded text-[13px] leading-none text-[#9ca3af] hover:bg-[#374151] hover:text-[#f87171] ${
+								tab.tabKey === activeTabKey
+									? 'opacity-100'
+									: 'opacity-0 group-hover:opacity-100'
+							}`}
+						>
+							×
+						</button>
 					)}
 					{menuFor === tab.tabKey && (
 						<div

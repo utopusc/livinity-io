@@ -24,6 +24,7 @@ import {WebglAddon} from '@xterm/addon-webgl'
 import {WebLinksAddon} from '@xterm/addon-web-links'
 import {Terminal} from '@xterm/xterm'
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
+import {createPortal} from 'react-dom'
 import {uuidv7} from 'uuidv7'
 
 import {TerminalTabBar, type TerminalTab} from './TerminalTabBar'
@@ -672,7 +673,15 @@ function TerminalTabPane({
 				}`}
 				ref={containerRef}
 			/>
-			{ctxMenu && isActive && (
+			{/* Phase 272 — PORTAL the clipboard menu to document.body. The terminal
+			    renders inside a LivOS desktop window whose container carries a CSS
+			    `transform` (window drag/position), which makes `position:fixed`
+			    resolve relative to that window instead of the viewport — so the
+			    viewport-based clientX/Y + innerWidth clamp landed the menu off the
+			    window ("right-click shows nothing unless I enlarge the window").
+			    Portaling out of the transformed subtree restores true viewport-fixed
+			    positioning, so the existing coords/clamp are now correct. */}
+			{ctxMenu && isActive && createPortal(
 				<>
 					{/* Click-away backdrop — also swallows the next right-click. */}
 					<div
@@ -722,7 +731,8 @@ function TerminalTabPane({
 							Clear
 						</button>
 					</div>
-				</>
+				</>,
+				document.body,
 			)}
 		</>
 	)
