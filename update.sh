@@ -480,6 +480,56 @@ DROPIN
     fi
 }
 
+# ── Fast, clean shutdown drop-in (2026-06-15) ────────────────────────────────
+# Root cause of "every update = ~90s of Cloudflare 502": livos.service spawns a
+# whole XFCE streaming-desktop subsystem (Xvfb, dbus, xfsettingsd, xfwm4,
+# xfce4-panel, xfdesktop, gvfsd, goa-daemon, xdg-desktop-portal, ~25+ procs)
+# INTO its own control-group. livinityd's SIGTERM handler exits node instantly
+# ("Received SIGTERM, exiting immediately to release port"), BUT the default
+# KillMode=control-group makes `systemctl restart` block until the ENTIRE cgroup
+# drains — and the XFCE processes ignore SIGTERM, so systemd waits the full
+# DefaultTimeoutStopSec (90s) then SIGKILLs the lot. That 90s window is ALSO
+# exactly when update.sh's `sudo` parent (a leftover in the same cgroup) gets
+# SIGKILLed — the mechanism that strands a non-escaped update.sh mid-deploy
+# (stale markers, no success/failed.json, "rolled back to old version" in the UI
+# with no record). Proven live on the Mini PC: 13:16:30 Stopping → 13:18:00
+# "final-sigterm timed out. Killing." (xfce4-panel, bash, sudo).
+#
+# Fix: KillMode=mixed → SIGTERM goes to the MAIN process only; once it exits the
+# cgroup remainder (the XFCE session, which livinityd re-spawns on every boot
+# anyway) is SIGKILLed immediately instead of being waited on. TimeoutStopSec=25
+# is a hard cap so a stuck stop can never again hang for 90s. Net: restart
+# downtime collapses from ~90s to a few seconds, and the cgroup-SIGKILL window
+# that endangers update.sh effectively disappears. Idempotent — mirrors the
+# StartLimit drop-in idiom above.
+ensure_livos_killmode_dropin() {
+    local dir="/etc/systemd/system/livos.service.d"
+    local f="$dir/20-livos-killmode.conf"
+    mkdir -p "$dir" 2>/dev/null || true
+    local tmp; tmp=$(mktemp)
+    cat > "$tmp" <<'DROPIN'
+[Service]
+# LivOS fast-shutdown (atomic-update safety): the XFCE streaming-desktop the
+# daemon spawns into this cgroup ignores SIGTERM and would otherwise hold the
+# stop open for the full 90s DefaultTimeoutStopSec, then SIGKILL — a window that
+# both gives users a 90s 502 on every update AND strands update.sh's sudo parent
+# (leftover in this cgroup) when systemd force-kills it. KillMode=mixed gates the
+# stop on the main process and SIGKILLs the desktop remainder immediately;
+# TimeoutStopSec caps any residual hang.
+KillMode=mixed
+TimeoutStopSec=25
+DROPIN
+    if [[ ! -f "$f" ]] || ! cmp -s "$tmp" "$f"; then
+        mv "$tmp" "$f" 2>/dev/null || { rm -f "$tmp"; return 0; }
+        chmod 644 "$f" 2>/dev/null || true
+        systemctl daemon-reload 2>/dev/null || true
+        ok "livos.service KillMode=mixed drop-in installed (fast restart, no 90s stop-hang)"
+    else
+        rm -f "$tmp"
+        ok "livos.service KillMode=mixed drop-in already current"
+    fi
+}
+
 # ── Phase 196-02 — opencode CLI version-pin warning ──
 # update.sh assumes install.sh has already provisioned opencode. If the
 # operator skipped install.sh OR opencode upstream pushed a regression,
@@ -1786,6 +1836,9 @@ systemctl daemon-reload
 
 # Auto-recovery: keep systemd retrying livos on crash-loop (never permanent-fail).
 ensure_livos_startlimit_dropin
+# Fast, clean shutdown — collapse the 90s stop-hang (XFCE cgroup) that both 502s
+# users on every update AND strands update.sh's sudo parent at the SIGKILL.
+ensure_livos_killmode_dropin
 
 info "Restarting livos..."
 # Clear any latched failed-state FIRST — a box already crash-looping from a prior

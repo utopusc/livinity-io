@@ -1973,6 +1973,17 @@ Environment=NODE_OPTIONS=--dns-result-order=ipv4first
 ExecStart=/usr/bin/npx tsx ${_DLD_LIVOS_DIR}/packages/livinityd/source/cli.ts --data-directory ${livos_data_dir} --port ${livos_port}
 Restart=on-failure
 RestartSec=5
+# 2026-06-15 — fast, clean shutdown. livinityd spawns a whole XFCE streaming
+# desktop (Xvfb/dbus/xfce4-panel/xfdesktop/gvfsd/…) into this cgroup; those
+# procs ignore SIGTERM. With the default KillMode=control-group, `systemctl
+# restart` waits for the ENTIRE cgroup to drain → the full 90s
+# DefaultTimeoutStopSec → SIGKILL, giving users a 90s 502 on EVERY update and
+# stranding update.sh's sudo parent in the cgroup-kill. KillMode=mixed gates the
+# stop on the main process (livinityd exits on SIGTERM in ms) and SIGKILLs the
+# desktop remainder immediately; TimeoutStopSec caps any residual hang. The
+# desktop is re-spawned on every boot, so the hard kill is lossless.
+KillMode=mixed
+TimeoutStopSec=25
 StandardOutput=journal
 StandardError=journal
 LimitNOFILE=65536
