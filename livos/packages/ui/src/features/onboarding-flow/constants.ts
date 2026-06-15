@@ -56,7 +56,10 @@ export type OnboardingData = {
 	region?: Region
 	/** Phase 196-04 — optional country sub-pick (ISO-3166-1 alpha-2). Required in 196.1. */
 	country?: string
-	/** Phase 196.1 — city name within country (curated catalog). */
+	/** State/region code within country (dataset IState.iso2). Optional —
+	 *  states-less countries omit it. */
+	state?: string
+	/** Phase 196.1 — city name within country (resolved from the dataset). */
 	city?: string
 	/** Phase 196-05 — IANA Olson timezone (e.g. Europe/Istanbul). Derived in 196.1 from city. */
 	timezone?: string

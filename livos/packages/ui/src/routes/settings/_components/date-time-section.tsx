@@ -9,22 +9,17 @@
      - Live display: `system.info` exposes `.region` (e.g.
        'Istanbul · UTC+3'). Shown read-only as the current
        time zone.
+     - Cascade data: comprehensive country → (state) → city picker
+       via `setup.getCountries` / `getStates` / `getCities`
+       (backed by the @countrystatecity dataset, backend-only —
+       the UI never imports the dataset, only these tRPC queries).
      - Saved read-back: `setup.getLocation` returns the persisted
-       {country, city, hourCycle}. We seed the Country/City picker
-       from it (one-time hydration) so it reflects what was saved,
-       falling back to the browser's resolved IANA time zone
-       (suggestFromBrowser) only when no saved location exists.
-     - Save: `setup.setLocation` takes EXACTLY {country, city}
+       {country, state, city, hourCycle}. We seed the cascade from
+       it (one-time hydration) so it reflects what was saved.
+     - Save: `setup.setLocation` takes {country, state?, cityId}
        and derives + sets timezone + locale + region server-side.
        On success we refetch system.info so the "Current" row
        reflects the new clock.
-
-   We surface system.info.region as the live value for the
-   read-only "Time zone" row.
-
-   COUNTRIES / getCountry are imported from the shared
-   livinityd locale catalog (single source of truth, same module
-   the onboarding LocationStep + the setup-router validation use).
    ========================================================= */
 
 import {useEffect, useMemo, useRef, useState} from 'react'
@@ -43,69 +38,97 @@ import {
 } from '@/shadcn-components/ui/select'
 import {trpcReact} from '@/trpc/trpc'
 
-import {
-	COUNTRIES,
-	getCountry,
-} from '../../../../../livinityd/source/modules/locale/location-data'
-
-/** Suggest a (country, city) from the browser's IANA time zone. */
-function suggestFromBrowser(): {country: string; city: string} | null {
-	try {
-		const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-		if (!tz) return null
-		for (const country of COUNTRIES) {
-			for (const city of country.cities) {
-				if (city.timezone === tz) {
-					return {country: country.code, city: city.name}
-				}
-			}
-		}
-	} catch {
-		// ignore
-	}
-	return null
-}
-
 type HourCycle = 'h12' | 'h23'
 
 export function DateTimeSection() {
-	const suggestion = useMemo(() => suggestFromBrowser(), [])
-
 	// Live, read-only display value for the current system time zone.
 	const sysInfoQ = trpcReact.system.info.useQuery()
 
-	// Phase 271 — read back the saved location + clock format.
+	// Read back the saved location + clock format.
 	const locationQ = trpcReact.setup.getLocation.useQuery(undefined, {
 		retry: false,
 	})
 
-	// Seed the picker from the browser's resolved IANA time zone as a sane
-	// default; the saved location (getLocation) hydrates over this once below.
-	const [country, setCountry] = useState<string>(suggestion?.country ?? 'TR')
-	const [city, setCity] = useState<string>(suggestion?.city ?? 'Istanbul')
+	// Cascade selections. Country defaults to 'TR' until the saved location (or
+	// the user) overrides it.
+	const [country, setCountry] = useState<string>('TR')
+	const [stateCode, setStateCode] = useState<string>('')
+	const [cityId, setCityId] = useState<string>('')
 
-	// Phase 272 — one-time hydration from the SAVED location. When getLocation
-	// returns a persisted country/city, seed the selects from it (reflecting
-	// what's actually saved, not just a browser guess). Falls back to the
-	// browser suggestion when there's no saved country/city. A ref guards it
-	// so a slow read-back can't clobber the user's in-progress selection.
-	const countryCityHydratedRef = useRef(false)
+	// ─── Cascade queries ──────────────────────────────────────────────────
+	const countriesQ = trpcReact.setup.getCountries.useQuery()
+	const statesQ = trpcReact.setup.getStates.useQuery(
+		{country},
+		{enabled: !!country},
+	)
+	const states = statesQ.data ?? []
+	const hasStates = states.length > 0
+
+	const citiesEnabled = !!country && (!hasStates || !!stateCode)
+	const citiesQ = trpcReact.setup.getCities.useQuery(
+		{country, state: hasStates && stateCode ? stateCode : undefined},
+		{enabled: citiesEnabled},
+	)
+	const cities = citiesQ.data ?? []
+
+	// ─── One-time hydration from the SAVED location ───────────────────────
+	// Seed country/state from getLocation. The city hydrates separately once the
+	// matching cities list loads (we match the saved city NAME to its id, since
+	// the dataset id wasn't persisted historically). Refs guard against a slow
+	// read-back clobbering an in-progress user selection.
+	const seedHydratedRef = useRef(false)
+	const savedCityName = locationQ.data?.city ?? null
 	useEffect(() => {
-		if (countryCityHydratedRef.current) return
+		if (seedHydratedRef.current) return
 		if (!locationQ.data) return
-		countryCityHydratedRef.current = true
-		const savedCountry = locationQ.data.country
-		const savedCity = locationQ.data.city
-		if (savedCountry) setCountry(savedCountry)
-		if (savedCity) setCity(savedCity)
+		seedHydratedRef.current = true
+		if (locationQ.data.country) setCountry(locationQ.data.country)
+		if (locationQ.data.state) setStateCode(locationQ.data.state)
 	}, [locationQ.data])
+
+	const cityNameHydratedRef = useRef(false)
+	useEffect(() => {
+		if (cityNameHydratedRef.current) return
+		if (!savedCityName) return
+		if (cities.length === 0) return
+		const match = cities.find((c) => c.name === savedCityName)
+		if (match) {
+			cityNameHydratedRef.current = true
+			setCityId(String(match.id))
+		}
+	}, [savedCityName, cities])
+
+	// When the country changes (by the user), clear downstream picks.
+	const prevCountryRef = useRef(country)
+	useEffect(() => {
+		if (prevCountryRef.current !== country) {
+			prevCountryRef.current = country
+			setStateCode('')
+			setCityId('')
+			cityNameHydratedRef.current = true // user navigated away from the saved city
+		}
+	}, [country])
+
+	const prevStateRef = useRef(stateCode)
+	useEffect(() => {
+		if (prevStateRef.current !== stateCode) {
+			prevStateRef.current = stateCode
+			setCityId('')
+			cityNameHydratedRef.current = true
+		}
+	}, [stateCode])
+
+	const selectedCity = useMemo(
+		() => cities.find((c) => String(c.id) === cityId),
+		[cities, cityId],
+	)
+	const derivedTimezone = selectedCity?.timezone ?? ''
 
 	const setLocation = trpcReact.setup.setLocation.useMutation({
 		onSuccess: () => sysInfoQ.refetch(),
 	})
 
-	// Phase 271 — 24h⇄AM/PM. Seeded from the saved hour_cycle (getLocation) once
-	// it loads; writes via setClockFormat.
+	// 24h⇄AM/PM. Seeded from the saved hour_cycle (getLocation) once it loads.
 	const utils = trpcReact.useUtils()
 	const [hourCycle, setHourCycle] = useState<HourCycle>('h23')
 	const hourCycleHydratedRef = useRef(false)
@@ -125,27 +148,16 @@ export function DateTimeSection() {
 		setClockFormat.mutate({hourCycle: next})
 	}
 
-	// When country changes, reset city to that country's first city if the
-	// current city doesn't belong to it.
-	useEffect(() => {
-		const entry = getCountry(country)
-		if (!entry) return
-		const stillValid = entry.cities.some((c) => c.name === city)
-		if (!stillValid) {
-			setCity(entry.cities[0]?.name ?? '')
-		}
-	}, [country]) // eslint-disable-line react-hooks/exhaustive-deps
-
-	const countryEntry = getCountry(country)
-	const cities = countryEntry?.cities ?? []
-	const derivedTimezone = cities.find((c) => c.name === city)?.timezone ?? ''
-	const derivedLocale = countryEntry?.defaultLocale ?? 'en-US'
-
-	const canSave = !!country && !!city && !!derivedTimezone && !setLocation.isPending
+	const canSave = !!country && !!cityId && !!derivedTimezone && !setLocation.isPending
 
 	function handleSave() {
+		if (!selectedCity) return
 		setLocation.reset()
-		setLocation.mutate({country, city})
+		setLocation.mutate({
+			country,
+			state: hasStates && stateCode ? stateCode : undefined,
+			cityId,
+		})
 	}
 
 	const region = sysInfoQ.data?.region
@@ -181,7 +193,7 @@ export function DateTimeSection() {
 				/>
 			</FieldCard>
 
-			{/* Picker — Country + City Selects with a derived preview + Save. */}
+			{/* Picker — Country → (State) → City Selects + derived preview + Save. */}
 			<FieldCard>
 				<FieldRow
 					label='Country'
@@ -191,7 +203,7 @@ export function DateTimeSection() {
 								<SelectValue placeholder='Select a country' />
 							</SelectTrigger>
 							<SelectContent>
-								{COUNTRIES.map((c) => (
+								{(countriesQ.data ?? []).map((c) => (
 									<SelectItem key={c.code} value={c.code}>
 										{c.name}
 									</SelectItem>
@@ -200,19 +212,46 @@ export function DateTimeSection() {
 						</Select>
 					}
 				/>
+				{/* State — only when the country has states. */}
+				{hasStates && (
+					<FieldRow
+						label='State / Region'
+						value={
+							<Select value={stateCode} onValueChange={setStateCode}>
+								<SelectTrigger className='w-full max-w-[280px]' aria-label='State'>
+									<SelectValue placeholder='Select a state' />
+								</SelectTrigger>
+								<SelectContent>
+									{states.map((s) => (
+										<SelectItem key={s.code} value={s.code}>
+											{s.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						}
+					/>
+				)}
 				<FieldRow
 					label='City'
 					value={
-						cities.length === 0 ? (
-							<span className='text-[color:var(--fg-faint)]'>No cities for this country</span>
+						hasStates && !stateCode ? (
+							<span className='text-[color:var(--fg-faint)]'>Pick a state first</span>
+						) : citiesQ.isLoading ? (
+							<span className='inline-flex items-center gap-2 text-[color:var(--fg-mute)]'>
+								<Loader2 className='h-3.5 w-3.5 animate-spin' />
+								Loading cities…
+							</span>
+						) : cities.length === 0 ? (
+							<span className='text-[color:var(--fg-faint)]'>No cities found</span>
 						) : (
-							<Select value={city} onValueChange={setCity}>
+							<Select value={cityId} onValueChange={setCityId}>
 								<SelectTrigger className='w-full max-w-[280px]' aria-label='City'>
 									<SelectValue placeholder='Select a city' />
 								</SelectTrigger>
 								<SelectContent>
 									{cities.map((c) => (
-										<SelectItem key={c.name} value={c.name}>
+										<SelectItem key={c.id} value={String(c.id)}>
 											{c.name}
 										</SelectItem>
 									))}
@@ -229,10 +268,6 @@ export function DateTimeSection() {
 								<div>
 									Time zone:{' '}
 									<span className='font-mono text-[color:var(--fg)]'>{derivedTimezone}</span>
-								</div>
-								<div>
-									Language:{' '}
-									<span className='font-mono text-[color:var(--fg)]'>{derivedLocale}</span>
 								</div>
 							</div>
 						) : (
@@ -266,7 +301,7 @@ export function DateTimeSection() {
 				)}
 			</FieldCard>
 
-			{/* Phase 271 — 24h⇄AM/PM clock format. Read via getLocation, write via
+			{/* 24h⇄AM/PM clock format. Read via getLocation, write via
 			    setClockFormat. Applies immediately to the navbar clock. */}
 			<FieldCard>
 				<FieldRow

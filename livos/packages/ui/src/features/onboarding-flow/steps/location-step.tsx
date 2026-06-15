@@ -1,9 +1,21 @@
 /* =========================================================
-   LocationStep — Phase 196.1
-   Replaces RegionStep + LocaleTimezoneStep with a single
-   Country + City picker. Submitting calls `setup.setLocation`
+   LocationStep — comprehensive country → (state) → city picker.
+
+   Replaces the old hand-curated 27-country catalog (imported
+   directly from livinityd, a 55MB bundle-leak vector) with three
+   cascading tRPC-driven selects backed by the @countrystatecity
+   dataset (backend-only). Submitting calls `setup.setLocation`
    which derives region + timezone + locale server-side and
    propagates the timezone to the system clock.
+
+   Cascade:
+     Country  → setup.getCountries (loaded once)
+     State    → setup.getStates({country}) — rendered ONLY when the
+                array is non-empty (driven off the actual per-country
+                length, not a hardcoded list)
+     City     → setup.getCities({country, state?}) — each option
+                carries its dataset id + IANA timezone, so we preview
+                the zone and submit by cityId.
 
    Props contract mirrors other steps: {data, setData, onContinue, onSkip, onBack}.
    ========================================================= */
@@ -12,10 +24,6 @@ import {useEffect, useMemo, useState} from 'react'
 
 import {trpcReact} from '@/trpc/trpc'
 
-import {
-	COUNTRIES,
-	getCountry,
-} from '../../../../../livinityd/source/modules/locale/location-data'
 import {FooterBar} from '../footer-bar'
 import type {OnboardingData} from '../constants'
 
@@ -27,24 +35,6 @@ type Props = {
 	onBack: () => void
 }
 
-/** Suggest a (country, city) from the browser's IANA timezone. */
-function suggestFromBrowser(): {country: string; city: string} | null {
-	try {
-		const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-		if (!tz) return null
-		for (const country of COUNTRIES) {
-			for (const city of country.cities) {
-				if (city.timezone === tz) {
-					return {country: country.code, city: city.name}
-				}
-			}
-		}
-	} catch {
-		// ignore
-	}
-	return null
-}
-
 type HourCycle = 'h12' | 'h23'
 
 /** Normalize any Intl hour-cycle code to the two-way 12h/24h axis. */
@@ -54,7 +44,7 @@ function normalizeHourCycle(hc: string | null | undefined): HourCycle | null {
 	return null
 }
 
-/** Phase 271 — derive the default hour-cycle from a locale (US → h12, TR → h23). */
+/** Derive the default hour-cycle from a locale (US → h12, TR → h23). */
 function deriveHourCycle(locale: string): HourCycle {
 	try {
 		const resolved = new Intl.DateTimeFormat(locale || 'en-US', {
@@ -66,69 +56,93 @@ function deriveHourCycle(locale: string): HourCycle {
 	}
 }
 
-export function LocationStep({data, setData, onContinue, onSkip, onBack}: Props) {
-	const suggestion = useMemo(() => suggestFromBrowser(), [])
+const selectStyle: React.CSSProperties = {
+	padding: '10px 14px',
+	borderRadius: 10,
+	border: '1px solid var(--line)',
+	background: 'var(--surface)',
+	color: 'var(--fg)',
+	fontSize: 14,
+}
 
-	const [country, setCountry] = useState<string>(
-		data.country ?? suggestion?.country ?? 'TR',
-	)
-	const [city, setCity] = useState<string>(
-		data.city ?? suggestion?.city ?? 'Istanbul',
-	)
+export function LocationStep({data, setData, onContinue, onSkip, onBack}: Props) {
+	// Default the Country to a sensible value — the saved pick, or 'TR' (the
+	// box-owner's locale baseline). We do NOT client-scan 156k cities to guess.
+	const [country, setCountry] = useState<string>(data.country ?? 'TR')
+	const [state, setState] = useState<string>(data.state ?? '')
+	const [cityId, setCityId] = useState<string>('')
 	const [error, setError] = useState<string | null>(null)
+
+	const countriesQ = trpcReact.setup.getCountries.useQuery()
+	const statesQ = trpcReact.setup.getStates.useQuery(
+		{country},
+		{enabled: !!country},
+	)
+	const states = statesQ.data ?? []
+	const hasStates = states.length > 0
+
+	// Cities load once we have a country AND (no states OR a state pick).
+	const citiesEnabled = !!country && (!hasStates || !!state)
+	const citiesQ = trpcReact.setup.getCities.useQuery(
+		{country, state: hasStates && state ? state : undefined},
+		{enabled: citiesEnabled},
+	)
+	const cities = citiesQ.data ?? []
 
 	const setLocation = trpcReact.setup.setLocation.useMutation()
 	const setClockFormat = trpcReact.setup.setClockFormat.useMutation()
 
-	// Phase 271 — 24h⇄AM/PM. Defaults to the selected country's locale default
-	// (US/en → h12 AM/PM, TR → h23 24h). Once the operator touches the toggle
-	// their explicit choice sticks (we stop auto-deriving).
+	// 24h⇄AM/PM. Defaults from the saved locale (US/en → h12, TR → h23). Once the
+	// operator touches the toggle their explicit choice sticks.
 	const [hourCycle, setHourCycle] = useState<HourCycle>(
 		data.hourCycle ?? deriveHourCycle(data.locale ?? 'en-US'),
 	)
-	const [hourCycleTouched, setHourCycleTouched] = useState<boolean>(
-		data.hourCycle != null,
-	)
 
-	// When country changes, reset city to that country's first city if the
-	// current city doesn't belong to it.
+	// When the country changes, clear the downstream state/city selections.
 	useEffect(() => {
-		const entry = getCountry(country)
-		if (!entry) return
-		const stillValid = entry.cities.some((c) => c.name === city)
-		if (!stillValid) {
-			setCity(entry.cities[0]?.name ?? '')
+		setState('')
+		setCityId('')
+	}, [country])
+
+	// When the state changes, clear the city.
+	useEffect(() => {
+		setCityId('')
+	}, [state])
+
+	// Default the city to the first option once cities load and nothing's picked.
+	useEffect(() => {
+		if (!cityId && cities.length > 0) {
+			setCityId(String(cities[0].id))
 		}
-	}, [country]) // eslint-disable-line react-hooks/exhaustive-deps
+	}, [cities, cityId])
 
-	const countryEntry = getCountry(country)
-	const cities = countryEntry?.cities ?? []
-	const derivedTimezone = cities.find((c) => c.name === city)?.timezone ?? ''
-	const derivedLocale = countryEntry?.defaultLocale ?? 'en-US'
-
-	// Auto-derive the hour-cycle from the selected country's locale until the
-	// operator overrides it manually (then their choice is sticky).
-	useEffect(() => {
-		if (hourCycleTouched) return
-		setHourCycle(deriveHourCycle(derivedLocale))
-	}, [derivedLocale, hourCycleTouched])
+	const selectedCity = useMemo(
+		() => cities.find((c) => String(c.id) === cityId),
+		[cities, cityId],
+	)
+	const derivedTimezone = selectedCity?.timezone ?? ''
 
 	function pickHourCycle(next: HourCycle) {
-		setHourCycleTouched(true)
 		setHourCycle(next)
-		// Best-effort persist — the click is immediate feedback; the canonical
-		// write also happens on Continue alongside setLocation.
+		// Best-effort persist — canonical write also happens on Continue.
 		setClockFormat.mutate({hourCycle: next})
 	}
 
-	const canContinue = !!country && !!city && !!derivedTimezone && !setLocation.isPending
+	const canContinue =
+		!!country && !!cityId && !!derivedTimezone && !setLocation.isPending
 
 	async function handleContinue() {
 		setError(null)
+		if (!selectedCity) {
+			setError('Pick a city to continue')
+			return
+		}
 		try {
-			const result = await setLocation.mutateAsync({country, city})
-			// Persist the clock-format choice (the default if untouched, or the
-			// operator's pick). Non-fatal — a failure here must not block the step.
+			const result = await setLocation.mutateAsync({
+				country,
+				state: hasStates && state ? state : undefined,
+				cityId,
+			})
 			try {
 				await setClockFormat.mutateAsync({hourCycle})
 			} catch {
@@ -137,6 +151,7 @@ export function LocationStep({data, setData, onContinue, onSkip, onBack}: Props)
 			setData({
 				...data,
 				country: result.country,
+				state: result.state ?? undefined,
 				city: result.city,
 				region: result.region as OnboardingData['region'],
 				timezone: result.timezone,
@@ -186,22 +201,44 @@ export function LocationStep({data, setData, onContinue, onSkip, onBack}: Props)
 						className='onb-select'
 						value={country}
 						onChange={(e) => setCountry(e.target.value)}
-						style={{
-							padding: '10px 14px',
-							borderRadius: 10,
-							border: '1px solid var(--line)',
-							background: 'var(--surface)',
-							color: 'var(--fg)',
-							fontSize: 14,
-						}}
+						disabled={countriesQ.isLoading}
+						style={selectStyle}
 					>
-						{COUNTRIES.map((c) => (
+						{(countriesQ.data ?? []).map((c) => (
 							<option key={c.code} value={c.code}>
 								{c.name}
 							</option>
 						))}
 					</select>
 				</div>
+
+				{/* State — rendered ONLY when this country actually has states. */}
+				{hasStates && (
+					<div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
+						<label
+							className='onb-label'
+							htmlFor='loc-state'
+							style={{fontSize: 13, color: 'var(--fg-mute)'}}
+						>
+							State / Region
+						</label>
+						<select
+							id='loc-state'
+							data-testid='loc-state'
+							className='onb-select'
+							value={state}
+							onChange={(e) => setState(e.target.value)}
+							style={selectStyle}
+						>
+							<option value=''>Select a state…</option>
+							{states.map((s) => (
+								<option key={s.code} value={s.code}>
+									{s.name}
+								</option>
+							))}
+						</select>
+					</div>
+				)}
 
 				<div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
 					<label
@@ -215,27 +252,28 @@ export function LocationStep({data, setData, onContinue, onSkip, onBack}: Props)
 						id='loc-city'
 						data-testid='loc-city'
 						className='onb-select'
-						value={city}
-						onChange={(e) => setCity(e.target.value)}
-						disabled={cities.length === 0}
-						style={{
-							padding: '10px 14px',
-							borderRadius: 10,
-							border: '1px solid var(--line)',
-							background: 'var(--surface)',
-							color: 'var(--fg)',
-							fontSize: 14,
-						}}
+						value={cityId}
+						onChange={(e) => setCityId(e.target.value)}
+						disabled={!citiesEnabled || citiesQ.isLoading || cities.length === 0}
+						style={selectStyle}
 					>
-						{cities.map((c) => (
-							<option key={c.name} value={c.name}>
-								{c.name}
-							</option>
-						))}
+						{hasStates && !state ? (
+							<option value=''>Pick a state first…</option>
+						) : citiesQ.isLoading ? (
+							<option value=''>Loading cities…</option>
+						) : cities.length === 0 ? (
+							<option value=''>No cities found</option>
+						) : (
+							cities.map((c) => (
+								<option key={c.id} value={String(c.id)}>
+									{c.name}
+								</option>
+							))
+						)}
 					</select>
 				</div>
 
-				{/* Phase 271 — 24h⇄AM/PM toggle. Defaults to the country's locale. */}
+				{/* 24h⇄AM/PM toggle. Defaults to the country's locale. */}
 				<div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
 					<label
 						className='onb-label'
@@ -296,9 +334,6 @@ export function LocationStep({data, setData, onContinue, onSkip, onBack}: Props)
 					>
 						<div>
 							Time zone: <span style={{color: 'var(--fg)'}}>{derivedTimezone}</span>
-						</div>
-						<div>
-							Language: <span style={{color: 'var(--fg)'}}>{derivedLocale}</span>
 						</div>
 					</div>
 				)}
