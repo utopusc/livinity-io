@@ -773,12 +773,25 @@
               body: JSON.stringify(body),
             });
             const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.success) {
+            // Email-verify-first: signup now returns { pending: true } (201) — no
+            // users row / session yet; the account is created when the emailed
+            // link is clicked. Sign-in still returns { success: true }.
+            const ok = mode === "signup"
+              ? (res.ok && (data.pending || data.success))
+              : (res.ok && data.success);
+            if (!ok) {
               setError(data.error || (mode === "signup" ? "Couldn't create account." : "Couldn't sign in."));
               setSubmitting(false);
               return;
             }
-            window.location.href = (mode === "signup") ? "/verify" : "/dashboard";
+            if (mode === "signup") {
+              // Stash the email so /verify can show the pending state + resend
+              // (there's no session until the link is clicked).
+              try { sessionStorage.setItem("liv_pending_email", email.toLowerCase().trim()); } catch (e) {}
+              window.location.href = "/verify";
+            } else {
+              window.location.href = "/dashboard";
+            }
           } catch (err) {
             setError("Network error. Try again.");
             setSubmitting(false);
