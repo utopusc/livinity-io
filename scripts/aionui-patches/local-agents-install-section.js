@@ -246,7 +246,14 @@
   //   2. `/agent-logos/<logo>.svg`            — the 267 static fallback SVG.
   function logoCandidates(meta) {
     var urls = [];
-    if (meta.aionuiLogo) urls.push(AIONUI_LOGO_BASE + meta.aionuiLogo);
+    // Phase 272 — LivOS static SVG FIRST and ONLY (we ship + control these under
+    // public/agent-logos/). The previous AionUi-first order requested
+    // /liv/api/assets/logos/tools/coding/<name>.svg, but on the box AionUi only
+    // ships `ai-major/*` — so EVERY tools/coding/* + most brand/* requests 404'd
+    // and spammed the console (13 per render) before the onerror cascade fell
+    // back here anyway. A CLI WITHOUT a bundled static SVG falls straight to its
+    // monogram (no broken-image network request). To give one of those a real
+    // logo, drop a <name>.svg into public/agent-logos/ and add `logo:'<name>'`.
     if (meta.logo) urls.push(LOGO_BASE + meta.logo + '.svg');
     return urls;
   }
