@@ -42,15 +42,18 @@ export function priceIdForInterval(interval: BillingInterval): string {
 }
 
 /**
- * EDU price ($3.99/mo, MONTHLY ONLY) for verified US `.edu` emails, or `null`
- * if `STRIPE_PRICE_ID_EDU_MONTHLY` isn't configured. Returns null (rather than
- * throwing) so an unset env degrades gracefully — the checkout route falls back
- * to the standard monthly price instead of failing an `.edu` user's checkout.
- * EDU does not apply to yearly: `.edu` users who pick yearly pay standard
- * $69.99/yr.
+ * EDU price for verified US `.edu` emails ($3.99/mo or $34.99/yr), or `null` if
+ * the matching env (`STRIPE_PRICE_ID_EDU_MONTHLY` / `STRIPE_PRICE_ID_EDU_YEARLY`)
+ * isn't configured. Returns null (rather than throwing) so an unset env degrades
+ * gracefully — the checkout route falls back to the standard price for that
+ * interval instead of failing an `.edu` user's checkout.
  */
-export function eduMonthlyPriceId(): string | null {
-  return process.env.STRIPE_PRICE_ID_EDU_MONTHLY ?? null;
+export function eduPriceIdForInterval(interval: BillingInterval): string | null {
+  const id =
+    interval === 'yearly'
+      ? process.env.STRIPE_PRICE_ID_EDU_YEARLY
+      : process.env.STRIPE_PRICE_ID_EDU_MONTHLY;
+  return id ?? null;
 }
 
 /** The 3-day free trial (card upfront) applied at checkout. */

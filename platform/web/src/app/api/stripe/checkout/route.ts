@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getSession, SESSION_COOKIE_NAME } from '@/lib/auth';
-import { stripe, priceIdForInterval, eduMonthlyPriceId, TRIAL_PERIOD_DAYS, type BillingInterval } from '@/lib/stripe';
+import { stripe, priceIdForInterval, eduPriceIdForInterval, TRIAL_PERIOD_DAYS, type BillingInterval } from '@/lib/stripe';
 import { mirrorSubscription, isLiveStatus } from '@/lib/stripe-sync';
 
 export const runtime = 'nodejs';
@@ -89,23 +89,26 @@ export async function POST(req: NextRequest) {
     // (which could yield two subscriptions / two trials for one user).
     const idempotencyKey = `checkout:${session.userId}:${interval}:${Math.floor(Date.now() / 15000)}`;
 
-    // EDU discount: verified US `.edu` emails get $3.99/mo (MONTHLY ONLY).
+    // EDU discount: verified US `.edu` emails get $3.99/mo or $34.99/yr.
     // COUPLED INVARIANT: this sits BELOW the `session.emailVerified` 403 guard
     // (top of this handler) ON PURPOSE — a user only reaches checkout with an
     // email they actually verified (clicked the link), so they cannot claim the
     // `.edu` rate with an address they don't own. If that email-verification
     // guard is ever relaxed, this discount becomes spoofable.
     // TLD-ANCHORED (`/\.edu$/`), NOT `host.includes('.edu')` — `x@edu.evil.com`
-    // and `notedu.com` must NOT qualify. EDU yearly falls back to standard.
+    // and `notedu.com` must NOT qualify.
     const emailHost = (session.email.split('@')[1] ?? '').toLowerCase();
     const isEdu = /\.edu$/.test(emailHost);
-    const eduPrice = eduMonthlyPriceId();
-    const priceId =
-      isEdu && interval === 'monthly' && eduPrice ? eduPrice : priceIdForInterval(interval);
-    if (isEdu && interval === 'monthly' && !eduPrice) {
-      console.warn(
-        '[stripe-checkout] .edu user but STRIPE_PRICE_ID_EDU_MONTHLY unset — using standard monthly price',
-      );
+    let priceId = priceIdForInterval(interval);
+    if (isEdu) {
+      const eduPrice = eduPriceIdForInterval(interval);
+      if (eduPrice) {
+        priceId = eduPrice;
+      } else {
+        console.warn(
+          `[stripe-checkout] .edu user but STRIPE_PRICE_ID_EDU_${interval === 'yearly' ? 'YEARLY' : 'MONTHLY'} unset — using standard ${interval} price`,
+        );
+      }
     }
 
     const checkout = await stripe.checkout.sessions.create(
