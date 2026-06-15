@@ -119,3 +119,25 @@ export class DisplayAllocator {
 		return this.max - this.min
 	}
 }
+
+/**
+ * Cross-pool display-collision fix — the SINGLE process-global allocator shared
+ * by BOTH webapp window spawns (webapps/window-manager.ts) AND native-app spawns
+ * (apps/native-routes.ts). They MUST draw from ONE in-use Set: both spawn Xvfb
+ * onto the SAME X-server `:N` namespace, so two independent allocators over
+ * overlapping ranges (the regression: webapp `[10,60)` vs native default
+ * `[10,100)`) hand out the SAME `:N` and the second app renders on the first
+ * app's display — exactly "open a WebApp, then open a native app and it appears
+ * inside the WebApp's screen", and webapp↔webapp double-allocation when a native
+ * already holds a low `:N`.
+ *
+ * Range = WEBAPP_DISPLAY_ALLOCATOR_RANGE `[10, 60)`, provably disjoint from the
+ * MCP `computer_create_display` allocator floor (MCP_CREATE_ALLOCATOR_START = 60)
+ * so a UI-app `:N` can never collide with an MCP-created `:N` either. The `:1`
+ * host display is below the range and registered via registerExisting (no
+ * allocator advance), so it never collides.
+ */
+export const appDisplayAllocator = new DisplayAllocator({
+	min: WEBAPP_DISPLAY_ALLOCATOR_RANGE.min,
+	max: WEBAPP_DISPLAY_ALLOCATOR_RANGE.max,
+})
