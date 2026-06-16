@@ -22,6 +22,12 @@ export async function POST(req: NextRequest) {
   if (!session.emailVerified) {
     return NextResponse.json({ error: 'Verify your email first' }, { status: 403 });
   }
+  // Phase 274: a username is required before subscribing — provisioning keys the
+  // CF tunnel + apex DNS off it. The /username guard normally funnels users here
+  // only after they pick; this is the defensive backstop.
+  if (!session.username) {
+    return NextResponse.json({ error: 'Choose a username first', code: 'username_required' }, { status: 409 });
+  }
 
   let interval: BillingInterval = 'monthly';
   try {
@@ -78,7 +84,18 @@ export async function POST(req: NextRequest) {
 
     // One free trial per account: grant the 3-day trial only if this account
     // has never had a subscription. Cancel → resubscribe is charged immediately.
-    const grantTrial = !row.has_used_trial;
+    // Phase 274: also deny the trial if this EMAIL has ever consumed one — the
+    // used_trials ledger survives account deletion, so delete+recreate (the
+    // livinitydemo abuse) can no longer reset trial eligibility.
+    let emailUsedTrial = false;
+    if (session.email) {
+      const ut = await pool.query<{ exists: number }>(
+        'SELECT 1 AS exists FROM used_trials WHERE email = lower($1) LIMIT 1',
+        [session.email],
+      );
+      emailUsedTrial = ut.rows.length > 0;
+    }
+    const grantTrial = !row.has_used_trial && !emailUsedTrial;
     const subscriptionData: Record<string, unknown> = { metadata: { userId: session.userId } };
     if (grantTrial) {
       subscriptionData.trial_period_days = TRIAL_PERIOD_DAYS;

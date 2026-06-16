@@ -53,6 +53,18 @@ export async function ensureProvisionedByCustomerId(customerId: string): Promise
       await client.query('COMMIT');
       return;
     }
+    // Phase 274: username is now nullable (picked in a /username step AFTER
+    // signup). Provisioning needs it (tunnel name `livos-{username}` + apex
+    // CNAME). If billing somehow started before the pick, do NOT call CF with a
+    // null username — leave cf_provisioned_at NULL so the next webhook/reconcile
+    // retries once the username exists. (The /username guard makes this rare.)
+    if (!user.username) {
+      await client.query('COMMIT');
+      console.warn(
+        `[provision] customer ${customerId} has no username yet — deferring CF provision until /username pick`,
+      );
+      return;
+    }
     username = user.username;
 
     // External CF calls happen while the row lock is held so a concurrent

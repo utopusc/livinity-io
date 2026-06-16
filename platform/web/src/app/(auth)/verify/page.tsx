@@ -49,9 +49,9 @@ function VerifyContent() {
             /* ignore */
           }
           setStatus('success');
-          // Billing-first onboarding: choose a plan before the install wizard.
-          // (/dashboard/install re-checks billing and bounces back if skipped.)
-          setTimeout(() => router.push('/pricing'), 1500);
+          // Phase 274: pick a username before pricing. The new user row has
+          // username=NULL; /username claims it, then routes on to /pricing.
+          setTimeout(() => router.push('/username'), 1500);
         } else {
           setStatus('error');
           setError(data.error || 'Verification failed');

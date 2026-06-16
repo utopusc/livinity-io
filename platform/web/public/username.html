@@ -1,0 +1,222 @@
+<!doctype html>
+<!-- Phase 274: /username — post-signup username selection (decoupled from account creation). -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <title>Choose your username — Livinity</title>
+    <meta name="description" content="Pick the username for your Livinity Cloud AI Computer." />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600;700;800&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="styles.css" />
+
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+    <style>
+      :root { --dash-radius: 18px; --dash-line: rgba(0,0,0,0.07); --dash-line-strong: rgba(0,0,0,0.12); --card-bg: #ffffff; --card-bg-2: #fafafa; --card-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 24px 60px -34px rgba(0,0,0,0.18); --accent-green: #16a34a; --accent-amber: #d97706; --accent-red: #dc2626; --font-mono: "Geist Mono", ui-monospace, monospace; --font-serif: "Instrument Serif", serif; }
+      body.dark { --dash-line: rgba(255,255,255,0.08); --dash-line-strong: rgba(255,255,255,0.16); --card-bg: #0f0f11; --card-bg-2: #08080a; --card-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 24px 60px -28px rgba(0,0,0,0.8); }
+      body { background: var(--bg); color: var(--fg); font-family: "Geist", -apple-system, sans-serif; }
+      body.dark { background: #050507; color: #f5f5f7; }
+
+      .install-shell { max-width: 560px; margin: 0 auto; padding: 32px 28px 80px; }
+      .install-nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; margin-bottom: 12px; }
+      .install-nav .brand { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg); text-decoration: none; }
+      .install-nav .brand em { font-family: var(--font-serif); font-weight: 400; font-style: italic; }
+
+      .h-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 18px; border-radius: 12px; background: transparent; border: 1px solid var(--dash-line-strong); color: var(--fg); font-size: 14.5px; font-weight: 500; font-family: inherit; cursor: pointer; transition: all 0.18s ease; text-decoration: none; }
+      .h-btn:hover { background: rgba(0,0,0,0.04); transform: translateY(-1px); }
+      body.dark .h-btn:hover { background: rgba(255,255,255,0.05); }
+      .h-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+      .h-btn.solid { background: var(--fg); color: var(--bg); border-color: var(--fg); width: 100%; }
+      .h-btn.solid:hover { opacity: 0.92; background: var(--fg); }
+
+      .install-hero { margin-bottom: 22px; }
+      .install-hero .step-pill { display: inline-block; padding: 4px 11px; border-radius: 999px; background: var(--card-bg); border: 1px solid var(--dash-line); font-size: 11.5px; font-family: var(--font-mono); color: var(--fg-mute); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px; }
+      .install-hero h1 { font-size: clamp(26px, 4vw, 36px); font-weight: 600; letter-spacing: -0.025em; line-height: 1.05; margin: 0 0 8px; }
+      .install-hero h1 em { font-family: var(--font-serif); font-weight: 400; font-style: italic; color: var(--fg-mute); }
+      .install-hero p { font-size: 15px; color: var(--fg-mute); margin: 0; max-width: 480px; line-height: 1.5; }
+
+      .panel { background: var(--card-bg); border: 1px solid var(--dash-line); border-radius: var(--dash-radius); padding: 28px; box-shadow: var(--card-shadow); }
+
+      .u-field { position: relative; display: flex; align-items: center; background: var(--card-bg-2); border: 1px solid var(--dash-line-strong); border-radius: 12px; transition: border-color .18s ease, box-shadow .18s ease; }
+      .u-field:focus-within { border-color: var(--fg); box-shadow: 0 0 0 4px rgba(0,0,0,0.06); }
+      body.dark .u-field:focus-within { box-shadow: 0 0 0 4px rgba(255,255,255,0.08); }
+      .u-field input { flex: 1; padding: 15px 4px 15px 16px; background: transparent; border: 0; outline: 0; font: 500 17px/1.2 "Geist", sans-serif; color: var(--fg); letter-spacing: -0.01em; }
+      .u-field .suffix { padding-right: 16px; font-family: var(--font-mono); font-size: 14px; color: var(--fg-faint); white-space: nowrap; }
+
+      .u-status { margin-top: 10px; min-height: 18px; font-size: 13px; font-family: var(--font-mono); display: flex; align-items: center; gap: 7px; }
+      .u-status.ok { color: var(--accent-green); }
+      .u-status.bad { color: var(--accent-red); }
+      .u-status.checking { color: var(--fg-mute); }
+
+      .u-preview { margin-top: 16px; font-size: 13px; color: var(--fg-mute); }
+      .u-preview .mono { font-family: var(--font-mono); color: var(--fg); }
+
+      .auth-error { margin-top: 16px; padding: 12px 14px; background: rgba(220,38,38,0.07); border: 1px solid rgba(220,38,38,0.18); border-radius: 10px; color: var(--accent-red); font-size: 13px; line-height: 1.45; }
+      body.dark .auth-error { background: rgba(248,113,113,0.08); border-color: rgba(248,113,113,0.22); color: #fca5a5; }
+
+      .install-loading { min-height: 100vh; display: grid; place-items: center; color: var(--fg-mute); font-family: var(--font-mono); font-size: 14px; }
+      .spinner { display: inline-block; width: 15px; height: 15px; border: 2px solid var(--dash-line-strong); border-top-color: var(--fg); border-radius: 999px; animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      @media (max-width: 480px) { .install-shell { padding: 16px 14px 60px; } .panel { padding: 20px 18px; } }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div class="install-loading"><p>Loading…</p></div></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      function App() {
+        const [phase, setPhase] = useState("loading"); // loading | ready
+        const [value, setValue] = useState("");
+        const [check, setCheck] = useState(null); // { available, error } | null
+        const [checking, setChecking] = useState(false);
+        const [submitting, setSubmitting] = useState(false);
+        const [error, setError] = useState(null);
+        const debounceRef = useRef(null);
+        const seqRef = useRef(0);
+
+        useEffect(() => {
+          try {
+            const saved = localStorage.getItem("liv_theme");
+            if (saved === "dark") document.body.classList.add("dark");
+          } catch (e) {}
+        }, []);
+
+        // Gate: must be logged in; if a username already exists, skip this step.
+        useEffect(() => {
+          (async () => {
+            try {
+              const res = await fetch("/api/auth/me", { credentials: "same-origin" });
+              if (!res.ok) { window.location.href = "/login"; return; }
+              const data = await res.json();
+              if (!data.user) { window.location.href = "/login"; return; }
+              if (data.user.username) { window.location.replace("/pricing"); return; }
+              setPhase("ready");
+            } catch (e) {
+              window.location.href = "/login";
+            }
+          })();
+        }, []);
+
+        // Debounced live availability check.
+        useEffect(() => {
+          setError(null);
+          if (debounceRef.current) clearTimeout(debounceRef.current);
+          const v = value.trim().toLowerCase();
+          if (!v) { setCheck(null); setChecking(false); return; }
+          setChecking(true);
+          const mySeq = ++seqRef.current;
+          debounceRef.current = setTimeout(async () => {
+            try {
+              const res = await fetch("/api/auth/username/check?u=" + encodeURIComponent(v), { credentials: "same-origin" });
+              const data = await res.json().catch(() => ({}));
+              if (mySeq !== seqRef.current) return; // a newer keystroke superseded us
+              setCheck(data);
+            } catch (e) {
+              if (mySeq === seqRef.current) setCheck({ available: false, error: "Couldn't check availability." });
+            } finally {
+              if (mySeq === seqRef.current) setChecking(false);
+            }
+          }, 350);
+          return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+        }, [value]);
+
+        const norm = value.trim().toLowerCase();
+        const canSubmit = !!norm && !checking && check && check.available && !submitting;
+
+        const claim = async (e) => {
+          if (e) e.preventDefault();
+          if (!canSubmit) return;
+          setSubmitting(true);
+          setError(null);
+          try {
+            const res = await fetch("/api/auth/username", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ username: norm }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.ok) {
+              window.location.href = "/pricing";
+              return;
+            }
+            if (data.code === "already_set") { window.location.href = "/pricing"; return; }
+            setError(data.error || "Couldn't claim that username. Try another.");
+            setSubmitting(false);
+          } catch (err) {
+            setError("Network error. Try again.");
+            setSubmitting(false);
+          }
+        };
+
+        if (phase === "loading") {
+          return (<div className="install-loading"><p><span className="spinner"/> Loading…</p></div>);
+        }
+
+        return (
+          <div className="install-shell">
+            <div className="install-nav">
+              <a href="/" className="brand">Livin<em>ity</em></a>
+            </div>
+
+            <div className="install-hero">
+              <span className="step-pill">Step 1 of 2 · Username</span>
+              <h1>Pick your <em>username.</em></h1>
+              <p>This is your computer's permanent address. Choose carefully — usernames can't be changed later.</p>
+            </div>
+
+            <div className="panel">
+              <form onSubmit={claim} noValidate>
+                <div className="u-field">
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="yourname"
+                    value={value}
+                    maxLength={32}
+                    onChange={(e) => setValue(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""))}
+                  />
+                  <span className="suffix">.livinity.io</span>
+                </div>
+
+                <div className={"u-status" + (checking ? " checking" : (check ? (check.available ? " ok" : " bad") : ""))}>
+                  {checking && <><span className="spinner"/> Checking…</>}
+                  {!checking && check && check.available && <>✓ Available</>}
+                  {!checking && check && !check.available && norm && <>✕ {check.error || "Not available"}</>}
+                </div>
+
+                <div className="u-preview">
+                  Your URL: <span className="mono">{(norm || "yourname")}.livinity.io</span>
+                </div>
+
+                {error && <div className="auth-error" role="alert">{error}</div>}
+
+                <button type="submit" className="h-btn solid" disabled={!canSubmit} style={{ marginTop: 18 }}>
+                  {submitting ? "Claiming…" : "Continue"}
+                </button>
+              </form>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

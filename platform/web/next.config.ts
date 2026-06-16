@@ -33,6 +33,7 @@ const nextConfig: NextConfig = {
         { source: '/pricing', destination: '/pricing.html' },
         { source: '/login', destination: '/auth.html' },
         { source: '/register', destination: '/auth.html' },
+        { source: '/username', destination: '/username.html' },
         { source: '/auth/callback', destination: '/oauth-callback.html' },
         { source: '/profile', destination: '/profile.html' },
         { source: '/verify', destination: '/verify.html' },

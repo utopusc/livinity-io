@@ -47,13 +47,14 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Primary path: pending registration → create the user. ────────────────
+    // Phase 274: pending rows no longer carry a username — the user is created
+    // username-less and picks one in /username after this step.
     const pending = await pool.query<{
       id: string;
       email: string;
-      username: string;
       password_hash: string;
     }>(
-      `SELECT id, email, username, password_hash
+      `SELECT id, email, password_hash
          FROM pending_registrations
         WHERE verification_token = $1 AND verification_expires > NOW()
         LIMIT 1`,
@@ -63,28 +64,21 @@ export async function POST(req: NextRequest) {
     if (pending.rows.length > 0) {
       const p = pending.rows[0];
       const normalizedEmail = p.email.toLowerCase().trim();
-      const normalizedUsername = p.username.toLowerCase().trim();
 
-      // Guard a race: the email/username slot may have been taken by another
-      // (already-verified) account between register and this link click.
-      const clash = await pool.query<{ which: string }>(
-        `SELECT CASE WHEN email = $1 THEN 'email' ELSE 'username' END AS which
-           FROM users WHERE email = $1 OR username = $2 LIMIT 1`,
-        [normalizedEmail, normalizedUsername],
+      // Guard a race: the EMAIL may have been registered by another account
+      // between register and this link click (username can no longer clash here
+      // since none is assigned yet).
+      const clash = await pool.query<{ id: string }>(
+        'SELECT id FROM users WHERE email = $1 LIMIT 1',
+        [normalizedEmail],
       );
       if (clash.rows.length > 0) {
         // The pending row is now unusable — drop it and ask them to retry.
         await pool
           .query('DELETE FROM pending_registrations WHERE id = $1', [p.id])
           .catch(() => {});
-        const which = clash.rows[0].which;
         return NextResponse.json(
-          {
-            error:
-              which === 'email'
-                ? 'That email is already registered. Try signing in.'
-                : 'That username was just taken. Please register again with a different username.',
-          },
+          { error: 'That email is already registered. Try signing in.' },
           { status: 409 },
         );
       }
@@ -95,10 +89,10 @@ export async function POST(req: NextRequest) {
         await client.query('BEGIN');
         // Shared helper (lib/user-creation.ts) so the email-verify path and the
         // OAuth bridge create users identically. Runs inside this tx so the
-        // INSERT + pending-row DELETE stay atomic.
+        // INSERT + pending-row DELETE stay atomic. username=NULL → /username.
         userId = await createUser(
           {
-            username: normalizedUsername,
+            username: null,
             email: normalizedEmail,
             passwordHash: p.password_hash,
             emailVerified: true,
@@ -114,9 +108,9 @@ export async function POST(req: NextRequest) {
           console.error('[auth] verify-email rollback failed:', rollbackErr);
         }
         if ((txErr as { code?: string })?.code === '23505') {
-          // Lost the race for the UNIQUE(email)/UNIQUE(username) index.
+          // Lost the race for the UNIQUE(email) index.
           return NextResponse.json(
-            { error: 'That email or username was just taken. Please register again.' },
+            { error: 'That email was just registered. Please sign in.' },
             { status: 409 },
           );
         }
