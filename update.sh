@@ -199,7 +199,7 @@ if [[ -d "$LAST_GOOD_DIR/livinityd-source" ]]; then
             cp -r "$LAST_GOOD_DIR/liv-core-dist" "$tgt" 2>/dev/null
         done
     fi
-    _LIVOS_RUN_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1); [ -z "$_LIVOS_RUN_USER" ] && _LIVOS_RUN_USER=bruce
+    _LIVOS_RUN_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1); [ -z "$_LIVOS_RUN_USER" ] && _LIVOS_RUN_USER=$(stat -c '%U' /opt/livos 2>/dev/null)
     if id "$_LIVOS_RUN_USER" >/dev/null 2>&1; then
         chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIVOS_DIR/packages/livinityd/source" "$LIVOS_DIR/packages/ui/dist" 2>/dev/null
         [[ -d "$LIV_DIR/packages/core/dist" ]] && chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIV_DIR/packages/core/dist" 2>/dev/null
@@ -536,6 +536,37 @@ verify_build() {
 
 step()  { echo -e "\n${CYAN}━━━ $* ━━━${NC}"; }
 
+# ── Phase 277.1 — desktop-user / operator-domain derivation (NO hardcoded `bruce`) ──
+# LivOS is installed by many operators under arbitrary usernames + domains; nothing
+# may assume `bruce` / `bruce.livinity.io`. Derive the desktop identity ONCE and reuse.
+# Chain (no literal username): livos.service User= (source of truth) → first uid>=1000
+# login → owner of /opt/livos → name of uid 1000.
+_set_desktop_identity() {
+    _DESKTOP_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1)
+    [[ -n "$_DESKTOP_USER" ]] || _DESKTOP_USER=$(getent passwd | awk -F: '$3>=1000 && $3<65534 {print $1; exit}')
+    [[ -n "$_DESKTOP_USER" ]] || _DESKTOP_USER=$(stat -c '%U' /opt/livos 2>/dev/null)
+    # Reject root/UNKNOWN from the weak last-resort tiers — root would mis-own desktop
+    # assets (sudo -u root / chown root:root). Fall to the canonical uid-1000 operator.
+    [[ -n "$_DESKTOP_USER" && "$_DESKTOP_USER" != "UNKNOWN" && "$_DESKTOP_USER" != "root" ]] || _DESKTOP_USER=$(id -un 1000 2>/dev/null)
+    _DESKTOP_HOME=$(getent passwd "$_DESKTOP_USER" 2>/dev/null | cut -d: -f6)
+    [[ -n "$_DESKTOP_HOME" ]] || _DESKTOP_HOME="/home/$_DESKTOP_USER"
+}
+
+# Resolve the operator's public domain (NO hardcoded bruce.livinity.io). Source of
+# truth: livinityd persists it to Redis `livos:domain:config` (.domain). Echoes the
+# domain or empty (callers must treat empty as "skip the domain-specific step").
+_resolve_operator_domain() {
+    local url pw dom=""
+    if command -v redis-cli >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+        url=$(grep -E '^REDIS_URL=' /opt/livos/.env 2>/dev/null | cut -d= -f2-)
+        if [[ -n "$url" ]]; then
+            pw=$(echo "$url" | sed -E 's|redis://[^:]*:([^@]+)@.*|\1|')
+            dom=$(redis-cli -a "$pw" --no-auth-warning GET livos:domain:config 2>/dev/null | jq -r '.domain // empty' 2>/dev/null)
+        fi
+    fi
+    echo "$dom"
+}
+
 # ── Atomic-update safety net (2026-06-15) ─────────────────────────────────────
 # Root cause of "update error → Cloudflare 502, UI inaccessible": update.sh
 # rsyncs the new livinityd source OVER the live tree (no build/typecheck gate —
@@ -604,7 +635,7 @@ restore_last_good() {
     fi
     # livos.service runs as the LivOS desktop user — derive it (NOT hardcoded bruce,
     # which crash-loops non-bruce accounts) and restore ownership so it can read the tree.
-    _LIVOS_RUN_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1); [ -z "$_LIVOS_RUN_USER" ] && _LIVOS_RUN_USER=bruce
+    _LIVOS_RUN_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1); [ -z "$_LIVOS_RUN_USER" ] && _LIVOS_RUN_USER=$(stat -c '%U' /opt/livos 2>/dev/null)
     if id "$_LIVOS_RUN_USER" >/dev/null 2>&1; then
         chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIVOS_DIR/packages/livinityd/source" "$LIVOS_DIR/packages/ui/dist" 2>/dev/null || true
         [[ -d "$LIV_DIR/packages/core/dist" ]] && chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIV_DIR/packages/core/dist" 2>/dev/null || true
@@ -1358,10 +1389,31 @@ set +e
 # `/home/bruce/.local/bin/claude` exports MCP_TIMEOUT=30000 before exec'ing the real
 # claude binary. Idempotent: only re-installs if wrapper missing or stale.
 step "Phase 245.2: Claude Code MCP_TIMEOUT wrapper"
-_CLAUDE_BIN="/home/bruce/.local/bin/claude"
-_CLAUDE_REAL="/home/bruce/.local/share/claude/versions/2.1.148"
+# Phase 277.1 — desktop-user-aware + version-agnostic. Derive the desktop user/home
+# (NOT hardcoded bruce) and resolve the REAL claude dynamically (newest native
+# versioned install, else whatever `claude` resolves to — e.g. a global npm install),
+# so the wrapper works on ANY operator's box regardless of username or claude version.
+_set_desktop_identity
+_CLAUDE_BIN="$_DESKTOP_HOME/.local/bin/claude"
 _WRAPPER_MARKER="Phase 245.2 wrapper"
-if [[ -f "$_CLAUDE_REAL" ]]; then
+# Resolve the REAL claude binary (version-agnostic), EXCLUDING our own wrapper so we can
+# NEVER bake a self-exec wrapper (fork/exec loop — review finding). Realistic locations
+# in order: native versioned install (the claude.ai installer) → global npm
+# (/usr/(local/)bin) → the DESKTOP USER's login PATH (covers ~/.local/bin installs; run
+# AS the user since root's PATH excludes ~/.local/bin). Any candidate that canonicalises
+# to the wrapper path OR already carries our marker is rejected.
+_CLAUDE_REAL=$(ls -1d "$_DESKTOP_HOME"/.local/share/claude/versions/* 2>/dev/null | sort -V | tail -1)
+[[ -x "$_CLAUDE_REAL" ]] || _CLAUDE_REAL=""
+if [[ -z "$_CLAUDE_REAL" ]]; then
+    _BIN_CANON=$(readlink -f "$_CLAUDE_BIN" 2>/dev/null)
+    for _cand in /usr/local/bin/claude /usr/bin/claude "$(sudo -u "$_DESKTOP_USER" -H bash -lc 'command -v claude' 2>/dev/null)"; do
+        [[ -x "$_cand" ]] || continue
+        [[ -n "$_BIN_CANON" && "$(readlink -f "$_cand" 2>/dev/null)" == "$_BIN_CANON" ]] && continue
+        grep -q "$_WRAPPER_MARKER" "$_cand" 2>/dev/null && continue
+        _CLAUDE_REAL="$_cand"; break
+    done
+fi
+if [[ -n "$_CLAUDE_REAL" && -x "$_CLAUDE_REAL" ]]; then
     _NEEDS_INSTALL=0
     if [[ ! -f "$_CLAUDE_BIN" ]] || ! grep -q "$_WRAPPER_MARKER" "$_CLAUDE_BIN" 2>/dev/null; then
         _NEEDS_INSTALL=1
@@ -1369,29 +1421,31 @@ if [[ -f "$_CLAUDE_REAL" ]]; then
     if [[ "$_NEEDS_INSTALL" -eq 1 ]]; then
         # Preserve original symlink if it exists
         if [[ -L "$_CLAUDE_BIN" && ! -L "$_CLAUDE_BIN.real-symlink" ]]; then
-            sudo -u bruce mv "$_CLAUDE_BIN" "$_CLAUDE_BIN.real-symlink" 2>/dev/null || true
+            sudo -u "$_DESKTOP_USER" mv "$_CLAUDE_BIN" "$_CLAUDE_BIN.real-symlink" 2>/dev/null || true
         fi
-        sudo -u bruce tee "$_CLAUDE_BIN" > /dev/null <<'CLAUDE_WRAPPER_EOF'
+        sudo -u "$_DESKTOP_USER" mkdir -p "$_DESKTOP_HOME/.local/bin"
+        # NON-quoted heredoc so $_CLAUDE_REAL (the resolved real binary) is baked in;
+        # \$MCP_TIMEOUT and \$@ are escaped so they stay runtime-evaluated in the wrapper.
+        sudo -u "$_DESKTOP_USER" tee "$_CLAUDE_BIN" > /dev/null <<CLAUDE_WRAPPER_EOF
 #!/bin/bash
 # Phase 245.2 wrapper — aioncore sanitizes env when spawning Claude Code, dropping MCP_TIMEOUT.
 # Without 30s timeout, 5 of 6 stdio MCPs (luse/liv-*) silently fail during cold-start.
-export MCP_TIMEOUT=${MCP_TIMEOUT:-30000}
-exec /home/bruce/.local/share/claude/versions/2.1.148 "$@"
+export MCP_TIMEOUT=\${MCP_TIMEOUT:-30000}
+exec "$_CLAUDE_REAL" "\$@"
 CLAUDE_WRAPPER_EOF
-        sudo -u bruce chmod 755 "$_CLAUDE_BIN"
-        ok "Phase 245.2: claude wrapper installed at $_CLAUDE_BIN (MCP_TIMEOUT=30000)"
+        sudo -u "$_DESKTOP_USER" chmod 755 "$_CLAUDE_BIN"
+        ok "Phase 245.2: claude wrapper installed at $_CLAUDE_BIN → $_CLAUDE_REAL (MCP_TIMEOUT=30000)"
     else
         ok "Phase 245.2: claude wrapper already in place (idempotent skip)"
     fi
 else
-    # Phase 277 (Bug 1 — THE root cause): 'claude doctor' is single-quoted ON PURPOSE.
-    # With backticks here, bash treats `claude doctor` as COMMAND SUBSTITUTION during
-    # this string's expansion — it actually runs `claude doctor`, which hangs waiting
-    # for input/auth, and update.sh blocks (anon_pipe_read) on its output. On a
-    # non-bruce box $_CLAUDE_REAL is always absent so this else-branch runs EVERY
-    # Update → the multi-minute "claude doctor" stall that needed a manual kill.
-    # DO NOT change these quotes back to backticks.
-    info "Phase 245.2: $_CLAUDE_REAL not present — claude wrapper deferred (run 'claude doctor' to install)"
+    # Phase 245.2: no claude binary resolvable for the desktop user (native versioned
+    # install absent AND `claude` not on PATH) → wrapper deferred.
+    # Phase 277 (Bug 1 — THE original hang): 'claude doctor' is single-quoted ON PURPOSE.
+    # Backticks here would be COMMAND SUBSTITUTION — bash would actually RUN `claude
+    # doctor`, which hangs on input/auth and blocks the whole Update (anon_pipe_read).
+    # That was the multi-minute stall that needed a manual kill. DO NOT use backticks.
+    info "Phase 245.2: no claude binary found for $_DESKTOP_USER — wrapper deferred (run 'claude doctor' to install)"
 fi
 
 # ── Phase 245.4 — Single-binary MCP wrappers under /usr/local/bin/ ─────────
@@ -1474,7 +1528,7 @@ _PATCH_COUNT=0
 # the synthesized fallback need it correct. Same desktop-user pattern as elsewhere.
 _LUSE_RUN_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1)
 [[ -n "$_LUSE_RUN_USER" ]] || _LUSE_RUN_USER=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1; exit}')
-[[ -n "$_LUSE_RUN_USER" ]] || _LUSE_RUN_USER=bruce
+[[ -n "$_LUSE_RUN_USER" ]] || _LUSE_RUN_USER=$(stat -c '%U' /opt/livos 2>/dev/null)
 _LUSE_RUN_HOME=$(getent passwd "$_LUSE_RUN_USER" 2>/dev/null | cut -d: -f6)
 [[ -n "$_LUSE_RUN_HOME" ]] || _LUSE_RUN_HOME="/home/$_LUSE_RUN_USER"
 for _NAME in "${!_MCP_PATHS[@]}"; do
@@ -1519,7 +1573,10 @@ fi
 # 6 system MCPs (luse, liv-system, liv-vault, liv-apps, liv-docker, aionui-team-guide).
 # Idempotent — only rewrites if missing or content drifts.
 step "Phase 245.3: Claude Code MCP permissions allowlist"
-_CLAUDE_SETTINGS="/home/bruce/.claude/settings.json"
+# Phase 277.1 — write to the DESKTOP user's home (NOT hardcoded /home/bruce) so the
+# MCP allowlist actually applies to the user liv-assistant runs as.
+_set_desktop_identity
+_CLAUDE_SETTINGS="$_DESKTOP_HOME/.claude/settings.json"
 _CLAUDE_SETTINGS_DESIRED='{
   "permissions": {
     "allow": [
@@ -1535,8 +1592,8 @@ _CLAUDE_SETTINGS_DESIRED='{
 if [[ -f "$_CLAUDE_SETTINGS" ]] && diff -q <(echo "$_CLAUDE_SETTINGS_DESIRED") "$_CLAUDE_SETTINGS" >/dev/null 2>&1; then
     ok "Phase 245.3: settings.json already has MCP allowlist (idempotent skip)"
 else
-    sudo -u bruce mkdir -p /home/bruce/.claude
-    echo "$_CLAUDE_SETTINGS_DESIRED" | sudo -u bruce tee "$_CLAUDE_SETTINGS" > /dev/null
+    sudo -u "$_DESKTOP_USER" mkdir -p "$_DESKTOP_HOME/.claude"
+    echo "$_CLAUDE_SETTINGS_DESIRED" | sudo -u "$_DESKTOP_USER" tee "$_CLAUDE_SETTINGS" > /dev/null
     ok "Phase 245.3: settings.json written with 6 MCP wildcard permissions"
 fi
 
@@ -1556,7 +1613,7 @@ _LIV_PERSONA_SRC="$TEMP_DIR/scripts/install/seeds/liv-agent-persona.md"
 [[ -f "$_LIV_PERSONA_SRC" ]] || _LIV_PERSONA_SRC="$LIVOS_DIR/scripts/install/seeds/liv-agent-persona.md"
 _PERSONA_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1)
 [[ -n "$_PERSONA_USER" ]] || _PERSONA_USER=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1; exit}')
-[[ -n "$_PERSONA_USER" ]] || _PERSONA_USER=bruce
+[[ -n "$_PERSONA_USER" ]] || _PERSONA_USER=$(stat -c '%U' /opt/livos 2>/dev/null)
 _PERSONA_HOME=$(getent passwd "$_PERSONA_USER" 2>/dev/null | cut -d: -f6)
 [[ -n "$_PERSONA_HOME" ]] || _PERSONA_HOME="/home/$_PERSONA_USER"
 if [[ ! -f "$_LIV_PERSONA_SRC" ]]; then
@@ -1898,10 +1955,11 @@ if [[ -f "$_LIV_CLAW_UNIT_SRC" ]]; then
     else
         ok "liv-claw-gateway.service already byte-identical"
     fi
-    # Ensure the gateway's state dir exists and is bruce-writable
+    # Ensure the gateway's state dir exists and is desktop-user-writable
+    _set_desktop_identity   # Phase 277.1 — self-derive (don't depend on a distant earlier call)
     mkdir -p /opt/livos/data/openclaw 2>/dev/null || true
-    if id bruce >/dev/null 2>&1; then
-        chown -R bruce:bruce /opt/livos/data/openclaw 2>/dev/null || true
+    if id "$_DESKTOP_USER" >/dev/null 2>&1; then
+        chown -R "$_DESKTOP_USER":"$_DESKTOP_USER" /opt/livos/data/openclaw 2>/dev/null || true
     fi
 
     # ── Phase 203 Hot-fix F 2026-05-24 — openclaw allowedOrigins patch ──
@@ -1942,8 +2000,10 @@ if [[ -f "$_LIV_CLAW_UNIT_SRC" ]]; then
                     _OPERATOR_DOMAIN=$(redis-cli -a "$_REDIS_PW" --no-auth-warning GET livos:domain:config 2>/dev/null | jq -r '.domain // empty' 2>/dev/null)
                 fi
             fi
-            [[ -z "$_OPERATOR_DOMAIN" ]] && _OPERATOR_DOMAIN="bruce.livinity.io"
-            info "openclaw config: operator domain resolved = $_OPERATOR_DOMAIN"
+            # Phase 277.1 — no hardcoded bruce.livinity.io fallback. If the domain is
+            # unresolvable, the jq below omits the domain-specific origins (the bare-
+            # scheme entries are skipped via the $dom length guard).
+            info "openclaw config: operator domain resolved = ${_OPERATOR_DOMAIN:-<none>}"
 
             # ── Hot-fix F2 2026-05-24 — ensure gateway.auth.token exists ──
             # The custom livinityd Ed25519 mint flow (Plan 203-05) is incompat
@@ -1979,10 +2039,10 @@ if [[ -f "$_LIV_CLAW_UNIT_SRC" ]]; then
                    | .gateway.controlUi //= {}
                    | .gateway.controlUi.allowedOrigins = (
                        ((.gateway.controlUi.allowedOrigins // []) +
-                        ["https://" + $dom,
-                         "http://" + $dom,
-                         "wss://" + $dom,
-                         "https://livinity.io",
+                        (if ($dom | length) > 0
+                          then ["https://" + $dom, "http://" + $dom, "wss://" + $dom]
+                          else [] end) +
+                        ["https://livinity.io",
                          "http://localhost:18789",
                          "http://127.0.0.1:18789"])
                        | unique
@@ -2000,8 +2060,8 @@ if [[ -f "$_LIV_CLAW_UNIT_SRC" ]]; then
                     cp "$_OPENCLAW_CFG" "${_OPENCLAW_CFG}.pre-hotfix-f2.bak" 2>/dev/null || true
                     mv "$_TMP_CFG" "$_OPENCLAW_CFG"
                     chmod 600 "$_OPENCLAW_CFG" 2>/dev/null || true
-                    if id bruce >/dev/null 2>&1; then
-                        chown bruce:bruce "$_OPENCLAW_CFG" 2>/dev/null || true
+                    if id "$_DESKTOP_USER" >/dev/null 2>&1; then
+                        chown "$_DESKTOP_USER":"$_DESKTOP_USER" "$_OPENCLAW_CFG" 2>/dev/null || true
                     fi
                     ok "openclaw config patched (allowedOrigins:$_OPERATOR_DOMAIN, gateway.auth.token ensured)"
                 else
@@ -2042,11 +2102,9 @@ _render_liv_assistant_unit() {
     local src="$1" dst="$2" tmp
     _LA_UNIT_STATUS=error; _LA_USER=""; _LA_HOME=""   # set -u safety on the early-return path
     [[ -f "$src" ]] || return 0
-    _LA_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1)
-    [[ -n "$_LA_USER" ]] || _LA_USER=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1; exit}')
-    [[ -n "$_LA_USER" ]] || _LA_USER=bruce
-    _LA_HOME=$(getent passwd "$_LA_USER" 2>/dev/null | cut -d: -f6)
-    [[ -n "$_LA_HOME" ]] || _LA_HOME="/home/$_LA_USER"
+    # Phase 277.1 — single source of truth for the desktop identity (no literal bruce).
+    _set_desktop_identity
+    _LA_USER="$_DESKTOP_USER"; _LA_HOME="$_DESKTOP_HOME"
     tmp="${dst}.tmp.$$"
     sed -E "s/^(User=)bruce$/\1${_LA_USER}/; s/^(Group=)bruce$/\1${_LA_USER}/; s#/home/bruce#${_LA_HOME}#g" \
         "$src" > "$tmp"
@@ -2130,7 +2188,7 @@ fi
 # working directory failed: Permission denied" → restart loop → CF 502. Fall back to
 # bruce ONLY if the unit can't be read (legacy single-user Mini PC).
 step "Fixing /opt/livos + /opt/liv ownership (LivOS desktop user)"
-_LIVOS_RUN_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1); [ -z "$_LIVOS_RUN_USER" ] && _LIVOS_RUN_USER=bruce
+_LIVOS_RUN_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1); [ -z "$_LIVOS_RUN_USER" ] && _LIVOS_RUN_USER=$(stat -c '%U' /opt/livos 2>/dev/null)
 if id "$_LIVOS_RUN_USER" >/dev/null 2>&1; then
     chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIVOS_DIR" 2>/dev/null || warn "chown $LIVOS_DIR partial"
     if [[ -d "$LIV_DIR" ]]; then
@@ -2386,32 +2444,31 @@ if [[ -f /etc/caddy/conf.d/liv-assistant.caddy ]]; then
     fi
     # Give caddy a moment to apply the new config before probing.
     sleep 2
-    info "Probing https://bruce.livinity.io/liv/api/auth/status via --resolve loopback (5s timeout)..."
-    _LIV_PROXY_CODE="$(curl -sS -o /dev/null -w '%{http_code}' \
-        --max-time 5 \
-        --resolve bruce.livinity.io:443:127.0.0.1 \
-        -k \
-        https://bruce.livinity.io/liv/api/auth/status 2>/dev/null || echo '000')"
-    if [[ "$_LIV_PROXY_CODE" =~ ^(200|204)$ ]]; then
-        ok "/liv proxy smoke = HTTP $_LIV_PROXY_CODE OK (bruce.livinity.io/liv/api/auth/status → 127.0.0.1:3020)"
+    # Phase 277.1 — derive the operator domain (NOT hardcoded bruce.livinity.io) so the
+    # /liv proxy smoke is meaningful on ANY operator's box; skip gracefully if unknown.
+    _SMOKE_DOMAIN=$(_resolve_operator_domain)
+    if [[ -z "$_SMOKE_DOMAIN" ]]; then
+        info "/liv proxy smoke skipped — operator domain not resolvable (Redis livos:domain:config empty); core update unaffected"
     else
-        # Collect diagnostics before aborting (mirrors Phase 225-01 Step C diagnostic pattern).
-        warn "/liv proxy smoke non-2xx (got HTTP $_LIV_PROXY_CODE); collecting diagnostics..."
-        curl -sS -o /dev/null -w 'HTTP %{http_code} (time %{time_total}s)\n' --max-time 5 \
-            --resolve bruce.livinity.io:443:127.0.0.1 -k \
-            https://bruce.livinity.io/liv/api/auth/status 2>&1 || true
-        # Show the Caddy snippet path it should have read.
-        ls -la /etc/caddy/conf.d/liv-assistant.caddy 2>&1 || true
-        # Show caddy's most recent errors.
-        journalctl -u caddy -n 20 --no-pager 2>/dev/null || true
-        # 2026-06-13: was a hard `fail` (Deploy aborted). Two problems: (1) this
-        # smokes an OPTIONAL subsystem (Liv AI /liv proxy) and must not discard a
-        # successful core update; (2) the URL is HARDCODED to bruce.livinity.io, so
-        # on ANY other operator's box the loopback Host never matches a Caddy site
-        # block → always non-2xx → every update on a non-bruce box aborted here and
-        # stayed on the old version. Warn + continue (the box-specific domain fix
-        # for this smoke is tracked separately; for now it must never gate deploys).
-        warn "/liv proxy smoke returned $_LIV_PROXY_CODE (expected 200/204) — NOT aborting (Liv AI /liv proxy only; core update already succeeded). Note: this loopback smoke is hardcoded to the bruce.livinity.io Host and is not meaningful on other operator domains."
+        info "Probing https://$_SMOKE_DOMAIN/liv/api/auth/status via --resolve loopback (5s timeout)..."
+        _LIV_PROXY_CODE="$(curl -sS -o /dev/null -w '%{http_code}' \
+            --max-time 5 \
+            --resolve "$_SMOKE_DOMAIN:443:127.0.0.1" \
+            -k \
+            "https://$_SMOKE_DOMAIN/liv/api/auth/status" 2>/dev/null || echo '000')"
+        if [[ "$_LIV_PROXY_CODE" =~ ^(200|204)$ ]]; then
+            ok "/liv proxy smoke = HTTP $_LIV_PROXY_CODE OK ($_SMOKE_DOMAIN/liv/api/auth/status → 127.0.0.1:3020)"
+        else
+            # Collect diagnostics. OPTIONAL subsystem (Liv AI /liv proxy) — must NEVER
+            # gate the core deploy (a non-2xx here used to abort every non-bruce update).
+            warn "/liv proxy smoke non-2xx (got HTTP $_LIV_PROXY_CODE) for $_SMOKE_DOMAIN; collecting diagnostics..."
+            curl -sS -o /dev/null -w 'HTTP %{http_code} (time %{time_total}s)\n' --max-time 5 \
+                --resolve "$_SMOKE_DOMAIN:443:127.0.0.1" -k \
+                "https://$_SMOKE_DOMAIN/liv/api/auth/status" 2>&1 || true
+            ls -la /etc/caddy/conf.d/liv-assistant.caddy 2>&1 || true
+            journalctl -u caddy -n 20 --no-pager 2>/dev/null || true
+            warn "/liv proxy smoke returned $_LIV_PROXY_CODE (expected 200/204) — NOT aborting (Liv AI /liv proxy only; core update already succeeded)."
+        fi
     fi
 else
     info "/etc/caddy/conf.d/liv-assistant.caddy not installed — skipping caddy reload + /liv smoke (pre-Phase 226 deploy)"
@@ -2490,7 +2547,7 @@ echo -e "    - livinityd source code"
 echo -e "    - UI (rebuilt from source)"
 echo -e "    - Liv AI packages (core, worker, mcp-server)"
 echo -e "    - liv-assistant (AionUi WebUI, vendored v2.1.14, port 3020)"
-echo -e "    - Caddy /liv reverse-proxy (livinityd-emitted; bruce.livinity.io/liv → :3020, iframe CSP override) [Phase 226-04]"
+echo -e "    - Caddy /liv reverse-proxy (livinityd-emitted; <operator-domain>/liv → :3020, iframe CSP override) [Phase 226-04]"
 echo -e "    - Gallery app cache"
 echo -e "    - Dependencies"
 echo ""
