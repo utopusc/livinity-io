@@ -3,24 +3,10 @@ import { customDomains } from '@/db/schema';
 import { verifyDomainDns } from '@/lib/dns-verify';
 import { eq, and, or, lt, sql, isNull } from 'drizzle-orm';
 
-const RELAY_DOMAIN_SYNC_URL = 'http://localhost:4000/internal/domain-sync';
-
-async function notifyRelayDomainSync(
-  userId: string,
-  action: 'add' | 'update' | 'remove',
-  domain: string,
-  status: string,
-): Promise<void> {
-  try {
-    await fetch(RELAY_DOMAIN_SYNC_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, action, domain, status }),
-    });
-  } catch (err) {
-    console.error(`[dns-polling] Failed to notify relay of domain sync for ${domain}:`, err);
-  }
-}
+// The legacy relay (ws://livinity.io:4000) was killed in Phase 146 — domain sync
+// now flows over the Cloudflare Tunnel / Supabase path, not an HTTP relay call.
+// The old `notifyRelayDomainSync(localhost:4000/internal/domain-sync)` hop is
+// dead code and has been removed.
 
 const FAST_INTERVAL_MS = 30_000; // 30 seconds (first hour after domain addition)
 const SLOW_INTERVAL_MS = 5 * 60_000; // 5 minutes (after first hour)
@@ -108,7 +94,7 @@ export async function pollPendingDomains(): Promise<void> {
         if (!result.aRecordVerified) {
           issues.push(
             result.aRecordValues.length > 0
-              ? `A record points to ${result.aRecordValues.join(', ')} instead of 45.137.194.102`
+              ? `A record points to ${result.aRecordValues.join(', ')} but no relay ingress is configured`
               : 'A record not found'
           );
         }
@@ -126,11 +112,6 @@ export async function pollPendingDomains(): Promise<void> {
         .update(customDomains)
         .set(updateData)
         .where(eq(customDomains.id, domain.id));
-
-      // Notify relay to sync domain to LivOS when verified
-      if (updateData.status === 'dns_verified') {
-        await notifyRelayDomainSync(domain.user_id, 'add', domain.domain, 'dns_verified');
-      }
     }
 
     // 2. Re-verify active/verified domains every 12 hours
@@ -165,9 +146,6 @@ export async function pollPendingDomains(): Promise<void> {
             error_message: 'DNS records have changed. Please verify your DNS configuration.',
           })
           .where(eq(customDomains.id, domain.id));
-
-        // Notify relay to update domain status on LivOS
-        await notifyRelayDomainSync(domain.user_id, 'update', domain.domain, 'dns_changed');
       } else {
         await db
           .update(customDomains)

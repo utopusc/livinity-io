@@ -1,7 +1,21 @@
 import dns from 'node:dns/promises';
 import crypto from 'node:crypto';
 
-const RELAY_IP = '45.137.194.102';
+/**
+ * Custom (bring-your-own) domain verification was built on the legacy relay
+ * A-record ingress (the retired Server5 IP). Server5 is RETIRED and the
+ * onboarding topology is now Cloudflare Tunnel (per-user proxied CNAMEs created
+ * by cf-saas.ts — see `provisionUserHostnames`), which has NO relay A-record.
+ *
+ * The literal Server5 IP has therefore been removed entirely: a non-bruce
+ * operator must never be shown a dead A-record target. The optional
+ * `NEXT_PUBLIC_RELAY_IP` env exists only so a future relay-based ingress can be
+ * re-enabled without re-introducing a hardcoded IP. It defaults to empty, which
+ * makes the A-record check inert (never "verified") — the BYO add flow is
+ * disabled at the API layer (`/api/domains` POST returns 410) until a real
+ * ingress target exists.
+ */
+const RELAY_IP = process.env.NEXT_PUBLIC_RELAY_IP || '';
 const CLOUDFLARE_DOH = 'https://1.1.1.1/dns-query';
 
 export interface DnsCheckResult {
@@ -18,7 +32,10 @@ export interface DnsCheckResult {
 export async function checkARecord(domain: string): Promise<{ verified: boolean; values: string[] }> {
   try {
     const addresses = await dns.resolve4(domain);
-    const verified = addresses.includes(RELAY_IP);
+    // No relay ingress IP is configured under the current CF-Tunnel topology, so
+    // an A-record can never "verify". Return the resolved values for display but
+    // never mark verified against an empty target.
+    const verified = RELAY_IP !== '' && addresses.includes(RELAY_IP);
     return { verified, values: addresses };
   } catch {
     return { verified: false, values: [] };
@@ -37,7 +54,7 @@ export async function checkARecordDoH(domain: string): Promise<{ verified: boole
     if (!res.ok) return { verified: false, values: [] };
     const data = await res.json() as { Answer?: Array<{ type: number; data: string }> };
     const addresses = (data.Answer || []).filter((a: { type: number }) => a.type === 1).map((a: { data: string }) => a.data);
-    const verified = addresses.includes(RELAY_IP);
+    const verified = RELAY_IP !== '' && addresses.includes(RELAY_IP);
     return { verified, values: addresses };
   } catch {
     return { verified: false, values: [] };
