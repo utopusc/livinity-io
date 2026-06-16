@@ -403,7 +403,28 @@ async function main(): Promise<void> {
 		)
 	}
 
-	const server = new McpServer({name: 'luse', version: '1.0.0'})
+	// Phase 276 — CLI-AGNOSTIC persona via the MCP `instructions` field. This is
+	// returned in the MCP initialize response, so EVERY agent that connects to
+	// luse receives it regardless of which CLI backend AionUi runs (Claude,
+	// Codex, Gemini, … — they all speak MCP, that's how they get these tools).
+	// This is the scalable single point that the per-CLI ~/.claude/CLAUDE.md /
+	// ~/.codex/AGENTS.md / ~/.gemini/GEMINI.md seeds only approximate. The tool
+	// descriptions carry the detail; this carries the "you CAN open apps" framing.
+	const LUSE_INSTRUCTIONS =
+		'You are operating inside LivOS — a personal desktop OS the user controls ' +
+		'through this chat. You are NOT a generic terminal/coding agent: you can open ' +
+		'and control REAL apps on the user\'s LivOS desktop with these tools. ' +
+		'To open / launch / start ANY app or website the user names (e.g. "open ' +
+		'Reddit", "Reddit\'i aç", "youtube.com"), ALWAYS call computer_application ' +
+		'with the app name OR the site URL/domain. It opens the real app in the ' +
+		'user\'s existing logged-in profile (their saved WebApp or native app) — like ' +
+		'clicking the desktop icon — and CREATES the WebApp if the site is not saved ' +
+		'yet. NEVER reply that you "cannot open a browser" or that you are "just a ' +
+		'terminal agent"; NEVER open a website by creating a new display + a raw ' +
+		'browser. After computer_application returns success the app is already open ' +
+		'(it runs on its own stream and appears on the desktop / Displays popover) — ' +
+		'do NOT screenshot a host display or create a display to "verify".'
+	const server = new McpServer({name: 'luse', version: '1.0.0'}, {instructions: LUSE_INSTRUCTIONS})
 	// Note: `streamManager` is NOT wired into this MCP child (the StreamManager
 	// instance lives in the parent livinityd process and cross-process IPC is
 	// out of scope for this plan). Without `streamManager`, the stream-management
