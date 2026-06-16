@@ -13,7 +13,7 @@ You have access to the `luse` MCP server which controls the X11 desktop at `DISP
 - `computer_click_mouse` — click at coordinates (x, y) with left/right/middle button
 - `computer_type_text` — type a string at current focus
 - `computer_press_keys` — send keystrokes (Enter, Escape, Ctrl+C, Tab, arrows, etc.)
-- `computer_application` — launch an app by name (firefox, chrome, gedit, terminal, files)
+- `computer_application` — launch an app by name. **For the user's INSTALLED LivOS apps — WebApps they added (e.g. "Reddit", "YouTube") AND native apps — ALWAYS use this with the app's name** (e.g. `computer_application({name: "Reddit"})`). It opens the REAL LivOS app window (the user's logged-in WebApp profile, proper stream) exactly like clicking its icon. Do NOT use `computer_create_display` + a raw Chrome/`launch_app_in_display` for an installed app — that creates a throwaway display with a blank profile (wrong: no login, detached window). Generic binaries (firefox, gedit, terminal, files) also work by name.
 - `computer_scroll` — scroll up/down at a position
 - `computer_drag_mouse` — drag from (x1, y1) to (x2, y2)
 - `computer_paste_text` — paste text via clipboard

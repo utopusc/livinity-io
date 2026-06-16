@@ -273,6 +273,12 @@ async function main(): Promise<void> {
 	const luseDomainRoot = process.env.LUSE_DOMAIN_ROOT
 
 	let livosAppResolver: ((name: string) => Promise<LivosAppMatch | null>) | undefined
+	// Phase 274 — actually OPEN a resolved LivOS app by calling livinityd's spawn
+	// procs over the SAME authed HTTP channel the resolver uses. Wired only when
+	// the env-thread is complete (needs LIVINITYD_API_URL + LIV_API_KEY).
+	let openLivosApp:
+		| ((match: LivosAppMatch, display?: string) => Promise<{ok: boolean; error?: string}>)
+		| undefined
 	if (livinitydApiUrl && livApiKey && luseUserSlug && luseDomainRoot) {
 		const fetchAppList = async (proc: string): Promise<any[]> => {
 			try {
@@ -301,6 +307,43 @@ async function main(): Promise<void> {
 				domainRoot: luseDomainRoot,
 			})
 
+		// Phase 274 — open a matched app by POSTing to livinityd's existing spawn
+		// mutations (webapp.window.spawn / apps.native.spawn). Non-batched tRPC,
+		// no transformer (mirrors fetchAppList's `?input=` + `data.result.data`).
+		openLivosApp = async (match: LivosAppMatch, _display?: string) => {
+			try {
+				const proc = match.kind === 'webapp' ? 'webapp.window.spawn' : 'apps.native.spawn'
+				const input =
+					match.kind === 'webapp'
+						? {webappId: match.appId, url: match.route}
+						: {id: match.appId}
+				const res = await fetch(`${livinitydApiUrl}/trpc/${proc}`, {
+					method: 'POST',
+					headers: {'X-Api-Key': livApiKey, 'Content-Type': 'application/json'},
+					body: JSON.stringify(input),
+					signal: AbortSignal.timeout(20000),
+				})
+				const text = await res.text()
+				if (!res.ok) {
+					let msg = `HTTP ${res.status}`
+					try {
+						const j = JSON.parse(text) as {error?: {message?: string; json?: {message?: string}}}
+						msg = j.error?.json?.message ?? j.error?.message ?? msg
+					} catch {
+						/* keep HTTP status */
+					}
+					process.stderr.write(`[luse-mcp] openLivosApp ${proc} failed: ${msg}\n`)
+					return {ok: false, error: msg}
+				}
+				process.stderr.write(`[luse-mcp] openLivosApp: opened ${match.kind} ${match.appId} (${match.title})\n`)
+				return {ok: true}
+			} catch (err: any) {
+				const msg = err?.message ?? String(err)
+				process.stderr.write(`[luse-mcp] openLivosApp error: ${msg}\n`)
+				return {ok: false, error: msg}
+			}
+		}
+
 		process.stderr.write(
 			`[luse-mcp] resolver: constructed (LIVINITYD_API_URL=${livinitydApiUrl}, userSlug=${luseUserSlug}, domainRoot=${luseDomainRoot})\n`,
 		)
@@ -326,6 +369,9 @@ async function main(): Promise<void> {
 		userId: resolveLuseUserId(),
 		// Phase 161-03 — undefined falls through to APP_MAP (pre-Phase-160-03 behavior)
 		livosAppResolver,
+		// Phase 274 — actually open a matched LivOS app (spawn + surface). undefined
+		// when the env-thread is incomplete → legacy stderr-emit-only behavior.
+		openLivosApp,
 		// Phase 248-02 — display-lifecycle backend (undefined when redis is null,
 		// in which case the 4 display tools fail-closed).
 		displayManager,

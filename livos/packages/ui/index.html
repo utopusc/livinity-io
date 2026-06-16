@@ -4,7 +4,10 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
 		<meta name="theme-color" content="#f8f9fc" />
-		<!-- PWA: iOS standalone mode -->
+		<!-- PWA: standalone mode. `mobile-web-app-capable` is the modern
+		     cross-browser name; the `apple-` variant is kept for older iOS
+		     Safari that still only honors the Apple-prefixed tag. -->
+		<meta name="mobile-web-app-capable" content="yes" />
 		<meta name="apple-mobile-web-app-capable" content="yes" />
 		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 		<meta name="apple-mobile-web-app-title" content="Livinity" />
