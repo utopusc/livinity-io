@@ -199,9 +199,10 @@ if [[ -d "$LAST_GOOD_DIR/livinityd-source" ]]; then
             cp -r "$LAST_GOOD_DIR/liv-core-dist" "$tgt" 2>/dev/null
         done
     fi
-    if id bruce >/dev/null 2>&1; then
-        chown -R bruce:bruce "$LIVOS_DIR/packages/livinityd/source" "$LIVOS_DIR/packages/ui/dist" 2>/dev/null
-        [[ -d "$LIV_DIR/packages/core/dist" ]] && chown -R bruce:bruce "$LIV_DIR/packages/core/dist" 2>/dev/null
+    _LIVOS_RUN_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1); [ -z "$_LIVOS_RUN_USER" ] && _LIVOS_RUN_USER=bruce
+    if id "$_LIVOS_RUN_USER" >/dev/null 2>&1; then
+        chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIVOS_DIR/packages/livinityd/source" "$LIVOS_DIR/packages/ui/dist" 2>/dev/null
+        [[ -d "$LIV_DIR/packages/core/dist" ]] && chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIV_DIR/packages/core/dist" 2>/dev/null
     fi
     log "last-good restored"
 else
@@ -601,10 +602,12 @@ restore_last_good() {
             cp -r "$LAST_GOOD_DIR/liv-core-dist" "$tgt" 2>/dev/null || true
         done
     fi
-    # livos.service runs as bruce — restore ownership so it can read the tree.
-    if id bruce >/dev/null 2>&1; then
-        chown -R bruce:bruce "$LIVOS_DIR/packages/livinityd/source" "$LIVOS_DIR/packages/ui/dist" 2>/dev/null || true
-        [[ -d "$LIV_DIR/packages/core/dist" ]] && chown -R bruce:bruce "$LIV_DIR/packages/core/dist" 2>/dev/null || true
+    # livos.service runs as the LivOS desktop user — derive it (NOT hardcoded bruce,
+    # which crash-loops non-bruce accounts) and restore ownership so it can read the tree.
+    _LIVOS_RUN_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1); [ -z "$_LIVOS_RUN_USER" ] && _LIVOS_RUN_USER=bruce
+    if id "$_LIVOS_RUN_USER" >/dev/null 2>&1; then
+        chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIVOS_DIR/packages/livinityd/source" "$LIVOS_DIR/packages/ui/dist" 2>/dev/null || true
+        [[ -d "$LIV_DIR/packages/core/dist" ]] && chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIV_DIR/packages/core/dist" 2>/dev/null || true
     fi
     ok "Last-good runtime restored"
     return 0
@@ -1319,7 +1322,11 @@ if [[ ! -f "$_LIV_ASSISTANT_INSTALLER_SRC" ]]; then
     _LIV_ASSISTANT_INSTALLER_SRC="$LIVOS_DIR/scripts/install-liv-assistant.sh"
 fi
 if [[ -f "$_LIV_ASSISTANT_INSTALLER_SRC" ]]; then
-    if bash "$_LIV_ASSISTANT_INSTALLER_SRC" 2>&1 | tail -10; then
+    # 2026-06-15: wrap in `timeout` — this step (AionUi/claude-agent setup) has hung
+    # indefinitely on a `claude doctor` child with no timeout, stranding the whole
+    # update (observed on the `everything` box). It is OPTIONAL polish, so a timeout
+    # that warns + continues is strictly better than an infinite hang.
+    if timeout 420 bash "$_LIV_ASSISTANT_INSTALLER_SRC" 2>&1 | tail -10; then
         ok "liv-assistant install ensured (vendored AionUi v2.1.14 at /opt/liv-assistant/current)"
     else
         # 2026-06-13: was a hard `fail` (abort). But liv-assistant (AionUi) is the
@@ -2015,20 +2022,27 @@ else
     info "liv-assistant.service unit source not found — skipping install (the unit may already be installed from a prior Phase 223-05 deploy)"
 fi
 
-# ── Phase 202-10: bruce ownership hook (recurring P198/P199/P200/P201 patch) ──
+# ── Phase 202-10: desktop-user ownership hook (recurring P198/P199/P200/P201 patch) ──
 # When update.sh runs as root, rsync + pnpm install + builds end up root-owned.
-# livos.service runs as `bruce`, and pnpm-store / .next / dist directories
-# end up un-readable on next boot. This was hot-fixed manually on every deploy
-# since Phase 198. Folding into update.sh closes the recurring carry-over.
-step "Fixing /opt/livos + /opt/liv ownership (bruce:bruce)"
-if id bruce >/dev/null 2>&1; then
-    chown -R bruce:bruce "$LIVOS_DIR" 2>/dev/null || warn "chown $LIVOS_DIR partial"
+# livos.service runs as the LivOS desktop user, and pnpm-store / .next / dist
+# directories end up un-readable on next boot. This was hot-fixed manually on every
+# deploy since Phase 198. Folding into update.sh closes the recurring carry-over.
+#
+# 2026-06-15: derive the run-user from the installed unit — hardcoding `bruce` here
+# CRASH-LOOPS any non-bruce account (e.g. the `everything` account): `chown bruce:bruce`
+# makes /opt/livos unreadable by `User=everything` → systemd "Changing to the requested
+# working directory failed: Permission denied" → restart loop → CF 502. Fall back to
+# bruce ONLY if the unit can't be read (legacy single-user Mini PC).
+step "Fixing /opt/livos + /opt/liv ownership (LivOS desktop user)"
+_LIVOS_RUN_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1); [ -z "$_LIVOS_RUN_USER" ] && _LIVOS_RUN_USER=bruce
+if id "$_LIVOS_RUN_USER" >/dev/null 2>&1; then
+    chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIVOS_DIR" 2>/dev/null || warn "chown $LIVOS_DIR partial"
     if [[ -d "$LIV_DIR" ]]; then
-        chown -R bruce:bruce "$LIV_DIR" 2>/dev/null || warn "chown $LIV_DIR partial"
+        chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIV_DIR" 2>/dev/null || warn "chown $LIV_DIR partial"
     fi
-    ok "Ownership normalised to bruce:bruce"
+    ok "Ownership normalised to $_LIVOS_RUN_USER:$_LIVOS_RUN_USER"
 else
-    info "bruce user absent — skipping ownership normalisation"
+    info "LivOS run-user '$_LIVOS_RUN_USER' absent — skipping ownership normalisation"
 fi
 
 # ── Step 8: Restart services ─────────────────────────────
