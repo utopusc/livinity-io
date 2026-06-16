@@ -56,7 +56,7 @@ async function expectOk(input: string): Promise<void> {
 
 async function expectFail(
   input: string,
-  expectedCode: 'FORMAT' | 'RESERVED' | 'APP_COLLISION' | 'TAKEN',
+  expectedCode: 'FORMAT' | 'RESERVED' | 'APP_COLLISION' | 'TAKEN' | 'RESERVED_PERMANENT',
 ): Promise<void> {
   const r = await validateUsername(input);
   assert.equal(r.ok, false, `expected fail for "${input}" but got ok`);
@@ -216,6 +216,16 @@ describe('username-validator — TAKEN (integration)', { skip: !RUN_INTEGRATION 
     // running against a fresh DB without that fixture.
     const taken = process.env.LIV_TEST_TAKEN_USERNAME ?? 'lucy';
     await expectFail(taken, 'TAKEN');
+  });
+});
+
+describe('username-validator — RESERVED_PERMANENT (integration)', { skip: !RUN_INTEGRATION }, () => {
+  it('rejects a permanently-reserved username (reserved_usernames ledger, Phase 274)', async () => {
+    // 'livinitydemo' is seeded into reserved_usernames by migration 0020 (a
+    // deleted abuser whose slot must never be re-registrable). Override with
+    // LIV_TEST_RESERVED_USERNAME against a DB without that seed.
+    const reserved = process.env.LIV_TEST_RESERVED_USERNAME ?? 'livinitydemo';
+    await expectFail(reserved, 'RESERVED_PERMANENT');
   });
 });
 

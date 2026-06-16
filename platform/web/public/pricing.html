@@ -117,7 +117,12 @@
               const me = await fetch("/api/auth/me", { credentials: "same-origin" });
               if (!me.ok) return;
               const data = await me.json();
-              if (data && data.user) setUser(data.user);
+              if (data && data.user) {
+                // Phase 274: a logged-in user who hasn't picked a username yet
+                // must do that before they can subscribe (provisioning needs it).
+                if (!data.user.username) { window.location.replace("/username"); return; }
+                setUser(data.user);
+              }
             } catch (e) {}
           })();
         }, []);

@@ -586,6 +586,9 @@
               if (!me.ok) { window.location.href = "/login"; return; }
               const meData = await me.json();
               if (!meData.user) { window.location.href = "/login"; return; }
+              // Phase 274: a signed-in user who hasn't picked a username yet must
+              // do that first (signup no longer collects it).
+              if (!meData.user.username) { window.location.replace("/username"); return; }
               if (aborted) return;
               setUser(meData.user);
 
