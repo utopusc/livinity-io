@@ -4837,10 +4837,10 @@ Plans:
 **Goal:** [To be planned]
 **Requirements**: TBD
 **Depends on:** Phase 271
-**Plans:** 0 plans
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 272 to break down)
+- [x] TBD (run /gsd-plan-phase 272 to break down) (completed 2026-06-16)
 
 ### Phase 273: Update safety Layer-B — independent systemd transient rollback guard armed by update.sh (immune to update.sh SIGKILL) + failed.json deploy visibility; live-tested with a deliberate broken deploy (extends v44.21 KillMode fix)
 
