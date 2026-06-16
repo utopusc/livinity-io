@@ -978,87 +978,12 @@ export default class Livinityd {
 			// (computer-use container streams, ad-hoc x11 surfaces, etc.)
 			// continue to find a working display.
 			try {
-				this.xvfbHandle = await startXvfb({
-					display: ':1',
-					// :1 host display pinned to a stable 1280x720 (HOST_DISPLAY_*),
-					// decoupled from the MCP computer_create_display default
-					// (DEFAULT_DISPLAY_* = 1080p). Xvfb -screen geometry is fixed so
-					// :1 never auto-resizes — it stays 720p across reboots.
-					resolution: `${HOST_DISPLAY_WIDTH}x${HOST_DISPLAY_HEIGHT}x24`,
-					logger: streamingLogger,
-				})
-				streamingLogger.info(`Xvfb :1 up (pid=${this.xvfbHandle.pid})`)
-				// 500ms grace so the X server is ready before the WM connects:
-				await new Promise((resolve) => setTimeout(resolve, 500))
-
-				// Phase 256 (D-256-XFCE-HOST-DESKTOP) — the `:1` host shell now runs a
-				// real, usable XFCE desktop (xfwm4 with the compositor OFF + xfce4-panel +
-				// xfdesktop + xfsettingsd, under a private dbus session) instead of the
-				// bare fluxbox + tint2 branded shell. XFCE's non-compositing xfwm4 paints
-				// into the X11 framebuffer, so the existing x11vnc/maim capture path
-				// renders it correctly — unlike the real GNOME `:0`, whose mutter GL
-				// compositing on this headless/software-GL box captures solid BLACK
-				// (x11vnc/maim/ffmpeg-x11grab all verified BLACK 2026-06-02). If XFCE
-				// fails to start we degrade to the legacy fluxbox + branded shell so the
-				// host display is never lost.
-				try {
-					this.xfceShellHandle = await startXfceShell({
-						display: ':1',
-						logger: streamingLogger,
-					})
-					streamingLogger.info(
-						`XFCE host desktop up on :1 (pid=${this.xfceShellHandle.pid}, compositor OFF)`,
-					)
-				} catch (xfceErr) {
-					streamingLogger.error(
-						'XFCE host desktop failed to start on :1 — degrading to fluxbox + branded shell',
-						xfceErr,
-					)
-					try {
-						this.fluxboxHandle = await startFluxbox({
-							display: ':1',
-							logger: streamingLogger,
-						})
-						streamingLogger.info(
-							`fluxbox up on :1 (pid=${this.fluxboxHandle.pid}) [XFCE degrade fallback]`,
-						)
-						await bootBrandedShell({display: ':1', logger: streamingLogger})
-					} catch (fbErr) {
-						streamingLogger.error('fluxbox degrade fallback also failed on :1', fbErr)
-					}
-				}
-
-				// 2026-06-02 — we register the branded `:1` (fluxbox) host display here,
-				// NOT the real GNOME `:0` Ubuntu desktop. Investigated exposing `:0`:
-				// it's a pure-X11 GNOME session, but mutter composites via GL and on this
-				// headless/software-GL box the composited framebuffer is NOT readable via
-				// XGetImage — x11vnc/maim capture it as solid BLACK (only stray X11 client
-				// windows show in the tree). Non-compositing `:1` (fluxbox) captures fine.
-				// Streaming the real GNOME desktop would need a PipeWire/portal screencast
-				// path (separate project), so the branded `:1` stays the host display.
-				if (this.displayManager) {
-					try {
-						await this.displayManager.registerExisting({
-							display: ':1',
-							// Must match the Xvfb -screen geometry above (1280x720) so
-							// displays.list / popover thumbs / openWindow size the :1
-							// VNC window to the real host resolution.
-							width: HOST_DISPLAY_WIDTH,
-							height: HOST_DISPLAY_HEIGHT,
-							mode: 'xvfb',
-							name: 'Host Display',
-							ownerSession: '',
-						})
-						streamingLogger.info(
-							'displays: registered :1 host display (host/shared, no spawn)',
-						)
-					} catch (regErr) {
-						streamingLogger.warn(
-							'displays: failed to register :1 host display (strip will omit :1)',
-							regErr,
-						)
-					}
-				}
+				// Phase 276 — host display :1 REMOVED ENTIRELY (operator decision:
+				// per-app-stream only). No host Xvfb, no XFCE/fluxbox/branded shell, and
+				// :1 is not registered as a viewable display. Each WebApp/native app
+				// spawns its own Xvfb ([10,60)/[60,100)) and streams individually;
+				// generic computer-use tools require an explicit per-app display:":N"
+				// (there is no host canvas to default to).
 
 				// Reap orphan webapp displays whose Xvfb died across a livinityd
 				// restart/crash. The in-memory WebAppWindowManager loses them, but
