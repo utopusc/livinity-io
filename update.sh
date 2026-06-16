@@ -91,8 +91,205 @@ LIVOS_UPDATE_TO_SHA=""
 
 exec > >(tee --output-error=warn-nopipe -a "$LIVOS_UPDATE_LOG_FILE") 2>&1
 
+# ── Update safety Layer-B (Phase 273) — independent SIGKILL-immune rollback guard ─
+# Layer-A (health_probe_or_rollback, v44.18) runs INSIDE update.sh: if update.sh is
+# SIGKILLed during the restart (cgroup-kill — mitigated by --slice/KillMode=mixed
+# but defense-in-depth), Layer-A never runs. Layer-B is a systemd transient unit
+# (system.slice ⇒ survives livos.service's control-group kill) armed BEFORE the
+# restart and disarmed by the EXIT trap. It rolls back ONLY if update.sh died
+# without disarming (sentinel present) AND :8080 is unhealthy — safe-or-better.
+DEPLOY_GUARD_SCRIPT="/opt/livos/livos-deploy-guard.sh"
+DEPLOY_GUARD_SENTINEL="/opt/livos/data/update/deploy-inflight"
+DEPLOY_GUARD_UNIT="livos-deploy-guard"
+DEPLOY_GUARD_DELAY=300
+
+# Heredoc-install the standalone guard (idempotent; mirrors ensure_*_dropin). The
+# guard runs AFTER update.sh is dead, so it is fully self-contained (own flock,
+# probe, restore, failed.json). QUOTED heredoc ⇒ nothing here expands at install
+# time; every $var / $(...) is literal in the emitted script (expands at guard run).
+install_deploy_guard() {
+    local tmp; tmp=$(mktemp)
+    cat > "$tmp" <<'GUARD_EOF'
+#!/usr/bin/env bash
+# LivOS deploy guard (Layer-B) — armed by update.sh via systemd-run in system.slice
+# right before `systemctl restart livos.service`. Fires ONCE. Rolls back to
+# last-good ONLY if update.sh died without disarming (sentinel present) AND :8080
+# is unhealthy. Race-safe: takes the SAME flock update.sh holds — alive ⇒ bail.
+set +e
+EXPECTED_ID="${1:-}"
+SENTINEL="/opt/livos/data/update/deploy-inflight"
+LAST_GOOD_DIR="/opt/.livos-last-good"
+LIVOS_DIR="/opt/livos"
+LIV_DIR="/opt/liv"
+HISTORY_DIR="/opt/livos/data/update-history"
+LOCK="/run/lock/livos-update.lock"
+log() { echo "[livos-deploy-guard] $*"; }
+
+# 1. Race guard: acquire update.sh's single-flight lock. If update.sh is alive it
+#    holds the lock → we can't → bail (it is in control, incl. its Layer-A). A
+#    SIGKILL frees the fd → the lock is free → we proceed.
+exec 9>"$LOCK" 2>/dev/null || exec 9>/tmp/livos-update.lock 2>/dev/null || true
+if command -v flock >/dev/null 2>&1; then
+    if ! flock -n 9; then
+        log "update.sh still holds the lock — no-op (it is in control)"
+        exit 0
+    fi
+fi
+
+# 2. Sentinel present + matches the deploy we were armed for.
+if [[ ! -f "$SENTINEL" ]]; then
+    log "no sentinel — update.sh disarmed cleanly; nothing to do"
+    exit 0
+fi
+SENT_ID=""; SENT_ISO_FS=""; SENT_ISO_JSON=""; SENT_FROM=""; SENT_TO=""; SENT_LOG=""
+while IFS='=' read -r k v; do
+    case "$k" in
+        id) SENT_ID="$v" ;;
+        iso_fs) SENT_ISO_FS="$v" ;;
+        iso_json) SENT_ISO_JSON="$v" ;;
+        from_sha) SENT_FROM="$v" ;;
+        to_sha) SENT_TO="$v" ;;
+        log_path) SENT_LOG="$v" ;;
+    esac
+done < "$SENTINEL"
+if [[ -n "$EXPECTED_ID" && -n "$SENT_ID" && "$EXPECTED_ID" != "$SENT_ID" ]]; then
+    log "sentinel id ($SENT_ID) != armed id ($EXPECTED_ID) — stale, ignoring"
+    exit 0
+fi
+
+responding() {
+    local code
+    code=$(curl -s -o /dev/null -w '%{http_code}' -m 4 http://127.0.0.1:8080/ 2>/dev/null || echo 000)
+    [[ "$code" =~ ^(2|3)[0-9][0-9]$ || "$code" == "401" || "$code" == "403" ]]
+}
+
+# 3. Probe :8080 ~80s (a stranded box may be mid crash-loop boot). Healthy ⇒
+#    never disturb it (safe-or-better) — just clear the sentinel.
+for _ in $(seq 1 20); do
+    if responding; then
+        log "livinityd healthy on :8080 — no rollback needed; clearing sentinel"
+        rm -f "$SENTINEL" 2>/dev/null
+        exit 0
+    fi
+    sleep 4
+done
+
+# 4. Unhealthy + update.sh dead ⇒ restore last-good (self-contained copy of Layer-A).
+log "livinityd NOT responding on :8080 and update.sh did not complete — Layer-B ROLLBACK"
+if [[ -d "$LAST_GOOD_DIR/livinityd-source" ]]; then
+    rsync -a --delete "$LAST_GOOD_DIR/livinityd-source/" "$LIVOS_DIR/packages/livinityd/source/" 2>/dev/null
+    if [[ -d "$LAST_GOOD_DIR/ui-dist" ]]; then
+        rm -rf "$LIVOS_DIR/packages/ui/dist" 2>/dev/null
+        rsync -a "$LAST_GOOD_DIR/ui-dist/" "$LIVOS_DIR/packages/ui/dist/" 2>/dev/null
+        ln -sf "$LIVOS_DIR/packages/ui/dist" "$LIVOS_DIR/packages/livinityd/ui" 2>/dev/null
+    fi
+    if [[ -d "$LAST_GOOD_DIR/liv-core-dist" && -d "$LIV_DIR/packages/core" ]]; then
+        rm -rf "$LIV_DIR/packages/core/dist" 2>/dev/null
+        rsync -a "$LAST_GOOD_DIR/liv-core-dist/" "$LIV_DIR/packages/core/dist/" 2>/dev/null
+        for store_dir in /opt/livos/node_modules/.pnpm/@liv+core*/; do
+            [[ -d "$store_dir" ]] || continue
+            tgt="${store_dir}node_modules/@liv/core/dist"
+            mkdir -p "$(dirname "$tgt")" 2>/dev/null
+            rm -rf "$tgt" 2>/dev/null
+            cp -r "$LAST_GOOD_DIR/liv-core-dist" "$tgt" 2>/dev/null
+        done
+    fi
+    if id bruce >/dev/null 2>&1; then
+        chown -R bruce:bruce "$LIVOS_DIR/packages/livinityd/source" "$LIVOS_DIR/packages/ui/dist" 2>/dev/null
+        [[ -d "$LIV_DIR/packages/core/dist" ]] && chown -R bruce:bruce "$LIV_DIR/packages/core/dist" 2>/dev/null
+    fi
+    log "last-good restored"
+else
+    log "no last-good snapshot — cannot restore (manual recovery needed)"
+fi
+systemctl reset-failed livos.service 2>/dev/null
+systemctl restart livos.service 2>/dev/null
+rolled_ok=0
+for _ in $(seq 1 40); do
+    if responding; then rolled_ok=1; break; fi
+    sleep 3
+done
+
+# 5. failed.json for Past-Deploys visibility (mirrors phase33_finalize schema).
+mkdir -p "$HISTORY_DIR" 2>/dev/null
+ts_iso="${SENT_ISO_FS:-$(date -u +%Y-%m-%dT%H-%M-%SZ)}"
+json_iso="${SENT_ISO_JSON:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+json_path="${HISTORY_DIR}/${ts_iso}-failed.json"
+from_field=""; [[ -n "$SENT_FROM" && "$SENT_FROM" != "unknown" ]] && from_field=", \"from_sha\": \"$SENT_FROM\""
+to_field="";   [[ -n "$SENT_TO" ]] && to_field=", \"to_sha\": \"$SENT_TO\""
+log_field="";  [[ -n "$SENT_LOG" ]] && log_field=", \"log_path\": \"$SENT_LOG\""
+reason="Layer-B guard rolled back a stranded/broken deploy (update.sh did not complete)"
+[[ "$rolled_ok" == "1" ]] || reason="Layer-B guard ran but rollback did not restore :8080 — manual recovery needed"
+cat > "$json_path" 2>/dev/null <<JSON
+{
+  "timestamp": "${json_iso}",
+  "status": "failed"${from_field}${to_field},
+  "guard": "layer-b"${log_field},
+  "reason": "${reason}"
+}
+JSON
+chmod 644 "$json_path" 2>/dev/null
+rm -f "$SENTINEL" 2>/dev/null
+log "Layer-B complete (rolled_ok=$rolled_ok) — wrote $json_path"
+exit 0
+GUARD_EOF
+    if [[ ! -f "$DEPLOY_GUARD_SCRIPT" ]] || ! cmp -s "$tmp" "$DEPLOY_GUARD_SCRIPT"; then
+        mv "$tmp" "$DEPLOY_GUARD_SCRIPT" 2>/dev/null || { rm -f "$tmp"; return 0; }
+        chmod +x "$DEPLOY_GUARD_SCRIPT" 2>/dev/null || true
+    else
+        rm -f "$tmp"
+    fi
+}
+
+# Arm the guard right before the risky restart. Writes the sentinel (deploy
+# metadata for the failed.json) and a one-shot system.slice transient unit.
+arm_deploy_guard() {
+    if [[ "${LIVOS_DISABLE_DEPLOY_GUARD:-}" == "1" ]]; then
+        warn "Layer-B deploy guard disabled (LIVOS_DISABLE_DEPLOY_GUARD=1) — skipping arm"
+        return 0
+    fi
+    if ! command -v systemd-run >/dev/null 2>&1; then
+        warn "systemd-run unavailable — Layer-B guard not armed (Layer-A still protects)"
+        return 0
+    fi
+    systemctl stop "${DEPLOY_GUARD_UNIT}.timer" "${DEPLOY_GUARD_UNIT}.service" 2>/dev/null || true
+    systemctl reset-failed "${DEPLOY_GUARD_UNIT}.timer" "${DEPLOY_GUARD_UNIT}.service" 2>/dev/null || true
+    install_deploy_guard
+    mkdir -p "$(dirname "$DEPLOY_GUARD_SENTINEL")" 2>/dev/null || true
+    cat > "$DEPLOY_GUARD_SENTINEL" <<SENT
+id=${LIVOS_UPDATE_START_TS}
+iso_fs=${LIVOS_UPDATE_START_ISO_FS}
+iso_json=${LIVOS_UPDATE_START_ISO_JSON}
+from_sha=${LIVOS_UPDATE_FROM_SHA}
+to_sha=${LIVOS_UPDATE_TO_SHA}
+log_path=${LIVOS_UPDATE_LOG_FILE}
+SENT
+    if systemd-run --slice=system.slice --collect --quiet \
+        --on-active="${DEPLOY_GUARD_DELAY}" \
+        --unit="${DEPLOY_GUARD_UNIT}" \
+        --description="LivOS deploy guard (Layer-B rollback)" \
+        -- "$DEPLOY_GUARD_SCRIPT" "${LIVOS_UPDATE_START_TS}" 2>/dev/null; then
+        ok "Layer-B deploy guard armed (independent rollback in ${DEPLOY_GUARD_DELAY}s if update.sh is SIGKILLed)"
+    else
+        warn "Could not arm Layer-B deploy guard via systemd-run — Layer-A still protects"
+        rm -f "$DEPLOY_GUARD_SENTINEL" 2>/dev/null || true
+    fi
+}
+
+# Disarm: stop the transient unit + drop the sentinel. Called by the EXIT trap, so
+# EVERY clean exit (success, Layer-A rollback, precheck-fail) cancels Layer-B — only
+# a SIGKILL (no trap) leaves it armed, which is exactly when Layer-B must fire.
+disarm_deploy_guard() {
+    systemctl stop "${DEPLOY_GUARD_UNIT}.timer" "${DEPLOY_GUARD_UNIT}.service" 2>/dev/null || true
+    systemctl reset-failed "${DEPLOY_GUARD_UNIT}.timer" "${DEPLOY_GUARD_UNIT}.service" 2>/dev/null || true
+    rm -f "$DEPLOY_GUARD_SENTINEL" 2>/dev/null || true
+}
+
 phase33_finalize() {
     local exit_code=$?
+    # Layer-B (273): cancel the independent guard on ANY clean exit (capture
+    # exit_code FIRST so the systemctl calls below don't clobber $?).
+    disarm_deploy_guard 2>/dev/null || true
     local end_ts end_ts_ms duration_ms status reason_field
     end_ts=$(date -u +%s)
     end_ts_ms=$(date -u +%s%3N 2>/dev/null || echo $((end_ts * 1000)))
@@ -1841,6 +2038,11 @@ ensure_livos_startlimit_dropin
 ensure_livos_killmode_dropin
 
 info "Restarting livos..."
+# Layer-B (Phase 273): arm the independent, SIGKILL-immune rollback guard RIGHT
+# before the restart (the cgroup-kill point). If this restart strands/kills
+# update.sh before Layer-A's probe runs, the guard rolls back to last-good on its
+# own. The EXIT trap disarms it on any clean exit, so it only fires on a SIGKILL.
+arm_deploy_guard
 # Clear any latched failed-state FIRST — a box already crash-looping from a prior
 # bad deploy (the exact case this rescues) can refuse a plain `restart` with
 # "start request repeated too quickly" until reset-failed clears the latch.
