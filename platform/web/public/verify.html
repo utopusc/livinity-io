@@ -125,9 +125,9 @@
               const data = await res.json().catch(() => ({}));
               if (data.success) {
                 setStatus("success");
-                // Billing-first onboarding: choose a plan, then the install
-                // wizard (/dashboard/install re-checks billing if skipped).
-                setTimeout(() => { window.location.href = "/pricing"; }, 1500);
+                // Phase 274: pick a username before pricing — the new user row
+                // has username=NULL; /username claims it then routes to /pricing.
+                setTimeout(() => { window.location.href = "/username"; }, 1500);
               } else {
                 setStatus("error");
                 setError(data.error || "Verification failed");

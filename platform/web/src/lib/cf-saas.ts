@@ -481,7 +481,19 @@ export const cfClient: CfClient = new Proxy({} as CfClient, {
  * Returns the tunnel_id, the connector token (caller must encrypt at rest),
  * and the apex DNS record ID (caller must store for deprovision).
  *
- * Idempotency: caller is responsible. Calling twice creates two tunnels.
+ * Idempotency / collision-safety (Phase 274): this function now TOLERATES a
+ * pre-existing tunnel or apex DNS record for the username. A CF tunnel is named
+ * `livos-{username}` and the apex CNAME is `{username}.livinity.io`; if a stale
+ * one survives (e.g. a best-effort deprovision that failed on a prior delete),
+ * a naive create would 409/duplicate and roll the whole provision back (the
+ * livinitydemo `had_tunnel:false` → install 410 NO_TUNNEL class). We instead
+ * REUSE an existing same-named tunnel and REPLACE any stale apex DNS records so
+ * provisioning succeeds. (Going forward reserved_usernames also makes username
+ * reuse impossible, but this hardens the path for any already-orphaned CF state.)
+ *
+ * NOTE: legacy orphan tunnels for already-DELETED usernames (livinitydemo,
+ * livinityio, haribo*, jack, …) are NOT cleaned up here — that is an operator
+ * one-off: list `livos-*` tunnels with no matching live user and delete them.
  *
  * Failure mode: if any step fails after a partial create, caller MUST call
  * deprovisionUser with whatever IDs got created. This function does NOT
@@ -494,19 +506,36 @@ export async function provisionUserHostnames(username: string): Promise<{
   apex_dns_record_id: string;
 }> {
   const env = readEnv();
+  const tunnelName = `livos-${username}`;
+  const apexName = `${username}.livinity.io`;
 
-  // Step 1: create tunnel
-  const { tunnel_id } = await cfClient.createTunnel(`livos-${username}`);
+  // Step 1: reuse an existing same-named tunnel if one survives, else create.
+  let tunnel_id: string;
+  const existingTunnels = await cfClient.listTunnels().catch(() => [] as Awaited<ReturnType<typeof cfClient.listTunnels>>);
+  const match = existingTunnels.find((t) => t.name === tunnelName);
+  if (match) {
+    tunnel_id = match.id;
+    console.warn(`[cf-saas] reusing pre-existing tunnel ${tunnelName}=${tunnel_id} (collision-safe provision)`);
+  } else {
+    ({ tunnel_id } = await cfClient.createTunnel(tunnelName));
+  }
 
-  // Step 2: fetch connector token
+  // Step 2: fetch connector token (deterministic for a reused tunnel)
   const tunnel_token = await cfClient.getTunnelToken(tunnel_id);
 
   // Step 3: set initial ingress (apex only + catch-all)
   await cfClient.pushTunnelIngress(tunnel_id, [
-    { hostname: `${username}.livinity.io`, service: 'http://localhost:80' },
+    { hostname: apexName, service: 'http://localhost:80' },
   ]);
 
-  // Step 4: create apex DNS CNAME
+  // Step 4: replace any stale apex DNS records, then create a fresh CNAME that
+  // points at the (possibly reused) tunnel.
+  const staleApex = await cfClient.listDnsRecordsByName(apexName).catch(() => [] as Awaited<ReturnType<typeof cfClient.listDnsRecordsByName>>);
+  for (const rec of staleApex) {
+    await cfClient
+      .deleteDnsRecord(rec.id)
+      .catch((e) => console.warn(`[cf-saas] stale apex DNS cleanup failed for ${apexName}: ${e}`));
+  }
   const { dns_record_id: apex_dns_record_id } = await cfClient.createDnsRecord({
     type: 'CNAME',
     name: username,
