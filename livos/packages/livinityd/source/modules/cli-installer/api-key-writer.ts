@@ -22,6 +22,7 @@
 //                    block (a 2-line `<env>: <key>` doc; goose reads flat keys).
 
 import os from 'node:os'
+import {getDesktopUser} from '../system/desktop-user.js'
 import path from 'node:path'
 import fsPromises from 'node:fs/promises'
 
@@ -205,7 +206,7 @@ export async function writeApiKey(
 	}
 
 	const fs = deps.fs ?? fsPromises
-	const home = deps.homeDir ?? os.homedir() ?? process.env.HOME ?? '/home/bruce'
+	const home = deps.homeDir ?? os.homedir() ?? process.env.HOME ?? `/home/${getDesktopUser()}`
 	const absPath = path.join(home, target.relPath)
 	const parentDir = path.dirname(absPath)
 

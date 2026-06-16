@@ -38,6 +38,7 @@ import {setTimeout as sleep} from 'node:timers/promises'
 
 import {z, type ZodTypeAny} from 'zod'
 
+import {getDesktopUser} from '../../system/desktop-user.js'
 import {LUSE_TOOLS, LUSE_AUTO_MODE_EXTRA_TOOLS} from '../luse-tools.js'
 import {
 	captureScreenshot,
@@ -82,13 +83,16 @@ import type {DisplayManager, DisplayMode} from '../displays/index.js'
 
 /**
  * R13 — the SINGLE default Luse user id. Drives the read-sandbox allowlist
- * (`/home/<slug>/`, `${LIVOS_ROOT}/data/uploads/<userId>/`). Unified on 'bruce'
- * (the single-tenant desktop user); previously server.ts defaulted to 'admin'
- * while tools.ts defaulted to 'bruce' in the SAME process — a fresh box left it
- * unset, so the two halves disagreed. Now ONE const + one resolver, seeded
- * explicitly via `LUSE_USER_ID` in seeds/mcp-servers.json.
+ * (`/home/<slug>/`, `${LIVOS_ROOT}/data/uploads/<userId>/`). Previously server.ts
+ * defaulted to 'admin' while tools.ts defaulted to 'bruce' in the SAME process —
+ * a fresh box left it unset, so the two halves disagreed. Now ONE const + one
+ * resolver, seeded explicitly via `LUSE_USER_ID` in seeds/mcp-servers.json.
+ *
+ * Phase 278: derive from getDesktopUser() (the luse MCP child runs AS the desktop
+ * user) instead of a hardcoded 'bruce', so the sandbox allowlist is correct for
+ * any operator even before the LUSE_USER_ID seed is read.
  */
-export const DEFAULT_LUSE_USER_ID = 'bruce'
+export const DEFAULT_LUSE_USER_ID = getDesktopUser()
 
 /** R13 — resolve the Luse user id from the env (single source). Empty string
  *  is treated as unset. Pure + DI'd so the default is testable without booting

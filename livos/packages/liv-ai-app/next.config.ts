@@ -14,18 +14,22 @@ import type { NextConfig } from "next";
  * `pnpm --filter liv-ai-app start` against the standalone server.
  *
  * Phase 201 dev-mode (2026-05-23) — when developing the UI on localhost:3010
- * we point at the live bruce.livinity.io livinityd instead of running a
- * local backend. Both `/chat/*` and `/trpc/*` get server-side proxied so the
- * browser sees same-origin (no CORS) and the operator's LIVINITY_SESSION
- * cookie (manually copied to localhost via DevTools → Application → Cookies
- * for first-time setup) is forwarded server-side to the real backend.
+ * we point at a livinityd backend instead of running a local one. Both
+ * `/chat/*` and `/trpc/*` get server-side proxied so the browser sees
+ * same-origin (no CORS) and the operator's LIVINITY_SESSION cookie (manually
+ * copied to localhost via DevTools → Application → Cookies for first-time
+ * setup) is forwarded server-side to the real backend.
+ *
+ * Phase 278: the dev default points at a LOCAL livinityd (localhost:8080), not
+ * a hardcoded operator domain. To develop against a remote box set
+ * `LIV_AI_UPSTREAM=https://<your-domain>` in the dev env.
  *
  * Production deploys (Caddy on Mini PC) do NOT use these rewrites — the
  * Caddy `handle /liv-ai-app/* → :3010` block already gives same-origin
  * routing, so the AssistantChatTransport's relative `api: '/chat/livAi'`
  * resolves natively to the parent livinityd's Express route.
  */
-const UPSTREAM = process.env.LIV_AI_UPSTREAM ?? "https://bruce.livinity.io";
+const UPSTREAM = process.env.LIV_AI_UPSTREAM ?? "http://localhost:8080";
 
 const isProd = process.env.NODE_ENV === "production";
 
