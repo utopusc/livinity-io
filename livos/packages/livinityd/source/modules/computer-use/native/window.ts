@@ -464,6 +464,53 @@ export type LivosAppResolver = (name: string) => Promise<LivosAppMatch | null>
  * match the common agent intent — "open n8n" usually means the browser app
  * since most LivOS apps are web-based.
  */
+/**
+ * Extract the bare hostname base from a WebApp url for matching.
+ * `https://www.reddit.com/r/x` → `reddit`. Strips a leading `www.` and takes
+ * the first DNS label (the brand name the user is most likely to say). Returns
+ * '' on parse failure or no url.
+ */
+export function hostnameBase(url?: string): string {
+	if (!url) return ''
+	try {
+		const host = new URL(url).hostname.replace(/^www\./i, '')
+		return (host.split('.')[0] ?? '').toLowerCase().trim()
+	} catch {
+		return ''
+	}
+}
+
+/**
+ * Graded match of an agent-supplied `needle` (already lowercased/trimmed)
+ * against a WebApp's candidate labels. Higher = better. 0 = no match.
+ *
+ * Priority: exact label equality > url hostname base equality > label prefix
+ * at a word boundary ("reddit - please wait…" matches "reddit") > needle as a
+ * standalone word inside the title > loose host containment. The hostname base
+ * is weighted highly because it is the most stable, user-intent-aligned signal
+ * (titles are noisy captured page titles).
+ */
+export function webappMatchScore(
+	needle: string,
+	labels: {title: string; name: string; sub: string; host: string},
+): number {
+	const {title, name, sub, host} = labels
+	const exact = [title, name, sub, host].filter(Boolean)
+	if (exact.includes(needle)) return 100
+	if (host && host === needle) return 95
+	for (const l of [title, name]) {
+		if (l && (l.startsWith(`${needle} `) || l.startsWith(`${needle}-`) || l.startsWith(`${needle} -`))) {
+			return 80
+		}
+	}
+	const word = new RegExp(`(^|[^a-z0-9])${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`)
+	for (const l of [title, name]) {
+		if (l && word.test(l)) return 60
+	}
+	if (host && needle.length >= 3 && (needle.includes(host) || host.includes(needle))) return 40
+	return 0
+}
+
 export async function defaultLivosAppResolver(
 	name: string,
 	deps: {
@@ -489,24 +536,38 @@ export async function defaultLivosAppResolver(
 	])
 
 	// Match WebApp first (more likely the user intent for browser-based apps).
-	// Phase 274 — match on the app's display name (webapp.list exposes `title`;
-	// older shape used `name`). Route to the webapp's REAL stored `url`
-	// (e.g. https://www.reddit.com) — that's what webapp.window.spawn needs.
-	// Only synthesize the legacy <app>-<user>.<root> form when no url exists
-	// (defensive; user-added WebApps always carry a url).
+	// Phase 275 — TOLERANT graded matching. WebApp `title` is a captured page
+	// title at add-time, so it is frequently noisy: bot-check pages
+	// ("Reddit - Please wait for verification"), login walls, "| Home" suffixes,
+	// etc. Exact title equality (the Phase 274 behavior) almost never matched a
+	// real user-added WebApp, so the agent fell back to the broken generic path.
+	// We now score each webapp against the needle and pick the best, using the
+	// URL hostname base ("https://reddit.com/" → "reddit") as the strongest,
+	// most stable signal (the user says "reddit", the url is reddit.com — the
+	// title is unreliable). Route to the webapp's REAL stored `url` — that's
+	// what webapp.window.spawn needs. Only synthesize the legacy
+	// <app>-<user>.<root> form when no url exists (defensive).
+	let bestWebApp: {wa: (typeof webapps)[number]; label: string; score: number} | null = null
 	for (const wa of webapps) {
-		const label = wa.title ?? wa.name ?? wa.subdomain
-		const candidate = (label ?? wa.id).toLowerCase()
-		if (candidate === needle) {
-			const sub = wa.subdomain ?? wa.id
-			const route = wa.url ?? `${proto}://${sub}-${deps.userSlug}.${deps.domainRoot}/`
-			return {
-				kind: 'webapp',
-				appId: wa.id,
-				route,
-				title: label ?? sub,
-				icon: '',
-			}
+		const title = (wa.title ?? '').toLowerCase().trim()
+		const wname = (wa.name ?? '').toLowerCase().trim()
+		const sub = (wa.subdomain ?? '').toLowerCase().trim()
+		const host = hostnameBase(wa.url) // "https://www.reddit.com/" → "reddit"
+		const score = webappMatchScore(needle, {title, name: wname, sub, host})
+		if (score > 0 && (bestWebApp === null || score > bestWebApp.score)) {
+			bestWebApp = {wa, label: wa.title ?? wa.name ?? wa.subdomain ?? host ?? wa.id, score}
+		}
+	}
+	if (bestWebApp) {
+		const wa = bestWebApp.wa
+		const sub = wa.subdomain ?? wa.id
+		const route = wa.url ?? `${proto}://${sub}-${deps.userSlug}.${deps.domainRoot}/`
+		return {
+			kind: 'webapp',
+			appId: wa.id,
+			route,
+			title: bestWebApp.label,
+			icon: '',
 		}
 	}
 
