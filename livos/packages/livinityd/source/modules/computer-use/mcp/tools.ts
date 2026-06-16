@@ -290,6 +290,18 @@ export interface LuseToolsOptions {
 		match: LivosAppMatch,
 		display?: string,
 	) => Promise<{ok: boolean; error?: string}>
+	/**
+	 * Phase 275 — create a WebApp for a site the user does NOT yet have, then
+	 * open it (so "open youtube.com" creates the YouTube WebApp on the desktop
+	 * and launches it instead of falling back to a throwaway browser). server.ts
+	 * wires it to livinityd's `webapp.create` (idempotent on userId+url) followed
+	 * by `webapp.window.spawn`, over the same authed HTTP channel. Returns the
+	 * created/opened app's title for agent feedback. When unset, the handler
+	 * leaves the legacy APP_MAP fallback in place.
+	 */
+	ensureWebApp?: (
+		url: string,
+	) => Promise<{ok: boolean; title?: string; error?: string}>
 }
 
 /**
@@ -672,6 +684,39 @@ function summarizeArgs(args: Record<string, unknown>): string {
 	}
 }
 
+/**
+ * Phase 275 — decide whether an agent-supplied `computer_application` argument
+ * is a WEBSITE the user wants opened as a WebApp (so we can auto-create + open
+ * it) versus a plain app name (which should fall through to the APP_MAP path).
+ * Returns a normalized https URL for URL-like input, else null.
+ *
+ *   "youtube.com"          → "https://youtube.com/"
+ *   "https://youtube.com"  → "https://youtube.com/"
+ *   "www.example.co.uk/x"  → "https://www.example.co.uk/x"
+ *   "reddit" / "libreoffice" / "open youtube" → null (no dotted domain)
+ */
+export function normalizeWebAppUrl(input: string): string | null {
+	const s = input.trim()
+	if (!s) return null
+	if (/^https?:\/\//i.test(s)) {
+		try {
+			return new URL(s).toString()
+		} catch {
+			return null
+		}
+	}
+	// Bare domain: no whitespace, at least one dot, an alphabetic TLD (≥2 chars),
+	// optional path. Excludes bare app names ("reddit") and phrases ("open x").
+	if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(s) && /\.[a-z]{2,}($|\/)/i.test(s)) {
+		try {
+			return new URL(`https://${s}`).toString()
+		} catch {
+			return null
+		}
+	}
+	return null
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HANDLERS — handler map for all 17 LUSE_TOOLS (D-NATIVE-04)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1045,6 +1090,34 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 								/* settle — windowManager.openWindow happens in parent process */
 							},
 						)
+					}
+					// Phase 275 — no existing WebApp/native match. If the user asked for a
+					// WEBSITE (a URL or bare domain like "youtube.com"), CREATE the WebApp
+					// (adds it to the desktop) and open it in the user's profile — NEVER fall
+					// back to a throwaway browser / new display. Plain app names (no dotted
+					// domain) fall through to the APP_MAP path below unchanged.
+					const webAppUrl = normalizeWebAppUrl(application)
+					if (webAppUrl && options.ensureWebApp) {
+						const ensured = await options.ensureWebApp(webAppUrl)
+						if (!ensured.ok) {
+							return {
+								content: [{type: 'text', text: `Could not create/open the WebApp for "${application}": ${ensured.error ?? 'unknown error'}`}],
+								isError: true,
+							}
+						}
+						return {
+							content: [
+								{
+									type: 'text',
+									text:
+										`Created and opened "${ensured.title ?? webAppUrl}" as a real LivOS WebApp ` +
+										`(added to the user's desktop, in their profile). It surfaces on the desktop / ` +
+										`in the Displays popover. Do NOT screenshot the main display (:1) or open ` +
+										`another browser to "verify" — the WebApp is already open. This task is complete.`,
+								},
+							],
+							isError: false,
+						}
 					}
 				} catch (err) {
 					process.stderr.write(

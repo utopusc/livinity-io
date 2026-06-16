@@ -279,6 +279,10 @@ async function main(): Promise<void> {
 	let openLivosApp:
 		| ((match: LivosAppMatch, display?: string) => Promise<{ok: boolean; error?: string}>)
 		| undefined
+	// Phase 275 — create a WebApp for a not-yet-saved site, then open it.
+	let ensureWebApp:
+		| ((url: string) => Promise<{ok: boolean; title?: string; error?: string}>)
+		| undefined
 	if (livinitydApiUrl && livApiKey && luseUserSlug && luseDomainRoot) {
 		const fetchAppList = async (proc: string): Promise<any[]> => {
 			try {
@@ -344,6 +348,52 @@ async function main(): Promise<void> {
 			}
 		}
 
+		// Phase 275 — create-then-open a WebApp for a site the user doesn't have yet.
+		// webapp.create is idempotent on (userId, url), so re-opening an
+		// already-created site just returns the existing row. Same authed,
+		// non-batched, no-transformer tRPC channel as openLivosApp.
+		ensureWebApp = async (url: string) => {
+			try {
+				const createRes = await fetch(`${livinitydApiUrl}/trpc/webapp.create`, {
+					method: 'POST',
+					headers: {'X-Api-Key': livApiKey, 'Content-Type': 'application/json'},
+					body: JSON.stringify({url}),
+					signal: AbortSignal.timeout(20000),
+				})
+				const createText = await createRes.text()
+				if (!createRes.ok) {
+					let msg = `HTTP ${createRes.status}`
+					try {
+						const j = JSON.parse(createText) as {error?: {message?: string; json?: {message?: string}}}
+						msg = j.error?.json?.message ?? j.error?.message ?? msg
+					} catch {
+						/* keep HTTP status */
+					}
+					process.stderr.write(`[luse-mcp] ensureWebApp webapp.create failed: ${msg}\n`)
+					return {ok: false, error: msg}
+				}
+				const created = (JSON.parse(createText) as {result?: {data?: {id?: string; url?: string; title?: string}}})
+					.result?.data
+				if (!created?.id) {
+					process.stderr.write(`[luse-mcp] ensureWebApp: webapp.create returned no id\n`)
+					return {ok: false, error: 'webapp.create returned no id'}
+				}
+				// Now open it as a real WebApp window (reuses openLivosApp's spawn proc).
+				const opened = await openLivosApp?.(
+					{kind: 'webapp', appId: created.id, route: created.url ?? url, title: created.title ?? url, icon: ''},
+				)
+				if (opened && !opened.ok) {
+					return {ok: false, title: created.title ?? created.url ?? url, error: opened.error}
+				}
+				process.stderr.write(`[luse-mcp] ensureWebApp: created+opened webapp ${created.id} (${created.url ?? url})\n`)
+				return {ok: true, title: created.title ?? created.url ?? url}
+			} catch (err: any) {
+				const msg = err?.message ?? String(err)
+				process.stderr.write(`[luse-mcp] ensureWebApp error: ${msg}\n`)
+				return {ok: false, error: msg}
+			}
+		}
+
 		process.stderr.write(
 			`[luse-mcp] resolver: constructed (LIVINITYD_API_URL=${livinitydApiUrl}, userSlug=${luseUserSlug}, domainRoot=${luseDomainRoot})\n`,
 		)
@@ -372,6 +422,9 @@ async function main(): Promise<void> {
 		// Phase 274 — actually open a matched LivOS app (spawn + surface). undefined
 		// when the env-thread is incomplete → legacy stderr-emit-only behavior.
 		openLivosApp,
+		// Phase 275 — create-then-open a WebApp for a not-yet-saved site (so
+		// "open youtube.com" adds + launches it instead of a throwaway browser).
+		ensureWebApp,
 		// Phase 248-02 — display-lifecycle backend (undefined when redis is null,
 		// in which case the 4 display tools fail-closed).
 		displayManager,
