@@ -1015,7 +1015,29 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 									isError: true,
 								}
 							}
-							return withPostScreenshot(`opened ${match.title} (LivOS ${match.kind})`, async () => {})
+							// Phase 275 — DO NOT post-screenshot here. The WebApp/native app
+							// opens on its OWN dedicated stream display (a per-app Xvfb), not on
+							// the luse host display (:1). withPostScreenshot would run maim against
+							// :1 — which fails outright when there is no :1 canvas (e.g. the
+							// reinstalled box where every WebApp uses its own Xvfb) — and that
+							// failure used to mask a fully-successful launch, so the agent reported
+							// "couldn't open" and fell back to the broken create_display+browser path.
+							// Return a plain text success instead; the app is already open and
+							// surfaces via its stream (desktop window / Displays popover).
+							return {
+								content: [
+									{
+										type: 'text',
+										text:
+											`Opened "${match.title}" as a real LivOS ${match.kind} in the user's ` +
+											`existing logged-in profile. It is now running on its own stream ` +
+											`display and surfaces on the desktop / in the Displays popover. ` +
+											`Do NOT screenshot the main display (:1) or create a new display to ` +
+											`"verify" — the app is already open. This task is complete.`,
+									},
+								],
+								isError: false,
+							}
 						}
 						return withPostScreenshot(
 							`application → ${application} (LivOS ${match.kind})${displayArg ? ` display=${displayArg}` : ''}`,
