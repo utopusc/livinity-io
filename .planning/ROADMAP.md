@@ -4852,4 +4852,14 @@ Plans:
 Plans:
 - [x] TBD (run /gsd-plan-phase 273 to break down) (completed 2026-06-16)
 
+### Phase 274: Username/Signup Redesign + Permanent Username Reservation + Trial Anti-Abuse
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 273
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 274 to break down)
+
 ---

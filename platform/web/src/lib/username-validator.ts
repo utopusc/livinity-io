@@ -8,10 +8,13 @@
  * routing. This module is the single chokepoint that enforces all four checks
  * in a stable order:
  *
- *   1. FORMAT         — pure regex, no I/O
- *   2. RESERVED       — static blacklist, no I/O
- *   3. APP_COLLISION  — SELECT slug FROM apps WHERE slug = $1
- *   4. TAKEN          — SELECT 1 FROM users WHERE username = $1
+ *   1. FORMAT             — pure regex, no I/O
+ *   2. RESERVED           — static blacklist, no I/O
+ *   3. APP_COLLISION      — SELECT slug FROM apps WHERE slug = $1
+ *   4. TAKEN              — SELECT 1 FROM users WHERE username = $1
+ *   5. RESERVED_PERMANENT — SELECT 1 FROM reserved_usernames WHERE username = $1
+ *                           (Phase 274: permanently claimed usernames are blocked
+ *                           forever for everyone, even after account deletion)
  *
  * The function short-circuits on the first failure so the cheaper checks run
  * before the DB hits. Input is trimmed + lowercased once and that normalized
@@ -46,7 +49,8 @@ export type ValidationErrorCode =
   | 'FORMAT'
   | 'RESERVED'
   | 'APP_COLLISION'
-  | 'TAKEN';
+  | 'TAKEN'
+  | 'RESERVED_PERMANENT';
 
 export type ValidationResult =
   | { ok: true; normalized: string }
@@ -115,6 +119,13 @@ const appCollisionErr = (normalized: string): string =>
 
 const takenErr = (normalized: string): string =>
   `"${normalized}" is already taken.`;
+
+// Phase 274: a username that was ever permanently claimed (subscription went
+// trialing/active) is reserved forever — blocked for EVERYONE, including the
+// original owner, even after the account is deleted. Message is deliberately
+// generic (don't leak whether the slot was deleted vs abuser-seeded).
+const reservedPermanentErr = (normalized: string): string =>
+  `"${normalized}" is no longer available. Please pick a different name.`;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -189,6 +200,23 @@ export async function validateUsername(input: string): Promise<ValidationResult>
 
   if (takenRes.rows.length > 0) {
     return { ok: false, error: takenErr(normalized), code: 'TAKEN' };
+  }
+
+  // RESERVED_PERMANENT (Phase 274) — raw SQL through `pool`. A username that was
+  // ever permanently claimed is in reserved_usernames forever, even if no live
+  // `users` row currently holds it (the prior owner was deleted). This is the
+  // structural fix for the delete→recreate username-reuse abuse loop.
+  const reservedRes = await pool.query<{ exists: number }>(
+    'SELECT 1 AS exists FROM reserved_usernames WHERE username = $1 LIMIT 1',
+    [normalized],
+  );
+
+  if (reservedRes.rows.length > 0) {
+    return {
+      ok: false,
+      error: reservedPermanentErr(normalized),
+      code: 'RESERVED_PERMANENT',
+    };
   }
 
   return { ok: true, normalized };
