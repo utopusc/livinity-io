@@ -439,12 +439,22 @@ const _cursorPositionTool = {
 const _applicationTool = {
 	name: 'computer_application',
 	description:
-		'Opens or focuses an application by name. Accepts: (1) LivOS app names ' +
-		'from the LIVOS CONTEXT overlay (e.g. "n8n", "libreoffice") — preferred. ' +
-		'(2) Classic Bytebot Linux apps: firefox, thunderbird, 1password, vscode, ' +
-		'terminal, desktop, directory — kept for upstream parity, may or may not ' +
-		'be installed on LivOS. The handler resolves LivOS apps first via runtime ' +
-		'catalog query, then falls back to Bytebot binary spawn.',
+		'Opens or focuses an application BY NAME as a real LivOS window. THIS IS ' +
+		'THE CORRECT, PREFERRED TOOL whenever the user asks to open / launch / ' +
+		'start an app OR a site they have saved in LivOS (e.g. "Reddit\'i aç", ' +
+		'"open Spotify", "n8n\'i başlat"). It resolves the name against the ' +
+		"user's LIVE installed-app catalog — including WebApps the user added " +
+		'themselves (Reddit, Spotify, Gmail, …) and native apps — and opens the ' +
+		"REAL app in the user's existing logged-in profile, exactly like clicking " +
+		'the WebApp/app icon on the desktop. It does NOT spawn a new throwaway ' +
+		'browser or a fresh isolated display. ALWAYS call this FIRST for any ' +
+		'"open <name>" request. Do NOT use computer_create_display + a browser to ' +
+		'open an app/site the user has — that yields a wrong/blank logged-out ' +
+		'window. The handler resolves LivOS apps first via runtime catalog query, ' +
+		'then falls back to classic Bytebot binaries (firefox, thunderbird, ' +
+		'1password, vscode, terminal, desktop, directory). If the name is not in ' +
+		'the catalog it returns an error so you can adjust — only THEN consider a ' +
+		'browser / new display.',
 	input_schema: {
 		type: 'object' as const,
 		properties: {
@@ -695,10 +705,15 @@ const _listStreamsTool = {
 const _createDisplayTool = {
 	name: 'computer_create_display',
 	description:
-		'Create a new isolated nested X server (display). Use this when you want to ' +
-		'open an app WITHOUT touching the operator\'s main desktop (:1) — typical ' +
-		'cases: running a flaky web app, doing batch screenshots that should not ' +
-		'interrupt the human, or quarantining a process that may misbehave. ' +
+		'Create a new isolated nested X server (display). DO NOT use this to open an ' +
+		'app or site the user has in LivOS — call computer_application(name) FIRST; ' +
+		'that opens the REAL WebApp/native window in the user\'s existing logged-in ' +
+		'profile (a new display here gives a blank, logged-out browser instead). ' +
+		'Use computer_create_display ONLY for apps/sites NOT in the user\'s catalog, ' +
+		'or when you explicitly need to open an app WITHOUT touching the operator\'s ' +
+		'main desktop (:1) — typical cases: running a flaky web app, doing batch ' +
+		'screenshots that should not interrupt the human, or quarantining a process ' +
+		'that may misbehave. ' +
 		'Defaults to mode="xephyr" (D-V44-DISPLAY-XEPHYR-DEFAULT — a VISIBLE nested ' +
 		'X window the operator can watch); pass mode="xvfb" for an off-screen ' +
 		'headless display. Defaults to 1920x1080. The returned display string ' +
