@@ -1384,7 +1384,14 @@ CLAUDE_WRAPPER_EOF
         ok "Phase 245.2: claude wrapper already in place (idempotent skip)"
     fi
 else
-    info "Phase 245.2: $_CLAUDE_REAL not present — claude wrapper deferred (run `claude doctor` to install)"
+    # Phase 277 (Bug 1 — THE root cause): 'claude doctor' is single-quoted ON PURPOSE.
+    # With backticks here, bash treats `claude doctor` as COMMAND SUBSTITUTION during
+    # this string's expansion — it actually runs `claude doctor`, which hangs waiting
+    # for input/auth, and update.sh blocks (anon_pipe_read) on its output. On a
+    # non-bruce box $_CLAUDE_REAL is always absent so this else-branch runs EVERY
+    # Update → the multi-minute "claude doctor" stall that needed a manual kill.
+    # DO NOT change these quotes back to backticks.
+    info "Phase 245.2: $_CLAUDE_REAL not present — claude wrapper deferred (run 'claude doctor' to install)"
 fi
 
 # ── Phase 245.4 — Single-binary MCP wrappers under /usr/local/bin/ ─────────
@@ -1574,13 +1581,14 @@ fi
 # Live-applies the 245.2 wrapper + 245.3 settings to any future Claude Code spawns.
 # Without restart, in-flight chat sessions keep their pre-fix env/settings.
 step "Phase 245.3: liv-assistant restart for MCP fix activation"
-# Phase 277 (Bug 1): bound the restart wait. `systemctl restart` blocks until the
-# unit reaches "started" — if aioncore wedges on boot (e.g. a child `claude doctor`
-# first-run hanging on auth/network/TTY), this waited up to TimeoutStartSec (~90s)
-# with the log frozen at the 245.x region, forcing the operator to hand-kill the
-# claude-doctor pid every Update. `timeout -k 10 75` caps the WAIT (the systemd job
-# keeps booting in the background; the load-bearing Step 8 restart + bounded :3020
-# probe below confirm the real serving state). 124 = timed out → warn + continue.
+# Phase 277 (Bug 1 — defensive hardening, NOT the root cause): bound the restart wait.
+# `systemctl restart` blocks until the unit reaches "started"; if aioncore is slow or
+# wedged on boot this could wait up to TimeoutStartSec (~90s). The ACTUAL multi-minute
+# "claude doctor" stall was the unescaped-backtick command-substitution at line ~1387
+# (fixed there). This bound is belt-and-suspenders so no restart wait can stall the
+# Update for minutes. `timeout -k 10 75` caps the WAIT (the systemd job keeps booting
+# in the background; the Step 8 restart + bounded :3020 probe confirm serving state).
+# 124 = timed out → warn + continue.
 if timeout -k 10 75 sudo systemctl restart liv-assistant 2>&1; then
     sleep 3
     if sudo systemctl is-active liv-assistant | grep -q '^active'; then
@@ -2247,10 +2255,10 @@ if [[ -f /etc/systemd/system/liv-assistant.service || -f /usr/lib/systemd/system
     fi
 
     systemctl enable liv-assistant.service 2>/dev/null || true
-    # Phase 277 (Bug 1): bound the restart wait so a wedged aioncore boot (child
-    # `claude doctor` first-run hanging) can't freeze the Update for minutes. The
-    # job keeps booting in the background; the bounded :3020 probe below confirms
-    # the real serving state. 124 = timed out → warn + continue (already non-fatal).
+    # Phase 277 (Bug 1 — defensive hardening): bound the restart wait so a slow/wedged
+    # aioncore boot can't freeze the Update for minutes (the actual claude-doctor hang
+    # is fixed at line ~1387). The job keeps booting in the background; the bounded
+    # :3020 probe below confirms serving state. 124 = timed out → warn + continue.
     if timeout -k 10 75 systemctl restart liv-assistant.service 2>/dev/null; then
         ok "Restarted liv-assistant (AionUi WebUI :3020)"
     else
