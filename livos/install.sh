@@ -1399,7 +1399,9 @@ ENVFILE
         local _desktop_user="${DESKTOP_USER:-$user_slug}"
         local _desktop_uid
         _desktop_uid=$(id -u "$_desktop_user" 2>/dev/null || echo 1000)
-        local luse_display=":1"
+        # Phase 276 — host display :1 removed; luse gets no default DISPLAY
+        # (per-app display:":N" only; launch-by-name path needs none).
+        local luse_display=""
         local luse_xauthority
         # `|| true`: /run/user/<uid> may be absent on a fresh box → find exits
         # non-zero → under `set -euo pipefail` the bare assignment aborts install

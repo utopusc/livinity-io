@@ -1558,14 +1558,14 @@ _dld_seed_mcp_servers() {
     local user_slug="${LIVOS_USER_SLUG:-bruce}"
     local domain_root="${LIVOS_DOMAIN_ROOT:-livinity.io}"
 
-    # Phase 252 (R6) — resolve the desktop user's DISPLAY + Xauthority at seed time
-    # instead of baking uid-1000/GDM literals. The displays luse spawns use `-ac`
-    # (disable-access-control), so DISPLAY=:1 is the working host display; the
-    # Xauthority is resolved from the actual desktop user's runtime dir.
+    # Phase 276 — host display :1 removed (per-app streams only). luse no longer
+    # gets a default DISPLAY/XAUTHORITY: generic computer-use tools take an explicit
+    # per-app display:":N"; the launch-WebApp-by-name path needs neither. (Empty
+    # substitution → "DISPLAY":"" in the seed, treated as no host display.)
     local _desktop_user="${_DLD_DESKTOP_USER:-bruce}"
     local _desktop_uid
     _desktop_uid=$(id -u "$_desktop_user" 2>/dev/null || echo 1000)
-    local luse_display=":1"
+    local luse_display=""
     local luse_xauthority
     # `|| true`: on a fresh box /run/user/<uid> may not exist yet → find exits
     # non-zero → under `set -euo pipefail` the bare assignment would abort the
