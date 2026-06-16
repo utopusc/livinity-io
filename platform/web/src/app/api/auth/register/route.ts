@@ -23,17 +23,20 @@ import { nanoid } from 'nanoid';
 import pool from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
 import { sendVerificationEmail } from '@/lib/email';
-import { validateUsername } from '@/lib/username-validator';
 
 const TOKEN_EXPIRY_HOURS = 24;
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, username } = await req.json();
+    // Phase 274: signup no longer collects a username. The create page asks for
+    // email + password (+ confirm-password, client-side). The user picks a
+    // username in the /username step AFTER verifying their email, so the pending
+    // row + the eventual users row are created username-less.
+    const { email, password } = await req.json();
 
-    if (!email || !password || !username) {
+    if (!email || !password) {
       return NextResponse.json(
-        { error: 'Email, password, and username are required' },
+        { error: 'Email and password are required' },
         { status: 400 },
       );
     }
@@ -50,18 +53,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
     }
 
-    // Username validator — format + reserved + app-collision + uniqueness
-    // against users.username (140-02). Returns normalized lowercase form.
-    const v = await validateUsername(username);
-    if (!v.ok) {
-      return NextResponse.json({ error: v.error, code: v.code }, { status: 400 });
-    }
-    const normalizedUsername = v.normalized;
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Email uniqueness against CONFIRMED users (validateUsername already covered
-    // username uniqueness vs users). Separate check so the message can say
-    // "email taken" vs "username taken".
+    // Email uniqueness against CONFIRMED users.
     const existingEmail = await pool.query(
       'SELECT id FROM users WHERE email = $1 LIMIT 1',
       [normalizedEmail],
@@ -70,55 +64,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email already taken' }, { status: 409 });
     }
 
-    // Username uniqueness against OTHER pending signups. A pending row for THIS
-    // same email is fine — the upsert below refreshes it. A pending row for a
-    // DIFFERENT email holding this username blocks (first-come-first-served
-    // until it expires or is verified).
-    const pendingUser = await pool.query<{ email: string }>(
-      'SELECT email FROM pending_registrations WHERE lower(username) = $1 LIMIT 1',
-      [normalizedUsername],
-    );
-    if (
-      pendingUser.rows.length > 0 &&
-      pendingUser.rows[0].email.toLowerCase() !== normalizedEmail
-    ) {
-      return NextResponse.json(
-        { error: `"${normalizedUsername}" is already taken.`, code: 'TAKEN' },
-        { status: 409 },
-      );
-    }
-
     const passwordHash = await hashPassword(password);
     const verificationToken = nanoid(48);
     const verificationExpires = new Date(Date.now() + TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
 
     // Upsert on lower(email): a re-register before verifying refreshes the
-    // token + username + password instead of 409'ing a stale, never-verified
-    // pending row.
-    try {
-      await pool.query(
-        `INSERT INTO pending_registrations
-           (email, username, password_hash, verification_token, verification_expires)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (lower(email)) DO UPDATE SET
-           username = EXCLUDED.username,
-           password_hash = EXCLUDED.password_hash,
-           verification_token = EXCLUDED.verification_token,
-           verification_expires = EXCLUDED.verification_expires,
-           created_at = NOW()`,
-        [normalizedEmail, normalizedUsername, passwordHash, verificationToken, verificationExpires],
-      );
-    } catch (err) {
-      // 23505 on the username unique index → a concurrent pending signup won
-      // the username between our check and this insert.
-      if ((err as { code?: string })?.code === '23505') {
-        return NextResponse.json(
-          { error: `"${normalizedUsername}" is already taken.`, code: 'TAKEN' },
-          { status: 409 },
-        );
-      }
-      throw err;
-    }
+    // token + password instead of 409'ing a stale, never-verified pending row.
+    // username is left NULL — it is chosen later in /username.
+    await pool.query(
+      `INSERT INTO pending_registrations
+         (email, username, password_hash, verification_token, verification_expires)
+       VALUES ($1, NULL, $2, $3, $4)
+       ON CONFLICT (lower(email)) DO UPDATE SET
+         password_hash = EXCLUDED.password_hash,
+         verification_token = EXCLUDED.verification_token,
+         verification_expires = EXCLUDED.verification_expires,
+         created_at = NOW()`,
+      [normalizedEmail, passwordHash, verificationToken, verificationExpires],
+    );
 
     await sendVerificationEmail(normalizedEmail, verificationToken);
 

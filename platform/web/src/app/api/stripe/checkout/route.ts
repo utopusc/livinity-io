@@ -22,6 +22,12 @@ export async function POST(req: NextRequest) {
   if (!session.emailVerified) {
     return NextResponse.json({ error: 'Verify your email first' }, { status: 403 });
   }
+  // Phase 274: a username is required before subscribing — provisioning keys the
+  // CF tunnel + apex DNS off it. The /username guard normally funnels users here
+  // only after they pick; this is the defensive backstop.
+  if (!session.username) {
+    return NextResponse.json({ error: 'Choose a username first', code: 'username_required' }, { status: 409 });
+  }
 
   let interval: BillingInterval = 'monthly';
   try {

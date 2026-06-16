@@ -27,7 +27,6 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 import pool from './db';
 import { getSupabasePublicUrl } from './supabase-server';
-import { validateUsername } from './username-validator';
 import { createUser } from './user-creation';
 
 // ---------------------------------------------------------------------------
@@ -39,7 +38,7 @@ export type OAuthBridgeErrorCode =
   | 'no_email'
   | 'email_unverified'
   | 'provider_untrusted'
-  | 'username_unavailable';
+  | 'create_failed';
 
 export class OAuthBridgeError extends Error {
   code: OAuthBridgeErrorCode;
@@ -137,61 +136,13 @@ export async function verifySupabaseToken(token: string): Promise<OAuthIdentity>
 }
 
 // ---------------------------------------------------------------------------
-// Username generation — derive a valid, unique username from the email.
-// ---------------------------------------------------------------------------
-
-/**
- * Generates a username that passes the canonical validateUsername() rules
- * (format + reserved + app-collision + users.username uniqueness) AND is not
- * already claimed by a pending registration. Never throws — always returns a
- * usable username (falls back to a random one if the email yields nothing).
- */
-export async function genUsername(email: string | undefined): Promise<string> {
-  const localPart = (email ?? '').split('@')[0] ?? '';
-  // Strip to the strict charset; cap base length to leave room for a suffix.
-  let base = localPart.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 24);
-  if (base.length < 3) base = `${base}user`.slice(0, 8);
-
-  // Deterministic-ish candidate ladder; the trailing index varies the suffix
-  // without relying on Math.random for the common case (collisions are rare).
-  for (let attempt = 0; attempt < 12; attempt++) {
-    const suffix = attempt === 0 ? '' : String(attempt + 1);
-    const candidate = `${base.slice(0, 32 - suffix.length)}${suffix}`;
-
-    const v = await validateUsername(candidate);
-    if (!v.ok) continue; // format / reserved / app-collision / taken → next
-
-    // validateUsername doesn't see pending_registrations; check it too so an
-    // in-flight email signup can't collide with this OAuth user.
-    const pending = await pool.query(
-      'SELECT 1 FROM pending_registrations WHERE username = $1 LIMIT 1',
-      [v.normalized],
-    );
-    if (pending.rows.length === 0) return v.normalized;
-  }
-
-  // Exhausted the ladder — fall back to a random-suffixed name and validate it.
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const rnd = Math.floor(Math.random() * 1e6)
-      .toString()
-      .padStart(6, '0');
-    const candidate = `user${rnd}`;
-    const v = await validateUsername(candidate);
-    if (!v.ok) continue;
-    const pending = await pool.query(
-      'SELECT 1 FROM pending_registrations WHERE username = $1 LIMIT 1',
-      [v.normalized],
-    );
-    if (pending.rows.length === 0) return v.normalized;
-  }
-
-  // Astronomically unlikely. Add entropy so repeated calls differ; the caller's
-  // create-retry loop + the DB UNIQUE constraint are the final guards.
-  return `user${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`.slice(0, 32);
-}
-
-// ---------------------------------------------------------------------------
 // Find-or-create-or-link
+//
+// Phase 274: OAuth no longer auto-generates a username. A brand-new OAuth user
+// is created with username=NULL and the caller routes them to the /username
+// step (same as the email/password flow). `needsUsername` tells the caller a
+// user still has to pick one (true whenever the resolved user's username IS
+// NULL — brand-new, or a returning user who hasn't picked yet).
 // ---------------------------------------------------------------------------
 
 async function linkIdentity(
@@ -212,20 +163,32 @@ async function linkIdentity(
 
 /**
  * Maps a verified OAuth identity to a user id, creating or linking as needed.
- * Returns { userId, isNew } where isNew=true means a brand-new account was
- * created (→ the caller routes them to /pricing).
+ * Returns { userId, isNew, needsUsername }:
+ *   - isNew=true means a brand-new account was just created.
+ *   - needsUsername=true means the resolved user has no username yet (username
+ *     IS NULL) and the caller must route them to /username before /pricing.
  */
-export async function bridgeOAuthUser(idn: OAuthIdentity): Promise<{ userId: string; isNew: boolean }> {
+export async function bridgeOAuthUser(
+  idn: OAuthIdentity,
+): Promise<{ userId: string; isNew: boolean; needsUsername: boolean }> {
   const { provider, subject } = idn;
   const email = idn.email?.toLowerCase().trim();
 
-  // 1. Returning sign-in: the identity row is the trust anchor.
-  const found = await pool.query<{ user_id: string }>(
-    'SELECT user_id FROM user_oauth_identities WHERE provider = $1 AND provider_subject = $2 LIMIT 1',
+  // 1. Returning sign-in: the identity row is the trust anchor. Join users so we
+  // can tell whether this returning user still needs to pick a username.
+  const found = await pool.query<{ user_id: string; username: string | null }>(
+    `SELECT i.user_id, u.username
+       FROM user_oauth_identities i
+       JOIN users u ON u.id = i.user_id
+      WHERE i.provider = $1 AND i.provider_subject = $2 LIMIT 1`,
     [provider, subject],
   );
   if (found.rows.length > 0) {
-    return { userId: found.rows[0].user_id, isNew: false };
+    return {
+      userId: found.rows[0].user_id,
+      isNew: false,
+      needsUsername: !found.rows[0].username,
+    };
   }
 
   // SECURITY: first-time link/create only for providers that attest email
@@ -254,8 +217,8 @@ export async function bridgeOAuthUser(idn: OAuthIdentity): Promise<{ userId: str
   }
 
   // 2. Existing account with this (verified) email → link the new provider.
-  const existing = await pool.query<{ id: string; email_verified: boolean }>(
-    'SELECT id, email_verified FROM users WHERE lower(email) = $1 LIMIT 1',
+  const existing = await pool.query<{ id: string; email_verified: boolean; username: string | null }>(
+    'SELECT id, email_verified, username FROM users WHERE lower(email) = $1 LIMIT 1',
     [email],
   );
   if (existing.rows.length > 0) {
@@ -264,40 +227,33 @@ export async function bridgeOAuthUser(idn: OAuthIdentity): Promise<{ userId: str
     if (!existing.rows[0].email_verified) {
       await pool.query('UPDATE users SET email_verified = TRUE WHERE id = $1', [userId]);
     }
-    return { userId, isNew: false };
+    return { userId, isNew: false, needsUsername: !existing.rows[0].username };
   }
 
-  // 3. Brand-new user. A UNIQUE violation (23505) on INSERT is one of two races:
-  //    - email index  → a concurrent request just created this same user; link to it.
-  //    - username index → the generated name was taken in the check→insert window;
-  //      regenerate and retry. (genUsername()'s pre-check is not atomic with the
-  //      INSERT, so this is the real guard.) A bounded loop keeps a username race
-  //      from surfacing as a 500; the email-race short-circuits immediately.
-  const MAX_CREATE_ATTEMPTS = 4;
-  for (let attempt = 0; attempt < MAX_CREATE_ATTEMPTS; attempt++) {
-    const username = await genUsername(email);
-    try {
-      const userId = await createUser({ username, email, passwordHash: null, emailVerified: true });
-      await linkIdentity(userId, provider, subject, email);
-      return { userId, isNew: true };
-    } catch (err) {
-      if ((err as { code?: string })?.code !== '23505') throw err;
-      // Email exists now → concurrent create won; link to that user and finish.
-      const recheck = await pool.query<{ id: string }>(
-        'SELECT id FROM users WHERE lower(email) = $1 LIMIT 1',
+  // 3. Brand-new user — created with username=NULL (Phase 274: the user picks a
+  //    username in the /username step, never auto-generated). The only remaining
+  //    race is a UNIQUE(email) violation (23505) from a concurrent create of the
+  //    SAME email; there is no username to collide on. On that race, link to the
+  //    winner instead of surfacing a 500.
+  try {
+    const userId = await createUser({ username: null, email, passwordHash: null, emailVerified: true });
+    await linkIdentity(userId, provider, subject, email);
+    return { userId, isNew: true, needsUsername: true };
+  } catch (err) {
+    if ((err as { code?: string })?.code === '23505') {
+      const recheck = await pool.query<{ id: string; username: string | null }>(
+        'SELECT id, username FROM users WHERE lower(email) = $1 LIMIT 1',
         [email],
       );
       if (recheck.rows.length > 0) {
         const existingId = recheck.rows[0].id;
         await linkIdentity(existingId, provider, subject, email);
-        return { userId: existingId, isNew: false };
+        return { userId: existingId, isNew: false, needsUsername: !recheck.rows[0].username };
       }
-      // Otherwise it was a username collision — loop to pick a fresh username.
     }
+    throw new OAuthBridgeError(
+      'create_failed',
+      "We couldn't finish setting up your account just now. Please try signing in again.",
+    );
   }
-
-  throw new OAuthBridgeError(
-    'username_unavailable',
-    "We couldn't finish setting up your account just now. Please try signing in again.",
-  );
 }

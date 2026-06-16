@@ -19,8 +19,14 @@ import type { Pool, PoolClient } from 'pg';
 import pool from './db';
 
 export interface CreateUserParams {
-  /** Already validated + normalized (lowercase, format-checked, unique). */
-  username: string;
+  /**
+   * Already validated + normalized (lowercase, format-checked, unique), OR null.
+   * Phase 274: signup no longer collects a username — both the email-verify and
+   * OAuth flows create the row with username=NULL and the user picks one in the
+   * /username step afterward. The UNIQUE index on users.username permits multiple
+   * NULLs, so many username-less rows can coexist.
+   */
+  username: string | null;
   /** Already normalized (lowercased, trimmed). */
   email: string;
   /** bcrypt hash for password accounts, or NULL for OAuth-only accounts. */
