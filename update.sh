@@ -1471,10 +1471,10 @@ _LUSE_RUN_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/
 _LUSE_RUN_HOME=$(getent passwd "$_LUSE_RUN_USER" 2>/dev/null | cut -d: -f6)
 [[ -n "$_LUSE_RUN_HOME" ]] || _LUSE_RUN_HOME="/home/$_LUSE_RUN_USER"
 for _NAME in "${!_MCP_PATHS[@]}"; do
-    _ID=$(curl -s http://localhost:3020/api/mcp/servers 2>/dev/null | \
+    _ID=$(curl -s --connect-timeout 3 --max-time 10 http://localhost:3020/api/mcp/servers 2>/dev/null | \
         python3 -c "import sys,json; d=json.load(sys.stdin); [print(m['id']) for m in d.get('data',[]) if m['name']=='${_NAME}']" 2>/dev/null | head -1)
     if [[ -n "$_ID" ]]; then
-        _CURRENT_CMD=$(curl -s "http://localhost:3020/api/mcp/servers/$_ID" 2>/dev/null | \
+        _CURRENT_CMD=$(curl -s --connect-timeout 3 --max-time 10 "http://localhost:3020/api/mcp/servers/$_ID" 2>/dev/null | \
             python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('transport',{}).get('command',''))" 2>/dev/null)
         if [[ "$_CURRENT_CMD" != "/usr/local/bin/liv-mcp-${_NAME}" ]]; then
             _ENV_JSON='{}'
@@ -1487,7 +1487,7 @@ for _NAME in "${!_MCP_PATHS[@]}"; do
             else
                 _ENV_JSON="{\"LIVINITYD_API_URL\":\"http://127.0.0.1:8080\",\"LIV_API_KEY\":\"$(grep -oP 'LIV_API_KEY=\K[^\n]+' /opt/livos/.env 2>/dev/null || echo missing)\"}"
             fi
-            curl -s -X PUT "http://localhost:3020/api/mcp/servers/$_ID" \
+            curl -s --connect-timeout 3 --max-time 15 -X PUT "http://localhost:3020/api/mcp/servers/$_ID" \
                 -H "Content-Type: application/json" \
                 -d "{\"transport\":{\"type\":\"stdio\",\"command\":\"/usr/local/bin/liv-mcp-${_NAME}\",\"args\":[],\"env\":${_ENV_JSON}}}" > /dev/null
             _PATCH_COUNT=$((_PATCH_COUNT + 1))
@@ -1574,7 +1574,14 @@ fi
 # Live-applies the 245.2 wrapper + 245.3 settings to any future Claude Code spawns.
 # Without restart, in-flight chat sessions keep their pre-fix env/settings.
 step "Phase 245.3: liv-assistant restart for MCP fix activation"
-if sudo systemctl restart liv-assistant 2>&1; then
+# Phase 277 (Bug 1): bound the restart wait. `systemctl restart` blocks until the
+# unit reaches "started" — if aioncore wedges on boot (e.g. a child `claude doctor`
+# first-run hanging on auth/network/TTY), this waited up to TimeoutStartSec (~90s)
+# with the log frozen at the 245.x region, forcing the operator to hand-kill the
+# claude-doctor pid every Update. `timeout -k 10 75` caps the WAIT (the systemd job
+# keeps booting in the background; the load-bearing Step 8 restart + bounded :3020
+# probe below confirm the real serving state). 124 = timed out → warn + continue.
+if timeout -k 10 75 sudo systemctl restart liv-assistant 2>&1; then
     sleep 3
     if sudo systemctl is-active liv-assistant | grep -q '^active'; then
         ok "Phase 245.3: liv-assistant restarted — new chats will see all 6 MCPs"
@@ -1582,7 +1589,7 @@ if sudo systemctl restart liv-assistant 2>&1; then
         warn "Phase 245.3: liv-assistant restart reported active=false — check journalctl"
     fi
 else
-    warn "Phase 245.3: liv-assistant restart failed (continuing — manual fix may be needed)"
+    warn "Phase 245.3: liv-assistant restart slow/failed (bounded at 75s, continuing — Step 8 restart + probe still run)"
 fi
 
 # Phase 259 — re-enable errexit; everything below (Caddy snippet, package build,
@@ -2007,6 +2014,48 @@ else
     info "liv-claw-gateway.service source not found — skipping install (Caddy /liv-ai-app/* will route to legacy :3010 unit until landed)"
 fi
 
+# ── Phase 277 — shared desktop-user-aware liv-assistant unit renderer ──────────
+# TWO blocks below touch /etc/systemd/system/liv-assistant.service: the Phase 225
+# install (Step 7.9) and the Phase 253 GC-E sync (Step 8). The repo unit hardcodes
+# User=bruce/Group=bruce + /home/bruce; on a non-bruce box (e.g. `everything`) the
+# unit MUST be adapted to the real desktop user or aioncore's logging-init fails
+# (BOOTSTRAP_LOGGING_INIT_FAILED logDir=/opt/liv-assistant/data/logs) → liv-assistant
+# crash-loops → /liv (:3020) 502. Phase 225 did this sed; the GC-E block historically
+# `install`ed the repo unit VERBATIM (User=bruce) and CLOBBERED the Phase 225 fix on
+# EVERY update (User=bruce won → /liv 502 → operator hand-fixed each time). Factor the
+# derive+sed+cmp+install into ONE helper both blocks call so they can never diverge.
+#
+# Sets globals for the caller: _LA_USER, _LA_HOME, _LA_UNIT_STATUS (changed|unchanged|
+# error). daemon-reloads + chowns the data dir on change. Always returns 0 (best-effort;
+# the source-missing case is reflected as _LA_UNIT_STATUS=error). Same desktop-user
+# substitution as the v44.19/v44.25 bruce-hardcoding fixes — the repo unit stays
+# User=bruce and the on-box render adapts it per box.
+_render_liv_assistant_unit() {
+    local src="$1" dst="$2" tmp
+    _LA_UNIT_STATUS=error; _LA_USER=""; _LA_HOME=""   # set -u safety on the early-return path
+    [[ -f "$src" ]] || return 0
+    _LA_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1)
+    [[ -n "$_LA_USER" ]] || _LA_USER=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1; exit}')
+    [[ -n "$_LA_USER" ]] || _LA_USER=bruce
+    _LA_HOME=$(getent passwd "$_LA_USER" 2>/dev/null | cut -d: -f6)
+    [[ -n "$_LA_HOME" ]] || _LA_HOME="/home/$_LA_USER"
+    tmp="${dst}.tmp.$$"
+    sed -E "s/^(User=)bruce$/\1${_LA_USER}/; s/^(Group=)bruce$/\1${_LA_USER}/; s#/home/bruce#${_LA_HOME}#g" \
+        "$src" > "$tmp"
+    if [[ ! -f "$dst" ]] || ! cmp -s "$tmp" "$dst"; then
+        install -m 0644 -o root -g root "$tmp" "$dst"
+        systemctl daemon-reload 2>/dev/null || true
+        # The unit just (re)gained the desktop User=; make the data dir match so
+        # aioncore's logging init can't fail (the live BOOTSTRAP_LOGGING_INIT_FAILED).
+        [[ -d /opt/liv-assistant/data ]] && chown -R "$_LA_USER":"$_LA_USER" /opt/liv-assistant/data 2>/dev/null || true
+        _LA_UNIT_STATUS=changed
+    else
+        _LA_UNIT_STATUS=unchanged
+    fi
+    rm -f "$tmp"
+    return 0
+}
+
 # ── Step 7.9: Phase 225 — install liv-assistant.service unit (if missing) ──────
 # Mirror of Step 7.7/7.8's idempotent pattern. update.sh runs on pre-existing
 # deploys that may not have re-run scripts/install-liv-assistant.sh's sibling
@@ -2042,32 +2091,21 @@ if [[ -f "$_LIV_ASSISTANT_UNIT_SRC" ]]; then
     # (PATH/HOME/ReadWritePaths). update.sh USED to `install` it VERBATIM — which on
     # a non-bruce box (e.g. "murphy") pinned AionUi to user bruce / HOME=/home/bruce,
     # so AionUi's startup $PATH scan never saw the operator's own ~/.local/bin claude
-    # → only the bundled Aion CLI showed in the picker. Mirror deploy-livinityd.sh's
-    # desktop-user substitution: derive the run-user from the ALREADY-installed
-    # livos.service (source of truth for who LivOS runs as), fall back to the first
-    # uid>=1000 login, then bruce. Atomic temp-file install so a half-written unit
-    # never lands.
-    _LA_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1)
-    [[ -n "$_LA_USER" ]] || _LA_USER=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1; exit}')
-    [[ -n "$_LA_USER" ]] || _LA_USER=bruce
-    _LA_HOME=$(getent passwd "$_LA_USER" 2>/dev/null | cut -d: -f6)
-    [[ -n "$_LA_HOME" ]] || _LA_HOME="/home/$_LA_USER"
-    _LA_TMP="${_LIV_ASSISTANT_UNIT_DST}.tmp.$$"
-    sed -E "s/^(User=)bruce$/\1${_LA_USER}/; s/^(Group=)bruce$/\1${_LA_USER}/; s#/home/bruce#${_LA_HOME}#g" \
-        "$_LIV_ASSISTANT_UNIT_SRC" > "$_LA_TMP"
-    if [[ ! -f "$_LIV_ASSISTANT_UNIT_DST" ]] || ! cmp -s "$_LA_TMP" "$_LIV_ASSISTANT_UNIT_DST"; then
-        install -m 0644 -o root -g root "$_LA_TMP" "$_LIV_ASSISTANT_UNIT_DST"
-        systemctl daemon-reload
+    # → only the bundled Aion CLI showed in the picker. Phase 277: the derive+sed+cmp+
+    # install now lives in the shared _render_liv_assistant_unit helper (used here AND
+    # by the GC-E sync below, so the two can never diverge again).
+    _render_liv_assistant_unit "$_LIV_ASSISTANT_UNIT_SRC" "$_LIV_ASSISTANT_UNIT_DST"
+    if [[ "$_LA_UNIT_STATUS" == changed ]]; then
         systemctl enable liv-assistant.service 2>/dev/null || true
         # Restart so the corrected User=/PATH takes effect AND AionUi re-scans $PATH
         # (it only discovers CLIs at startup) — this is what makes a newly-installed
-        # claude appear in the picker.
-        systemctl restart liv-assistant.service 2>/dev/null || true
+        # claude appear in the picker. Phase 277 (Bug 1): bound the wait (timeout -k
+        # 10 75) so a wedged aioncore boot can't stall the Update for minutes.
+        timeout -k 10 75 systemctl restart liv-assistant.service 2>/dev/null || true
         ok "liv-assistant.service installed (User=${_LA_USER}, HOME=${_LA_HOME}) at $_LIV_ASSISTANT_UNIT_DST"
     else
         ok "liv-assistant.service already current (User=${_LA_USER})"
     fi
-    rm -f "$_LA_TMP"
 else
     info "liv-assistant.service unit source not found — skipping install (the unit may already be installed from a prior Phase 223-05 deploy)"
 fi
@@ -2189,12 +2227,18 @@ if [[ -f /etc/systemd/system/liv-assistant.service || -f /usr/lib/systemd/system
     # changes (e.g. GEMINI_CLI_TRUST_WORKSPACE) never reached existing boxes. Sync
     # it from the fresh clone and daemon-reload so the restart below picks up unit
     # edits. Idempotent (cmp guard); only the on-disk /etc unit is touched.
+    #
+    # Phase 277 (Bug 2 fix): this block USED to `install` the repo unit VERBATIM
+    # (User=bruce) — running LATER than the Phase 225 install above, it CLOBBERED the
+    # desktop-user fix on EVERY update (User=bruce won → aioncore logging-init fail →
+    # liv-assistant crash-loop → /liv 502 → operator hand-fixed each time). Now it
+    # renders through the SAME _render_liv_assistant_unit helper, so it produces the
+    # byte-identical desktop-user unit (cmp → unchanged → no clobber, no churn).
     _LIV_ASSISTANT_UNIT_SRC="$TEMP_DIR/systemd/liv-assistant.service"
     if [[ -f "$_LIV_ASSISTANT_UNIT_SRC" ]]; then
-        if ! cmp -s "$_LIV_ASSISTANT_UNIT_SRC" /etc/systemd/system/liv-assistant.service 2>/dev/null; then
-            install -m 0644 -o root -g root "$_LIV_ASSISTANT_UNIT_SRC" /etc/systemd/system/liv-assistant.service
-            systemctl daemon-reload 2>/dev/null || true
-            ok "liv-assistant.service unit synced from repo + daemon-reload (GC-E)"
+        _render_liv_assistant_unit "$_LIV_ASSISTANT_UNIT_SRC" /etc/systemd/system/liv-assistant.service
+        if [[ "$_LA_UNIT_STATUS" == changed ]]; then
+            ok "liv-assistant.service unit synced from repo (User=${_LA_USER}) + daemon-reload (GC-E)"
         else
             info "liv-assistant.service unit unchanged"
         fi
@@ -2203,10 +2247,14 @@ if [[ -f /etc/systemd/system/liv-assistant.service || -f /usr/lib/systemd/system
     fi
 
     systemctl enable liv-assistant.service 2>/dev/null || true
-    if systemctl restart liv-assistant.service 2>/dev/null; then
+    # Phase 277 (Bug 1): bound the restart wait so a wedged aioncore boot (child
+    # `claude doctor` first-run hanging) can't freeze the Update for minutes. The
+    # job keeps booting in the background; the bounded :3020 probe below confirms
+    # the real serving state. 124 = timed out → warn + continue (already non-fatal).
+    if timeout -k 10 75 systemctl restart liv-assistant.service 2>/dev/null; then
         ok "Restarted liv-assistant (AionUi WebUI :3020)"
     else
-        warn "liv-assistant restart failed — check journalctl -u liv-assistant -n 30"
+        warn "liv-assistant restart slow/failed (bounded at 75s) — check journalctl -u liv-assistant -n 30"
     fi
     # Give the service a moment to bind port 3020 before probing.
     sleep 2
