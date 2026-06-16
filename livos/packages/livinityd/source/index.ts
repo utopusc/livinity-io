@@ -69,17 +69,9 @@ import {
 import {PortAllocator} from './modules/streaming/port-allocator.js'
 import {WebAppWindowManager} from './modules/webapps/window-manager.js'
 import {WEBAPPS_X11_ENV} from './modules/webapps/window-discovery.js'
-// Phase 100-08-01 — dedicated Xvfb :1 + fluxbox WM lifecycle (D-100-08-A).
-import {startXvfb, type XvfbHandle} from './modules/webapps/xvfb-display.js'
-import {startFluxbox, type FluxboxHandle} from './modules/webapps/fluxbox-wm.js'
-// Phase 255-05 (D-255-SHELL-LIVOS-BRANDED) — in-display LivOS shell (feh
-// wallpaper + design-token fluxbox style + slim tint2 dock) on the :1 host.
-import {bootBrandedShell} from './modules/shell/branded-shell.js'
-// Phase 256 (D-256-XFCE-HOST-DESKTOP) — real, usable XFCE desktop on the :1 host
-// (xfwm4 compositor OFF + xfce4-panel + xfdesktop, captured by the existing
-// non-compositing x11vnc/maim path). Replaces the bare fluxbox + tint2 shell;
-// degrades back to fluxbox + bootBrandedShell on failure.
-import {startXfceShell, type XfceShellHandle} from './modules/shell/xfce-shell.js'
+// Phase 276 — host display :1 removed; the host-shell imports (startXvfb,
+// startFluxbox, bootBrandedShell, startXfceShell) are gone. Per-app Xvfb/fluxbox
+// live in webapps/* and are imported by the WebApp window manager, not here.
 // Phase 102-01 — legacy `webapps/display-allocator.ts` (string-returning,
 // Phase 100-10-01 scaffolding) DELETED. The number-returning replacement
 // lives at `streaming/display-allocator.ts` (composed with `streaming/
@@ -408,15 +400,8 @@ export default class Livinityd {
 	// for the v33 WebApp UX. Optional for the same wiring reason as
 	// streamManager — T93-11 owns lifecycle init in start().
 	webappWindowManager?: WebAppWindowManager
-	// Phase 100-08-01 — dedicated Xvfb :1 + fluxbox WM lifecycle (D-100-08-A).
-	// Lifecycle owned by start()/stop(); both fields stay undefined if Xvfb
-	// or fluxbox fail to spawn (non-fatal — webapp.window.spawn returns
-	// SERVICE_UNAVAILABLE downstream).
-	xvfbHandle?: XvfbHandle
-	fluxboxHandle?: FluxboxHandle
-	// Phase 256 — XFCE host desktop on :1 (replaces fluxbox+branded as the host
-	// shell; fluxboxHandle is only set if XFCE fails and we degrade).
-	xfceShellHandle?: XfceShellHandle
+	// Phase 276 — host display :1 removed; the host xvfb/fluxbox/xfce handle
+	// fields are gone (per-app displays manage their own lifecycle).
 	// Phase 101-03 — Native-app config store (D-101-NATIVE-APPS). Optional
 	// because the tRPC routes return SERVICE_UNAVAILABLE if it has not yet
 	// been wired (boot edge before ai.start() finishes, or Redis offline).
@@ -2291,25 +2276,8 @@ export default class Livinityd {
 				this.logger.error('Failed to stop WebAppWindowManager idle cleanup', err)
 			}
 
-			// Phase 256 / 100-08-01 — tear down the host shell first (XFCE desktop,
-			// or the fluxbox degrade fallback), then Xvfb. Both helpers SIGTERM →
-			// 2s grace → SIGKILL (XFCE kills the whole detached process group so the
-			// private dbus session + xfwm4/panel/desktop all die).
-			try {
-				await this.xfceShellHandle?.stop()
-			} catch (err) {
-				this.logger.error('Failed to stop XFCE host shell', err)
-			}
-			try {
-				await this.fluxboxHandle?.stop()
-			} catch (err) {
-				this.logger.error('Failed to stop fluxbox', err)
-			}
-			try {
-				await this.xvfbHandle?.stop()
-			} catch (err) {
-				this.logger.error('Failed to stop Xvfb', err)
-			}
+			// Phase 276 — host display :1 removed; no host XFCE/fluxbox/Xvfb to tear
+			// down (per-app displays are torn down by the WebApp window manager).
 
 			// Stop modules
 			// Phase 215: stop install poller before tunnelClient so any in-flight

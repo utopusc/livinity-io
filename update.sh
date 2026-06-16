@@ -1479,7 +1479,11 @@ for _NAME in "${!_MCP_PATHS[@]}"; do
         if [[ "$_CURRENT_CMD" != "/usr/local/bin/liv-mcp-${_NAME}" ]]; then
             _ENV_JSON='{}'
             if [[ "$_NAME" == "luse" ]]; then
-                _ENV_JSON="{\"DISPLAY\":\":1\",\"XAUTHORITY\":\"${_LUSE_RUN_HOME}/.Xauthority\",\"LIVINITYD_API_URL\":\"http://127.0.0.1:8080\",\"LIV_API_KEY\":\"$(grep -oP 'LIV_API_KEY=\K[^\n]+' /opt/livos/.env 2>/dev/null || echo missing)\",\"LUSE_REDIS_URL\":\"$(grep -oP 'REDIS_URL=\K[^\n]+' /opt/livos/.env 2>/dev/null || echo missing)\",\"LUSE_USER_SLUG\":\"${_LUSE_RUN_USER}\",\"LUSE_USER_ID\":\"${_LUSE_RUN_USER}\",\"LUSE_DOMAIN_ROOT\":\"livinity.io\"}"
+                # Phase 276 — host display :1 removed; the luse env no longer carries
+                # DISPLAY/XAUTHORITY (no host canvas). Generic computer-use tools take
+                # an explicit per-app display:":N"; the resolver/openLivosApp path
+                # (launch WebApp by name) needs neither.
+                _ENV_JSON="{\"LIVINITYD_API_URL\":\"http://127.0.0.1:8080\",\"LIV_API_KEY\":\"$(grep -oP 'LIV_API_KEY=\K[^\n]+' /opt/livos/.env 2>/dev/null || echo missing)\",\"LUSE_REDIS_URL\":\"$(grep -oP 'REDIS_URL=\K[^\n]+' /opt/livos/.env 2>/dev/null || echo missing)\",\"LUSE_USER_SLUG\":\"${_LUSE_RUN_USER}\",\"LUSE_USER_ID\":\"${_LUSE_RUN_USER}\",\"LUSE_DOMAIN_ROOT\":\"livinity.io\"}"
             else
                 _ENV_JSON="{\"LIVINITYD_API_URL\":\"http://127.0.0.1:8080\",\"LIV_API_KEY\":\"$(grep -oP 'LIV_API_KEY=\K[^\n]+' /opt/livos/.env 2>/dev/null || echo missing)\"}"
             fi
