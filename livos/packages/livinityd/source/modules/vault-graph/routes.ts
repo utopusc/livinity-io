@@ -33,6 +33,7 @@ import path from 'node:path'
 
 import {walkVault} from './walker.js'
 import {buildGraph} from './builder.js'
+import {getDesktopHome} from '../system/desktop-user.js'
 
 const MAX_FILE_BYTES = 1_048_576 // 1 MiB cap for /api/vault/file
 
@@ -129,12 +130,19 @@ export function mountVaultGraphRoutes(
 	livinityd: LivinitydLike,
 	opts: MountVaultGraphOpts = {},
 ): Router {
+	// Phase 278: deploy seeds `LIV_VAULT_ROOT` (deploy-livinityd.sh), NOT
+	// `VAULT_ROOT` — the old `VAULT_ROOT` read never matched, so the hardcoded
+	// `/home/bruce/livinity-vault/` literal was ACTUALLY reached on every box.
+	// Read LIV_VAULT_ROOT first (canonical, matches liv-vault/index.ts), keep
+	// VAULT_ROOT as back-compat, and derive the final fallback from the desktop
+	// user's home so it is never operator-specific.
 	const vaultRoot =
 		opts.vaultRootOverride ??
+		process.env.LIV_VAULT_ROOT ??
 		process.env.VAULT_ROOT ??
 		(process.env.NODE_ENV === 'test'
 			? path.join(process.cwd(), 'test-vault')
-			: '/home/bruce/livinity-vault/')
+			: path.join(getDesktopHome(), 'livinity-vault/'))
 
 	const authMiddleware: RequestHandler =
 		opts.authOverride ??

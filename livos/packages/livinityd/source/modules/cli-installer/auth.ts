@@ -22,6 +22,7 @@
 import {createHash} from 'node:crypto'
 import {spawn as nodeSpawn, type ChildProcess} from 'node:child_process'
 import os from 'node:os'
+import {getDesktopUser} from '../system/desktop-user.js'
 
 import pty from 'node-pty'
 import type {Redis} from 'ioredis'
@@ -527,7 +528,7 @@ export async function authCli(
 	// the CLI install dirs (claude/opencode ~/.local/bin, openclaw /opt/livos/bin,
 	// gemini/aion npm-global), so `spawn('claude', …)` fails with ENOENT ("spawn
 	// claude ENOENT"). Prepend the known install dirs so the auth command resolves.
-	const authHome = os.homedir() || process.env.HOME || '/home/bruce'
+	const authHome = os.homedir() || process.env.HOME || `/home/${getDesktopUser()}`
 	const authEnv: NodeJS.ProcessEnv = {
 		...process.env,
 		HOME: authHome,

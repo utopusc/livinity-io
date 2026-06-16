@@ -27,6 +27,7 @@
 // (smol-toml, lazy-loaded so JSON/YAML targets never depend on it).
 
 import os from 'node:os'
+import {getDesktopUser} from '../system/desktop-user.js'
 import path from 'node:path'
 import fsPromises from 'node:fs/promises'
 
@@ -389,7 +390,7 @@ export async function writeLivMcpsToCli(
 	}
 
 	const fs = deps.fs ?? fsPromises
-	const home = deps.homeDir ?? os.homedir() ?? process.env.HOME ?? '/home/bruce'
+	const home = deps.homeDir ?? os.homedir() ?? process.env.HOME ?? `/home/${getDesktopUser()}`
 	const absPath = path.join(home, target.relPath)
 	await fs.mkdir(path.dirname(absPath), {recursive: true})
 

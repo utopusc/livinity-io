@@ -338,7 +338,10 @@ export function createPtyTerminalWsHandler(deps: CreateHandlerDeps) {
 				.get?.('livos:desktop:user')
 			if (typeof u === 'string' && u.length > 0) desktopUser = u
 		} catch {
-			desktopUser = 'bruce'
+			// Phase 278: on a Redis throw, KEEP the already-resolved
+			// getDesktopUser() value (the process's own login). The old
+			// `desktopUser = 'bruce'` here CLOBBERED the correct value on any
+			// non-bruce box whenever Redis hiccupped.
 		}
 
 		// ─── URL mode routing (Phase 246-03) ──────────────────────────────

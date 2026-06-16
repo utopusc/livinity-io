@@ -463,14 +463,18 @@ describe('Phase 248 — display lifecycle tools', () => {
 
 // ── Phase 252-06 Task 1 (R13) — LUSE_USER_ID single-source default ──────────
 // The same env var resolved to 'admin' (server.ts:315) vs 'bruce' (tools.ts:915-916)
-// in one process and was unset on a fresh box. Unify on 'bruce' (it drives the
-// read-sandbox allowlist) via ONE shared resolver consumed by both files.
+// in one process and was unset on a fresh box. Unify via ONE shared resolver
+// consumed by both files. Phase 278: the unset default now DERIVES from
+// getDesktopUser() (the luse MCP child runs AS the desktop user) instead of a
+// hardcoded 'bruce', so the read-sandbox allowlist is correct on any operator box.
 describe('R13 — LUSE_USER_ID single-source default', () => {
-	test('Test 1: unset LUSE_USER_ID resolves to "bruce" (was "admin")', async () => {
+	test('Test 1: unset LUSE_USER_ID resolves to the desktop user (was hardcoded "bruce")', async () => {
 		const {resolveLuseUserId, DEFAULT_LUSE_USER_ID} = await import('./tools.js')
-		expect(DEFAULT_LUSE_USER_ID).toBe('bruce')
-		expect(resolveLuseUserId({})).toBe('bruce')
-		expect(resolveLuseUserId({LUSE_USER_ID: ''})).toBe('bruce')
+		const {getDesktopUser} = await import('../../system/desktop-user.js')
+		const desktopUser = getDesktopUser()
+		expect(DEFAULT_LUSE_USER_ID).toBe(desktopUser)
+		expect(resolveLuseUserId({})).toBe(desktopUser)
+		expect(resolveLuseUserId({LUSE_USER_ID: ''})).toBe(desktopUser)
 	})
 
 	test('Test 2: LUSE_USER_ID="alice" is honored (single source)', async () => {

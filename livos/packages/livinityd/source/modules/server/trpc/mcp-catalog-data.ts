@@ -15,6 +15,13 @@
  * web / ai — kept short so the picker can group with category sidebars.
  */
 
+import {getDesktopHome} from '../../system/desktop-user.js'
+
+// Phase 278: the filesystem MCP root must be the running operator's home, not a
+// hardcoded /home/bruce. getDesktopHome() resolves the desktop user's actual
+// home (livinityd runs AS that user), so this is correct on any box.
+const DESKTOP_HOME = getDesktopHome()
+
 export type McpCatalogCategory =
 	| 'search'
 	| 'dev'
@@ -73,8 +80,8 @@ export const MCP_CATALOG: ReadonlyArray<McpCatalogEntry> = [
 		name: 'filesystem',
 		transport: 'stdio',
 		command: 'npx',
-		args: ['-y', '@modelcontextprotocol/server-filesystem', '/home/bruce'],
-		description: 'Read / write files under an allowed root (defaults to /home/bruce). Destructive ops gated.',
+		args: ['-y', '@modelcontextprotocol/server-filesystem', DESKTOP_HOME],
+		description: 'Read / write files under an allowed root (defaults to the desktop user home). Destructive ops gated.',
 		category: 'files',
 	},
 	{

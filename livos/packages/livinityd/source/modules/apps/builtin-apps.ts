@@ -1395,9 +1395,13 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
             // hostnames, and CSP blocks cross-origin to internal IPs anyway).
             // suna-api subdomain registered with public:true in Redis subdomains
             // → bypasses LivOS auth gate → proxies to host:13738 → container:8008.
-            // TODO multi-user: hardcoded to bruce.livinity.io for now. Replace with
-            // ${LIVINITY_USER_DOMAIN} env injection at install time for portability.
-            NEXT_PUBLIC_BACKEND_URL: 'https://suna-api.bruce.livinity.io/v1',
+            // Phase 278: this is a PLACEHOLDER. app.ts#patchComposeFile rewrites
+            // NEXT_PUBLIC_BACKEND_URL to `https://suna-api.<operator-domain>/v1`
+            // from `livos:domain:config` at compose-render time so it is correct
+            // for any operator (was hardcoded to bruce.livinity.io pre-278). If the
+            // domain isn't configured yet this localhost fallback is harmless — the
+            // app gets re-rendered when the operator's domain lands.
+            NEXT_PUBLIC_BACKEND_URL: 'http://localhost:13738/v1',
             // Broker env vars (ANTHROPIC_BASE_URL, OPENCODE_CONFIG_JSON, etc.)
             // are auto-injected by Phase 43.2 into THIS mainService — they are
             // a no-op for the frontend itself (kortix-api consumes them via

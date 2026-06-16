@@ -11,6 +11,7 @@
 
 import {spawn as nodeSpawn, type ChildProcess} from 'node:child_process'
 import os from 'node:os'
+import {getDesktopUser} from '../system/desktop-user.js'
 
 import {
 	CLI_BIN_NAMES,
@@ -117,7 +118,7 @@ export async function detectCli(
 	// install (the agent re-shows as "Available to Install" after a refresh).
 	// Fix: (1) login shell (`-lc`) so the user's profile PATH (npm/nvm/etc.) is
 	// sourced; (2) explicitly prepend the known install dirs.
-	const home = os.homedir() || process.env.HOME || '/home/bruce'
+	const home = os.homedir() || process.env.HOME || `/home/${getDesktopUser()}`
 	const probePath = [
 		`${home}/.local/bin`,
 		`${home}/.opencode/bin`,

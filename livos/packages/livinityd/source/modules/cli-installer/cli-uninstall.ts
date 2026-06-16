@@ -27,6 +27,7 @@
 //      structured {ok:false} so the tRPC layer (plan 03) renders the error.
 
 import os from 'node:os'
+import {getDesktopUser} from '../system/desktop-user.js'
 import path from 'node:path'
 import fsPromises from 'node:fs/promises'
 import {spawn as nodeSpawn, type ChildProcess} from 'node:child_process'
@@ -274,7 +275,7 @@ export async function uninstallCli(
 	}
 
 	// b. Resolve injectable deps (production defaults).
-	const home = deps.homeDir ?? os.homedir() ?? process.env.HOME ?? '/home/bruce'
+	const home = deps.homeDir ?? os.homedir() ?? process.env.HOME ?? `/home/${getDesktopUser()}`
 	const fs = deps.fs ?? fsPromises
 	const spawn = deps.spawnFn ?? nodeSpawn
 	const spec = CLI_UNINSTALL[input.name]

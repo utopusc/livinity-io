@@ -21,16 +21,26 @@ import os from 'node:os'
  */
 let _cachedUser: string | undefined
 
+/**
+ * Phase 278: neutral last-resort desktop user. The real desktop user almost
+ * always comes from `os.userInfo().username` (livinityd runs AS that account);
+ * this fallback only fires if the process is somehow running as root (legacy
+ * box mid-migration) or `os.userInfo()` throws. It is NOT operator-specific —
+ * `'livos'` mirrors the shell-side neutral default in scripts/install/parse-cli.sh
+ * (LIVOS_DESKTOP_USER) so a misconfigured box never silently chowns to `bruce`.
+ */
+const NEUTRAL_DESKTOP_USER = 'livos'
+
 export function getDesktopUser(): string {
 	if (_cachedUser !== undefined) return _cachedUser
 	try {
 		const name = os.userInfo().username
 		// Never resolve to root — livinityd should not be running as root post
 		// Phase 192-02, but if it somehow is (legacy box mid-migration), fall
-		// back to the historical default rather than chowning things to root.
-		_cachedUser = name && name !== 'root' ? name : 'bruce'
+		// back to the neutral default rather than chowning things to root.
+		_cachedUser = name && name !== 'root' ? name : NEUTRAL_DESKTOP_USER
 	} catch {
-		_cachedUser = 'bruce'
+		_cachedUser = NEUTRAL_DESKTOP_USER
 	}
 	return _cachedUser
 }

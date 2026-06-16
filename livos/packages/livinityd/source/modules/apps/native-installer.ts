@@ -37,6 +37,7 @@ import * as https from 'https'
 
 // Phase 262-02 (LIVOS-055) — SSRF guard reused on EVERY download hop: blocks
 // loopback/RFC1918/link-local (incl. 169.254.169.254 metadata)/ULA targets.
+import {getDesktopHome} from '../system/desktop-user.js'
 import {validateUrl} from '../webapps/url-validator.js'
 import {
 	type AppCatalogRow,
@@ -369,7 +370,9 @@ function userHome(userId: string): string {
 	if (userId && /^[a-z_][a-z0-9_-]*$/.test(userId) && existsSync(`/home/${userId}`)) {
 		return `/home/${userId}`
 	}
-	return process.env.HOME || homedir() || '/home/bruce'
+	// Phase 278: final fallback derives from the desktop user (getDesktopHome),
+	// not a hardcoded /home/bruce — correct on any operator's box.
+	return process.env.HOME || homedir() || getDesktopHome()
 }
 
 function writeDesktopFile(

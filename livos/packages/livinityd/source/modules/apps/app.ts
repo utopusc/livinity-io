@@ -269,6 +269,45 @@ export default class App {
 			}
 		}
 
+		// Phase 278: Suna's frontend needs its backend URL pointed at the operator's
+		// OWN public suna-api subdomain (was hardcoded to bruce.livinity.io in
+		// builtin-apps.ts). Browsers can't resolve Docker hostnames + CSP blocks
+		// internal IPs, so it must be the public domain. Render
+		// `https://suna-api.<operator-domain>/v1` from the live domain config; the
+		// static definition only carries a localhost placeholder.
+		if (this.id === 'suna') {
+			try {
+				const domainRaw = await this.#livinityd.ai.redis.get('livos:domain:config')
+				if (domainRaw) {
+					const domainConfig = JSON.parse(domainRaw)
+					if (domainConfig?.active && domainConfig?.domain) {
+						const subdomainsRaw = await this.#livinityd.ai.redis.get('livos:domain:subdomains')
+						const subdomains = subdomainsRaw ? JSON.parse(subdomainsRaw) : []
+						// suna-api is registered as its own public subdomain; honour any
+						// operator-customised value, else default to `suna-api`.
+						const apiSub = subdomains.find(
+							(s: {appId?: string; subdomain?: string}) =>
+								s.subdomain === 'suna-api' ||
+								(s.appId === this.id && s.subdomain?.startsWith('suna-api')),
+						)
+						const apiSubdomain = apiSub?.subdomain || 'suna-api'
+						const backendUrl = `https://${apiSubdomain}.${domainConfig.domain}/v1`
+
+						const frontend = compose.services?.['frontend']
+						if (frontend) {
+							if (!frontend.environment) frontend.environment = {}
+							if (typeof frontend.environment === 'object' && !Array.isArray(frontend.environment)) {
+								;(frontend.environment as Record<string, string>).NEXT_PUBLIC_BACKEND_URL = backendUrl
+							}
+							this.logger.log(`Set NEXT_PUBLIC_BACKEND_URL=${backendUrl} for ${this.id}`)
+						}
+					}
+				}
+			} catch (error) {
+				this.logger.error(`Failed to set NEXT_PUBLIC_BACKEND_URL for ${this.id}`, error)
+			}
+		}
+
 		await this.writeCompose(compose)
 	}
 

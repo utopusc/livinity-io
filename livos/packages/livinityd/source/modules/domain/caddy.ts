@@ -353,9 +353,9 @@ const LIV_GATE_BODY = `\t\tforward_auth 127.0.0.1:8080 {
  * Iframe / CSP — AionUi upstream may emit `X-Frame-Options: DENY` and its own
  * CSP. We strip both via `header_down -X-Frame-Options` +
  * `header_down -Content-Security-Policy` on the reverse_proxy, then set our
- * own minimal `frame-ancestors 'self' https://bruce.livinity.io` CSP at
+ * own minimal `frame-ancestors 'self' https://<operator-domain>` CSP at
  * `handle` scope (AFTER the upstream's was stripped). Phase 227's LivOS
- * shell iframe mount serves bruce.livinity.io, so `'self'` covers it.
+ * shell iframe mount serves the operator's own domain, so `'self'` covers it.
  *
  * Ordering — emitted AFTER LIV_AI_APP_HANDLE and BEFORE the catch-all
  * `handle { reverse_proxy 127.0.0.1:8080 ... }`. Caddy v2 evaluates by
@@ -470,6 +470,13 @@ ${WS_TRANSPORT_BODY}
 \t\t}
 \t}`
 
+// Phase 278: neutral sentinel for the /liv-family CSP frame-ancestors embedder
+// origin. The handle constants must NOT carry an operator-specific domain literal
+// in source; applyCsp() (generateFullCaddyfile) rewrites this token to the running
+// operator's mainDomain at emit time (or drops it when no domain is configured).
+// Was hardcoded `https://bruce.livinity.io` pre-278.
+const CSP_EMBEDDER_SENTINEL = '__LIVOS_EMBEDDER__'
+
 const LIV_ASSISTANT_HANDLE = `\t@liv path /liv /liv/*
 \thandle @liv {
 ${LIV_GATE_BODY}
@@ -479,7 +486,7 @@ ${LIV_GATE_BODY}
 \t\t\theader_down -Content-Security-Policy
 ${WS_TRANSPORT_BODY}
 \t\t}
-\t\theader Content-Security-Policy "frame-ancestors 'self' https://bruce.livinity.io"
+\t\theader Content-Security-Policy "frame-ancestors 'self' ${CSP_EMBEDDER_SENTINEL}"
 \t}`
 
 /**
@@ -639,7 +646,7 @@ ${LIV_GATE_BODY}
 \t\t\theader_down -Content-Security-Policy
 ${WS_TRANSPORT_BODY}
 \t\t}
-\t\theader Content-Security-Policy "frame-ancestors 'self' https://bruce.livinity.io"
+\t\theader Content-Security-Policy "frame-ancestors 'self' ${CSP_EMBEDDER_SENTINEL}"
 \t}`
 
 /**
@@ -700,7 +707,7 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 	// carrying it are not part of the generated file).
 	const applyCsp = (out: string): string =>
 		out.replaceAll(
-			"frame-ancestors 'self' https://bruce.livinity.io",
+			`frame-ancestors 'self' ${CSP_EMBEDDER_SENTINEL}`,
 			config.mainDomain ? `frame-ancestors 'self' https://${config.mainDomain}` : "frame-ancestors 'self'",
 		)
 
