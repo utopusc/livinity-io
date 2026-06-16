@@ -68,8 +68,11 @@
           $('back').style.display = 'inline-block';
         }
 
-        function redirect(isNew) {
-          window.location.replace(isNew ? '/pricing' : '/dashboard');
+        function redirect(needsUsername) {
+          // Phase 274: a user without a username picks one first (/username);
+          // everyone else lands on the dashboard (which itself bounces to
+          // /pricing if they have no subscription).
+          window.location.replace(needsUsername ? '/username' : '/dashboard');
         }
 
         async function run() {
@@ -123,8 +126,8 @@
             }
 
             $('title').textContent = 'Welcome to Livinity';
-            $('sub').textContent = data.isNew ? 'Setting up your account…' : 'Waking up your computer…';
-            redirect(!!data.isNew);
+            $('sub').textContent = data.needsUsername ? 'Choose your username…' : 'Waking up your computer…';
+            redirect(!!data.needsUsername);
           } catch (e) {
             fail('Something went wrong while signing you in. Please try again.');
           }

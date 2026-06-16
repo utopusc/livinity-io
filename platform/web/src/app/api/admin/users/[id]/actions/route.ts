@@ -114,7 +114,7 @@ export async function POST(req: NextRequest, ctxParam: RouteContext) {
   const audit = (act: string, detail?: Record<string, unknown>) =>
     logAdminAction({
       adminUserId: ctx.userId,
-      adminUsername: ctx.username,
+      adminUsername: ctx.username ?? 'unknown',
       targetUserId: user.id,
       targetUsername: user.username,
       action: act,

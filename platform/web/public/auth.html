@@ -841,7 +841,9 @@
       const ClassicForm = ({ mode, setMode }) => {
         const [email, setEmail] = useState("");
         const [pw, setPw] = useState("");
-        const [name, setName] = useState("");
+        // Phase 274: signup no longer asks for a username (picked later in
+        // /username). It now asks for a password CONFIRMATION instead.
+        const [pw2, setPw2] = useState("");
         const [remember, setRemember] = useState(true);
         const [submitting, setSubmitting] = useState(false);
         const [error, setError] = useState(null);
@@ -851,7 +853,7 @@
         const handleSubmit = async (e) => {
           if (e) e.preventDefault();
           setError(null);
-          if (!email || !pw || (mode === "signup" && !name)) {
+          if (!email || !pw || (mode === "signup" && !pw2)) {
             setError("Please fill in all fields.");
             return;
           }
@@ -859,12 +861,14 @@
             setError("Password must be at least 8 characters.");
             return;
           }
+          if (mode === "signup" && pw !== pw2) {
+            setError("Passwords don't match.");
+            return;
+          }
           setSubmitting(true);
           try {
             const url = mode === "signup" ? "/api/auth/register" : "/api/auth/login";
-            const body = mode === "signup"
-              ? { email, password: pw, username: name }
-              : { email, password: pw };
+            const body = { email, password: pw };
             const res = await fetch(url, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -908,18 +912,18 @@
             </h1>
             <p className="form-sub">
               {mode === "signup"
-                ? "Takes about 30 seconds. Pick a username, choose a password, you're in."
+                ? "Takes about 30 seconds. Enter your email, choose a password — you'll pick your username next."
                 : "Sign in to pick up where you left off."}
             </p>
 
             <ModeTabs mode={mode} setMode={setMode}/>
 
             <div className="field-group">
-              {mode === "signup" && (
-                <Field label="Username" placeholder="yourname" value={name} onChange={setName} hint={<><span className="mono">{(name || "yourname").toLowerCase().replace(/[^a-z0-9]/g, "") || "yourname"}.livinity.io</span> · your computer's address</>}/>
-              )}
               <Field label="Email" type="email" placeholder="you@livinity.io" value={email} onChange={setEmail}/>
               <Field label="Password" type="password" placeholder="••••••••" value={pw} onChange={setPw} hint={mode === "signup" ? "At least 8 characters" : null}/>
+              {mode === "signup" && (
+                <Field label="Confirm password" type="password" placeholder="••••••••" value={pw2} onChange={setPw2} hint={pw2 && pw !== pw2 ? "Passwords don't match" : null}/>
+              )}
             </div>
 
             {mode === "signin" && (

@@ -68,6 +68,33 @@ export async function mirrorSubscription(sub: Stripe.Subscription): Promise<void
   // Re-subscribe after enforcement cut DNS: restore inline so a paying user
   // doesn't wait for the next cron sweep. Best-effort — the cron is the retry.
   if (sub.status === 'trialing' || sub.status === 'active') {
+    // Phase 274: PERMANENTLY reserve the username + record trial use the moment a
+    // real subscription (trial or paid) exists. Both ledgers are append-only and
+    // ON CONFLICT DO NOTHING (idempotent across repeated webhook deliveries).
+    //   • reserved_usernames → the username can NEVER be re-registered, even after
+    //     the account is deleted (kills the delete→recreate username-reuse loop).
+    //   • used_trials → the one-free-trial eligibility survives account deletion
+    //     (keyed on lower(email)), so delete+recreate cannot reset the trial.
+    // Best-effort: a failure here must NOT 500 the webhook — log + continue.
+    try {
+      await pool.query(
+        `INSERT INTO reserved_usernames (username, reason, last_user_id, last_email)
+         SELECT lower(username), 'purchased', id, lower(email)
+           FROM users WHERE stripe_customer_id = $1 AND username IS NOT NULL
+         ON CONFLICT (username) DO NOTHING`,
+        [customerId],
+      );
+      await pool.query(
+        `INSERT INTO used_trials (email, user_id)
+         SELECT lower(email), id
+           FROM users WHERE stripe_customer_id = $1 AND email IS NOT NULL
+         ON CONFLICT (email) DO NOTHING`,
+        [customerId],
+      );
+    } catch (err) {
+      console.error('[stripe-sync] ledger write (reserved_usernames/used_trials) failed:', err);
+    }
+
     // A suspended (admin-banned) user who pays must STAY out — exclude them
     // from the restore candidate set. DEFENSIVE: users.suspended_at may not
     // exist yet (operator runs the ALTER separately). Try the SELECT WITH the

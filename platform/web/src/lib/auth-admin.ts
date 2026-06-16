@@ -5,14 +5,16 @@ import { getSession, SESSION_COOKIE_NAME } from './auth';
 
 export interface AdminContext {
   userId: string;
-  username: string;
+  // Phase 274: username is nullable on users now (picked post-signup). In
+  // practice every admin has one, but the type must match the session source.
+  username: string | null;
   email: string;
   isAdmin: true;
 }
 
 export interface SessionUserWithAdmin {
   userId: string;
-  username: string;
+  username: string | null;
   email: string;
   emailVerified: boolean;
   isAdmin: boolean;
