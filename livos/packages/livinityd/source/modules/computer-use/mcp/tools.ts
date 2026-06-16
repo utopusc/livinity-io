@@ -59,7 +59,7 @@ import {
 // Phase 160-03 — LivOS app catalog resolver type. The handler in this module
 // calls the resolver BEFORE openOrFocus so LivOS apps (n8n, libreoffice, etc.)
 // dispatch through windowManager IPC instead of the classic Bytebot APP_MAP.
-import type {LivosAppResolver} from '../native/window.js'
+import type {LivosAppResolver, LivosAppMatch} from '../native/window.js'
 // Phase 248-02 — display lifecycle manager surface. When `displayManager` is
 // passed to buildHandlers via LuseToolsOptions, the 4 new display-lifecycle
 // tool handlers (computer_create_display / computer_list_displays /
@@ -271,6 +271,25 @@ export interface LuseToolsOptions {
 	 * `isError:true` with a helpful text block.
 	 */
 	displayManager?: DisplayManager
+	/**
+	 * Phase 274 — actually OPEN a resolver-matched LivOS app. Historically the
+	 * match path ONLY emitted an `open_livos_app` stderr line for a "parent
+	 * livinityd" to consume — but NO parent ever consumed it (AionUi-spawned
+	 * luse ignores it; livinityd's McpBridge reads only stdout JSON-RPC), so
+	 * launching an installed WebApp/Native by name silently no-op'd and the
+	 * agent fell back to the generic create_display+Chrome path (wrong window).
+	 *
+	 * When set, the handler calls this on a match to spawn + surface the REAL
+	 * LivOS WebApp/Native stream. server.ts wires it to livinityd's
+	 * `webapp.window.spawn` / `apps.native.spawn` over the SAME authed HTTP
+	 * channel the resolver already uses — so it works regardless of which
+	 * process spawned the MCP. Returns {ok} so the handler reports
+	 * success/failure to the agent. When unset, legacy stderr-emit-only.
+	 */
+	openLivosApp?: (
+		match: LivosAppMatch,
+		display?: string,
+	) => Promise<{ok: boolean; error?: string}>
 }
 
 /**
@@ -985,6 +1004,19 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 						process.stderr.write(
 							`[luse-mcp] open_livos_app kind=${match.kind} appId=${match.appId} route=${match.route}\n`,
 						)
+						// Phase 274 — ACTUALLY open it. The stderr line above is a no-op
+						// (nobody consumes it); openLivosApp spawns + surfaces the real
+						// LivOS WebApp/Native stream via livinityd.
+						if (options.openLivosApp) {
+							const opened = await options.openLivosApp(match, displayArg)
+							if (!opened.ok) {
+								return {
+									content: [{type: 'text', text: `Could not open "${match.title}" (${match.kind}): ${opened.error ?? 'unknown error'}`}],
+									isError: true,
+								}
+							}
+							return withPostScreenshot(`opened ${match.title} (LivOS ${match.kind})`, async () => {})
+						}
 						return withPostScreenshot(
 							`application → ${application} (LivOS ${match.kind})${displayArg ? ` display=${displayArg}` : ''}`,
 							async () => {
@@ -1304,6 +1336,15 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 						process.stderr.write(
 							`[luse-mcp] open_livos_app kind=${match.kind} appId=${match.appId} route=${match.route} display=${displayArg ?? '(default)'}\n`,
 						)
+						// Phase 274 — actually open the matched LivOS app (webapp/native spawn
+						// allocates its own display; the display arg is a hint, ignored for
+						// installed apps). Returns early on success/failure.
+						if (options.openLivosApp) {
+							const opened = await options.openLivosApp(match, displayArg)
+							return opened.ok
+								? withPostScreenshot(`opened ${match.title} (LivOS ${match.kind})`, async () => {})
+								: {content: [{type: 'text', text: `Could not open "${match.title}": ${opened.error ?? 'unknown error'}`}], isError: true}
+						}
 					}
 				} catch (err) {
 					process.stderr.write(
@@ -1548,6 +1589,7 @@ export function registerLuseTools(server: McpServerLike, options?: LuseToolsOpti
 		options?.displayManager !== undefined ||
 		options?.redis !== undefined ||
 		options?.livosAppResolver !== undefined ||
+		options?.openLivosApp !== undefined ||
 		options?.defaultDisplay !== undefined ||
 		options?.streamManager !== undefined
 			? buildHandlers(options)
