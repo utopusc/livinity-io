@@ -200,10 +200,10 @@ describe('username-validator — APP_COLLISION (integration)', { skip: !RUN_INTE
 
 describe('username-validator — normalization (integration)', { skip: !RUN_INTEGRATION }, () => {
   it('lowercases mixed-case input before validating (DB-touching path)', async () => {
-    // 'LUCY-X' passes FORMAT/RESERVED after lowercasing, so it reaches the DB.
+    // 'LUCYX' passes FORMAT/RESERVED after lowercasing, so it reaches the DB.
     // We assert only that it does NOT fail with FORMAT — outcome (ok / TAKEN /
-    // APP_COLLISION) depends on live data.
-    const r = await validateUsername('LUCY-X');
+    // APP_COLLISION) depends on live data. (Hyphen-free per L-066 / Phase 263-04.)
+    const r = await validateUsername('LUCYX');
     if (!r.ok) {
       assert.notEqual(r.code, 'FORMAT', 'uppercase should normalize, not fail FORMAT');
     }
@@ -234,10 +234,12 @@ describe('username-validator — happy path (integration)', { skip: !RUN_INTEGRA
     // Random-ish sentinel that should never collide with apps or users.
     // Kept deterministic so a flake is debuggable; if the DB ever has this
     // exact row, override with LIV_TEST_HAPPY_USERNAME.
+    // Hyphen-free per L-066 (Phase 263-04) — the username FORMAT now bans
+    // hyphens, so the old `phase140-ok-<ts>` sentinel would fail FORMAT.
     const fresh =
-      process.env.LIV_TEST_HAPPY_USERNAME ?? `phase140-ok-${Date.now()}`;
+      process.env.LIV_TEST_HAPPY_USERNAME ?? `phase274ok${Date.now()}`;
     // Length-clamp to 32 in case Date.now() pushes us over.
-    const clamped = fresh.slice(0, 32).replace(/-+$/, '');
+    const clamped = fresh.slice(0, 32).replace(/[^a-z0-9]+$/, '');
     await expectOk(clamped);
   });
 });
