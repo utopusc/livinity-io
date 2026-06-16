@@ -467,7 +467,12 @@ export type LivosAppResolver = (name: string) => Promise<LivosAppMatch | null>
 export async function defaultLivosAppResolver(
 	name: string,
 	deps: {
-		listWebApps: () => Promise<Array<{id: string; subdomain?: string; name?: string}>>
+		// Phase 274 — webapp.list returns {id, url, title, ...}; older callers
+		// passed {subdomain, name}. Accept all so matching + routing work against
+		// the REAL shape (match on title, route to the stored url).
+		listWebApps: () => Promise<
+			Array<{id: string; url?: string; title?: string; subdomain?: string; name?: string}>
+		>
 		listNativeApps: () => Promise<Array<{id: string; name?: string; iconUrl?: string}>>
 		userSlug: string
 		domainRoot: string
@@ -484,18 +489,22 @@ export async function defaultLivosAppResolver(
 	])
 
 	// Match WebApp first (more likely the user intent for browser-based apps).
+	// Phase 274 — match on the app's display name (webapp.list exposes `title`;
+	// older shape used `name`). Route to the webapp's REAL stored `url`
+	// (e.g. https://www.reddit.com) — that's what webapp.window.spawn needs.
+	// Only synthesize the legacy <app>-<user>.<root> form when no url exists
+	// (defensive; user-added WebApps always carry a url).
 	for (const wa of webapps) {
-		const candidate = (wa.name ?? wa.subdomain ?? wa.id).toLowerCase()
+		const label = wa.title ?? wa.name ?? wa.subdomain
+		const candidate = (label ?? wa.id).toLowerCase()
 		if (candidate === needle) {
-			// Phase 160-03 — domain pattern is <app>-<user>.<root> (DASH separator).
-			// NEVER the dot form <app>.<user>.<root>. Test invariant locks this.
 			const sub = wa.subdomain ?? wa.id
-			const url = `${proto}://${sub}-${deps.userSlug}.${deps.domainRoot}/`
+			const route = wa.url ?? `${proto}://${sub}-${deps.userSlug}.${deps.domainRoot}/`
 			return {
 				kind: 'webapp',
 				appId: wa.id,
-				route: url,
-				title: wa.name ?? sub,
+				route,
+				title: label ?? sub,
 				icon: '',
 			}
 		}
