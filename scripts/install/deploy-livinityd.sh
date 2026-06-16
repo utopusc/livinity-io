@@ -2313,10 +2313,12 @@ _dld_update_caddy_to_livinityd() {
             }
         }
     }
-    # 2026-06-11 LIVOS-054 carve-out: ONLY the 3 cliInstaller procedures reach :8080
-    # (Liv AI Local Agents panel). EXACT paths — a cliInstaller.* wildcard would match
-    # tRPC comma-batch URLs and re-open the full API. Mirrors caddy.ts LIV_CLI_INSTALLER_HANDLE.
-    @liv_cli_installer path /liv/trpc/cliInstaller.detect /liv/trpc/cliInstaller.install /liv/trpc/cliInstaller.auth
+    # 2026-06-11 LIVOS-054 carve-out: ONLY these named procedures reach :8080
+    # (Liv AI Local Agents panel + One-Click Liv MCPs). EXACT paths — a cliInstaller.*
+    # wildcard would match tRPC comma-batch URLs and re-open the full API. This list
+    # MUST stay in lock-step with caddy.ts LIV_CLI_INSTALLER_HANDLE (drift here =
+    # /liv/trpc/<proc> 404s into the AionUi SPA → "Unexpected token '<'" in the panel).
+    @liv_cli_installer path /liv/trpc/cliInstaller.detect /liv/trpc/cliInstaller.install /liv/trpc/cliInstaller.auth /liv/trpc/cliInstaller.applyAgentChanges /liv/trpc/cliInstaller.hasPendingAgentChanges /liv/trpc/mcp.config.installLivTools /liv/trpc/mcp.config.installLivMcpsToCli
     handle @liv_cli_installer {
         forward_auth 127.0.0.1:8080 {
             uri /auth/verify

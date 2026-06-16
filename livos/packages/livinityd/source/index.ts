@@ -232,6 +232,8 @@ import {
 	// uninstall (uninstallCli). Both flow through the cli-installer barrel.
 	sendAuthInput,
 	uninstallCli,
+	// Liv-MCP CLI-picker — no-spawn per-CLI MCP writer (installLivMcpsToCli).
+	writeLivMcpsToCli,
 } from './modules/cli-installer/index.js'
 // Phase 224 — `config.*` namespace production wire. Builds the
 // getV42MigrationActive procedure against the live ioredis client; the
@@ -1863,6 +1865,20 @@ export default class Livinityd {
 							},
 							getAutoApprove: () =>
 								approvalManagerForPlugin?.getAutoApprove() ?? false,
+							// Liv-MCP CLI-picker — no-spawn per-CLI MCP write path.
+							// writeLivMcpsToCli resolves the desktop-user home (os.homedir(),
+							// = the user livinityd runs as = where the operator's CLI configs
+							// live) + fs internally; it NEVER logs/returns env values (only
+							// {path, written}). The proc re-asserts the SUPPORTED_CLIS
+							// whitelist before delegating here (RCE boundary).
+							writeLivMcpsToCliFn: async (input) =>
+								writeLivMcpsToCli(input, {
+									logger: {
+										info: (msg) => webappLogger.info(msg),
+										warn: (msg, err) => this.logger.error(msg, err),
+										error: (msg, err) => this.logger.error(msg, err),
+									},
+								}),
 						})
 					: undefined
 

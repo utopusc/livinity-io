@@ -374,12 +374,13 @@ _configure_caddy_for_tunnel() {
     # Phase 262 WS1 (LIVOS-054): the broad /liv/trpc/* → livinityd :8080 bridge was REMOVED.
     # The framed AionUi SPA must NOT reach the full LivOS tRPC API with the operator's
     # same-origin cookie auto-attached.
-    # 2026-06-11 carve-out (operator-accepted trade-off): ONLY the three cliInstaller
-    # procedures route to :8080 so the Liv AI "Local Agents" panel works. EXACT paths,
-    # NOT cliInstaller.* — a trailing wildcard would match tRPC comma-batch URLs
+    # 2026-06-11 carve-out (operator-accepted trade-off): ONLY these named procedures
+    # route to :8080 so the Liv AI "Local Agents" panel + One-Click Liv MCPs work. EXACT
+    # paths, NOT cliInstaller.* — a trailing wildcard would match tRPC comma-batch URLs
     # (cliInstaller.detect,users.create?batch=1) and re-open the full API. forward_auth
-    # gates it (mirrors the runtime caddy.ts LIV_CLI_INSTALLER_HANDLE shape).
-    @liv_cli_installer path /liv/trpc/cliInstaller.detect /liv/trpc/cliInstaller.install /liv/trpc/cliInstaller.auth
+    # gates it. This list MUST stay in lock-step with caddy.ts LIV_CLI_INSTALLER_HANDLE
+    # (drift here = /liv/trpc/<proc> 404s into the AionUi SPA → "Unexpected token '<'").
+    @liv_cli_installer path /liv/trpc/cliInstaller.detect /liv/trpc/cliInstaller.install /liv/trpc/cliInstaller.auth /liv/trpc/cliInstaller.applyAgentChanges /liv/trpc/cliInstaller.hasPendingAgentChanges /liv/trpc/mcp.config.installLivTools /liv/trpc/mcp.config.installLivMcpsToCli
     handle @liv_cli_installer {
         forward_auth 127.0.0.1:8080 {
             uri /auth/verify
