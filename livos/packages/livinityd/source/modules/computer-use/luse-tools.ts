@@ -452,9 +452,13 @@ const _applicationTool = {
 		'open an app/site the user has — that yields a wrong/blank logged-out ' +
 		'window. The handler resolves LivOS apps first via runtime catalog query, ' +
 		'then falls back to classic Bytebot binaries (firefox, thunderbird, ' +
-		'1password, vscode, terminal, desktop, directory). If the name is not in ' +
-		'the catalog it returns an error so you can adjust — only THEN consider a ' +
-		'browser / new display.',
+		'1password, vscode, terminal, desktop, directory). This tool ALSO accepts ' +
+		'a URL or bare domain for a site the user has NOT saved yet (e.g. ' +
+		'"youtube.com", "https://news.ycombinator.com") — it will CREATE the ' +
+		'WebApp (add it to the desktop) and open it in the user\'s profile. So for ' +
+		'ANY website request — saved or not — pass the site to THIS tool; NEVER ' +
+		'open a website by creating a new display + a browser. Only non-website ' +
+		'names that are not installed return an error.',
 	input_schema: {
 		type: 'object' as const,
 		properties: {
