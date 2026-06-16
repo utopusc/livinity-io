@@ -1533,30 +1533,41 @@ else
     ok "Phase 245.3: settings.json written with 6 MCP wildcard permissions"
 fi
 
-# ── Phase 275 — Liv agent persona CLAUDE.md ────────────────────────────────
-# Without this, the AionUi-vendored Claude agent boots with its default
+# ── Phase 275/276 — Liv agent persona (ALL CLI backends) ───────────────────
+# Without this, whichever CLI agent AionUi runs boots with its default
 # "terminal coding agent" persona and refuses to open apps ("I can't open a
-# browser") until the user explicitly says "use luse mcp". Seed a user-global
-# CLAUDE.md (Claude Code loads ~/.claude/CLAUDE.md every session) that tells Liv
-# it IS the LivOS assistant and MUST use computer_application to open apps /
-# websites. Desktop-user-aware (NOT hardcoded bruce); idempotent.
-step "Phase 275: Liv agent persona CLAUDE.md"
-_LIV_PERSONA_SRC="$TEMP_DIR/scripts/install/seeds/liv-agent-CLAUDE.md"
-[[ -f "$_LIV_PERSONA_SRC" ]] || _LIV_PERSONA_SRC="$LIVOS_DIR/scripts/install/seeds/liv-agent-CLAUDE.md"
+# browser") until the user says "use luse mcp". Seed the SAME persona to every
+# supported CLI's user-global instruction file so it works no matter which agent
+# the user picks (NOT just Claude):
+#   - Claude Code → ~/.claude/CLAUDE.md
+#   - OpenAI Codex → ~/.codex/AGENTS.md
+#   - Gemini CLI  → ~/.gemini/GEMINI.md
+# (The MCP tool descriptions are already CLI-agnostic; this adds the persona
+# nudge for every backend.) Desktop-user-aware (NOT hardcoded bruce); idempotent.
+step "Phase 275/276: Liv agent persona (all CLI backends)"
+_LIV_PERSONA_SRC="$TEMP_DIR/scripts/install/seeds/liv-agent-persona.md"
+[[ -f "$_LIV_PERSONA_SRC" ]] || _LIV_PERSONA_SRC="$LIVOS_DIR/scripts/install/seeds/liv-agent-persona.md"
 _PERSONA_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1)
 [[ -n "$_PERSONA_USER" ]] || _PERSONA_USER=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1; exit}')
 [[ -n "$_PERSONA_USER" ]] || _PERSONA_USER=bruce
 _PERSONA_HOME=$(getent passwd "$_PERSONA_USER" 2>/dev/null | cut -d: -f6)
 [[ -n "$_PERSONA_HOME" ]] || _PERSONA_HOME="/home/$_PERSONA_USER"
-_PERSONA_DST="$_PERSONA_HOME/.claude/CLAUDE.md"
 if [[ ! -f "$_LIV_PERSONA_SRC" ]]; then
-    warn "Phase 275: liv-agent-CLAUDE.md seed not found — skipping persona seed"
-elif [[ -f "$_PERSONA_DST" ]] && cmp -s "$_LIV_PERSONA_SRC" "$_PERSONA_DST"; then
-    ok "Phase 275: Liv persona CLAUDE.md already current ($_PERSONA_DST)"
+    warn "Phase 275/276: liv-agent-persona.md seed not found — skipping persona seed"
 else
-    sudo -u "$_PERSONA_USER" mkdir -p "$_PERSONA_HOME/.claude"
-    sudo -u "$_PERSONA_USER" tee "$_PERSONA_DST" < "$_LIV_PERSONA_SRC" > /dev/null
-    ok "Phase 275: Liv persona CLAUDE.md written to $_PERSONA_DST (user=$_PERSONA_USER)"
+    # subdir:file pairs — one per CLI instruction convention.
+    for _PERSONA_TARGET in ".claude:CLAUDE.md" ".codex:AGENTS.md" ".gemini:GEMINI.md"; do
+        _P_DIR="${_PERSONA_TARGET%%:*}"
+        _P_FILE="${_PERSONA_TARGET##*:}"
+        _P_DST="$_PERSONA_HOME/$_P_DIR/$_P_FILE"
+        if [[ -f "$_P_DST" ]] && cmp -s "$_LIV_PERSONA_SRC" "$_P_DST"; then
+            ok "Phase 275/276: persona already current ($_P_DST)"
+        else
+            sudo -u "$_PERSONA_USER" mkdir -p "$_PERSONA_HOME/$_P_DIR"
+            sudo -u "$_PERSONA_USER" tee "$_P_DST" < "$_LIV_PERSONA_SRC" > /dev/null
+            ok "Phase 275/276: persona written to $_P_DST (user=$_PERSONA_USER)"
+        fi
+    done
 fi
 
 # ── Phase 245.3 — liv-assistant restart to pick up settings + wrapper ──────

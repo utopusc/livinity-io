@@ -1014,75 +1014,12 @@ export default class Livinityd {
 				)
 			}
 
-			// Phase 101-01 — Chrome CDP bootstrap. Spawn the singleton Chrome with
-			// --remote-debugging-port=9222 bound to 127.0.0.1 only (T-101-01
-			// mitigation), wait for /json/version to return 200, then open a
-			// persistent CDP connection. The about:blank shell window opened by
-			// --new-window=about:blank is minimized via a SEPARATE setWindowBounds
-			// call after connect (RESEARCH correction #1: CDP rejects state+bounds
-			// in one call). All of this is wrapped in try/catch — bootstrap failure
-			// degrades Pillar A (multi-stream WebApps) but livinityd boot keeps
-			// going. The Wave 2+ window-manager rewrite (Plan 101-04) will pull
-			// chromeCdpClient off `this` once it's not null.
-			try {
-				const chromeCdpLogger = (() => {
-					const c = this.logger.createChildLogger('chrome-cdp')
-					// Adapter shape matches the streamingLogger/webappLogger pattern
-					// elsewhere in start() — livinityd's logger has (msg, error?)
-					// signatures while our chrome-cdp modules expect ChromeCdpLogger
-					// with rest-args. Collapse to error+verbose without rest.
-					return {
-						info: (msg: string) => c.log(msg),
-						warn: (msg: string, error?: unknown) => c.error(msg, error),
-						error: (msg: string, error?: unknown) => c.error(msg, error),
-						verbose: (msg: string) => c.verbose(msg),
-					}
-				})()
-				const {pid: chromePid} = await bootstrapChrome({
-					display: process.env.WEBAPPS_X11_DISPLAY ?? ':1',
-					logger: chromeCdpLogger,
-				})
-				this.chromeCdpClient = new ChromeCdpClient({logger: chromeCdpLogger})
-				await this.chromeCdpClient.connect()
-				// Phase 101-04 — cache the Chrome pid on the client so
-				// WebAppWindowManager.spawn() can baseline `xdotool search --pid <pid>`
-				// BEFORE driving CDP createTarget. Without this, getChromePid()
-				// throws inside spawn(), and Pillar A fails on every WebApp launch
-				// even though bootstrap succeeded.
-				this.chromeCdpClient.setChromePid(chromePid)
-				chromeCdpLogger.info(`Chrome CDP ready (pid=${chromePid})`)
-				// Minimize the about:blank shell window so it never shows up in
-				// fluxbox. Uses the dedicated getWindowIdForTarget helper +
-				// minimizeWindow (issues setWindowBounds with windowState ONLY —
-				// the second flank of RESEARCH correction #1).
-				try {
-					const blank = await this.chromeCdpClient.findTargetByUrl(
-						(u) => u === 'about:blank' || u.startsWith('about:blank'),
-					)
-					if (blank) {
-						const windowId =
-							await this.chromeCdpClient.getWindowIdForTarget(blank.targetId)
-						await this.chromeCdpClient.minimizeWindow(windowId)
-						chromeCdpLogger.verbose(
-							`minimized about:blank shell window (windowId=${windowId})`,
-						)
-					}
-				} catch (e) {
-					chromeCdpLogger.warn(
-						`Could not minimize about:blank shell: ${(e as Error).message}`,
-					)
-				}
-			} catch (err) {
-				// Non-fatal — Pillar A (multi-stream WebApps via CDP) degrades to
-				// "unavailable" until next livinityd restart, but the rest of the
-				// daemon stays up. Same shape as the outer streaming-subsystem
-				// try/catch (lines 474-482). chromeCdpClient stays null;
-				// downstream callers must check.
-				this.logger.error(
-					'Chrome CDP bootstrap failed; continuing without CDP (Pillar A degraded)',
-					err,
-				)
-			}
+			// Phase 276 — singleton Chrome CDP bootstrap REMOVED. It bootstrapped a
+			// Chrome on the (now-removed) :1 host display and only minimized an
+			// about:blank window; the WebApp spawn path (Phase 102-04) uses per-app
+			// Chrome via chrome-process-spawner and never consulted chromeCdpClient
+			// (it was an IGNORED back-compat slot — no functional CDP consumer).
+			// chromeCdpClient stays undefined; the webapp manager ignores it.
 
 			const webappLogger = (() => {
 				const child = this.logger.createChildLogger('webapps')
