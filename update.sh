@@ -1461,6 +1461,15 @@ fi
 # PATCH is HTTP-driven so it survives across liv-assistant restarts. Idempotent.
 step "Phase 245.4: AionUi backend MCP entry patching (wrapper paths)"
 _PATCH_COUNT=0
+# Phase 275 — derive the LivOS desktop user (NOT hardcoded bruce) so the luse env
+# below carries the right slug + XAUTHORITY on ANY box (e.g. uid-1001 'everything').
+# WebApps now route to their real url so the slug is non-fatal, but native apps +
+# the synthesized fallback need it correct. Same desktop-user pattern as elsewhere.
+_LUSE_RUN_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1)
+[[ -n "$_LUSE_RUN_USER" ]] || _LUSE_RUN_USER=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1; exit}')
+[[ -n "$_LUSE_RUN_USER" ]] || _LUSE_RUN_USER=bruce
+_LUSE_RUN_HOME=$(getent passwd "$_LUSE_RUN_USER" 2>/dev/null | cut -d: -f6)
+[[ -n "$_LUSE_RUN_HOME" ]] || _LUSE_RUN_HOME="/home/$_LUSE_RUN_USER"
 for _NAME in "${!_MCP_PATHS[@]}"; do
     _ID=$(curl -s http://localhost:3020/api/mcp/servers 2>/dev/null | \
         python3 -c "import sys,json; d=json.load(sys.stdin); [print(m['id']) for m in d.get('data',[]) if m['name']=='${_NAME}']" 2>/dev/null | head -1)
@@ -1470,7 +1479,7 @@ for _NAME in "${!_MCP_PATHS[@]}"; do
         if [[ "$_CURRENT_CMD" != "/usr/local/bin/liv-mcp-${_NAME}" ]]; then
             _ENV_JSON='{}'
             if [[ "$_NAME" == "luse" ]]; then
-                _ENV_JSON="{\"DISPLAY\":\":1\",\"XAUTHORITY\":\"/run/user/1000/gdm/Xauthority\",\"LIVINITYD_API_URL\":\"http://127.0.0.1:8080\",\"LIV_API_KEY\":\"$(grep -oP 'LIV_API_KEY=\K[^\n]+' /opt/livos/.env 2>/dev/null || echo missing)\",\"LUSE_REDIS_URL\":\"$(grep -oP 'REDIS_URL=\K[^\n]+' /opt/livos/.env 2>/dev/null || echo missing)\",\"LUSE_USER_SLUG\":\"bruce\",\"LUSE_DOMAIN_ROOT\":\"livinity.io\"}"
+                _ENV_JSON="{\"DISPLAY\":\":1\",\"XAUTHORITY\":\"${_LUSE_RUN_HOME}/.Xauthority\",\"LIVINITYD_API_URL\":\"http://127.0.0.1:8080\",\"LIV_API_KEY\":\"$(grep -oP 'LIV_API_KEY=\K[^\n]+' /opt/livos/.env 2>/dev/null || echo missing)\",\"LUSE_REDIS_URL\":\"$(grep -oP 'REDIS_URL=\K[^\n]+' /opt/livos/.env 2>/dev/null || echo missing)\",\"LUSE_USER_SLUG\":\"${_LUSE_RUN_USER}\",\"LUSE_USER_ID\":\"${_LUSE_RUN_USER}\",\"LUSE_DOMAIN_ROOT\":\"livinity.io\"}"
             else
                 _ENV_JSON="{\"LIVINITYD_API_URL\":\"http://127.0.0.1:8080\",\"LIV_API_KEY\":\"$(grep -oP 'LIV_API_KEY=\K[^\n]+' /opt/livos/.env 2>/dev/null || echo missing)\"}"
             fi
@@ -1518,6 +1527,32 @@ else
     sudo -u bruce mkdir -p /home/bruce/.claude
     echo "$_CLAUDE_SETTINGS_DESIRED" | sudo -u bruce tee "$_CLAUDE_SETTINGS" > /dev/null
     ok "Phase 245.3: settings.json written with 6 MCP wildcard permissions"
+fi
+
+# ── Phase 275 — Liv agent persona CLAUDE.md ────────────────────────────────
+# Without this, the AionUi-vendored Claude agent boots with its default
+# "terminal coding agent" persona and refuses to open apps ("I can't open a
+# browser") until the user explicitly says "use luse mcp". Seed a user-global
+# CLAUDE.md (Claude Code loads ~/.claude/CLAUDE.md every session) that tells Liv
+# it IS the LivOS assistant and MUST use computer_application to open apps /
+# websites. Desktop-user-aware (NOT hardcoded bruce); idempotent.
+step "Phase 275: Liv agent persona CLAUDE.md"
+_LIV_PERSONA_SRC="$TEMP_DIR/scripts/install/seeds/liv-agent-CLAUDE.md"
+[[ -f "$_LIV_PERSONA_SRC" ]] || _LIV_PERSONA_SRC="$LIVOS_DIR/scripts/install/seeds/liv-agent-CLAUDE.md"
+_PERSONA_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1)
+[[ -n "$_PERSONA_USER" ]] || _PERSONA_USER=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1; exit}')
+[[ -n "$_PERSONA_USER" ]] || _PERSONA_USER=bruce
+_PERSONA_HOME=$(getent passwd "$_PERSONA_USER" 2>/dev/null | cut -d: -f6)
+[[ -n "$_PERSONA_HOME" ]] || _PERSONA_HOME="/home/$_PERSONA_USER"
+_PERSONA_DST="$_PERSONA_HOME/.claude/CLAUDE.md"
+if [[ ! -f "$_LIV_PERSONA_SRC" ]]; then
+    warn "Phase 275: liv-agent-CLAUDE.md seed not found — skipping persona seed"
+elif [[ -f "$_PERSONA_DST" ]] && cmp -s "$_LIV_PERSONA_SRC" "$_PERSONA_DST"; then
+    ok "Phase 275: Liv persona CLAUDE.md already current ($_PERSONA_DST)"
+else
+    sudo -u "$_PERSONA_USER" mkdir -p "$_PERSONA_HOME/.claude"
+    sudo -u "$_PERSONA_USER" tee "$_PERSONA_DST" < "$_LIV_PERSONA_SRC" > /dev/null
+    ok "Phase 275: Liv persona CLAUDE.md written to $_PERSONA_DST (user=$_PERSONA_USER)"
 fi
 
 # ── Phase 245.3 — liv-assistant restart to pick up settings + wrapper ──────
