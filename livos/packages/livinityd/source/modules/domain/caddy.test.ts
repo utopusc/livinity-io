@@ -1743,15 +1743,18 @@ describe('Phase 262-01 — /liv-family forward_auth gate (LIVOS-041/047/054)', (
 		// FULL tRPC API through the batch — exactly what LIVOS-054 closed.
 		// Phase 269-01 appended applyAgentChanges + hasPendingAgentChanges (the
 		// panel's manual-apply calls). The Liv-MCP one-click added
-		// mcp.config.installLivTools — still EXACT paths, still no wildcard.
+		// mcp.config.installLivTools; the CLI-picker added
+		// mcp.config.installLivMcpsToCli — still EXACT paths, still no wildcard.
 		expect(out).toContain(
-			'@liv_cli_installer path /liv/trpc/cliInstaller.detect /liv/trpc/cliInstaller.install /liv/trpc/cliInstaller.auth /liv/trpc/cliInstaller.applyAgentChanges /liv/trpc/cliInstaller.hasPendingAgentChanges /liv/trpc/mcp.config.installLivTools',
+			'@liv_cli_installer path /liv/trpc/cliInstaller.detect /liv/trpc/cliInstaller.install /liv/trpc/cliInstaller.auth /liv/trpc/cliInstaller.applyAgentChanges /liv/trpc/cliInstaller.hasPendingAgentChanges /liv/trpc/mcp.config.installLivTools /liv/trpc/mcp.config.installLivMcpsToCli',
 		)
 		// Phase 269-01 — the 2 new manual-apply paths are present as EXACT entries.
 		expect(out).toContain('/liv/trpc/cliInstaller.applyAgentChanges')
 		expect(out).toContain('/liv/trpc/cliInstaller.hasPendingAgentChanges')
 		// Liv-MCP one-click — the install procedure reaches livinityd :8080.
 		expect(out).toContain('/liv/trpc/mcp.config.installLivTools')
+		// Liv-MCP CLI-picker — the per-CLI install procedure reaches livinityd :8080.
+		expect(out).toContain('/liv/trpc/mcp.config.installLivMcpsToCli')
 		expect(out).not.toContain('cliInstaller.*')
 		expect(out).not.toContain('/liv/trpc/*')
 	})

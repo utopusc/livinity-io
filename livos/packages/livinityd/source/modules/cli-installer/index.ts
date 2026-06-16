@@ -76,3 +76,14 @@ export {
 	type ScheduleAgentRefreshDeps,
 	type AgentRefreshExecFn,
 } from './agent-refresh.js'
+// Liv-MCP CLI-picker — no-spawn per-CLI MCP writer (0600, whitelist-guarded).
+// Writes the Liv system MCPs into a chosen CLI's own config (json/yaml/toml).
+export {
+	writeLivMcpsToCli,
+	MCP_TARGETS,
+	MCP_WRITABLE_CLIS,
+	type LivMcpDef,
+	type WriteLivMcpsToCliInput,
+	type WriteLivMcpsToCliDeps,
+	type WriteLivMcpsToCliResult,
+} from './mcp-writer.js'

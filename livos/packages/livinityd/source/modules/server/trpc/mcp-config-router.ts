@@ -55,7 +55,14 @@ import type {
 	OpenclawMcpServerConfig,
 } from '../../openclawos/openclaw-config-store.js'
 import {MCP_CATALOG, type McpCatalogEntry} from './mcp-catalog-data.js'
-import {seedAionUiMcpConfig, type SeedRedisClient} from '../../mcp-registrar/index.js'
+import {
+	readSystemMcpCatalog,
+	seedAionUiMcpConfig,
+	type SeedRedisClient,
+} from '../../mcp-registrar/index.js'
+import {SUPPORTED_CLIS_SET} from '../../cli-installer/install-scripts.js'
+import type {CliName} from '../../cli-installer/types.js'
+import type {LivMcpDef, WriteLivMcpsToCliResult} from '../../cli-installer/mcp-writer.js'
 import {adminProcedure, router} from './trpc.js'
 
 export const MCP_CONFIG_REDIS_HASH_KEY = 'liv:mcp:config'
@@ -250,6 +257,19 @@ export interface McpConfigRouterDeps {
 	 * mutation lands).
 	 */
 	getAutoApprove?: () => boolean
+	/**
+	 * Liv-MCP CLI-picker — DI seam for `installLivMcpsToCli`. Prod (livinityd
+	 * boot) wires a wrapper that calls `writeLivMcpsToCli` (cli-installer/
+	 * mcp-writer.ts) with the live desktop-user home dir + fs, so the router
+	 * stays fs-free + unit-testable (mirrors the cli-installer-router
+	 * writeApiKeyFn pattern). The whitelist guard on `cli` (the D-239-07 RCE
+	 * boundary) runs in the PROC before this is ever called. When unset, the
+	 * proc throws PRECONDITION_FAILED (boot did not wire the writer).
+	 */
+	writeLivMcpsToCliFn?: (input: {
+		cli: CliName
+		servers: LivMcpDef[]
+	}) => Promise<WriteLivMcpsToCliResult>
 }
 
 /** Phase 207 UAT 2026-05-24 round 4 — Redis key for the persisted toggle. */
@@ -613,6 +633,88 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 				emptyCatalog: r.emptyCatalog === true,
 			}
 		}),
+
+		// ── installLivMcpsToCli ──────────────────────────────────────────────
+		// Liv-MCP CLI-picker: write the 5 Liv system MCPs (luse, liv-system,
+		// liv-apps, liv-vault, liv-docker) into ONE chosen CLI's OWN config file
+		// (e.g. claude → ~/.claude.json mcpServers) so that running that CLI in a
+		// terminal sees the Liv tools. Powers the per-CLI rows in the "One-Click:
+		// Install Liv MCPs" picker (scripts/aionui-patches/install-liv-mcps-section.js).
+		//
+		// Whitelist guard FIRST (D-239-07 RCE boundary): cli MUST be one of the 20
+		// SUPPORTED_CLIS names — rejected BEFORE any fs path is built. Source of
+		// truth for the MCP defs = the Redis hash liv:mcp:config (same as
+		// installLivTools / the boot seed), so the env (LIV_API_KEY etc.) is the
+		// already-resolved install-time value, never re-derived here.
+		installLivMcpsToCli: adminProcedure
+			.input(z.object({cli: z.string().trim().min(1).max(64)}))
+			.mutation(async ({input}) => {
+				if (!SUPPORTED_CLIS_SET.has(input.cli as CliName)) {
+					throw new TRPCError({
+						code: 'BAD_REQUEST',
+						message: `CLI_NOT_SUPPORTED: '${input.cli}' is not a known CLI agent (D-239-07 RCE boundary).`,
+					})
+				}
+				const cli = input.cli as CliName
+				if (!deps.writeLivMcpsToCliFn) {
+					throw new TRPCError({
+						code: 'PRECONDITION_FAILED',
+						message:
+							'installLivMcpsToCli requires production wire-up (writeLivMcpsToCliFn DI seam unfilled — home/fs missing)',
+					})
+				}
+				let targets
+				try {
+					targets = await readSystemMcpCatalog(deps.redis, {
+						info: deps.logger.info,
+						warn: deps.logger.warn,
+						error: (msg, err) => deps.logger.warn(msg, err),
+					})
+				} catch (err) {
+					deps.logger.warn(
+						'[mcp-config] installLivMcpsToCli — failed to read liv:mcp:config',
+						err,
+					)
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: 'Failed to read the Liv MCP catalog from Redis.',
+					})
+				}
+				if (targets.length === 0) {
+					deps.logger.warn(
+						`[mcp-config] installLivMcpsToCli cli=${cli} — EMPTY liv:mcp:config catalog (install seed missing)`,
+					)
+					return {
+						ok: true as const,
+						cli,
+						supported: true,
+						emptyCatalog: true,
+						written: [] as string[],
+						skippedExisting: [] as string[],
+					}
+				}
+				const servers: LivMcpDef[] = targets.map((t) => ({
+					name: t.name,
+					transport: t.cfg.transport,
+					command: t.cfg.command,
+					args: t.cfg.args,
+					env: t.cfg.env,
+					url: t.cfg.url,
+				}))
+				const r = await deps.writeLivMcpsToCliFn({cli, servers})
+				deps.logger.info(
+					`[mcp-config] installLivMcpsToCli cli=${cli} supported=${r.supported} written=${r.written.length} skipped=${r.skippedExisting.length}${r.path ? ` path=${r.path}` : ''}`,
+				)
+				return {
+					ok: r.ok,
+					cli,
+					supported: r.supported,
+					path: r.path,
+					written: r.written,
+					skippedExisting: r.skippedExisting,
+					emptyCatalog: false as const,
+				}
+			}),
 
 		// ── getAutoApprove ─────────────────────────────────────────────────────
 		// Phase 207 UAT 2026-05-24 round 4 — read the live auto-approve flag.
