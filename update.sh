@@ -101,7 +101,12 @@ exec > >(tee --output-error=warn-nopipe -a "$LIVOS_UPDATE_LOG_FILE") 2>&1
 DEPLOY_GUARD_SCRIPT="/opt/livos/livos-deploy-guard.sh"
 DEPLOY_GUARD_SENTINEL="/opt/livos/data/update/deploy-inflight"
 DEPLOY_GUARD_UNIT="livos-deploy-guard"
-DEPLOY_GUARD_DELAY=300
+# Invariant: the delay MUST exceed update.sh's own worst-case runtime from arm to
+# exit, so a slow-but-surviving deploy disarms BEFORE the guard fires. Layer-A's
+# rollback path is the worst case: restart (≤25s) + probe (≤120s) + restore +
+# restart (≤25s) + re-probe (≤120s) + tail ≈ 320s. 420s gives ~100s margin. (Even
+# if it fires early, the shared flock makes it bail while update.sh is alive.)
+DEPLOY_GUARD_DELAY=420
 
 # Heredoc-install the standalone guard (idempotent; mirrors ensure_*_dropin). The
 # guard runs AFTER update.sh is dead, so it is fully self-contained (own flock,
@@ -2042,7 +2047,9 @@ info "Restarting livos..."
 # before the restart (the cgroup-kill point). If this restart strands/kills
 # update.sh before Layer-A's probe runs, the guard rolls back to last-good on its
 # own. The EXIT trap disarms it on any clean exit, so it only fires on a SIGKILL.
-arm_deploy_guard
+# `|| true` keeps arming fail-open: a sentinel-write/systemd-run hiccup must never
+# abort the deploy itself (Layer-A still protects).
+arm_deploy_guard || true
 # Clear any latched failed-state FIRST — a box already crash-looping from a prior
 # bad deploy (the exact case this rescues) can refuse a plain `restart` with
 # "start request repeated too quickly" until reset-failed clears the latch.
