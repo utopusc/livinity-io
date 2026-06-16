@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 // This runs on UserPromptSubmit hook
 // It checks if the Nexus daemon has pending notifications
-const NEXUS_URL = process.env.NEXUS_URL || 'http://45.137.194.103:3200';
+// Phase 278: default to LOCAL liv-core (127.0.0.1:3200). NEXUS_URL is never
+// exported anywhere, so the old `45.137.194.103:3200` (Server4) default was what
+// actually RAN — these hooks polled a FOREIGN box on every non-bruce install.
+// liv-core listens on 127.0.0.1:3200 on the same box; set NEXUS_URL only to
+// override for a remote daemon.
+const NEXUS_URL = process.env.NEXUS_URL || 'http://127.0.0.1:3200';
 
 async function checkInbox() {
   try {
