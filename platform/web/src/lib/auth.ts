@@ -60,7 +60,8 @@ export async function createSession(
 
 export interface SessionUser {
   userId: string;
-  username: string;
+  /** Phase 274: null until the user picks one in /username (post-signup). */
+  username: string | null;
   email: string;
   emailVerified: boolean;
 }
@@ -70,7 +71,7 @@ export async function getSession(token: string): Promise<SessionUser | null> {
 
   const result = await pool.query<{
     user_id: string;
-    username: string;
+    username: string | null;
     email: string;
     email_verified: boolean;
   }>(

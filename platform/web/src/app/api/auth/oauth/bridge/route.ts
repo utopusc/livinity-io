@@ -70,7 +70,14 @@ export async function POST(req: NextRequest) {
       req.headers.get('user-agent') ?? undefined,
     );
 
-    const response = NextResponse.json({ ok: true, isNew: result.isNew });
+    // Phase 274: needsUsername drives the post-OAuth redirect — a user with no
+    // username yet (brand-new, or a returning user who never picked) goes to
+    // /username before /pricing|/dashboard.
+    const response = NextResponse.json({
+      ok: true,
+      isNew: result.isNew,
+      needsUsername: result.needsUsername,
+    });
     response.cookies.set(SESSION_COOKIE_NAME, sessionToken, {
       httpOnly: true,
       secure: true,
