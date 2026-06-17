@@ -130,7 +130,7 @@ const Icon = ({ name, size = 18, stroke = 1.5, ...rest }) => {
 };
 
 const Brand = ({ withText = true }) => (
-  <a href="#" className="brand">
+  <a href="/" className="brand">
     <span className="brand-mark" aria-hidden="true"></span>
     {withText && <span>Livinity</span>}
   </a>
@@ -169,6 +169,7 @@ const Nav = () => {
         <a href="#apps">App Library</a>
         <a href="#install">Self-Host</a>
         <a href="#developers">Developers</a>
+        <a href="/docs">Docs</a>
         <a href="#pricing">Pricing</a>
       </div>
       <div className="nav-cta">

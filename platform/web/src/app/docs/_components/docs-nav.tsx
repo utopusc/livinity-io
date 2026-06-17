@@ -1,20 +1,25 @@
 import Link from 'next/link';
 
+// NOTE: the live homepage at "/" is the static public/index.html SPA (not the
+// Next app/page.tsx), so links to the homepage use a plain <a> for a full
+// navigation — a Next <Link> would client-route to the shadowed page.tsx.
 export function DocsNav() {
   return (
     <nav className="docs-nav">
       <div className="docs-nav-inner">
-        <Link href="/docs" className="docs-brand">
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+        <a href="/" className="docs-brand">
           <span className="docs-brand-mark" aria-hidden="true" />
           <span>Livinity</span>
-          <span className="docs-brand-tag">Docs</span>
-        </Link>
+        </a>
         <div className="docs-nav-links">
-          <Link href="/">Home</Link>
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+          <a href="/#apps">App Library</a>
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+          <a href="/#pricing">Pricing</a>
           <Link href="/docs" className="is-active">
             Docs
           </Link>
-          <Link href="/download">Download</Link>
           <Link href="/login" className="docs-nav-cta">
             Sign in
           </Link>
