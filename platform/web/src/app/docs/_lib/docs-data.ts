@@ -5,6 +5,7 @@
 import { asc, eq } from 'drizzle-orm';
 import { db } from '@/lib/drizzle';
 import { docsArticles, docsCategories } from '@/db/schema';
+import { extractToc } from './toc';
 
 export type NavArticle = { slug: string; title: string };
 export type NavCategory = {
@@ -33,6 +34,53 @@ export type Category = {
   name: string;
   description: string;
 };
+
+// One published article, flattened for the client-side ⌘K search palette.
+// `headings` are precomputed (text + slug id) so a heading match can deep-link
+// straight to the on-page anchor. `content` is capped so the index stays small.
+export type SearchDoc = {
+  slug: string;
+  title: string;
+  description: string;
+  category_slug: string;
+  category_name: string;
+  content: string;
+  headings: { text: string; id: string }[];
+};
+
+const SEARCH_CONTENT_CAP = 6000;
+
+// Full search index over published articles. Sent to the client (via the docs
+// layout → nav) where filtering/ranking happens instantly with no round-trip.
+export async function getSearchIndex(): Promise<SearchDoc[]> {
+  const rows = await db
+    .select({
+      slug: docsArticles.slug,
+      title: docsArticles.title,
+      description: docsArticles.description,
+      content: docsArticles.content,
+      sort_order: docsArticles.sort_order,
+      category_slug: docsCategories.slug,
+      category_name: docsCategories.name,
+    })
+    .from(docsArticles)
+    .innerJoin(docsCategories, eq(docsArticles.category_id, docsCategories.id))
+    .where(eq(docsArticles.published, true))
+    .orderBy(asc(docsArticles.sort_order), asc(docsArticles.title));
+
+  return rows.map((r) => ({
+    slug: r.slug,
+    title: r.title,
+    description: r.description,
+    category_slug: r.category_slug,
+    category_name: r.category_name,
+    content:
+      r.content.length > SEARCH_CONTENT_CAP
+        ? r.content.slice(0, SEARCH_CONTENT_CAP)
+        : r.content,
+    headings: extractToc(r.content).map((h) => ({ text: h.text, id: h.id })),
+  }));
+}
 
 // Sidebar / index navigation: every category that has ≥1 published article,
 // with its published articles in sort order.

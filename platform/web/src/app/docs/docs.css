@@ -672,6 +672,169 @@
   color: var(--fg);
 }
 
+/* ---- Search: ⌘K palette ----------------------------------------------- */
+.docs-search-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px 7px 12px;
+  background: var(--bg-2);
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  color: var(--fg-mute);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.18s var(--ease), background 0.18s var(--ease),
+    color 0.18s var(--ease);
+}
+.docs-search-trigger:hover {
+  border-color: var(--line-strong);
+  background: var(--bg);
+  color: var(--fg);
+}
+.docs-search-trigger svg {
+  color: var(--fg-faint);
+  flex: none;
+}
+.docs-search-trigger kbd {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: var(--bg-3);
+  color: var(--fg-mute);
+  border: 1px solid var(--line);
+}
+
+.docs-search-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh 20px 24px;
+  background: rgba(20, 20, 22, 0.32);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: docs-search-fade 0.16s var(--ease);
+}
+@keyframes docs-search-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.docs-search-panel {
+  width: 100%;
+  max-width: 600px;
+  max-height: 76vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  box-shadow: 0 28px 80px -22px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+.docs-search-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.docs-search-input svg {
+  color: var(--fg-faint);
+  flex: none;
+}
+.docs-search-input input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--fg);
+  letter-spacing: -0.01em;
+}
+.docs-search-input input::placeholder {
+  color: var(--fg-faint);
+}
+.docs-search-input kbd {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1;
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: var(--bg-2);
+  color: var(--fg-mute);
+  border: 1px solid var(--line);
+  flex: none;
+}
+.docs-search-results {
+  overflow-y: auto;
+  padding: 8px;
+}
+.docs-search-hint,
+.docs-search-empty {
+  padding: 24px 14px;
+  font-size: 13.5px;
+  color: var(--fg-mute);
+  text-align: center;
+}
+.docs-search-result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 11px 14px;
+  border: none;
+  background: transparent;
+  border-radius: var(--r);
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+}
+.docs-search-result.is-active {
+  background: var(--bg-2);
+}
+.docs-search-result-cat {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-faint);
+  margin-bottom: 3px;
+}
+.docs-search-result-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--fg);
+  margin-bottom: 2px;
+}
+.docs-search-result-snip {
+  font-size: 12.5px;
+  color: var(--fg-mute);
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.docs-search-result-snip mark {
+  background: rgba(217, 119, 6, 0.18);
+  color: var(--fg);
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
 /* ---- Responsive -------------------------------------------------------- */
 @media (max-width: 1100px) {
   .docs-shell {
@@ -697,5 +860,15 @@
   }
   .docs-nav-links {
     gap: 18px;
+  }
+}
+@media (max-width: 640px) {
+  /* Collapse the search box to an icon button so the nav stays uncluttered. */
+  .docs-search-trigger {
+    padding: 7px;
+  }
+  .docs-search-trigger span,
+  .docs-search-trigger kbd {
+    display: none;
   }
 }
