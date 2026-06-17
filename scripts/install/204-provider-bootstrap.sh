@@ -140,5 +140,5 @@ else
 fi
 
 log "bootstrap complete. To verify:"
-log "  sudo -n -u bruce sudo /bin/systemctl status liv-claw-gateway >/dev/null && echo 'sudoers OK'"
+log "  sudo -n -u ${DESKTOP_USER} sudo /bin/systemctl status liv-claw-gateway >/dev/null && echo 'sudoers OK'"
 log "  stat -c '%a %U' /opt/livos/etc"
