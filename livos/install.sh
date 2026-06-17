@@ -1387,7 +1387,10 @@ ENVFILE
             liv_api_key=$(grep -E '^LIV_API_KEY=' "$LIVOS_DIR/.env" 2>/dev/null \
                 | sed -E 's|^LIV_API_KEY=(.*)$|\1|' | head -1)
         fi
-        local user_slug="${LIVOS_USER_SLUG:-bruce}"
+        # Phase 278 — neutral last-resort `livos` (was hardcoded 'bruce'); mirrors
+        # deploy-livinityd.sh:_dld_seed_mcp_servers so Path C / route.ts fallback
+        # doesn't seed a literal 'bruce' owner slug on a non-bruce box.
+        local user_slug="${LIVOS_USER_SLUG:-${LIVOS_DESKTOP_USER:-livos}}"
         local domain_root="${LIVOS_DOMAIN_ROOT:-livinity.io}"
 
         # Phase 252 (R6 / code-review WR-01) — resolve the desktop user's DISPLAY +
@@ -1399,6 +1402,12 @@ ENVFILE
         local _desktop_user="${DESKTOP_USER:-$user_slug}"
         local _desktop_uid
         _desktop_uid=$(id -u "$_desktop_user" 2>/dev/null || echo 1000)
+        # Phase 278 — the filesystem MCP root is seeded as __LIVOS_HOME__ (was a
+        # hardcoded /home/bruce). Resolve the desktop user's real home so the seed
+        # is correct on any operator box. Mirrors deploy-livinityd.sh:_dld_seed.
+        local _desktop_home
+        _desktop_home=$(getent passwd "$_desktop_user" 2>/dev/null | cut -d: -f6 || true)
+        [[ -n "$_desktop_home" ]] || _desktop_home="/home/${_desktop_user}"
         # Phase 276 — host display :1 removed; luse gets no default DISPLAY
         # (per-app display:":N" only; launch-by-name path needs none).
         local luse_display=""
@@ -1419,7 +1428,8 @@ ENVFILE
             -e "s|__LIVOS_USER_SLUG__|${user_slug}|g" \
             -e "s|__LIVOS_DOMAIN_ROOT__|${domain_root}|g" \
             -e "s|__LIVOS_DISPLAY__|${luse_display}|g" \
-            -e "s|__LIVOS_XAUTHORITY__|${luse_xauthority}|g")
+            -e "s|__LIVOS_XAUTHORITY__|${luse_xauthority}|g" \
+            -e "s|__LIVOS_HOME__|${_desktop_home}|g")
         if [[ -z "$substituted_json" ]]; then
             warn "Seed substitution produced empty JSON — skipping MCP seed"
             return 0
