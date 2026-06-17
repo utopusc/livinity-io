@@ -2632,11 +2632,32 @@ _dld_run_bruce_migration() {
     if [[ ! -f /etc/sudoers.d/livinityd ]]; then
         local frag="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livinityd"
         [[ -f "$frag" ]] || frag="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livinityd"
-        if [[ -f "$frag" ]] && visudo -cf "$frag" >/dev/null 2>&1; then
-            install -m 0440 -o root -g root "$frag" /etc/sudoers.d/livinityd
-            ok "sudoers fragment installed directly from ${frag} (marker-lock self-heal)"
+        # Phase 278 — the repo fragment hardcodes `bruce ALL=`/`=(bruce)`. The
+        # migration's install_sudoers_fragment templates these to the desktop user,
+        # but it is SKIPPED when the .bruce-migrated marker exists. In a
+        # marker-present-but-file-missing recovery state, installing the fragment
+        # VERBATIM lands a literal-`bruce` user-spec on a non-bruce box (its sudo
+        # grants then apply to nobody). Template the same way install_sudoers_fragment
+        # does, then visudo-check the TEMPLATED content before it lands.
+        if [[ -f "$frag" ]]; then
+            local _frag_tmp
+            _frag_tmp=$(mktemp)
+            if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+                sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                    "$frag" > "$_frag_tmp"
+            else
+                cp -f "$frag" "$_frag_tmp"
+            fi
+            if visudo -cf "$_frag_tmp" >/dev/null 2>&1; then
+                install -m 0440 -o root -g root "$_frag_tmp" /etc/sudoers.d/livinityd
+                rm -f "$_frag_tmp"
+                ok "sudoers fragment installed from ${frag} (templated user-spec: ${_DLD_DESKTOP_USER}, marker-lock self-heal)"
+            else
+                rm -f "$_frag_tmp"
+                fail "/etc/sudoers.d/livinityd missing and templated fragment from ${frag} failed visudo — daemon sudo paths (update/streaming/WebApps) would be dead" 75
+            fi
         else
-            fail "/etc/sudoers.d/livinityd missing and no valid fragment at ${frag} — daemon sudo paths (update/streaming/WebApps) would be dead" 75
+            fail "/etc/sudoers.d/livinityd missing and no fragment at ${frag} — daemon sudo paths (update/streaming/WebApps) would be dead" 75
         fi
     fi
     # Re-run/update parity: the stage dir dies at cleanup — keep copies where
