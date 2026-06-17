@@ -21,8 +21,8 @@
 - [ ] **ABUSE-01**: A monitored mailbox (`abuse@livinity.io`) is set as the Cloudflare account abuse contact
 - [ ] **ABUSE-02**: A Cloudflare abuse notification auto-creates an internal alert/ticket (24-hour response SLA)
 - [ ] **ABUSE-03**: Cloudflare CSAM Scanning Tool is enabled on the `livinity.io` zone
-- [ ] **ABUSE-04**: Admin can suspend a tenant (disable tunnel + DNS) from a single action
-- [ ] **ABUSE-05**: Terms/AUP grant Livinity the right to immediately suspend a tenant on an abuse finding
+- [x] **ABUSE-04**: Admin can suspend a tenant (disable tunnel + DNS) from a single action — `suspend`/`unsuspend` admin actions revoke CF DNS + set `suspended_at`; oracle (`subscription.ts`) makes `suspended` override legacy_free/comp/active billing; enforce-cron Pass 2 + stripe-sync exclude suspended from restore. (route/UI `2d8aee63`; migration `0023` + enforce guard `af15f3f0`)
+- [x] **ABUSE-05**: Terms/AUP grant Livinity the right to immediately suspend a tenant on an abuse finding — AUP §5 "Enforcement & Consequences" (immediate, without prior notice for severe violations). (Phase 279 legal docs `a056d359`)
 
 ### Cloudflare Compliance (CFC) — Phase 281 (P0)
 
@@ -43,8 +43,8 @@
 
 - [x] **QUOTA-01**: A per-user cap on app subdomains / DNS records is enforced before any Cloudflare create
 - [x] **QUOTA-02**: Provisioning runs through a queue with a concurrency cap and exponential backoff on HTTP 429
-- [ ] **QUOTA-03**: A daily reconciliation job deletes orphan DNS records that no longer map to an active subdomain
-- [ ] **QUOTA-04**: Zone DNS-record-count monitoring alerts at 80% of quota
+- [x] **QUOTA-03**: A daily reconciliation job deletes orphan DNS records that no longer map to an active subdomain — `/api/cron/reconcile-dns` enumerates the zone, classifies orphan tunnel CNAMEs (id not DB-tracked); REPORT-ONLY by default, deletes only aged `deleted-user-tunnel` orphans when `DNS_RECONCILE_DELETE=true`. (`af15f3f0`)
+- [x] **QUOTA-04**: Zone DNS-record-count monitoring alerts at 80% of quota — same cron emails the operator at ≥80% of `CF_ZONE_DNS_LIMIT` (and on a truncated enumeration). (`af15f3f0`)
 
 ### Cost Controls (COST) — Phase 284 (P2)
 
@@ -74,10 +74,10 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | LEGAL-01..08 | Phase 279 | Complete (shipped a056d359 + d1318d19, live-verified) |
-| ABUSE-01..05 | Phase 280 | Pending |
+| ABUSE-04,05 | Phase 280 | Complete (suspend `2d8aee63`+`af15f3f0`; AUP §5 `a056d359`) | | ABUSE-01..03 | Phase 280 | Pending (CF dashboard: abuse mailbox, alert webhook, CSAM tool) |
 | CFC-01..03 | Phase 281 | Pending |
 | HARDEN-01..06 | Phase 282 | Complete (e2281ede, live-verified 429) |
-| QUOTA-01 | Phase 283 | Complete (fd01d4d2) | | QUOTA-02..04 | Phase 283 | Pending |
+| QUOTA-01..04 | Phase 283 | Complete (`fd01d4d2`/`9852978a`/`af15f3f0`) |
 | COST-03,04 | Phase 284 | Complete (5755ce40) | | COST-01,02,05 | Phase 284 | Pending (Vercel/CF dashboard) |
 
 **Coverage:**
