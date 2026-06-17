@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
 
   let encryptedToken: Buffer;
   try {
-    encryptedToken = await encryptToken(cf.tunnel_token);
+    encryptedToken = await encryptToken(cf.tunnel_token, user.id);
   } catch (err) {
     return NextResponse.json(
       { error: `Token encryption failed: ${err instanceof Error ? err.message : String(err)}` },

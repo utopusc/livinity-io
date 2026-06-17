@@ -117,6 +117,17 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ── Housekeeping: prune expired rate-limit windows (Phase 282 rate_limits).
+  // The limiter reuses a row per key, but keys that go quiet linger; drop any
+  // window that ended over an hour ago so the table stays small. ────────────
+  try {
+    await pool.query(`DELETE FROM rate_limits WHERE reset_at < NOW() - INTERVAL '1 hour'`);
+  } catch (err) {
+    if ((err as { code?: string })?.code !== '42P01') {
+      console.error('[billing-enforce] rate_limits cleanup failed:', err);
+    }
+  }
+
   console.info(
     `[billing-enforce] sweep done: checked=${candidates.rows.length} revoked=${revoked.length} restored=${restored.length} errors=${errors.length}`,
   );

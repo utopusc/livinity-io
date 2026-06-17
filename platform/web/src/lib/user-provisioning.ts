@@ -71,7 +71,7 @@ export async function ensureProvisionedByCustomerId(customerId: string): Promise
     // provisioner blocks until we commit/rollback (bounded by CF request
     // timeouts) — guarantees exactly one tunnel per user.
     cf = await provisionUserHostnames(user.username);
-    const encryptedToken = await encryptToken(cf.tunnel_token);
+    const encryptedToken = await encryptToken(cf.tunnel_token, user.id);
 
     await client.query(
       `UPDATE users

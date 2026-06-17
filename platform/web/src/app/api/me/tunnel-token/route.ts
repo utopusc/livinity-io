@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
   //    client errors.
   let token: string;
   try {
-    token = await decryptToken(blob);
+    token = await decryptToken(blob, auth.userId);
   } catch (err) {
     console.error(
       `[140-05/tunnel-token] decrypt failed for user_id=${auth.userId}`,
