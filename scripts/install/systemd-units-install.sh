@@ -43,6 +43,23 @@ _repo_systemd_dir="${SCRIPT_DIR}/../../systemd"
 _install_systemd_dir="${SCRIPT_DIR}/systemd"
 _seeds_dir="${SCRIPT_DIR}/seeds"
 
+# Phase 278 — livos-app-liv-ai.service hardcodes User=bruce/Group=bruce. Installing
+# it VERBATIM pins the Next.js subapp to user bruce on a non-bruce box → 217/USER →
+# /liv-ai-app/* 502, and the byte-vs-source cmp re-clobbers a corrected box on every
+# run. Resolve the desktop user (same chain as 204-provider-bootstrap.sh /
+# _set_desktop_identity) and template that one unit before install. Neutral
+# last-resort `livos`.
+_DESKTOP_USER="${LIVOS_DESKTOP_USER:-${DESKTOP_USER:-}}"
+if [[ -z "${_DESKTOP_USER}" ]]; then
+    _DESKTOP_USER="$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1 || true)"
+fi
+if [[ -z "${_DESKTOP_USER}" ]]; then
+    _DESKTOP_USER="$(getent passwd | awk -F: '$3>=1000 && $3<65534 {print $1; exit}' || true)"
+fi
+[[ -n "${_DESKTOP_USER}" ]] || _DESKTOP_USER="livos"
+_DESKTOP_HOME="$(getent passwd "${_DESKTOP_USER}" 2>/dev/null | cut -d: -f6 || true)"
+[[ -n "${_DESKTOP_HOME}" ]] || _DESKTOP_HOME="/home/${_DESKTOP_USER}"
+
 _installed_any=0
 _skipped_any=0
 _missing_any=0
@@ -63,15 +80,29 @@ for _unit in "${_units[@]}"; do
         continue
     fi
 
+    # Phase 278 — render the desktop-user-hardcoded unit before install/cmp so the
+    # cmp guard compares TEMPLATED content vs installed (no re-clobber to bruce).
+    # Other units carry no User= line; the sed is a no-op there, but we only pay the
+    # temp cost for the one unit that needs it.
+    _render_src="$_src"
+    _render_tmp=""
+    if [[ "$_unit" == "livos-app-liv-ai.service" ]]; then
+        _render_tmp="$(mktemp)"
+        sed -E "s/^(User=)bruce$/\1${_DESKTOP_USER}/; s/^(Group=)bruce$/\1${_DESKTOP_USER}/; s#/home/bruce#${_DESKTOP_HOME}#g" \
+            "$_src" > "$_render_tmp"
+        _render_src="$_render_tmp"
+    fi
+
     _dst="/etc/systemd/system/${_unit}"
-    if [[ -f "$_dst" ]] && cmp -s "$_src" "$_dst"; then
+    if [[ -f "$_dst" ]] && cmp -s "$_render_src" "$_dst"; then
         ok "✓ ${_unit} already installed (byte-identical)"
         _skipped_any=$((_skipped_any + 1))
     else
         info "Installing ${_unit} → ${_dst}"
-        install -m 0644 -o root -g root "$_src" "$_dst"
+        install -m 0644 -o root -g root "$_render_src" "$_dst"
         _installed_any=$((_installed_any + 1))
     fi
+    [[ -n "$_render_tmp" ]] && rm -f "$_render_tmp"
 done
 
 # daemon-reload only if we actually wrote a new unit (cheap, but stay precise).
