@@ -898,6 +898,59 @@ describe('Phase 237 — split subresource matchers (@liv_ws + @liv_api_subresour
 		)
 	})
 
+	// 2026-06-17 — AionUi v2.1.19 avatar-404 fix. Builtin-assistant avatars are
+	// served as backend-built absolute URLs /api/assistants/<name>/avatar; the
+	// value comes from the aioncore API response (NOT a bundle source literal),
+	// so the install-liv-assistant.sh "/api -> "/liv/api sed CANNOT rewrite it.
+	// The bare URL escapes the iframe /liv prefix -> livinityd 404. Routed at
+	// Caddy (same bug class as @aionui_assets), but GATED — the broad
+	// /api/assistants/* surface must stay auth-protected like /liv/api/*.
+	it('apex @aionui_avatar handle routes bare /api/assistants/* to :3020, GATED (forward_auth), no strip_prefix', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		expect(out).toContain('@aionui_avatar path /api/assistants/*')
+		expect(out).toContain('handle @aionui_avatar {')
+		const idx = out.indexOf('handle @aionui_avatar {')
+		expect(idx).toBeGreaterThan(-1)
+		// Body ends where the adjacent @webapp_stream_ws matcher begins (the
+		// avatar handle is emitted immediately after @aionui_assets inside
+		// LIV_ASSISTANT_SUBRESOURCE_HANDLE, and @webapp_stream_ws follows it).
+		const end = out.indexOf('@webapp_stream_ws', idx)
+		expect(end).toBeGreaterThan(idx)
+		const block = out.slice(idx, end)
+		// GATED — forward_auth to livinityd /auth/verify (NOT ungated like the
+		// static-logo @aionui_assets).
+		expect(block).toContain('forward_auth 127.0.0.1:8080')
+		expect(block).toContain('uri /auth/verify')
+		// Proxies to the AionUi backend with XFO/CSP stripped.
+		expect(block).toContain('reverse_proxy 127.0.0.1:3020')
+		expect(block).toContain('header_down -X-Frame-Options')
+		expect(block).toContain('header_down -Content-Security-Policy')
+		// NO strip_prefix — :3020 expects the bare /api/... path (no /liv).
+		expect(block).not.toContain('strip_prefix')
+	})
+
+	it('@aionui_avatar handle is present in the multi-user subdomain block too (all emit sites)', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'livinity.io',
+				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
+			},
+			true,
+			false,
+			[],
+		)
+		const subBlockStart = out.indexOf('bruce.livinity.io {')
+		expect(subBlockStart).toBeGreaterThan(-1)
+		expect(
+			out.indexOf('@aionui_avatar path /api/assistants/*', subBlockStart),
+		).toBeGreaterThan(subBlockStart)
+	})
+
 	it('OLD Phase 236 `@liv_subresource` combined matcher is GONE (no /api/* /ws /ws/* token list)', () => {
 		const out = generateFullCaddyfile(
 			{mainDomain: 'bruce.livinity.io', subdomains: []},
