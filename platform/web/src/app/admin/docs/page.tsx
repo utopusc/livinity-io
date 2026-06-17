@@ -51,6 +51,12 @@ function ListInner() {
     return m;
   }, [cats]);
 
+  const catSlug = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of cats) m.set(c.id, c.slug);
+    return m;
+  }, [cats]);
+
   async function handleDelete(slug: string, title: string) {
     if (!confirm(`Delete "${title}" (${slug})?\n\nThis removes the article from livinity.io/docs immediately.`)) {
       return;
@@ -140,6 +146,18 @@ function ListInner() {
                       {new Date(row.updated_at).toLocaleDateString()}
                     </td>
                     <td className="actions">
+                      {catSlug.get(row.category_id) && (
+                        // Opens the real /docs URL in a new tab; admins see
+                        // drafts there (preview-auth), the public still 404s.
+                        <a
+                          href={`/docs/${catSlug.get(row.category_id)}/${row.slug}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn ghost sm"
+                        >
+                          {row.published ? 'View ↗' : 'Preview ↗'}
+                        </a>
+                      )}
                       <Link href={`/admin/docs/${row.slug}`} className="btn ghost sm">
                         Edit
                       </Link>

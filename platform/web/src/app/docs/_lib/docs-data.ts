@@ -147,11 +147,15 @@ export async function getFeatured(limit = 6): Promise<(Article & { category_slug
   return chosen.map((r) => ({ ...r, updated_at: String(r.updated_at) }));
 }
 
-// A single published article + its category, addressed by category slug + article slug.
+// A single article + its category, addressed by category slug + article slug.
+// By default only published articles resolve; pass `includeUnpublished` (set by
+// the page for admin viewers) to also resolve drafts for preview. The returned
+// `published` flag lets the page render a "Draft" banner.
 export async function getArticle(
   categorySlug: string,
   articleSlug: string,
-): Promise<{ article: Article; category: Category } | null> {
+  opts: { includeUnpublished?: boolean } = {},
+): Promise<{ article: Article; category: Category; published: boolean } | null> {
   const [cat] = await db
     .select()
     .from(docsCategories)
@@ -164,10 +168,12 @@ export async function getArticle(
     .from(docsArticles)
     .where(eq(docsArticles.slug, articleSlug))
     .limit(1);
-  if (!a || !a.published || a.category_id !== cat.id) return null;
+  if (!a || a.category_id !== cat.id) return null;
+  if (!a.published && !opts.includeUnpublished) return null;
 
   return {
     category: { id: cat.id, slug: cat.slug, name: cat.name, description: cat.description },
+    published: a.published,
     article: {
       id: a.id,
       slug: a.slug,
