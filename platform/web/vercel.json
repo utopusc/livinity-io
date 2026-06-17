@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/reconcile-dns",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/abuse-scan",
+      "schedule": "0 5 * * *"
     }
   ]
 }

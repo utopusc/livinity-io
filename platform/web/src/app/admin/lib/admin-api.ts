@@ -448,6 +448,35 @@ export function getBandwidth(opts: { period?: string } = {}): Promise<BandwidthR
   return adminGet<BandwidthResult>(`/api/admin/bandwidth${qs ? `?${qs}` : ''}`);
 }
 
+// ---------------------------------------------------------------------------
+// Phase 280/283: per-tenant abuse/risk signals (the "Abuse" panel). Backed by
+// the daily abuse-scan cron (egress + reputation) + live signals. DEFENSIVE:
+// when abuse_signals isn't migrated yet, signalsAvailable=false and the
+// cron-computed fields come back null.
+// ---------------------------------------------------------------------------
+export type AbuseSignalRow = {
+  user_id: string;
+  username: string;
+  suspended: boolean;
+  revoked: boolean;
+  subdomain_count: number;
+  egress_24h_bytes: number | null;
+  egress_flagged: boolean;
+  reputation: 'clean' | 'flagged' | 'unknown';
+  reputation_detail: string | null;
+  scanned_at: string | null;
+  level: 'ok' | 'watch' | 'high';
+};
+
+export type AbuseSignalsResult = {
+  signals: AbuseSignalRow[];
+  signalsAvailable: boolean;
+};
+
+export function getAbuseSignals(): Promise<AbuseSignalsResult> {
+  return adminGet<AbuseSignalsResult>('/api/admin/abuse-signals');
+}
+
 export type SyncCatalogResult = {
   repo: string;
   ref: string;
