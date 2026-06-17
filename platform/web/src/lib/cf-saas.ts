@@ -177,6 +177,27 @@ function shouldRetry(status: number, errCode?: string): boolean {
   return false;
 }
 
+// QUOTA-02 (v46.0): parse CF's rate-limit headers into a wait (ms), capped, or
+// null if absent. `Retry-After` is in seconds; `cf-ratelimit-reset` is a unix
+// timestamp. Honoring these rides out the 1200-req/5min cap exactly instead of
+// guessing with a fixed backoff.
+function retryAfterMs(res: Response): number | null {
+  const ra = res.headers.get('retry-after');
+  if (ra) {
+    const secs = Number(ra);
+    if (Number.isFinite(secs) && secs >= 0) return Math.min(secs * 1000, 30_000) + jitter(200);
+  }
+  const reset = res.headers.get('cf-ratelimit-reset');
+  if (reset) {
+    const resetUnix = Number(reset);
+    if (Number.isFinite(resetUnix)) {
+      const deltaMs = resetUnix * 1000 - Date.now();
+      if (deltaMs > 0) return Math.min(deltaMs, 30_000) + jitter(200);
+    }
+  }
+  return null;
+}
+
 interface CfEnvelope<T> {
   success: boolean;
   errors: Array<{ code: number; message: string }>;
@@ -231,8 +252,10 @@ async function callCf<T>(env: CfEnv, opts: CallOpts): Promise<T> {
 
       if (!res.ok) {
         if (shouldRetry(res.status) && attempt < MAX_RETRIES) {
-          const wait = jitter(BACKOFF_BASE_MS[attempt]);
-              console.warn(
+          // QUOTA-02: honor CF's Retry-After / cf-ratelimit-reset header on a
+          // 429 so we wait exactly as long as CF asks; else fixed backoff.
+          const wait = retryAfterMs(res) ?? jitter(BACKOFF_BASE_MS[attempt]);
+          console.warn(
             `[cf-saas] retry ${attempt + 1}/${MAX_RETRIES} after ${wait}ms — ${opts.method} ${opts.path} status=${res.status}`,
           );
           await sleep(wait);
