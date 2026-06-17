@@ -1912,6 +1912,40 @@ fi
 # re-run) so the restart step below has a unit to manage.
 step "Phase 201-06: install livos-app-liv-ai.service unit (if missing)"
 
+# ── Phase 278 — render the AI unit per box (de-hardcode User=bruce) ───────────
+# The repo unit (scripts/install/systemd/livos-app-liv-ai.service) hardcodes
+# User=bruce/Group=bruce. update.sh USED to `install` it VERBATIM — which on a
+# non-bruce box pinned the Next.js subapp to user bruce → systemd 217/USER →
+# /liv-ai-app/* 502. Worse: the byte-vs-source cmp guard compared repo-source
+# (User=bruce) vs installed (User=jack) → mismatch → RE-CLOBBERED to User=bruce
+# on EVERY update. This helper mirrors _render_liv_assistant_unit EXACTLY: derive
+# the desktop identity, sed the unit, and cmp the TEMPLATED content vs installed
+# (so a correct box is `unchanged` — no re-clobber, no daemon-reload churn).
+#
+# Sets globals for the caller: _LAI_USER, _LAI_HOME, _LAI_UNIT_STATUS
+# (changed|unchanged|error). Always returns 0 (best-effort; source-missing case
+# is reflected as _LAI_UNIT_STATUS=error).
+_render_liv_ai_unit() {
+    local src="$1" dst="$2" tmp
+    _LAI_UNIT_STATUS=error; _LAI_USER=""; _LAI_HOME=""   # set -u safety on early-return
+    [[ -f "$src" ]] || return 0
+    # Phase 277.1 — single source of truth for the desktop identity (no literal bruce).
+    _set_desktop_identity
+    _LAI_USER="$_DESKTOP_USER"; _LAI_HOME="$_DESKTOP_HOME"
+    tmp="${dst}.tmp.$$"
+    sed -E "s/^(User=)bruce$/\1${_LAI_USER}/; s/^(Group=)bruce$/\1${_LAI_USER}/; s#/home/bruce#${_LAI_HOME}#g" \
+        "$src" > "$tmp"
+    if [[ ! -f "$dst" ]] || ! cmp -s "$tmp" "$dst"; then
+        install -m 0644 -o root -g root "$tmp" "$dst"
+        systemctl daemon-reload 2>/dev/null || true
+        _LAI_UNIT_STATUS=changed
+    else
+        _LAI_UNIT_STATUS=unchanged
+    fi
+    rm -f "$tmp"
+    return 0
+}
+
 _LIV_AI_UNIT_SRC="$LIVOS_DIR/../scripts/install/systemd/livos-app-liv-ai.service"
 # Fallback to TEMP_DIR location (fresh clone) if the on-disk path isn't there.
 if [[ ! -f "$_LIV_AI_UNIT_SRC" && -d "${TEMP_DIR:-}" ]]; then
@@ -1920,13 +1954,14 @@ fi
 
 if [[ -f "$_LIV_AI_UNIT_SRC" ]]; then
     _LIV_AI_UNIT_DST="/etc/systemd/system/livos-app-liv-ai.service"
-    if [[ ! -f "$_LIV_AI_UNIT_DST" ]] || ! cmp -s "$_LIV_AI_UNIT_SRC" "$_LIV_AI_UNIT_DST"; then
-        install -m 0644 -o root -g root "$_LIV_AI_UNIT_SRC" "$_LIV_AI_UNIT_DST"
-        systemctl daemon-reload
+    # Phase 278: render+cmp through the helper (templated User=desktop), not a
+    # verbatim install with a source-vs-installed cmp (that re-clobbered to bruce).
+    _render_liv_ai_unit "$_LIV_AI_UNIT_SRC" "$_LIV_AI_UNIT_DST"
+    if [[ "$_LAI_UNIT_STATUS" == changed ]]; then
         systemctl enable livos-app-liv-ai.service 2>/dev/null || true
-        ok "livos-app-liv-ai.service installed at $_LIV_AI_UNIT_DST"
+        ok "livos-app-liv-ai.service installed (User=${_LAI_USER}) at $_LIV_AI_UNIT_DST"
     else
-        ok "livos-app-liv-ai.service already byte-identical"
+        ok "livos-app-liv-ai.service already current (User=${_LAI_USER})"
     fi
 else
     info "livos-app-liv-ai.service source not found — skipping install (Caddy /liv-ai-app/* will 502 until unit lands)"
