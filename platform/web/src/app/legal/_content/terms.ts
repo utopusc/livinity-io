@@ -20,7 +20,7 @@ You are responsible for the hardware on which you run LivOS, for its security an
 
 ## 2. Eligibility & Accounts
 
-You must be at least 18 years old, or the age of majority in your jurisdiction, to use the Service. You agree to provide accurate registration information, to keep your password and API keys confidential, and to be responsible for all activity under your account. Notify us immediately at everything@gmail.com of any unauthorized use. We may refuse, suspend, or reclaim usernames, including for trademark, impersonation, or abuse reasons.
+You must be at least 18 years old, or the age of majority in your jurisdiction, to use the Service. You agree to provide accurate registration information, to keep your password and API keys confidential, and to be responsible for all activity under your account. Notify us immediately at everything@livinity.io of any unauthorized use. We may refuse, suspend, or reclaim usernames, including for trademark, impersonation, or abuse reasons.
 
 ## 3. Subscriptions, Trials & Billing
 
@@ -76,5 +76,5 @@ These Terms, together with the policies incorporated by reference, are the entir
 
 ## 16. Contact
 
-Questions about these Terms: everything@gmail.com · Livinity Inc., 5630 Mission St #322, San Francisco, CA 94110.`,
+Questions about these Terms: everything@livinity.io · Livinity Inc., 5630 Mission St #322, San Francisco, CA 94110.`,
 };

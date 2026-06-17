@@ -17,13 +17,13 @@ Where a free trial is offered, you will not be charged during the trial. Unless 
 
 ## 3. Cancelling
 
-You can cancel at any time from your account settings (or by contacting everything@gmail.com). Cancellation stops future renewals. **Your subscription remains active until the end of the current billing period**, and you keep access until then. We do not provide partial-period credits except where required by law.
+You can cancel at any time from your account settings (or by contacting everything@livinity.io). Cancellation stops future renewals. **Your subscription remains active until the end of the current billing period**, and you keep access until then. We do not provide partial-period credits except where required by law.
 
 ## 4. Refunds
 
 Fees are generally non-refundable, including for partial billing periods and for periods during which you did not use the Service. We may, at our discretion, grant a refund — for example for a duplicate charge, a billing error, or a documented inability to use the Service caused by us.
 
-**Statutory rights are preserved.** Where mandatory consumer-protection law gives you a refund or withdrawal right (for example, the EU/UK 14-day right of withdrawal for consumers, subject to its conditions), that right applies regardless of this section. To request a refund, contact everything@gmail.com with your account email and the charge details.
+**Statutory rights are preserved.** Where mandatory consumer-protection law gives you a refund or withdrawal right (for example, the EU/UK 14-day right of withdrawal for consumers, subject to its conditions), that right applies regardless of this section. To request a refund, contact everything@livinity.io with your account email and the charge details.
 
 ## 5. Failed Payments & Suspension
 
@@ -39,5 +39,5 @@ We may change subscription prices on prospective notice. Changes take effect at 
 
 ## 8. Contact
 
-Billing questions: everything@gmail.com · Livinity Inc., 5630 Mission St #322, San Francisco, CA 94110.`,
+Billing questions: everything@livinity.io · Livinity Inc., 5630 Mission St #322, San Francisco, CA 94110.`,
 };
