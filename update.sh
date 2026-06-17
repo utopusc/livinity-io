@@ -1967,6 +1967,40 @@ else
     info "livos-app-liv-ai.service source not found — skipping install (Caddy /liv-ai-app/* will 502 until unit lands)"
 fi
 
+# ── Step 7.7b: cloudflared auto-recovery drop-in (reboot/power-loss resilience) ─
+# The CF Tunnel is livinity's public ingress; it MUST come back on its own after
+# a reboot, power loss, or a transient boot-time DNS/network race. cloudflared's
+# stock unit has Restart=on-failure, but systemd's default StartLimit can give up
+# after repeated quick failures. This idempotent drop-in (mirrors mode-tunnel.sh
+# _ensure_cloudflared_resilience_dropin) makes it restart on ANY exit and retry
+# FOREVER. Applied on every update so EXISTING boxes get it too — mode-tunnel.sh
+# only writes it at fresh-install time. No-op when cloudflared isn't installed
+# (local / non-tunnel mode).
+if [[ -f /etc/systemd/system/cloudflared.service ]]; then
+    _cfd_dropin_dir="/etc/systemd/system/cloudflared.service.d"
+    _cfd_dropin="${_cfd_dropin_dir}/livos-resilience.conf"
+    install -d -m 0755 "$_cfd_dropin_dir" 2>/dev/null || true
+    _cfd_want="$(cat <<'CONF'
+# Managed by LivOS (update.sh) — auto-recover the CF Tunnel after reboot /
+# power loss / transient boot-time DNS or network races. Do not edit by hand.
+[Unit]
+StartLimitIntervalSec=0
+
+[Service]
+Restart=always
+RestartSec=5s
+CONF
+)"
+    if [[ ! -f "$_cfd_dropin" ]] || [[ "$(cat "$_cfd_dropin" 2>/dev/null)" != "$_cfd_want" ]]; then
+        printf '%s\n' "$_cfd_want" > "$_cfd_dropin" 2>/dev/null || true
+        chmod 0644 "$_cfd_dropin" 2>/dev/null || true
+        systemctl daemon-reload 2>/dev/null || true
+        ok "cloudflared resilience drop-in written (auto-recovers on reboot/power-loss)"
+    else
+        ok "cloudflared resilience drop-in already current"
+    fi
+fi
+
 # ── Step 7.8: Phase 203-03 — install liv-claw-gateway.service unit (if missing) ──
 # Mirror of Step 7.7's idempotent pattern for the new gateway unit. update.sh
 # runs on pre-existing deploys that may not have re-run install.sh; copy the

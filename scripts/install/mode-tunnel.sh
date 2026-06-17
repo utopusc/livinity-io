@@ -191,6 +191,39 @@ _write_cf_tunnel_token_secret() {
     set_livos_redis_key "livos:domain:cf_tunnel_token_secret_ref" "$secret_file"
 }
 
+# LivOS resilience drop-in — make the Cloudflare Tunnel auto-recover after a
+# reboot, power loss, or a transient boot-time DNS/network race. cloudflared's
+# stock unit (from `cloudflared service install`) already has
+# Restart=on-failure + network-online ordering; this layers a drop-in that
+# restarts on ANY exit AND retries FOREVER (StartLimitIntervalSec=0 removes
+# systemd's give-up-after-N-failures cap), so livinity always comes back on its
+# own without operator intervention. Idempotent (no-op when already current).
+_ensure_cloudflared_resilience_dropin() {
+    local dropin_dir="/etc/systemd/system/cloudflared.service.d"
+    local dropin="${dropin_dir}/livos-resilience.conf"
+    install -d -m 0755 "$dropin_dir"
+    local want
+    want="$(cat <<'CONF'
+# Managed by LivOS (mode-tunnel.sh) — auto-recover the CF Tunnel after reboot /
+# power loss / transient boot-time DNS or network races. Do not edit by hand.
+[Unit]
+StartLimitIntervalSec=0
+
+[Service]
+Restart=always
+RestartSec=5s
+CONF
+)"
+    if [[ ! -f "$dropin" ]] || [[ "$(cat "$dropin" 2>/dev/null)" != "$want" ]]; then
+        printf '%s\n' "$want" > "$dropin"
+        chmod 0644 "$dropin"
+        systemctl daemon-reload 2>/dev/null || true
+        ok "cloudflared resilience drop-in written (auto-recovers on reboot/power-loss)"
+    else
+        ok "cloudflared resilience drop-in already current"
+    fi
+}
+
 _register_cloudflared_service() {
     step "Registering cloudflared as a systemd service"
 
@@ -234,6 +267,7 @@ _register_cloudflared_service() {
         ok "cloudflared.service already registered — restarting to pick up token"
         systemctl restart cloudflared.service \
             || warn "cloudflared restart returned non-zero (check 'journalctl -u cloudflared')"
+        _ensure_cloudflared_resilience_dropin
         return 0
     fi
 
@@ -259,6 +293,8 @@ _register_cloudflared_service() {
     systemctl daemon-reload 2>/dev/null || true
     systemctl enable --now cloudflared.service 2>&1 \
         || warn "systemctl enable cloudflared returned non-zero (may already be enabled)"
+
+    _ensure_cloudflared_resilience_dropin
 
     if ! systemctl is-active cloudflared.service &>/dev/null; then
         warn "cloudflared.service not active — check 'journalctl -u cloudflared'"
