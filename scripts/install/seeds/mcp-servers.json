@@ -1,9 +1,9 @@
 {
   "_meta": {
-    "exported_from": "Mini PC bruce@10.69.31.68 liv:mcp:config",
+    "exported_from": "a reference LivOS box's liv:mcp:config",
     "exported_at": "2026-05-26",
     "phase": "219-T2",
-    "_note": "Placeholder tokens (surrounded by double underscores) in this file are substituted at install-time by _dld_seed_mcp_servers helper: __LIVOS_REDIS_URL__ ← REDIS_URL from /opt/livos/.env; __LIVOS_LIV_API_KEY__ ← LIV_API_KEY from /opt/livos/.env; __LIVOS_USER_SLUG__ ← single-user owner slug (default 'bruce' on Mini PC v43); __LIVOS_DOMAIN_ROOT__ ← per-host LivOS domain (default 'livinity.io'). installedAt is 0 because seed installs have no meaningful install epoch. Phase 219 T2: 15+ curated MCPs across categories (search, dev, files, productivity, system, database, web). Phase 245.1 (hot-fix 2026-05-28): all 5 system MCPs (luse + liv-apps + liv-docker + liv-system + liv-vault) ship enabled:true because operator declared them mandatory; the 4 local liv-* MCPs gained LIVINITYD_API_URL + LIV_API_KEY env to talk back to livinityd; luse gained LIVINITYD_API_URL + LIV_API_KEY + LUSE_USER_SLUG + LUSE_DOMAIN_ROOT so the [luse-mcp] resolver env-thread is complete (was emitting 'env-thread incomplete; falling back to APP_MAP' + redis=null in production). Non-system MCPs (sequential-thinking + the search/dev/files/productivity/database/web set) remain enabled:false — operators opt in via /settings → MCP. T3 added 4 local liv-* MCPs (system category)."
+    "_note": "Placeholder tokens (surrounded by double underscores) in this file are substituted at install-time by _dld_seed_mcp_servers helper: __LIVOS_REDIS_URL__ ← REDIS_URL from /opt/livos/.env; __LIVOS_LIV_API_KEY__ ← LIV_API_KEY from /opt/livos/.env; __LIVOS_USER_SLUG__ ← operator owner slug (LIVOS_USER_SLUG / LIVOS_SUBDOMAIN / desktop user; neutral 'livos' last-resort, Phase 278); __LIVOS_DOMAIN_ROOT__ ← per-host LivOS domain (default 'livinity.io'); __LIVOS_HOME__ ← the desktop user's home (filesystem MCP root, Phase 278). installedAt is 0 because seed installs have no meaningful install epoch. Phase 219 T2: 15+ curated MCPs across categories (search, dev, files, productivity, system, database, web). Phase 245.1 (hot-fix 2026-05-28): all 5 system MCPs (luse + liv-apps + liv-docker + liv-system + liv-vault) ship enabled:true because operator declared them mandatory; the 4 local liv-* MCPs gained LIVINITYD_API_URL + LIV_API_KEY env to talk back to livinityd; luse gained LIVINITYD_API_URL + LIV_API_KEY + LUSE_USER_SLUG + LUSE_DOMAIN_ROOT so the [luse-mcp] resolver env-thread is complete (was emitting 'env-thread incomplete; falling back to APP_MAP' + redis=null in production). Non-system MCPs (sequential-thinking + the search/dev/files/productivity/database/web set) remain enabled:false — operators opt in via /settings → MCP. T3 added 4 local liv-* MCPs (system category)."
   },
   "mcpServers": {
     "brave-search": {
@@ -161,7 +161,7 @@
         "LIVINITYD_API_URL": "http://127.0.0.1:8080",
         "LIV_API_KEY": "__LIVOS_LIV_API_KEY__"
       },
-      "description": "Note CRUD over ~bruce/livinity/<agent>/notes/. Write + delete are destructive (gated).",
+      "description": "Note CRUD over the desktop user's ~/livinity/<agent>/notes/. Write + delete are destructive (gated).",
       "category": "system",
       "enabled": true,
       "installedAt": 0
