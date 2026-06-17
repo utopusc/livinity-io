@@ -301,7 +301,7 @@ export function AppForm({ initial }: { initial?: AdminApp }) {
             </div>
           </div>
           <div className="form-help">
-            Max 2 MB · PNG / JPEG / WebP / SVG. Stored at{' '}
+            Max 8 MB · PNG / JPEG / WebP / SVG. Stored at{' '}
             <code>app-icons/{state.slug || '<slug>'}/…</code>
           </div>
         </div>
