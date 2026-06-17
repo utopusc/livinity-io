@@ -76,5 +76,5 @@ These Terms, together with the policies incorporated by reference, are the entir
 
 ## 16. Contact
 
-Questions about these Terms: everything@livinity.io · Livinity Inc., 5630 Mission St #322, San Francisco, CA 94110.`,
+Questions about these Terms: everything@livinity.io · Livinity Inc., 5630 Mission St #322, San Francisco, CA 94112.`,
 };
