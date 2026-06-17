@@ -622,6 +622,16 @@ const LIV_ASSISTANT_SUBRESOURCE_HANDLE = `\t# AionUI builds logo URLs as absolut
 ${WS_TRANSPORT_BODY}
 \t\t}
 \t}
+\t# AionUi serves builtin-assistant avatars as backend-built ABSOLUTE URLs /api/assistants/<name>/avatar. The avatar VALUE comes from the aioncore API response (the assistant object's .avatar field) — it is NOT a bundle source literal, so the install-liv-assistant.sh "/api -> "/liv/api sed CANNOT rewrite it (the bundle's only quoted "/api/assistants/" is a startsWith() CHECK, not the request URL). The img src is therefore always the bare /api/assistants/<name>/avatar, which escapes the iframe /liv prefix and falls through to livinityd -> 404 (~20x console spam). Same bug class as @aionui_assets (2026-06-10). Route the bare assistants namespace to :3020, GATED with forward_auth (LIV_GATE_BODY) so the broad /api/assistants/* surface stays auth-protected exactly like /liv/api/* — NOT ungated like the static-logo @aionui_assets. No strip_prefix: :3020 expects the bare /api/... path (no /liv to strip). The avatar <img> carries LIVINITY_SESSION (path=/, host-only, same-site) so forward_auth passes. 2026-06-17.
+\t@aionui_avatar path /api/assistants/*
+\thandle @aionui_avatar {
+${LIV_GATE_BODY}
+\t\treverse_proxy 127.0.0.1:3020 {
+\t\t\theader_down -X-Frame-Options
+\t\t\theader_down -Content-Security-Policy
+${WS_TRANSPORT_BODY}
+\t\t}
+\t}
 \t@webapp_stream_ws path /ws/stream/* /ws/docker/* /ws/docker-exec /ws/ssh-sessions
 \thandle @webapp_stream_ws {
 \t\treverse_proxy 127.0.0.1:8080 {
