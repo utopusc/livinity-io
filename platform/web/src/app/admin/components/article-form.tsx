@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   type DocArticle,
@@ -79,6 +79,15 @@ export function ArticleForm({ initial }: { initial?: DocArticle }) {
   const [uploadingCover, setUploadingCover] = useState(false);
   const [insertingImage, setInsertingImage] = useState(false);
   const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null);
+
+  // Live /docs URL for the saved article (edit mode only). Uses the PERSISTED
+  // category + slug so the link always resolves; admins see drafts via
+  // preview-auth, the public 404s.
+  const previewHref = useMemo(() => {
+    if (!initial) return null;
+    const cat = categories.find((c) => c.id === initial.category_id);
+    return cat ? `/docs/${cat.slug}/${initial.slug}` : null;
+  }, [initial, categories]);
 
   useEffect(() => {
     listCategories()
@@ -378,7 +387,13 @@ export function ArticleForm({ initial }: { initial?: DocArticle }) {
       </div>
 
       <div className="form-actions">
-        <div className="left" />
+        <div className="left">
+          {previewHref && (
+            <a href={previewHref} target="_blank" rel="noreferrer" className="btn ghost">
+              {state.published ? 'View ↗' : 'Preview draft ↗'}
+            </a>
+          )}
+        </div>
         <button type="button" className="btn ghost" onClick={() => router.push('/admin/docs')}>
           Cancel
         </button>

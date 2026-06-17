@@ -273,6 +273,25 @@
   box-shadow: var(--shadow-card);
 }
 
+/* ---- Draft preview banner (admins only) ------------------------------- */
+.docs-draft-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+  padding: 11px 16px;
+  border-left: 3px solid var(--amber);
+  background: rgba(217, 119, 6, 0.08);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  font-size: 13.5px;
+  color: var(--fg-dim);
+}
+.docs-draft-banner strong {
+  color: var(--amber);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
 /* ---- Prose (markdown body) -------------------------------------------- */
 .docs-prose {
   font-size: 16.5px;

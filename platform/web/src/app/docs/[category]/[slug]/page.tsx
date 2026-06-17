@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { getArticle, getDocsNav } from '../../_lib/docs-data';
 import { extractToc } from '../../_lib/toc';
+import { isAdminViewer } from '../../_lib/preview-auth';
 import { DocsSidebar } from '../../_components/sidebar';
 import { DocsToc } from '../../_components/toc';
 import { DocsMarkdown } from '../../_components/markdown';
@@ -13,7 +14,8 @@ type Params = { params: Promise<{ category: string; slug: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { category, slug } = await params;
-  const data = await getArticle(category, slug);
+  const admin = await isAdminViewer();
+  const data = await getArticle(category, slug, { includeUnpublished: admin });
   if (!data) return { title: 'Not found — Livinity Docs' };
   return {
     title: `${data.article.title} — Livinity Docs`,
@@ -28,10 +30,14 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function ArticlePage({ params }: Params) {
   const { category, slug } = await params;
-  const [data, nav] = await Promise.all([getArticle(category, slug), getDocsNav()]);
+  const admin = await isAdminViewer();
+  const [data, nav] = await Promise.all([
+    getArticle(category, slug, { includeUnpublished: admin }),
+    getDocsNav(),
+  ]);
   if (!data) notFound();
 
-  const { article, category: cat } = data;
+  const { article, category: cat, published } = data;
   const toc = extractToc(article.content);
 
   return (
@@ -40,6 +46,13 @@ export default async function ArticlePage({ params }: Params) {
 
       <main className="docs-content">
         <article className="docs-article">
+          {!published && (
+            <div className="docs-draft-banner">
+              <strong>Draft</strong>
+              <span>Not published — only admins can see this preview.</span>
+            </div>
+          )}
+
           <div className="docs-breadcrumb">
             <Link href="/docs">Docs</Link>
             <span>/</span>
