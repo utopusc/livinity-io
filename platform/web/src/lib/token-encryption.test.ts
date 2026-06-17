@@ -157,3 +157,25 @@ test('key resolution is cached — repeated calls reuse the same key', async () 
   // Note: NO __resetKeyCacheForTests() — that's the whole point.
   assert.equal(await decryptToken(blob), 'cached-key-test');
 });
+
+// ── Per-user key derivation (Phase 284) ────────────────────────────────────
+
+test('per-user roundtrip: encrypt + decrypt under the same userId', async () => {
+  setKey(KEY_A);
+  const pt = 'cf-tunnel-token-per-user';
+  const blob = await encryptToken(pt, 'user-123');
+  assert.equal(await decryptToken(blob, 'user-123'), pt);
+});
+
+test('a per-user blob does NOT decrypt under a different userId', async () => {
+  setKey(KEY_A);
+  const blob = await encryptToken('secret', 'user-A');
+  await assert.rejects(() => decryptToken(blob, 'user-B'));
+});
+
+test('legacy master-key blob still decrypts when a userId is supplied (fallback)', async () => {
+  setKey(KEY_A);
+  const legacy = await encryptToken('legacy-token'); // no userId → master key
+  // A reader that now passes userId must still recover pre-migration tokens.
+  assert.equal(await decryptToken(legacy, 'user-123'), 'legacy-token');
+});
