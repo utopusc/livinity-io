@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth-admin';
 import { getSupabaseService, getSupabasePublicUrl } from '@/lib/supabase-server';
 
-const MAX_BYTES = 2 * 1024 * 1024; // matches bucket file_size_limit
+const MAX_BYTES = 8 * 1024 * 1024; // matches app-icons bucket file_size_limit (8 MB)
 const ALLOWED_MIMES = new Set([
   'image/png',
   'image/jpeg',

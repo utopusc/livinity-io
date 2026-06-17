@@ -292,7 +292,7 @@ export function ArticleForm({ initial }: { initial?: DocArticle }) {
             </div>
           </div>
         </div>
-        <div className="form-help">Max 2 MB · PNG / JPEG / WebP / SVG.</div>
+        <div className="form-help">Max 8 MB · PNG / JPEG / WebP / SVG.</div>
       </div>
 
       <div className="form-row">
