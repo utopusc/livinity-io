@@ -18,7 +18,8 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
       <footer className="docs-footer">
         <div className="docs-footer-inner">
           <span>© Livinity</span>
-          <Link href="/">livinity.io</Link>
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+          <a href="/">livinity.io</a>
           <Link href="/docs">Docs</Link>
           <span style={{ marginLeft: 'auto' }}>
             Your personal AI server, accessible anywhere.

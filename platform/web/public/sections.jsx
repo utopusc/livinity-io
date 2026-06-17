@@ -458,7 +458,7 @@ const Footer = () => (
         </div>
         <div>
           <h6>Builders</h6>
-          <a href="#">Documentation</a><a href="#">Open API</a><a href="#">Skills</a><a href="https://github.com/utopusc/livinity-io">Source</a><a href="#">Status</a>
+          <a href="/docs">Documentation</a><a href="#">Open API</a><a href="#">Skills</a><a href="https://github.com/utopusc/livinity-io">Source</a><a href="#">Status</a>
         </div>
         <div>
           <h6>Company</h6>
