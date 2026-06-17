@@ -1,14 +1,14 @@
 import type { LegalDoc } from './types';
 
 // NOTE: professional template — review by licensed counsel before relying on
-// it in a dispute. Placeholder tokens ([COMPANY LEGAL NAME], etc.) are filled
+// it in a dispute. Placeholder tokens (Livinity Inc., etc.) are filled
 // once the legal entity is finalized.
 export const terms: LegalDoc = {
   slug: 'terms',
   title: 'Terms of Service',
   summary: 'The agreement between you and Livinity that governs your use of the service.',
   updated: 'June 17, 2026',
-  body: `These Terms of Service ("Terms") are a binding agreement between you ("you", "your", or "User") and [COMPANY LEGAL NAME] ("Livinity", "we", "us", or "our") governing your access to and use of the Livinity platform at livinity.io, the LivOS software, and all related websites, applications, APIs, and services (collectively, the "Service").
+  body: `These Terms of Service ("Terms") are a binding agreement between you ("you", "your", or "User") and Livinity Inc. ("Livinity", "we", "us", or "our") governing your access to and use of the Livinity platform at livinity.io, the LivOS software, and all related websites, applications, APIs, and services (collectively, the "Service").
 
 **By creating an account, installing LivOS, or otherwise using the Service, you agree to these Terms.** If you do not agree, do not use the Service. If you use the Service on behalf of an organization, you represent that you are authorized to bind that organization, and "you" refers to that organization.
 
@@ -20,7 +20,7 @@ You are responsible for the hardware on which you run LivOS, for its security an
 
 ## 2. Eligibility & Accounts
 
-You must be at least 18 years old, or the age of majority in your jurisdiction, to use the Service. You agree to provide accurate registration information, to keep your password and API keys confidential, and to be responsible for all activity under your account. Notify us immediately at [CONTACT EMAIL] of any unauthorized use. We may refuse, suspend, or reclaim usernames, including for trademark, impersonation, or abuse reasons.
+You must be at least 18 years old, or the age of majority in your jurisdiction, to use the Service. You agree to provide accurate registration information, to keep your password and API keys confidential, and to be responsible for all activity under your account. Notify us immediately at everything@gmail.com of any unauthorized use. We may refuse, suspend, or reclaim usernames, including for trademark, impersonation, or abuse reasons.
 
 ## 3. Subscriptions, Trials & Billing
 
@@ -76,5 +76,5 @@ These Terms, together with the policies incorporated by reference, are the entir
 
 ## 16. Contact
 
-Questions about these Terms: [CONTACT EMAIL] · [COMPANY LEGAL NAME], [COMPANY ADDRESS].`,
+Questions about these Terms: everything@gmail.com · Livinity Inc., 5630 Mission St #322, San Francisco, CA 94110.`,
 };

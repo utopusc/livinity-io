@@ -47,7 +47,7 @@ We may investigate suspected violations and may, at our discretion and to the ex
 
 ## 6. Reporting Abuse
 
-To report a violation, email **abuse@livinity.io** with the URL or subdomain, a description, and any supporting evidence. We aim to acknowledge reports promptly and to act within the timeframes required by our upstream providers and applicable law.
+To report a violation, email **everything@gmail.com** with the URL or subdomain, a description, and any supporting evidence. We aim to acknowledge reports promptly and to act within the timeframes required by our upstream providers and applicable law.
 
 ## 7. Changes
 
@@ -55,5 +55,5 @@ We may update this AUP. The current version is always posted here with its effec
 
 ## 8. Contact
 
-Questions about this policy: [CONTACT EMAIL]. Abuse reports: abuse@livinity.io.`,
+Questions about this policy: everything@gmail.com. Abuse reports: everything@gmail.com.`,
 };

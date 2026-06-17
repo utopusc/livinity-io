@@ -44,11 +44,11 @@ export default async function LegalDocPage({ params }: Params) {
         <div className="docs-article-foot">
           Questions about this policy? Contact{' '}
           <a
-            href="mailto:legal@livinity.io"
+            href="mailto:everything@gmail.com"
             className="docs-side-link"
             style={{ display: 'inline', padding: 0 }}
           >
-            legal@livinity.io
+            everything@gmail.com
           </a>
           .
         </div>
