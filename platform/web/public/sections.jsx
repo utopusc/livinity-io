@@ -464,6 +464,10 @@ const Footer = () => (
           <h6>Company</h6>
           <a href="#">About</a><a href="#">Manifesto</a><a href="#">Security</a><a href="#">License</a><a href="#">Contact</a>
         </div>
+        <div>
+          <h6>Legal</h6>
+          <a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/acceptable-use">Acceptable Use</a><a href="/legal/cookies">Cookies</a><a href="/legal/refund">Refunds</a>
+        </div>
       </div>
       <div className="brandwall">Livinity</div>
       <div className="footer-base">
