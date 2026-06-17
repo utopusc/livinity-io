@@ -23,6 +23,7 @@ import { nanoid } from 'nanoid';
 import { getSession, SESSION_COOKIE_NAME } from '@/lib/auth';
 import pool from '@/lib/db';
 import { sendVerificationEmail } from '@/lib/email';
+import { rateLimit, getClientIp, tooManyRequests } from '@/lib/rate-limit';
 
 const TOKEN_EXPIRY_HOURS = 24;
 
@@ -30,9 +31,18 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const emailRaw = typeof body?.email === 'string' ? body.email : null;
 
+  // Per-IP flood guard (covers both modes); fails open on a limiter outage.
+  const ipLimit = await rateLimit(`resend:ip:${getClientIp(req)}`, 20, 3600);
+  if (!ipLimit.allowed) return tooManyRequests(ipLimit.retryAfter);
+
   // ── Mode 1: pending-registration resend (no session) ──────────────────────
   if (emailRaw) {
     const email = emailRaw.toLowerCase().trim();
+
+    // Per-email cap. Anti-enumeration: exceeding it returns the same success
+    // shape as every other early return (never reveals pending activity).
+    const emailLimit = await rateLimit(`resend:email:${email}`, 5, 3600);
+    if (!emailLimit.allowed) return NextResponse.json({ success: true });
 
     const row = await pool.query<{ verification_expires: Date }>(
       'SELECT verification_expires FROM pending_registrations WHERE lower(email) = $1 LIMIT 1',
