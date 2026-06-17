@@ -7,14 +7,14 @@
 
 ### Legal & Policy (LEGAL) — Phase 279
 
-- [ ] **LEGAL-01**: Visitor can read the Terms of Service at `/legal/terms`
-- [ ] **LEGAL-02**: Visitor can read the Privacy Policy (GDPR + KVKK data-subject rights + sub-processor list) at `/legal/privacy`
-- [ ] **LEGAL-03**: Visitor can read the Acceptable Use Policy at `/legal/acceptable-use`
-- [ ] **LEGAL-04**: Visitor can read the Cookie Policy at `/legal/cookies`
-- [ ] **LEGAL-05**: Visitor can read the Refund & Cancellation Policy at `/legal/refund`
-- [ ] **LEGAL-06**: A `/legal` hub page lists and links every policy document
-- [ ] **LEGAL-07**: Signup flow links to the real Terms & Privacy (no dead `href="#"`) and records explicit consent
-- [ ] **LEGAL-08**: Site footers (homepage + docs) link to the legal pages
+- [x] **LEGAL-01**: Visitor can read the Terms of Service at `/legal/terms`
+- [x] **LEGAL-02**: Visitor can read the Privacy Policy (GDPR + KVKK data-subject rights + sub-processor list) at `/legal/privacy`
+- [x] **LEGAL-03**: Visitor can read the Acceptable Use Policy at `/legal/acceptable-use`
+- [x] **LEGAL-04**: Visitor can read the Cookie Policy at `/legal/cookies`
+- [x] **LEGAL-05**: Visitor can read the Refund & Cancellation Policy at `/legal/refund`
+- [x] **LEGAL-06**: A `/legal` hub page lists and links every policy document
+- [x] **LEGAL-07**: Signup flow links to the real Terms & Privacy (no dead `href="#"`) and records explicit consent
+- [x] **LEGAL-08**: Site footers (homepage + docs) link to the legal pages
 
 ### Abuse Response & CSAM (ABUSE) — Phase 280 (P0)
 
@@ -32,16 +32,16 @@
 
 ### Endpoint Hardening (HARDEN) — Phase 282 (P1)
 
-- [ ] **HARDEN-01**: `resend-verification` is IP- and email-rate-limited
-- [ ] **HARDEN-02**: `forgot-password` is IP- and email-rate-limited
-- [ ] **HARDEN-03**: `username-available` is IP-rate-limited (with a reserved-username cache)
-- [ ] **HARDEN-04**: `webapp/preview` is per-API-key rate-limited and byte-capped
-- [ ] **HARDEN-05**: `app-subdomain` provisioning is per-API-key rate-limited
-- [ ] **HARDEN-06**: Transactional email sends are idempotent (idempotency key) to prevent duplicate-send floods
+- [x] **HARDEN-01**: `resend-verification` is IP- and email-rate-limited
+- [x] **HARDEN-02**: `forgot-password` is IP- and email-rate-limited
+- [x] **HARDEN-03**: `username-available` is IP-rate-limited (with a reserved-username cache)
+- [x] **HARDEN-04**: `webapp/preview` is per-API-key rate-limited and byte-capped
+- [x] **HARDEN-05**: `app-subdomain` provisioning is per-API-key rate-limited
+- [x] **HARDEN-06**: Transactional email sends are idempotent (idempotency key) to prevent duplicate-send floods
 
 ### Quotas & Provisioning Resilience (QUOTA) — Phase 283 (P1)
 
-- [ ] **QUOTA-01**: A per-user cap on app subdomains / DNS records is enforced before any Cloudflare create
+- [x] **QUOTA-01**: A per-user cap on app subdomains / DNS records is enforced before any Cloudflare create
 - [ ] **QUOTA-02**: Provisioning runs through a queue with a concurrency cap and exponential backoff on HTTP 429
 - [ ] **QUOTA-03**: A daily reconciliation job deletes orphan DNS records that no longer map to an active subdomain
 - [ ] **QUOTA-04**: Zone DNS-record-count monitoring alerts at 80% of quota
@@ -73,11 +73,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LEGAL-01..08 | Phase 279 | Pending |
+| LEGAL-01..08 | Phase 279 | Complete (shipped a056d359 + d1318d19, live-verified) |
 | ABUSE-01..05 | Phase 280 | Pending |
 | CFC-01..03 | Phase 281 | Pending |
-| HARDEN-01..06 | Phase 282 | Pending |
-| QUOTA-01..04 | Phase 283 | Pending |
+| HARDEN-01..06 | Phase 282 | Complete (e2281ede, live-verified 429) |
+| QUOTA-01 | Phase 283 | Complete (fd01d4d2) | | QUOTA-02..04 | Phase 283 | Pending |
 | COST-01..05 | Phase 284 | Pending |
 
 **Coverage:**
