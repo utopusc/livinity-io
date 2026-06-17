@@ -23,18 +23,26 @@ IFS=$'\n\t'
 # ---------------------------------------------------------------------------
 # Pinned constants (DO NOT EDIT without bumping Phase + re-running spike)
 # ---------------------------------------------------------------------------
-# AionUi bump 2026-06-09: v2.1.4 -> v2.1.14 (10 upstream releases; unified theme
-# system, bundled managed runtime, conversation-scoped MCP, Markdown preview,
-# skill folder/zip import, aioncore -> v0.1.24). SHA256 = the official
-# .sha256 sidecar for the linux-x86_64 web tarball, re-verified by downloading
-# the 352MB tarball on the Mini PC and running sha256sum (matched exactly).
-# Rollback is trivial: the prior aionui-web-2.1.4/ version dir is left intact;
-# `ln -sfn .../aionui-web-2.1.4/aionui-web /opt/liv-assistant/current` + restart.
-AIONUI_VERSION="2.1.14"
+# AionUi bump 2026-06-17: v2.1.14 -> v2.1.19 (5 upstream releases; new ACP/AionRS
+# runtime policy + turn-aware conversation view that prevents late events from
+# overwriting newer turns, HTTP error-response handling fix, aioncore
+# v0.1.24 -> v0.1.27 — improves graceful recovery from transient upstream errors
+# (e.g. Claude API 529 Overloaded) instead of killing the chat). SHA256 = the
+# official .sha256 sidecar for the linux-x86_64 web tarball, re-verified by
+# downloading the tarball and running sha256sum (matched exactly: d22d2b5b…).
+# Patch note: the Phase-253-W4 MCP-importer filter literal
+# (F.source===c&&_.push(...F.servers)) was refactored upstream to
+# `.find(le=>le.source===i)?.servers`, so that sed no-ops GRACEFULLY on v2.1.19
+# (its grep pre-check misses) — LivOS MCPs still work for the default agent;
+# cross-agent importer re-derivation is a follow-up. Path-rewrite (/api,/ws) +
+# index.html/branding/sw.js patches verified present in the v2.1.19 bundle.
+# Rollback is trivial: the prior aionui-web-2.1.14/ version dir is left intact;
+# `ln -sfn .../aionui-web-2.1.14/aionui-web /opt/liv-assistant/current` + restart.
+AIONUI_VERSION="2.1.19"
 AIONUI_ARCH="linux-x86_64"
 AIONUI_TARBALL="aionui-web-${AIONUI_VERSION}-${AIONUI_ARCH}.tar.gz"
 AIONUI_URL="https://github.com/iOfficeAI/AionUi/releases/download/v${AIONUI_VERSION}/${AIONUI_TARBALL}"
-EXPECTED_SHA256="2da3e1ffbe710f45f66c4a0ead24f2715726ab2e480d0a93ad6e07d7b5c35f83"
+EXPECTED_SHA256="d22d2b5be90fba2217938f624932b5c5608aadfb378d9f45ae1b45d6810f41c2"
 
 INSTALL_ROOT="/opt/liv-assistant"
 CACHE_DIR="${INSTALL_ROOT}/cache"
