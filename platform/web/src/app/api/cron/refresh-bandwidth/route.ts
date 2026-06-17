@@ -3,10 +3,17 @@
 // Vercel Cron hits this (see vercel.json); auth = `Authorization: Bearer
 // ${CRON_SECRET}` which Vercel attaches automatically when the env var is set.
 //
-// For each provisioned, non-legacy, non-revoked user we query Cloudflare's
-// GraphQL Analytics for month-to-date egress on `{username}.livinity.io` and
-// upsert it into bandwidth_usage (stored in bytes_out; bytes_in 0 — CF's
-// edgeResponseBytes is egress-only). The dashboard then reads the same table.
+// For each tunnel-provisioned, non-revoked user we query Cloudflare's GraphQL
+// Analytics for the last-7-day egress on `{username}.livinity.io` and upsert it
+// into bandwidth_usage (bytes_out; bytes_in 0 — CF's edgeResponseBytes is
+// egress-only). The dashboard reads the same table.
+//
+// Why 7 days, not month-to-date: CF retains PER-HOSTNAME analytics for only
+// ~8 days (httpRequestsAdaptiveGroups enforces a 1w1d window+age cap), and the
+// long-retention daily dataset can't filter by host — so a true per-tenant
+// calendar-month total is impossible on this plan. A rolling 7-day egress is
+// always within retention AND is the more useful signal for abuse detection +
+// the admin bandwidth view.
 //
 // Best-effort: CF analytics never throws (returns null), and each user is
 // wrapped in its own try/catch so one failure can't stall the sweep. CF reads
@@ -26,11 +33,8 @@ interface UserRow {
   username: string;
 }
 
-/** First instant of the current UTC month as an ISO-8601 string. */
-function startOfMonthISO(): string {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0)).toISOString();
-}
+// Rolling window: CF's per-hostname dataset only covers the last ~8 days.
+const WINDOW_DAYS = 7;
 
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -43,8 +47,8 @@ export async function GET(req: NextRequest) {
   }
 
   const periodMonth = currentPeriodMonth();
-  const sinceISO = startOfMonthISO();
   const untilISO = new Date().toISOString();
+  const sinceISO = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   // EVERY tunnel-provisioned, non-revoked user — NOT just paid ones. Bandwidth
   // is metered for visibility + abuse detection (CFC-03), so legacy_free
