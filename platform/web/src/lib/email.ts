@@ -1,6 +1,10 @@
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://livinity.io';
 const FROM_ADDRESS = 'Livinity <noreply@livinity.io>';
 
+// Where operational alarms (Phase 280/283/284: DNS-quota, abuse, cost) are sent.
+// Env-overridable; defaults to the operator's monitored ops/abuse mailbox.
+const OPS_ALERT_EMAIL = process.env.OPS_ALERT_EMAIL || 'everything@gmail.com';
+
 // `idempotencyKey` (Resend, valid 24h) dedupes accidental duplicate sends of
 // the SAME logical email (double-submit, retry). Floods of DISTINCT sends are
 // handled separately by the rate limiter on the calling endpoints.
@@ -85,6 +89,30 @@ export async function sendAccessPausedEmail(to: string, username: string): Promi
       <p style="color: #999; font-size: 13px; margin-top: 24px;">Questions? Just reply to this email.</p>
     </div>
   `);
+}
+
+/**
+ * Operational alarm to the operator's monitored ops mailbox (NOT a user-facing
+ * email). Used by the QUOTA-04 zone-capacity alarm + QUOTA-03 orphan report.
+ * `idempotencyKey` (24h, Resend) dedupes a daily alarm if the cron retries.
+ */
+export async function sendOpsAlertEmail(
+  subject: string,
+  html: string,
+  idempotencyKey?: string,
+): Promise<void> {
+  await sendEmail(
+    OPS_ALERT_EMAIL,
+    subject,
+    `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 20px;">
+      <h2 style="font-size: 18px; font-weight: 700; color: #111; margin-bottom: 16px;">⚠️ Livinity ops alert</h2>
+      ${html}
+      <p style="color: #999; font-size: 12px; margin-top: 24px;">Automated alert from the Livinity platform. Set OPS_ALERT_EMAIL to change where these go.</p>
+    </div>
+  `,
+    idempotencyKey,
+  );
 }
 
 export async function sendPasswordResetEmail(to: string, token: string): Promise<void> {

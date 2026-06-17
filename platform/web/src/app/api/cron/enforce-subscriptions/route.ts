@@ -78,11 +78,34 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Pass 2: restore reactivated users ────────────────────────────────────
-  const revokedUsers = await pool.query<CandidateRow>(
-    `SELECT id, username, email, cf_tunnel_id, cf_dns_record_id_apex, created_at
-       FROM users
-      WHERE access_revoked_at IS NOT NULL`,
-  );
+  // suspended_at IS NULL guard (Phase 280): an admin-suspended (banned) user
+  // also has access_revoked_at set, so they land in this pass. getSubscription
+  // Status already returns active=false reason='suspended' for them (so the
+  // restore below would skip anyway), but we exclude them at the SQL level too
+  // so billing reactivation can NEVER silently un-ban an abuser — independent of
+  // the oracle's internals. DEFENSIVE (mirrors stripe-sync.ts): users.suspended_at
+  // is live in prod + captured in 0023, but on a fresh rebuild that hasn't run
+  // 0023 the column is absent → on 42703 retry WITHOUT the predicate so the
+  // housekeeping below still runs (never 500 before the column exists).
+  let revokedUsers;
+  try {
+    revokedUsers = await pool.query<CandidateRow>(
+      `SELECT id, username, email, cf_tunnel_id, cf_dns_record_id_apex, created_at
+         FROM users
+        WHERE access_revoked_at IS NOT NULL
+          AND suspended_at IS NULL`,
+    );
+  } catch (err) {
+    if ((err as { code?: string })?.code === '42703') {
+      revokedUsers = await pool.query<CandidateRow>(
+        `SELECT id, username, email, cf_tunnel_id, cf_dns_record_id_apex, created_at
+           FROM users
+          WHERE access_revoked_at IS NOT NULL`,
+      );
+    } else {
+      throw err;
+    }
+  }
 
   for (const user of revokedUsers.rows) {
     try {

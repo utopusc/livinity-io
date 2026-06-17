@@ -50,6 +50,9 @@ export interface DnsRecord {
   content: string;
   proxied?: boolean;
   zone_id?: string;
+  /** ISO-8601 creation time (CF returns this on list). Used by the DNS
+   *  reconciler's grace window so an in-flight provision is never deleted. */
+  created_on?: string;
 }
 
 export interface CfClient {
@@ -78,6 +81,16 @@ export interface CfClient {
   }): Promise<{ dns_record_id: string }>;
   deleteDnsRecord(dns_record_id: string): Promise<void>;
   listDnsRecordsByName(name: string): Promise<DnsRecord[]>;
+  /**
+   * Enumerate EVERY DNS record in the livinity.io zone, paginating internally.
+   * Used by the QUOTA-03/04 reconciler (api/cron/reconcile-dns) to find orphaned
+   * per-user CNAMEs and to gauge how close the shared zone is to its record cap.
+   * Pages at 100/req through the shared rate limiter; stops at MAX_DNS_PAGES as a
+   * runaway guard. `truncated` is true when that cap was hit — the caller MUST
+   * treat a truncated enumeration as "near full" (the count is a floor, not the
+   * true total), otherwise the capacity alarm could read healthy off a clamp.
+   */
+  listAllDnsRecords(): Promise<{ records: DnsRecord[]; truncated: boolean }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +174,12 @@ const limiter = new Bottleneck({
 const PER_CALL_TIMEOUT_MS = 5000;
 const MAX_RETRIES = 3;
 const BACKOFF_BASE_MS = [200, 800, 3200] as const;
+
+// Whole-zone enumeration (listAllDnsRecords). CF caps per_page at 100 for
+// dns_records; MAX_DNS_PAGES is a runaway guard (100 pages = 10k records, far
+// above the shared zone's record cap).
+const DNS_PER_PAGE = 100;
+const MAX_DNS_PAGES = 100;
 
 function jitter(ms: number): number {
   // ±25% jitter
@@ -479,6 +498,34 @@ function makeClient(env: CfEnv): CfClient {
         }),
       );
       return result ?? [];
+    },
+
+    async listAllDnsRecords() {
+      const all: DnsRecord[] = [];
+      let truncated = false;
+      // Paginate until a page comes back shorter than a full page (the last
+      // page), or we hit the runaway cap. The short-page heuristic is robust to
+      // concurrent record churn — it always terminates.
+      for (let page = 1; page <= MAX_DNS_PAGES; page++) {
+        const batch = await rl(() =>
+          callCf<DnsRecord[]>(env, {
+            method: 'GET',
+            path: `/zones/${env.zoneId}/dns_records?page=${page}&per_page=${DNS_PER_PAGE}`,
+          }),
+        );
+        if (!batch || batch.length === 0) break;
+        all.push(...batch);
+        if (batch.length < DNS_PER_PAGE) break;
+        if (page === MAX_DNS_PAGES) {
+          // A full final page means there may be more — the count is now a
+          // FLOOR, not the true total. Signal it so the capacity alarm fires.
+          truncated = true;
+          console.warn(
+            `[cf-saas] listAllDnsRecords hit MAX_DNS_PAGES=${MAX_DNS_PAGES} (${all.length}+ records) — enumeration TRUNCATED; capacity count is a floor`,
+          );
+        }
+      }
+      return { records: all, truncated };
     },
   };
 }

@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/refresh-bandwidth",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-dns",
+      "schedule": "0 4 * * *"
     }
   ]
 }
