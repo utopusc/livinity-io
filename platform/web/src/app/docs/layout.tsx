@@ -28,6 +28,7 @@ export default async function DocsLayout({ children }: { children: ReactNode }) 
           {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a href="/">livinity.io</a>
           <Link href="/docs">Docs</Link>
+          <Link href="/legal">Legal</Link>
           <span style={{ marginLeft: 'auto' }}>
             Your personal AI server, accessible anywhere.
           </span>
