@@ -362,6 +362,102 @@
   font-size: 13px;
   color: var(--fg-dim);
 }
+
+/* ---- Code blocks: copy button ----------------------------------------- */
+.docs-code-wrap {
+  position: relative;
+  margin: 0 0 22px;
+}
+.docs-prose .docs-code-wrap pre {
+  margin: 0;
+}
+.docs-code-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  padding: 4px 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--fg-mute);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.16s var(--ease), color 0.16s var(--ease),
+    border-color 0.16s var(--ease);
+}
+.docs-code-wrap:hover .docs-code-copy,
+.docs-code-copy:focus-visible {
+  opacity: 1;
+}
+.docs-code-copy:hover {
+  color: var(--fg);
+  border-color: var(--line-strong);
+}
+.docs-code-copy.is-copied {
+  opacity: 1;
+  color: var(--green);
+  border-color: var(--green);
+}
+
+/* ---- Syntax highlighting (highlight.js tokens, brand-matched) ----------
+   Only token colors are defined (no full hljs theme import); untokenized
+   code inherits .docs-prose pre code (--fg-dim). Scoped to .docs-prose. */
+.docs-prose .hljs-comment,
+.docs-prose .hljs-quote {
+  color: var(--fg-faint);
+  font-style: italic;
+}
+.docs-prose .hljs-keyword,
+.docs-prose .hljs-selector-tag,
+.docs-prose .hljs-built_in,
+.docs-prose .hljs-literal,
+.docs-prose .hljs-type,
+.docs-prose .hljs-meta .hljs-keyword {
+  color: var(--fg);
+  font-weight: 600;
+}
+.docs-prose .hljs-string,
+.docs-prose .hljs-regexp,
+.docs-prose .hljs-addition {
+  color: var(--green);
+}
+.docs-prose .hljs-number,
+.docs-prose .hljs-attr,
+.docs-prose .hljs-attribute,
+.docs-prose .hljs-symbol,
+.docs-prose .hljs-bullet {
+  color: var(--amber);
+}
+.docs-prose .hljs-title,
+.docs-prose .hljs-title.function_,
+.docs-prose .hljs-title.class_,
+.docs-prose .hljs-section,
+.docs-prose .hljs-name {
+  color: var(--fg);
+  font-weight: 600;
+}
+.docs-prose .hljs-tag,
+.docs-prose .hljs-meta,
+.docs-prose .hljs-params {
+  color: var(--fg-mute);
+}
+.docs-prose .hljs-deletion {
+  color: var(--red);
+}
+.docs-prose .hljs-emphasis {
+  font-style: italic;
+}
+.docs-prose .hljs-strong {
+  font-weight: 700;
+}
+.docs-prose .hljs-link {
+  text-decoration: underline;
+}
 .docs-prose blockquote {
   margin: 0 0 22px;
   padding: 14px 18px;
