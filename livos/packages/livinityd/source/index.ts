@@ -529,14 +529,29 @@ export default class Livinityd {
 			dbLogger.log('PostgreSQL not available, continuing with YAML-only mode')
 		}
 
-		// Initialise modules (ai must start first — TunnelClient needs ai.redis)
+		// Initialise modules (ai must start first — TunnelClient needs ai.redis).
+		//
+		// ROBUSTNESS (2026-06-17) — recurring "Cannot GET /liv-login" root cause:
+		// every non-listener module below is now wrapped with .catch(log) so a
+		// TRANSIENT start() rejection in any of them (Docker/apps, dbus, the
+		// filesystem watcher, or Redis — all common in the seconds after an
+		// Update) can NO LONGER reject this Promise.all and ABORT start() before
+		// the route mounts that run AFTER this await. Previously such a rejection
+		// threw here while this.server.start() (below) had ALREADY bound :8080 —
+		// leaving /liv-login (mounted ~30 lines down) and every later route
+		// UNREGISTERED, so :8080 answered but 404'd the path ("Cannot GET
+		// /liv-login"), intermittently, on each Update. The wrapped promises never
+		// reject, so start() always reaches the mounts; the modules just log +
+		// degrade (ioredis auto-reconnects; Docker/dbus/fs retry on use).
+		// Only this.server.start() stays FATAL: with no Express listener there is
+		// nothing to mount onto, so its failure must still abort start().
 		await Promise.all([
-			this.files.start(),
-			this.apps.start(),
-			this.appStore.start(),
-			this.dbus.start(),
+			this.files.start().catch((error) => this.logger.error('files.start() failed (non-fatal — continuing so post-await route mounts still run)', error)),
+			this.apps.start().catch((error) => this.logger.error('apps.start() failed (non-fatal — continuing so post-await route mounts still run)', error)),
+			this.appStore.start().catch((error) => this.logger.error('appStore.start() failed (non-fatal — continuing so post-await route mounts still run)', error)),
+			this.dbus.start().catch((error) => this.logger.error('dbus.start() failed (non-fatal — continuing so post-await route mounts still run)', error)),
 			this.server.start(),
-			this.ai.start(),
+			this.ai.start().catch((error) => this.logger.error('ai.start() failed (non-fatal — Redis auto-reconnects; post-await route mounts still run)', error)),
 		])
 
 		// Phase 101-03 — Wire the NativeAppConfigStore now that this.ai.redis
