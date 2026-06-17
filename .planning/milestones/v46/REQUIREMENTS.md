@@ -42,7 +42,7 @@
 ### Quotas & Provisioning Resilience (QUOTA) — Phase 283 (P1)
 
 - [x] **QUOTA-01**: A per-user cap on app subdomains / DNS records is enforced before any Cloudflare create
-- [ ] **QUOTA-02**: Provisioning runs through a queue with a concurrency cap and exponential backoff on HTTP 429
+- [x] **QUOTA-02**: Provisioning runs through a queue with a concurrency cap and exponential backoff on HTTP 429
 - [ ] **QUOTA-03**: A daily reconciliation job deletes orphan DNS records that no longer map to an active subdomain
 - [ ] **QUOTA-04**: Zone DNS-record-count monitoring alerts at 80% of quota
 
@@ -50,8 +50,8 @@
 
 - [ ] **COST-01**: Vercel Spend Management cap + alert is configured
 - [ ] **COST-02**: Static docs/legal assets are served via a Cloudflare cache in front of Vercel
-- [ ] **COST-03**: A cleanup cron prunes stale `pending_registrations`
-- [ ] **COST-04**: Tunnel-token encryption uses per-user key derivation (HKDF) or a secrets manager
+- [x] **COST-03**: A cleanup cron prunes stale `pending_registrations`
+- [x] **COST-04**: Tunnel-token encryption uses per-user key derivation (HKDF) or a secrets manager
 - [ ] **COST-05**: Supabase egress / Realtime / storage usage alerts are configured
 
 ## v2 Requirements (deferred)
@@ -78,7 +78,7 @@
 | CFC-01..03 | Phase 281 | Pending |
 | HARDEN-01..06 | Phase 282 | Complete (e2281ede, live-verified 429) |
 | QUOTA-01 | Phase 283 | Complete (fd01d4d2) | | QUOTA-02..04 | Phase 283 | Pending |
-| COST-01..05 | Phase 284 | Pending |
+| COST-03,04 | Phase 284 | Complete (5755ce40) | | COST-01,02,05 | Phase 284 | Pending (Vercel/CF dashboard) |
 
 **Coverage:**
 - v1 requirements: 31 total
