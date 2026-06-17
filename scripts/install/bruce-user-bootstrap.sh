@@ -21,28 +21,38 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_logging.sh
 [[ -f "${SCRIPT_DIR}/_logging.sh" ]] && source "${SCRIPT_DIR}/_logging.sh"
 
-step "Phase 196-02 — bruce user + sudoers"
+step "Phase 196-02 — desktop user + sudoers"
 
 if [[ $EUID -ne 0 ]]; then
     fail "bruce-user-bootstrap: must run as root" 77
 fi
 
+# Phase 278 — the desktop user is parameterized (was a hardcoded `bruce`). Derive
+# from LIVOS_DESKTOP_USER / DESKTOP_USER (set by parse-cli.sh), neutral `livos`
+# last-resort. Running this on a non-bruce box no longer creates a stray `bruce`
+# OS account or chowns the wrong home. The sudoers fragment copy below stays
+# BYTE-IDENTICAL (pinned blob) — only the user/home body is parameterized.
+_DESKTOP_USER="${LIVOS_DESKTOP_USER:-${DESKTOP_USER:-livos}}"
+
 # ── User ────────────────────────────────────────────────────────────────────
-if id -u bruce >/dev/null 2>&1; then
-    ok "✓ user 'bruce' already present (uid=$(id -u bruce))"
+if id -u "$_DESKTOP_USER" >/dev/null 2>&1; then
+    ok "✓ user '$_DESKTOP_USER' already present (uid=$(id -u "$_DESKTOP_USER"))"
 else
-    info "Creating user 'bruce' (useradd -m -s /bin/bash)"
-    useradd -m -s /bin/bash bruce || fail "useradd bruce failed" 77
-    ok "user 'bruce' created (uid=$(id -u bruce))"
+    info "Creating user '$_DESKTOP_USER' (useradd -m -s /bin/bash)"
+    useradd -m -s /bin/bash "$_DESKTOP_USER" || fail "useradd $_DESKTOP_USER failed" 77
+    ok "user '$_DESKTOP_USER' created (uid=$(id -u "$_DESKTOP_USER"))"
 fi
 
 # ── Home ownership (always run; memory pitfall) ─────────────────────────────
 # Per feedback_bruce_home_ownership: useradd -m alone is not defensive —
-# WebApp Chrome dies SIGTRAP when /home/bruce is root-owned because chrome +
+# WebApp Chrome dies SIGTRAP when the home is root-owned because chrome +
 # fluxbox + feh write to ~/.config / ~/.fluxbox / ~/.fehbg → Permission denied.
-info "Ensuring /home/bruce is owned by bruce:bruce"
-chown -R bruce:bruce /home/bruce
-ok "/home/bruce ownership reconciled"
+_DESKTOP_HOME="$(getent passwd "$_DESKTOP_USER" 2>/dev/null | cut -d: -f6)"
+[[ -n "$_DESKTOP_HOME" ]] || _DESKTOP_HOME="/home/$_DESKTOP_USER"
+_DESKTOP_GROUP="$(id -gn "$_DESKTOP_USER" 2>/dev/null || echo "$_DESKTOP_USER")"
+info "Ensuring $_DESKTOP_HOME is owned by ${_DESKTOP_USER}:${_DESKTOP_GROUP}"
+chown -R "${_DESKTOP_USER}:${_DESKTOP_GROUP}" "$_DESKTOP_HOME"
+ok "$_DESKTOP_HOME ownership reconciled"
 
 # ── Sudoers fragment ────────────────────────────────────────────────────────
 _src="${SCRIPT_DIR}/sudoers.d/livinityd"

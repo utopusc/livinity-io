@@ -212,7 +212,7 @@ _sanitize_desktop_user() {
 
 # WS1 — refuse system / reserved names so we never useradd over root, a daemon
 # account, or a service user the box already owns. Empty also counts reserved
-# (forces the bruce fallback). Returns 0 (reserved) / 1 (ok to use).
+# (forces the neutral `livos` fallback). Returns 0 (reserved) / 1 (ok to use).
 _is_reserved_user() {
     case "${1:-}" in
         ''|root|daemon|bin|sys|sync|games|man|lp|mail|news|uucp|proxy|backup|list|irc|gnats|nobody|sshd|messagebus|caddy|redis|postgres|postgresql|docker|www-data|ubuntu|admin|administrator)
@@ -233,7 +233,7 @@ parse_cli() {
             --cf-tunnel-token) LIVOS_CF_TUNNEL_TOKEN="${2:-}"; shift 2 ;;
             --api-key) LIVOS_API_KEY="${2:-}"; shift 2 ;;
             # WS1 — operator override for the local Linux desktop user (else
-            # derived from the api-key owner; else `bruce`).
+            # derived from the api-key owner; else the neutral `livos`).
             --desktop-user) LIVOS_DESKTOP_USER="${2:-}"; _LIVOS_DESKTOP_USER_EXPLICIT=1; shift 2 ;;
             --skip-deploy) SKIP_DEPLOY=1; shift ;;
             --help|-h) print_help; exit 0 ;;
@@ -506,25 +506,39 @@ parse_cli() {
     # Plan 140-07 — export LIVOS_SUBDOMAIN for logging / banner consumption.
     # WS1 (2026-06-11) — finalize the desktop user. Sanitize whatever was set
     # (--desktop-user, api-key owner, or empty), reject reserved/system names,
-    # and fall back to `bruce` so no-api-key / legacy installs are unchanged.
-    # Existing boxes are NOT renamed — deploy-livinityd.sh detects the present
-    # user via `id -u`; this value only names the user a fresh install creates.
+    # and fall back to a NEUTRAL `livos` when nothing usable was provided.
+    # Phase 278: the last-resort default was `bruce` (operator-specific) — now
+    # `livos` so a no-api-key / no-flag fresh install never creates a stray
+    # `bruce` account. Existing boxes are NOT renamed — deploy-livinityd.sh
+    # detects the present user via `id -u`; this value only names the user a
+    # fresh install creates.
     if [[ -n "$LIVOS_DESKTOP_USER" ]]; then
         local _du
         _du=$(_sanitize_desktop_user "$LIVOS_DESKTOP_USER")
         if _is_reserved_user "$_du"; then
-            warn "desktop user '$LIVOS_DESKTOP_USER' sanitized to '$_du' is empty/reserved — falling back to 'bruce'"
-            LIVOS_DESKTOP_USER="bruce"
+            warn "desktop user '$LIVOS_DESKTOP_USER' sanitized to '$_du' is empty/reserved — falling back to 'livos'"
+            LIVOS_DESKTOP_USER="livos"
         else
             [[ "$_du" != "$LIVOS_DESKTOP_USER" ]] && info "desktop user normalized '$LIVOS_DESKTOP_USER' → '$_du'"
             LIVOS_DESKTOP_USER="$_du"
         fi
     else
-        LIVOS_DESKTOP_USER="bruce"
+        LIVOS_DESKTOP_USER="livos"
     fi
     info "Desktop user: $LIVOS_DESKTOP_USER (the local Linux login LivOS runs as)"
 
+    # Phase 278 — export the operator slug + domain root for downstream seed
+    # substitution (_dld_seed_mcp_servers reads LIVOS_USER_SLUG / LIVOS_DOMAIN_ROOT
+    # to fill __LIVOS_USER_SLUG__ / __LIVOS_DOMAIN_ROOT__ in seeds/mcp-servers.json;
+    # they were previously UNSET → the seed fell back to a hardcoded 'bruce').
+    # The slug is the operator subdomain (e.g. `jack` in jack.livinity.io); fall
+    # back to the desktop user, then a neutral 'livos'. The domain root is the
+    # apex below the slug (default livinity.io).
+    LIVOS_USER_SLUG="${LIVOS_USER_SLUG:-${LIVOS_SUBDOMAIN:-${LIVOS_DESKTOP_USER:-livos}}}"
+    LIVOS_DOMAIN_ROOT="${LIVOS_DOMAIN_ROOT:-livinity.io}"
+
     export LIVOS_DOMAIN LIVOS_SUBDOMAIN LIVOS_CF_TOKEN LIVOS_CF_ZONE_ID \
            LIVOS_CF_TUNNEL_TOKEN LIVOS_API_KEY LIVOS_DESKTOP_USER \
+           LIVOS_USER_SLUG LIVOS_DOMAIN_ROOT \
            SKIP_DEPLOY
 }

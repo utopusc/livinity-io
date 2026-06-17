@@ -289,6 +289,12 @@ _configure_caddy_for_tunnel() {
     # Same Caddyfile-must-be-world-readable invariant Plan 105-05 Bug #4
     # added to deploy-livinityd.sh; backport here so the install completes
     # standalone without depending on the deploy step's chmod 0644 to recover.
+    # Phase 278 — CSP frame-ancestors embedder. When LIVOS_DOMAIN is set (tunnel
+    # mode normally requires one) allow-list it; otherwise emit just `'self'`
+    # rather than a hardcoded operator-domain literal. livinityd's runtime
+    # caddy.ts regen supersedes this once the domain config is in Redis.
+    local _csp_embedder=""
+    [[ -n "${LIVOS_DOMAIN:-}" ]] && _csp_embedder=" https://${LIVOS_DOMAIN}"
     (
         umask 0022
         cat > "$tmp" <<EOF
@@ -358,7 +364,7 @@ _configure_caddy_for_tunnel() {
                 versions 1.1
             }
         }
-        header Content-Security-Policy "frame-ancestors 'self' https://${LIVOS_DOMAIN:-bruce.livinity.io}"
+        header Content-Security-Policy "frame-ancestors 'self'${_csp_embedder}"
     }
     @livos_terminal_ws path /livos/terminal/ws
     handle @livos_terminal_ws {
@@ -408,7 +414,7 @@ _configure_caddy_for_tunnel() {
                 versions 1.1
             }
         }
-        header Content-Security-Policy "frame-ancestors 'self' https://${LIVOS_DOMAIN:-bruce.livinity.io}"
+        header Content-Security-Policy "frame-ancestors 'self'${_csp_embedder}"
     }
     handle {
         reverse_proxy 127.0.0.1:8080
