@@ -72,11 +72,18 @@ export default function MultiUserLogin() {
 		onError: (error) => {
 			if (error.message === 'Missing 2FA code') {
 				setStep('2fa')
-			} else {
-				setPassword('')
-				setOrbState('pulse')
-				setTimeout(() => setOrbState('breathe'), 1500)
+				return
 			}
+			// Wrong 2FA code: keep the password and stay on the 2FA step so the user
+			// can retry the code without re-entering their password (PinInput clears +
+			// refocuses its own 6-digit input). Clearing the password here used to
+			// break every retry — the next attempt sent an empty password → "Incorrect
+			// password" → the user had to refresh the whole page and start over.
+			if (error.message !== 'Incorrect 2FA code') {
+				setPassword('')
+			}
+			setOrbState('pulse')
+			setTimeout(() => setOrbState('breathe'), 1500)
 		},
 	})
 
@@ -105,8 +112,15 @@ export default function MultiUserLogin() {
 	}
 
 	const handleSubmit2fa = async (totpToken: string) => {
-		const res = await loginMut.mutateAsync({password, totpToken, username: selectedUser?.username})
-		return !!res
+		try {
+			await loginMut.mutateAsync({password, totpToken, username: selectedUser?.username})
+			return true
+		} catch {
+			// Wrong code (or a transient error) — return false so PinInput resets its
+			// input for another attempt. The password is preserved (see onError), so
+			// the user can immediately retry the 6-digit code.
+			return false
+		}
 	}
 
 	if (usersQ.isLoading) {
