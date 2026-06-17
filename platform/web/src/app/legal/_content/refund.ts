@@ -39,5 +39,5 @@ We may change subscription prices on prospective notice. Changes take effect at 
 
 ## 8. Contact
 
-Billing questions: everything@livinity.io · Livinity Inc., 5630 Mission St #322, San Francisco, CA 94110.`,
+Billing questions: everything@livinity.io · Livinity Inc., 5630 Mission St #322, San Francisco, CA 94112.`,
 };

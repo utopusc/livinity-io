@@ -60,7 +60,7 @@ Subject to applicable law, you may: **access** your data; request **rectificatio
 
 ## 9. Your Rights — KVKK (Türkiye)
 
-If you are in Türkiye, under Article 11 of the KVKK you have the right to: learn whether your data is processed and request information about it; learn the purpose of processing and whether it is used accordingly; know the third parties to whom data is transferred domestically or abroad; request correction of incomplete or inaccurate data; request erasure or destruction; request that corrections/erasures be notified to third parties; object to results produced solely by automated analysis; and claim compensation for damage caused by unlawful processing. Submit requests to everything@livinity.io (or to the registered data-controller address 5630 Mission St #322, San Francisco, CA 94110); we respond within the periods set by the KVKK.
+If you are in Türkiye, under Article 11 of the KVKK you have the right to: learn whether your data is processed and request information about it; learn the purpose of processing and whether it is used accordingly; know the third parties to whom data is transferred domestically or abroad; request correction of incomplete or inaccurate data; request erasure or destruction; request that corrections/erasures be notified to third parties; object to results produced solely by automated analysis; and claim compensation for damage caused by unlawful processing. Submit requests to everything@livinity.io (or to the registered data-controller address 5630 Mission St #322, San Francisco, CA 94112); we respond within the periods set by the KVKK.
 
 ## 10. Cookies
 
@@ -76,5 +76,5 @@ We may update this policy. We will post the new version here with an updated dat
 
 ## 13. Contact
 
-Privacy questions or rights requests: everything@livinity.io · Livinity Inc., 5630 Mission St #322, San Francisco, CA 94110.`,
+Privacy questions or rights requests: everything@livinity.io · Livinity Inc., 5630 Mission St #322, San Francisco, CA 94112.`,
 };
