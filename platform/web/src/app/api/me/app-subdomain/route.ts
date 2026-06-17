@@ -46,6 +46,11 @@ import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
 // `{app_slug}-{username}.livinity.io` URL pattern locked by Phase 140.
 const APP_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$/;
 
+// QUOTA-01 (v46.0 Phase 283): hard per-user cap on app subdomains. Every app
+// subdomain is a CNAME in the SHARED livinity.io zone, so an unbounded user
+// could exhaust the zone's DNS-record quota and block provisioning for everyone.
+const MAX_APP_SUBDOMAINS_PER_USER = 50;
+
 interface ProvisionBody {
   app_slug?: unknown;
   port?: unknown;
@@ -136,6 +141,22 @@ export async function POST(req: NextRequest) {
       {
         error: 'App subdomain already exists for this user + app',
         code: 'ALREADY_EXISTS',
+      },
+      { status: 409 },
+    );
+  }
+
+  // 5b. QUOTA-01: enforce the per-user subdomain cap BEFORE creating any CF
+  //     resource, so one user can't exhaust the shared zone's DNS quota.
+  const countRow = await pool.query<{ n: string }>(
+    'SELECT count(*)::text AS n FROM user_app_subdomains WHERE user_id = $1',
+    [auth.userId],
+  );
+  if (Number(countRow.rows[0]?.n ?? 0) >= MAX_APP_SUBDOMAINS_PER_USER) {
+    return NextResponse.json(
+      {
+        error: `App subdomain limit reached (${MAX_APP_SUBDOMAINS_PER_USER} per user). Remove an app before adding another.`,
+        code: 'QUOTA_EXCEEDED',
       },
       { status: 409 },
     );
