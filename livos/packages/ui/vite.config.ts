@@ -114,7 +114,13 @@ export default defineConfig({
 				// IframeChecker → prints "LivOS cannot be embedded in an iframe."
 				// Phase 218 T7 — /version.txt must bypass the SW so polling reads the
 				// freshly-deployed bundle's stamp, not a cached fallback to index.html.
-				navigateFallbackDenylist: [/^\/trpc/, /^\/api/, /^\/ws/, /^\/liv-ai-app/, /^\/version\.txt/],
+				// 2026-06-17 — also deny /liv + /liv-login (Caddy-proxied Liv AI auth
+				// paths, NOT SPA routes — same class as /liv-ai-app above). Without
+				// this, if the SW is ever re-enabled (selfDestroying off), a navigation
+				// to /liv-login would be served the cached index.html instead of
+				// livinityd's real auto-login handler → broken Liv AI login. The
+				// `($|\/)` bound keeps it off /livos/* and /liv-ai-app/*.
+				navigateFallbackDenylist: [/^\/trpc/, /^\/api/, /^\/ws/, /^\/liv-ai-app/, /^\/liv-login/, /^\/liv($|\/)/, /^\/version\.txt/],
 				runtimeCaching: [
 					{
 						urlPattern: /\/wallpapers\/.*/,
