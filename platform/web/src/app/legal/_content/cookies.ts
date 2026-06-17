@@ -36,5 +36,5 @@ We may update this policy; the current version is posted here with its effective
 
 ## 6. Contact
 
-Questions: everything@gmail.com.`,
+Questions: everything@livinity.io.`,
 };

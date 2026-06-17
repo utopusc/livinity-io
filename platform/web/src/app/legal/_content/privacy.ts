@@ -7,7 +7,7 @@ export const privacy: LegalDoc = {
   title: 'Privacy Policy',
   summary: 'What personal data Livinity collects, why, who processes it, and your rights.',
   updated: 'June 17, 2026',
-  body: `This Privacy Policy explains how Livinity Inc. ("Livinity", "we", "us") collects, uses, and shares personal data when you use livinity.io and the LivOS service (the "Service"). For the purposes of the EU/UK General Data Protection Regulation ("GDPR") and the Turkish Personal Data Protection Law No. 6698 ("KVKK"), Livinity is the **data controller** for the personal data described here. Our contact is everything@gmail.com.
+  body: `This Privacy Policy explains how Livinity Inc. ("Livinity", "we", "us") collects, uses, and shares personal data when you use livinity.io and the LivOS service (the "Service"). For the purposes of the EU/UK General Data Protection Regulation ("GDPR") and the Turkish Personal Data Protection Law No. 6698 ("KVKK"), Livinity is the **data controller** for the personal data described here. Our contact is everything@livinity.io.
 
 This policy covers the personal data we process to operate the platform. It does **not** cover the data you choose to store on or process through your own LivOS server — for that data, **you** are the controller and are responsible for your own compliance.
 
@@ -56,11 +56,11 @@ We use technical and organizational measures appropriate to the risk, including 
 
 ## 8. Your Rights — GDPR (EU/UK)
 
-Subject to applicable law, you may: **access** your data; request **rectification** of inaccurate data; request **erasure** ("right to be forgotten"); **restrict** or **object** to processing; obtain **portability** of data you provided; and **withdraw consent** at any time. You also have the right to **lodge a complaint** with your supervisory authority. To exercise these rights, contact everything@gmail.com; we respond within the timeframes the law requires.
+Subject to applicable law, you may: **access** your data; request **rectification** of inaccurate data; request **erasure** ("right to be forgotten"); **restrict** or **object** to processing; obtain **portability** of data you provided; and **withdraw consent** at any time. You also have the right to **lodge a complaint** with your supervisory authority. To exercise these rights, contact everything@livinity.io; we respond within the timeframes the law requires.
 
 ## 9. Your Rights — KVKK (Türkiye)
 
-If you are in Türkiye, under Article 11 of the KVKK you have the right to: learn whether your data is processed and request information about it; learn the purpose of processing and whether it is used accordingly; know the third parties to whom data is transferred domestically or abroad; request correction of incomplete or inaccurate data; request erasure or destruction; request that corrections/erasures be notified to third parties; object to results produced solely by automated analysis; and claim compensation for damage caused by unlawful processing. Submit requests to everything@gmail.com (or to the registered data-controller address 5630 Mission St #322, San Francisco, CA 94110); we respond within the periods set by the KVKK.
+If you are in Türkiye, under Article 11 of the KVKK you have the right to: learn whether your data is processed and request information about it; learn the purpose of processing and whether it is used accordingly; know the third parties to whom data is transferred domestically or abroad; request correction of incomplete or inaccurate data; request erasure or destruction; request that corrections/erasures be notified to third parties; object to results produced solely by automated analysis; and claim compensation for damage caused by unlawful processing. Submit requests to everything@livinity.io (or to the registered data-controller address 5630 Mission St #322, San Francisco, CA 94110); we respond within the periods set by the KVKK.
 
 ## 10. Cookies
 
@@ -68,7 +68,7 @@ We use a small number of cookies that are necessary to operate the Service (for 
 
 ## 11. Children
 
-The Service is not directed to children under 16 (or the minimum age in your jurisdiction), and we do not knowingly collect their data. If you believe a child has provided us data, contact everything@gmail.com and we will delete it.
+The Service is not directed to children under 16 (or the minimum age in your jurisdiction), and we do not knowingly collect their data. If you believe a child has provided us data, contact everything@livinity.io and we will delete it.
 
 ## 12. Changes
 
@@ -76,5 +76,5 @@ We may update this policy. We will post the new version here with an updated dat
 
 ## 13. Contact
 
-Privacy questions or rights requests: everything@gmail.com · Livinity Inc., 5630 Mission St #322, San Francisco, CA 94110.`,
+Privacy questions or rights requests: everything@livinity.io · Livinity Inc., 5630 Mission St #322, San Francisco, CA 94110.`,
 };

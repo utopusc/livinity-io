@@ -3,7 +3,7 @@ const FROM_ADDRESS = 'Livinity <noreply@livinity.io>';
 
 // Where operational alarms (Phase 280/283/284: DNS-quota, abuse, cost) are sent.
 // Env-overridable; defaults to the operator's monitored ops/abuse mailbox.
-const OPS_ALERT_EMAIL = process.env.OPS_ALERT_EMAIL || 'everything@gmail.com';
+const OPS_ALERT_EMAIL = process.env.OPS_ALERT_EMAIL || 'everything@livinity.io';
 
 // `idempotencyKey` (Resend, valid 24h) dedupes accidental duplicate sends of
 // the SAME logical email (double-submit, retry). Floods of DISTINCT sends are
