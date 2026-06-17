@@ -1030,8 +1030,10 @@ if grep -qE "^_dld_create_desktop_user\(\)" "$DEPLOY_SH"; then
 else
     fail "Bug #10: _dld_create_desktop_user function NOT defined"
 fi
-if grep -qE "^_DLD_DESKTOP_USER=" "$DEPLOY_SH" && grep -qE '_DLD_DESKTOP_USER:-bruce' "$DEPLOY_SH"; then
-    pass "Bug #10: _DLD_DESKTOP_USER constant defined with :-bruce default"
+# Phase 278 — the ultimate fallback was de-hardcoded from `bruce` to the neutral
+# `livos`; the constant now reads ${_DLD_DESKTOP_USER:-${LIVOS_DESKTOP_USER:-livos}}.
+if grep -qE "^_DLD_DESKTOP_USER=" "$DEPLOY_SH" && grep -qE 'LIVOS_DESKTOP_USER:-livos' "$DEPLOY_SH"; then
+    pass "Bug #10: _DLD_DESKTOP_USER constant defined with neutral :-livos fallback (Phase 278)"
 else
     fail "Bug #10: _DLD_DESKTOP_USER constant missing or wrong default"
 fi

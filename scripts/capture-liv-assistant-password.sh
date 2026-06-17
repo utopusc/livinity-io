@@ -2,12 +2,31 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# Target credential file: /etc/livos/liv-assistant-credentials (mode 0600, owner bruce:bruce)
+# Target credential file: /etc/livos/liv-assistant-credentials
+# (mode 0600, owned by the LivOS desktop user — NOT hardcoded bruce).
 CREDS_DIR="/etc/livos"
 CREDS_FILE="${CREDS_DIR}/liv-assistant-credentials"
 SERVICE="liv-assistant"
-BRUCE_USER="bruce"
-BRUCE_GROUP="bruce"
+
+# Phase 278: derive the owning user from the install env (mirrors
+# install-liv-assistant.sh:51). Resolution chain, neutral last-resort:
+#   1. LIVOS_DESKTOP_USER (set by parse-cli.sh)
+#   2. DESKTOP_USER (alternate install env)
+#   3. User= of the installed livos.service (the source of truth on a live box)
+#   4. first real login uid>=1000
+# This file is chowned to <user>:<group>; a non-bruce box no longer mis-owns it.
+DESKTOP_USER_RESOLVED="${LIVOS_DESKTOP_USER:-${DESKTOP_USER:-}}"
+if [[ -z "${DESKTOP_USER_RESOLVED}" ]]; then
+  DESKTOP_USER_RESOLVED="$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1 || true)"
+fi
+if [[ -z "${DESKTOP_USER_RESOLVED}" ]]; then
+  DESKTOP_USER_RESOLVED="$(getent passwd | awk -F: '$3>=1000 && $3<65534 {print $1; exit}' || true)"
+fi
+[[ -n "${DESKTOP_USER_RESOLVED}" ]] || DESKTOP_USER_RESOLVED="livos"
+BRUCE_USER="${DESKTOP_USER_RESOLVED}"
+# Primary group of the resolved user (falls back to the username, the Ubuntu
+# useradd default where the user has an eponymous group).
+BRUCE_GROUP="$(id -gn "${BRUCE_USER}" 2>/dev/null || echo "${BRUCE_USER}")"
 
 log() { echo "[capture-liv-assistant-password] $*" >&2; }
 die() { log "ERROR: $*"; exit 1; }

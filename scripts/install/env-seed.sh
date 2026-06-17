@@ -29,12 +29,15 @@ fi
 
 # WS1 (2026-06-11) — the desktop user that owns /opt/livos/data + secrets.
 # Derives from LIVOS_DESKTOP_USER (exported by parse-cli.sh from the platform
-# username); falls back to `bruce` for legacy / no-api-key installs. If the
-# resolved user doesn't exist yet (env-seed can run before user creation on
-# some orderings), fall back to bruce so the chown doesn't error — the later
-# migration re-chowns to the real user idempotently.
-_ES_USER="${LIVOS_DESKTOP_USER:-bruce}"
-id "$_ES_USER" >/dev/null 2>&1 || _ES_USER="bruce"
+# username). Phase 278: neutral `livos` fallback (was `bruce`) for legacy /
+# no-api-key installs. If the resolved user doesn't exist yet (env-seed can run
+# before user creation on some orderings), fall back to a user that DOES exist
+# (the bruce account on legacy boxes, else root) so the chown doesn't error —
+# the later migration re-chowns to the real user idempotently.
+_ES_USER="${LIVOS_DESKTOP_USER:-livos}"
+if ! id "$_ES_USER" >/dev/null 2>&1; then
+    if id bruce >/dev/null 2>&1; then _ES_USER="bruce"; else _ES_USER="root"; fi
+fi
 
 # ── Secrets dir ─────────────────────────────────────────────────────────────
 _secrets_dir="/opt/livos/data/secrets"

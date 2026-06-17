@@ -84,12 +84,13 @@ _DLD_CADDYFILE="/etc/caddy/Caddyfile"
 # AND the User= the livos/liv-* systemd units run as.
 # WS1 (2026-06-11): the desktop user derives from the platform username
 # (LIVOS_DESKTOP_USER, set by parse-cli.sh from the api-key owner / --desktop-user)
-# so a fresh box for "jack" gets the Linux user "jack". Ultimate fallback `bruce`
-# keeps no-api-key / legacy installs unchanged. On an EXISTING box the user is
+# so a fresh box for "jack" gets the Linux user "jack". Phase 278: the ultimate
+# fallback is the NEUTRAL `livos` (was `bruce`) so a no-api-key / no-flag install
+# never creates a stray operator-named account. On an EXISTING box the user is
 # already present; _dld_create_desktop_user re-resolves the actual uid via `id -u`
 # (never assumes 1000 — a real desktop Ubuntu owner already holds uid 1000, so a
 # fresh livinityd user lands at 1001+).
-_DLD_DESKTOP_USER="${_DLD_DESKTOP_USER:-${LIVOS_DESKTOP_USER:-bruce}}"
+_DLD_DESKTOP_USER="${_DLD_DESKTOP_USER:-${LIVOS_DESKTOP_USER:-livos}}"
 _DLD_DESKTOP_UID="${_DLD_DESKTOP_UID:-1000}"
 
 # UAT 252 G7: owner for chown -R of /opt/livos + /opt/liv. MUST equal the
@@ -468,7 +469,7 @@ _dld_setup_redis() {
 _dld_create_desktop_user() {
     step "Phase 106 Bug #10 / 262 WS3 — create desktop user (sudo + docker groups; scoped sudoers fragment only)"
 
-    local user="${_DLD_DESKTOP_USER:-bruce}"
+    local user="${_DLD_DESKTOP_USER:-livos}"
     local uid="${_DLD_DESKTOP_UID:-1000}"
 
     # Sanity: useradd only available on Linux. Skip silently on non-Linux hosts.
@@ -1553,18 +1554,25 @@ _dld_seed_mcp_servers() {
         # 'env-thread incomplete' warning is the documented signal for this case.
     fi
 
-    # Phase 245.1: single-user v43 — slug defaults to 'bruce', domain to
-    # 'livinity.io'. Multi-user v44+ should plumb these from per-user context.
-    local user_slug="${LIVOS_USER_SLUG:-bruce}"
+    # Phase 245.1 / 278: slug + domain come from parse-cli (LIVOS_USER_SLUG =
+    # operator subdomain / desktop user; LIVOS_DOMAIN_ROOT defaults livinity.io).
+    # Neutral last-resort `livos` (was hardcoded 'bruce') if parse-cli didn't run.
+    local user_slug="${LIVOS_USER_SLUG:-${LIVOS_DESKTOP_USER:-livos}}"
     local domain_root="${LIVOS_DOMAIN_ROOT:-livinity.io}"
 
     # Phase 276 — host display :1 removed (per-app streams only). luse no longer
     # gets a default DISPLAY/XAUTHORITY: generic computer-use tools take an explicit
     # per-app display:":N"; the launch-WebApp-by-name path needs neither. (Empty
     # substitution → "DISPLAY":"" in the seed, treated as no host display.)
-    local _desktop_user="${_DLD_DESKTOP_USER:-bruce}"
+    local _desktop_user="${_DLD_DESKTOP_USER:-livos}"
     local _desktop_uid
     _desktop_uid=$(id -u "$_desktop_user" 2>/dev/null || echo 1000)
+    # Phase 278 — the filesystem MCP root is seeded as __LIVOS_HOME__ (was a
+    # hardcoded /home/bruce). Resolve the desktop user's real home so the seed is
+    # correct on any operator box.
+    local _desktop_home
+    _desktop_home=$(getent passwd "$_desktop_user" 2>/dev/null | cut -d: -f6 || true)
+    [[ -n "$_desktop_home" ]] || _desktop_home="/home/${_desktop_user}"
     local luse_display=""
     local luse_xauthority
     # `|| true`: on a fresh box /run/user/<uid> may not exist yet → find exits
@@ -1587,6 +1595,7 @@ _dld_seed_mcp_servers() {
         -e "s|__LIVOS_DOMAIN_ROOT__|${domain_root}|g" \
         -e "s|__LIVOS_DISPLAY__|${luse_display}|g" \
         -e "s|__LIVOS_XAUTHORITY__|${luse_xauthority}|g" \
+        -e "s|__LIVOS_HOME__|${_desktop_home}|g" \
         "$seed_file")
     if [[ -z "$substituted_json" ]]; then
         warn "Seed substitution produced empty JSON — skipping MCP seed"
@@ -2300,7 +2309,7 @@ _dld_update_caddy_to_livinityd() {
                 versions 1.1
             }
         }
-        header Content-Security-Policy "frame-ancestors 'self' https://bruce.livinity.io"
+        header Content-Security-Policy "frame-ancestors 'self' __LIVOS_EMBEDDER__"
     }
     @livos_terminal_ws path /livos/terminal/ws
     handle @livos_terminal_ws {
@@ -2346,19 +2355,26 @@ _dld_update_caddy_to_livinityd() {
                 versions 1.1
             }
         }
-        header Content-Security-Policy "frame-ancestors 'self' https://bruce.livinity.io"
+        header Content-Security-Policy "frame-ancestors 'self' __LIVOS_EMBEDDER__"
     }
 LIVAI_HANDLES
 
     # WS1 (2026-06-11) — the heredoc above is single-quoted (literals preserved so
     # the @liv_api_subresource Referer regex's `$` stays intact), so the CSP
     # frame-ancestors domain can't interpolate inline. Substitute the operator's
-    # actual domain post-read. bruce boxes (LIVOS_DOMAIN=bruce.livinity.io) are a
-    # no-op; on every other box the bootstrap Caddyfile now allow-lists the real
-    # embedder. (livinityd's runtime caddy.ts regen also fixes this, but the
-    # bootstrap file must be correct for the window before the first regen.)
-    local _dld_csp_domain="${LIVOS_DOMAIN:-${DOMAIN:-bruce.livinity.io}}"
-    _DLD_LIV_AI_HANDLES="${_DLD_LIV_AI_HANDLES//https:\/\/bruce.livinity.io/https://${_dld_csp_domain}}"
+    # actual domain post-read. Phase 278: the heredoc carries a neutral
+    # __LIVOS_EMBEDDER__ sentinel (was a hardcoded bruce.livinity.io literal).
+    # When a domain is configured, replace it with `https://<domain>`; when NONE
+    # is set, drop to `'self'` (mirrors caddy.ts applyCsp) — never emit a bogus
+    # operator-named literal. (livinityd's runtime caddy.ts regen also fixes this,
+    # but the bootstrap file must be correct for the window before the first regen.)
+    local _dld_csp_domain="${LIVOS_DOMAIN:-${DOMAIN:-}}"
+    if [[ -n "$_dld_csp_domain" ]]; then
+        _DLD_LIV_AI_HANDLES="${_DLD_LIV_AI_HANDLES//__LIVOS_EMBEDDER__/https://${_dld_csp_domain}}"
+    else
+        # No domain — frame-ancestors 'self' __LIVOS_EMBEDDER__ → frame-ancestors 'self'
+        _DLD_LIV_AI_HANDLES="${_DLD_LIV_AI_HANDLES// __LIVOS_EMBEDDER__/}"
+    fi
 
     case "${MODE:-hybrid}" in
         hybrid|tunnel)
@@ -2738,6 +2754,66 @@ _dld_check_ports() {
 # purge. Also writes /opt/livos/.deployed-sha forward-compat with update.sh's
 # Phase 30 UPD-03 SHA-tracking — without it, first `bash /opt/livos/update.sh`
 # logs FROM_SHA=unknown (cosmetic).
+# ── Phase 278 — template the app-service unit + native sudoers to the desktop user ──
+# The main livos/liv-core/etc units are written with User=${_DLD_DESKTOP_USER}
+# by deploy-livinityd, and the livinityd sudoers fragment is templated by the
+# bruce-migration. But TWO install-time artifacts were left hardcoded to `bruce`:
+#   1. systemd/livos-app-liv-ai.service — installed VERBATIM (User=bruce) by
+#      update.sh's Step 7.7. On a non-bruce box the unit fails to start (the
+#      account doesn't exist) → Caddy /liv-ai-app/* 502.
+#   2. sudoers.d/livos-native — the `bruce ALL=` user-spec (native apt installs).
+# This step re-templates BOTH unconditionally (idempotent; runs on every deploy,
+# NOT gated behind the .bruce-migrated marker) so existing boxes get fixed too.
+_dld_template_app_units() {
+    step "Phase 278 — template app units + native sudoers to ${_DLD_DESKTOP_USER}"
+
+    local _liv_home
+    _liv_home=$(getent passwd "$_DLD_DESKTOP_USER" 2>/dev/null | cut -d: -f6 || true)
+    [[ -n "$_liv_home" ]] || _liv_home="/home/$_DLD_DESKTOP_USER"
+
+    # 1. livos-app-liv-ai.service — re-template the INSTALLED unit (if present)
+    local _ai_unit="/etc/systemd/system/livos-app-liv-ai.service"
+    if [[ -f "$_ai_unit" ]] && grep -qE '^(User|Group)=bruce$|/home/bruce' "$_ai_unit"; then
+        local _ai_tmp="${_ai_unit}.tmp.$$"
+        sed -E "s/^(User=)bruce$/\1${_DLD_DESKTOP_USER}/; s/^(Group=)bruce$/\1${_DLD_DESKTOP_USER}/; s#/home/bruce#${_liv_home}#g" \
+            "$_ai_unit" > "$_ai_tmp"
+        if ! cmp -s "$_ai_tmp" "$_ai_unit"; then
+            install -m 0644 -o root -g root "$_ai_tmp" "$_ai_unit"
+            systemctl daemon-reload 2>/dev/null || true
+            systemctl restart livos-app-liv-ai.service 2>/dev/null || true
+            ok "livos-app-liv-ai.service re-templated to ${_DLD_DESKTOP_USER}"
+        fi
+        rm -f "$_ai_tmp"
+    fi
+
+    # 2. sudoers.d/livos-native — install + template the user-spec subject
+    local _native_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-native"
+    [[ -f "$_native_src" ]] || _native_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-native"
+    local _native_dst="/etc/sudoers.d/livos-native"
+    if [[ -f "$_native_src" ]]; then
+        local _native_tmp
+        _native_tmp=$(mktemp)
+        if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                "$_native_src" > "$_native_tmp"
+        else
+            cp -f "$_native_src" "$_native_tmp"
+        fi
+        if [[ ! -f "$_native_dst" ]] || ! cmp -s "$_native_tmp" "$_native_dst"; then
+            install -m 0440 -o root -g root "$_native_tmp" "$_native_dst"
+            if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_native_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_native_dst — removing (native apt installs stay denied until fixed)"
+                rm -f "$_native_dst"
+            else
+                ok "sudoers.d/livos-native installed (user-spec: ${_DLD_DESKTOP_USER})"
+            fi
+        fi
+        rm -f "$_native_tmp"
+    else
+        info "sudoers.d/livos-native source not found — skipping (native apt installs unavailable)"
+    fi
+}
+
 _dld_cleanup_temp_dir() {
     step "105-02 (G7+G9) — cleanup + .deployed-sha (update.sh:657-682)"
 
@@ -2842,6 +2918,7 @@ deploy_livinityd() {
     _dld_write_systemd_unit
     _dld_health_check
     _dld_install_liv_assistant            # UAT 252 — install Liv AI (AionUi :3020) + unit so /liv resolves
+    _dld_template_app_units               # Phase 278 — re-template livos-app-liv-ai.service + sudoers.d/livos-native to the desktop user
     _dld_update_caddy_to_livinityd
     _dld_harden_firewall                  # 257-02 (WS-C / LIVOS-015) — UFW deny :8080 from the LAN (defense in depth)
     _dld_cleanup_temp_dir                 # 105-02 G7+G9 — cleanup + .deployed-sha

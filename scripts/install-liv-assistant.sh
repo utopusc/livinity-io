@@ -44,11 +44,11 @@ DATA_DIR="${INSTALL_ROOT}/data"
 
 # WS1 (2026-06-11) — the desktop user LivOS runs as. Derives from
 # LIVOS_DESKTOP_USER / DESKTOP_USER (passed by deploy-livinityd.sh from the
-# platform username), defaulting to `bruce` for legacy installs. Variable name
-# kept BRUCE_USER to avoid churn across the ~5 downstream references; only the
-# VALUE is now dynamic. BRUCE_HOME resolves from the user's real passwd entry
-# (its home may not be /home/<user> on every box).
-BRUCE_USER="${LIVOS_DESKTOP_USER:-${DESKTOP_USER:-bruce}}"
+# platform username). Phase 278: neutral `livos` last-resort (was `bruce`).
+# Variable name kept BRUCE_USER to avoid churn across the ~5 downstream
+# references; only the VALUE is now dynamic. BRUCE_HOME resolves from the user's
+# real passwd entry (its home may not be /home/<user> on every box).
+BRUCE_USER="${LIVOS_DESKTOP_USER:-${DESKTOP_USER:-livos}}"
 BRUCE_HOME="$(getent passwd "${BRUCE_USER}" 2>/dev/null | cut -d: -f6)"
 [[ -n "${BRUCE_HOME}" ]] || BRUCE_HOME="/home/${BRUCE_USER}"
 BUN_DIR="${BRUCE_HOME}/.bun"

@@ -41,8 +41,8 @@
       "name": "filesystem",
       "transport": "stdio",
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/bruce"],
-      "description": "Read / write files under an allowed root (defaults to /home/bruce). Destructive ops gated.",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "__LIVOS_HOME__"],
+      "description": "Read / write files under an allowed root (defaults to the desktop user home). Destructive ops gated.",
       "category": "files",
       "enabled": false,
       "installedAt": 0

@@ -36,6 +36,20 @@ readonly FALLBACK_FILE="${FALLBACK_DIR}/liv-claw-gateway.env"
 readonly UNIT_PATH="/etc/systemd/system/liv-claw-gateway.service"
 readonly FALLBACK_ENV_LINE="EnvironmentFile=-/opt/livos/etc/liv-claw-gateway.env"
 
+# Phase 278 — resolve the LivOS desktop user (NOT hardcoded bruce). This script
+# installs the claw-gateway sudoers fragment + chowns the fallback env dir/file;
+# both must target the actual operator account. Chain: LIVOS_DESKTOP_USER /
+# DESKTOP_USER env → User= of the installed livos.service → first login uid>=1000.
+DESKTOP_USER="${LIVOS_DESKTOP_USER:-${DESKTOP_USER:-}}"
+if [ -z "${DESKTOP_USER}" ]; then
+	DESKTOP_USER="$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1 || true)"
+fi
+if [ -z "${DESKTOP_USER}" ]; then
+	DESKTOP_USER="$(getent passwd | awk -F: '$3>=1000 && $3<65534 {print $1; exit}' || true)"
+fi
+[ -n "${DESKTOP_USER}" ] || DESKTOP_USER="livos"
+DESKTOP_GROUP="$(id -gn "${DESKTOP_USER}" 2>/dev/null || echo "${DESKTOP_USER}")"
+
 log() {
 	printf '[Phase 204-02] %s\n' "$*"
 }
@@ -47,40 +61,54 @@ if [ ! -f "$SUDOERS_SRC" ]; then
 	exit 1
 fi
 
-# Skip if the destination is byte-identical to the source (idempotent re-run).
-if [ -f "$SUDOERS_DEST" ] && cmp -s "$SUDOERS_SRC" "$SUDOERS_DEST"; then
-	log "sudoers drop-in already current — skipping"
+# Phase 278 — build the desktop-user-templated expectation once so the
+# idempotency check compares against what we'd actually install (else a
+# non-bruce box re-installs+re-templates every run, which is still correct but
+# noisy). The source carries `bruce ALL=`; rewrite the user-spec subject only.
+_expected_tmp="$(mktemp)"
+if [ "$DESKTOP_USER" != "bruce" ]; then
+	sed -E "s/^bruce([[:space:]]+ALL=)/${DESKTOP_USER}\1/; s/=\(bruce\)/=(${DESKTOP_USER})/g" "$SUDOERS_SRC" > "$_expected_tmp"
 else
-	log "installing sudoers drop-in to $SUDOERS_DEST"
-	install -m 0440 -o root -g root "$SUDOERS_SRC" "$SUDOERS_DEST"
+	cp -f "$SUDOERS_SRC" "$_expected_tmp"
+fi
+
+# Skip if the destination is byte-identical to the templated expectation.
+if [ -f "$SUDOERS_DEST" ] && cmp -s "$_expected_tmp" "$SUDOERS_DEST"; then
+	log "sudoers drop-in already current (user-spec: $DESKTOP_USER) — skipping"
+else
+	log "installing sudoers drop-in to $SUDOERS_DEST (user-spec: $DESKTOP_USER)"
+	install -m 0440 -o root -g root "$_expected_tmp" "$SUDOERS_DEST"
 	# Validate. If visudo refuses, rollback by removing the file (better to
 	# break the restart hook than to brick all sudo via a bad drop-in).
 	if ! visudo -c -f "$SUDOERS_DEST"; then
 		log "ERROR: visudo rejected $SUDOERS_DEST — rolling back" >&2
 		rm -f "$SUDOERS_DEST"
+		rm -f "$_expected_tmp"
 		exit 1
 	fi
 	log "sudoers drop-in installed + validated"
 fi
+rm -f "$_expected_tmp"
 
 # ── 2. Fallback env-file directory ────────────────────────────────────────
 
 if [ ! -d "$FALLBACK_DIR" ]; then
-	log "creating fallback env dir $FALLBACK_DIR (bruce:bruce 0700)"
+	log "creating fallback env dir $FALLBACK_DIR (${DESKTOP_USER}:${DESKTOP_GROUP} 0700)"
 	mkdir -p "$FALLBACK_DIR"
 fi
 # Always re-assert ownership + mode. Cheap, defends against accidental
-# chmod/chown by other install steps.
-chown bruce:bruce "$FALLBACK_DIR"
+# chmod/chown by other install steps. Phase 278: target the resolved desktop
+# user, not a hardcoded bruce.
+chown "${DESKTOP_USER}:${DESKTOP_GROUP}" "$FALLBACK_DIR"
 chmod 0700 "$FALLBACK_DIR"
 
 # Touch the file if missing so livinityd doesn't see ENOENT on first read
 # from a cold deploy. Empty file is fine — liv-claw-gateway.service uses
 # `EnvironmentFile=-` so missing/empty is harmless.
 if [ ! -f "$FALLBACK_FILE" ]; then
-	log "creating empty fallback env file $FALLBACK_FILE (bruce:bruce 0600)"
+	log "creating empty fallback env file $FALLBACK_FILE (${DESKTOP_USER}:${DESKTOP_GROUP} 0600)"
 	touch "$FALLBACK_FILE"
-	chown bruce:bruce "$FALLBACK_FILE"
+	chown "${DESKTOP_USER}:${DESKTOP_GROUP}" "$FALLBACK_FILE"
 	chmod 0600 "$FALLBACK_FILE"
 fi
 

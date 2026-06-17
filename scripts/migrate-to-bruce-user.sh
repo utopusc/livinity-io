@@ -27,13 +27,22 @@ MARKER="$LIVOS_DATA_DIR/.bruce-migrated"
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 SUDOERS_SRC="$REPO_ROOT/scripts/install/sudoers.d/livinityd"
 SUDOERS_DEST="${SUDOERS_DEST:-/etc/sudoers.d/livinityd}"
+# Phase 278 — the native-installer + claw-gateway sudoers fragments ALSO carry a
+# hardcoded `bruce ALL=` user-spec and were installed verbatim (only the
+# livinityd fragment was templated). Template them at the same install step so a
+# non-bruce operator can run native apt installs. Test mode overrides the dests.
+SUDOERS_NATIVE_SRC="$REPO_ROOT/scripts/install/sudoers.d/livos-native"
+SUDOERS_NATIVE_DEST="${SUDOERS_NATIVE_DEST:-/etc/sudoers.d/livos-native}"
+SUDOERS_CLAW_SRC="$REPO_ROOT/scripts/install/sudoers.d/livos-claw-gateway"
+SUDOERS_CLAW_DEST="${SUDOERS_CLAW_DEST:-/etc/sudoers.d/livos-claw-gateway}"
 DRY_RUN="${DRY_RUN:-0}"
 # WS1 (2026-06-11) — the desktop user LivOS runs as. Derives from
 # LIVOS_DESKTOP_USER / DESKTOP_USER (passed by deploy-livinityd.sh from the
-# platform username), defaulting to `bruce` so legacy + the Mini PC are
-# unchanged. The .bruce-migrated marker filename is kept stable (it's an
-# idempotency flag, not a username) so existing boxes don't re-migrate.
-DESKTOP_USER="${DESKTOP_USER:-${LIVOS_DESKTOP_USER:-bruce}}"
+# platform username). Phase 278: neutral `livos` last-resort (was `bruce`) so a
+# no-env invocation never creates/chowns a stray bruce account. The
+# .bruce-migrated marker filename is kept stable (it's an idempotency flag, not a
+# username) so existing boxes don't re-migrate.
+DESKTOP_USER="${DESKTOP_USER:-${LIVOS_DESKTOP_USER:-livos}}"
 
 log() { echo "[migrate-to-bruce] $*"; }
 do_cmd() {
@@ -119,38 +128,43 @@ else
     log "TEST_ROOT mode — skipping docker group add"
 fi
 
-# ── 7. Install sudoers fragment ─────────────────────────────────────────────
-if [[ -f "$SUDOERS_SRC" ]]; then
-    log "installing $SUDOERS_SRC → $SUDOERS_DEST (0440 root:root)"
-    if [[ -z "${TEST_ROOT:-}" ]]; then
-        do_cmd "install -m 0440 -o root -g root $SUDOERS_SRC $SUDOERS_DEST"
-        # 7a. WS1 (2026-06-11) — the repo fragment hardcodes the user-spec subject
-        # `bruce` (sudoers does NOT expand env vars, so it must be templated at
-        # install time). Rewrite ONLY the user-spec subject (`^bruce ALL=`) and the
-        # self-target Runas (`=(bruce)`) to the actual desktop user. The
-        # `chown -R 1000:1000` Cmnd_Alias is deliberately UNTOUCHED — that 1000 is
-        # the Tor/app CONTAINER's internal uid, not the host desktop user. No-op on
-        # a bruce box (bruce→bruce). RCE boundary: visudo -c re-validates below; a
-        # botched substitution removes the file rather than leaving broken sudoers.
-        if [[ "$DESKTOP_USER" != "bruce" ]]; then
-            log "templating sudoers user-spec: bruce → $DESKTOP_USER"
-            do_cmd "sed -i -E 's/^bruce([[:space:]]+ALL=)/${DESKTOP_USER}\\1/; s/=\\(bruce\\)/=(${DESKTOP_USER})/g' $SUDOERS_DEST"
-        fi
-        # 7b. visudo syntax check — if it fails, REMOVE the file (broken sudoers
-        # bricks sudo entirely; aborting with a removed file is safe).
-        if command -v visudo >/dev/null 2>&1; then
-            if ! visudo -cf "$SUDOERS_DEST" >/dev/null; then
-                log "ERROR: visudo syntax check FAILED on $SUDOERS_DEST — removing"
-                do_cmd "rm -f $SUDOERS_DEST"
-                exit 2
-            fi
-        fi
-    else
-        log "TEST_ROOT mode — skipping sudoers install (would: install -m 0440 -o root -g root $SUDOERS_SRC $SUDOERS_DEST)"
+# ── 7. Install sudoers fragments ────────────────────────────────────────────
+# install_sudoers_fragment <src> <dest>
+# Installs a sudoers.d fragment (0440 root:root), templates its hardcoded
+# `bruce` user-spec subject + self-target Runas to $DESKTOP_USER, then visudo
+# syntax-checks (removing the file on failure so broken sudoers never lands).
+# Cmnd_Alias numeric uids (e.g. `chown -R 1000:1000`, the container-internal
+# uid) are deliberately UNTOUCHED. No-op subject rewrite on a bruce box.
+install_sudoers_fragment() {
+    local _src="$1" _dest="$2"
+    if [[ ! -f "$_src" ]]; then
+        log "WARN: $_src missing — skipping sudoers install"
+        return 0
     fi
-else
-    log "WARN: $SUDOERS_SRC missing — skipping sudoers install (192-01 not deployed?)"
-fi
+    log "installing $_src → $_dest (0440 root:root)"
+    if [[ -n "${TEST_ROOT:-}" ]]; then
+        log "TEST_ROOT mode — skipping sudoers install (would: install -m 0440 -o root -g root $_src $_dest)"
+        return 0
+    fi
+    do_cmd "install -m 0440 -o root -g root $_src $_dest"
+    if [[ "$DESKTOP_USER" != "bruce" ]]; then
+        log "templating sudoers user-spec: bruce → $DESKTOP_USER ($_dest)"
+        do_cmd "sed -i -E 's/^bruce([[:space:]]+ALL=)/${DESKTOP_USER}\\1/; s/=\\(bruce\\)/=(${DESKTOP_USER})/g' $_dest"
+    fi
+    if command -v visudo >/dev/null 2>&1; then
+        if ! visudo -cf "$_dest" >/dev/null; then
+            log "ERROR: visudo syntax check FAILED on $_dest — removing"
+            do_cmd "rm -f $_dest"
+            exit 2
+        fi
+    fi
+}
+
+install_sudoers_fragment "$SUDOERS_SRC" "$SUDOERS_DEST"
+# Phase 278 — also template the native-installer + claw-gateway fragments
+# (previously installed verbatim → native apt installs denied on a non-bruce box).
+install_sudoers_fragment "$SUDOERS_NATIVE_SRC" "$SUDOERS_NATIVE_DEST"
+install_sudoers_fragment "$SUDOERS_CLAW_SRC" "$SUDOERS_CLAW_DEST"
 
 # ── 8. Write idempotency marker ─────────────────────────────────────────────
 do_cmd "mkdir -p $LIVOS_DATA_DIR"
