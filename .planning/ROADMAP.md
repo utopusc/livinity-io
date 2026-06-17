@@ -2,6 +2,7 @@
 
 ## Milestones
 
+- 🟢 **v46.0 Trust, Safety, Compliance & Cost Controls** — Phases 279-284 (opened 2026-06-17; runs ALONGSIDE v45, does not close it). Remediates the session's *Cloudflare & Cost Risk Report* for the multi-tenant livinity.io model (single shared CF account/zone = total-outage blast radius; VNC/WebApp streaming through the CF edge → ToS §2.8 risk; dead Terms/Privacy links at signup; un-rate-limited cost/abuse endpoints). 6 phases: legal docs + site wiring (279, executed in-session) → Abuse/CSAM readiness (280, P0) → CF compliance + §2.8 streaming decision (281, P0) → endpoint rate-limits (282, P1) → DNS/app quotas + provisioning queue (283, P1) → cost controls (284, P2). Master: [milestones/v46/ROADMAP.md](milestones/v46/ROADMAP.md), reqs: [milestones/v46/REQUIREMENTS.md](milestones/v46/REQUIREMENTS.md), project: [milestones/v46/PROJECT.md](milestones/v46/PROJECT.md).
 - 🚧 **v45.0 Security Hardening** — Phase 256 (CURRENT; opened 2026-06-03). Remediates the authorized LivOS security audit (`SECURITY-AUDIT.md`, 40 findings) per operator-locked design (`SECURITY-REMEDIATION-DESIGN.md`): **Contained Autonomy** (bubblewrap sandbox + egress allowlist + cred-scrub + git-undo + an injection-proof classifier gate for irreversible/off-box ops only, ordinary ops stay autonomous — closes LIVOS-002), **credential egress proxy** (stop bind-mounting operator OAuth tokens into app containers; verified apps get OAuth at the wire, unverified/community apps get a per-app metered virtual key — closes LIVOS-001), **pipeline admin-gate** (privileged/docker.sock/host-mount strip + admin-only install — closes LIVOS-007/013 + #1 residual), and **auth fail-closed** (LIVOS-004/008/014/018/019/025). Mini PC only. See `## v45 — Security Hardening` section below. _(This 🚧 marker is the authoritative current-milestone pointer `gsd-sdk getMilestoneInfo` reads first.)_
 - ⏳ **v44.0 Liv AI Tooling Depth** — Phases 246-255 (artifact-complete; operator close walk pending — `.planning/v44-OPERATOR-WALK.md`). Terminal v2 + Luse skill/display tooling + fresh-install portability remediation (Phase 252 ✅ 6/6). See `## v44 — Liv AI Tooling Depth` section below. _(NOTE: the older `### 🟢 vNN.0 … (Active)` headings further down — v31/v32/v33/v34/v36/v37 — are STALE label drift from long-shipped milestones.)_
 - ✅ **v29.3 Marketplace AI Broker (Subscription-Only)** — Phases 39-44 (shipped local 2026-05-01) — see [milestones/v29.3-ROADMAP.md](milestones/v29.3-ROADMAP.md)
@@ -4861,5 +4862,25 @@ Plans:
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 274 to break down)
+
+### Phase 275: Liv launches installed WebApps/native apps by name as real LivOS windows (#8) — box deploy + live verification
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 274
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 275 to break down)
+
+### Phase 276: App-store Supabase browse migration (box side) + Umbrel docker image cleanup + dead app-store code removal
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 275
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 276 to break down)
 
 ---
