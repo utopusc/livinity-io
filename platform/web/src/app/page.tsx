@@ -101,6 +101,7 @@ function Navbar() {
           <a href="#ai" className="text-sm text-neutral-400 transition-colors hover:text-black">AI</a>
           <a href="#pricing" className="text-sm text-neutral-400 transition-colors hover:text-black">Pricing</a>
           <Link href="/download" className="text-sm text-neutral-400 transition-colors hover:text-black">Download</Link>
+          <Link href="/docs" className="text-sm text-neutral-400 transition-colors hover:text-black">Docs</Link>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/login" className="text-sm font-medium text-neutral-500 transition-colors hover:text-black">Sign in</Link>

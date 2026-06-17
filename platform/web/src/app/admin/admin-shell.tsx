@@ -37,6 +37,10 @@ const NAV_CATALOG: NavItem[] = [
   { href: '/admin/store', label: 'Store' },
 ];
 
+const NAV_CONTENT: NavItem[] = [
+  { href: '/admin/docs', label: 'Docs' },
+];
+
 const NAV_OPERATIONS: NavItem[] = [
   { href: '/admin/users', label: 'Users' },
   { href: '/admin/feedback', label: 'Feedback' },
@@ -84,6 +88,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
           <div className="admin-side-label">Catalog</div>
           <NavLinks items={NAV_CATALOG} pathname={pathname} />
+
+          <div className="admin-side-label">Content</div>
+          <NavLinks items={NAV_CONTENT} pathname={pathname} />
 
           <div className="admin-side-label">Operations</div>
           <NavLinks items={NAV_OPERATIONS} pathname={pathname} />

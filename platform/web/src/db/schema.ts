@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, boolean, timestamp, jsonb, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, boolean, timestamp, jsonb, pgEnum, integer } from 'drizzle-orm/pg-core';
 
 // Phase 148 — section enum (see SPEC.md §1).
 export const sectionEnum = pgEnum('section_enum', [
@@ -85,6 +85,40 @@ export const customDomains = pgTable('custom_domains', {
   error_message: text('error_message'),
   last_dns_check: timestamp('last_dns_check', { withTimezone: true }),
   verified_at: timestamp('verified_at', { withTimezone: true }),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// =========================================================================
+// Docs — admin-editable documentation (Supabase-backed, image-capable).
+// Public reads happen in RSC via `db` directly; writes via /api/admin/docs/*
+// (requireAdmin gated). Article `content` is GitHub-flavored markdown;
+// `cover_url` + inline images live in the app-icons Storage bucket under a
+// `docs/<slug>/` prefix (reuses the existing icon-upload route).
+// =========================================================================
+export const docsCategories = pgTable('docs_categories', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  slug: text('slug').notNull().unique(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  sort_order: integer('sort_order').notNull().default(100),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const docsArticles = pgTable('docs_articles', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  slug: text('slug').notNull().unique(),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  category_id: uuid('category_id')
+    .notNull()
+    .references(() => docsCategories.id, { onDelete: 'restrict' }),
+  content: text('content').notNull().default(''),
+  cover_url: text('cover_url'),
+  published: boolean('published').notNull().default(false),
+  featured: boolean('featured').notNull().default(false),
+  sort_order: integer('sort_order').notNull().default(100),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
