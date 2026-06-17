@@ -5,7 +5,7 @@ export const cookies: LegalDoc = {
   title: 'Cookie Policy',
   summary: 'The cookies Livinity uses and how to control them.',
   updated: 'June 17, 2026',
-  body: `This Cookie Policy explains how [COMPANY LEGAL NAME] ("Livinity") uses cookies and similar technologies on livinity.io. It supplements our [Privacy Policy](/legal/privacy).
+  body: `This Cookie Policy explains how Livinity Inc. ("Livinity") uses cookies and similar technologies on livinity.io. It supplements our [Privacy Policy](/legal/privacy).
 
 ## 1. What Cookies Are
 
@@ -36,5 +36,5 @@ We may update this policy; the current version is posted here with its effective
 
 ## 6. Contact
 
-Questions: [CONTACT EMAIL].`,
+Questions: everything@gmail.com.`,
 };
