@@ -29,8 +29,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { validateUsername } from '@/lib/username-validator';
-
-// TODO(140-06): rate limit by IP, 60 req/min — same deferral as 140-05.
+import { rateLimit, getClientIp, tooManyRequests } from '@/lib/rate-limit';
 
 export async function GET(req: NextRequest) {
   const u = req.nextUrl.searchParams.get('u');
@@ -38,6 +37,10 @@ export async function GET(req: NextRequest) {
   if (!u || u.trim().length === 0) {
     return NextResponse.json({ error: 'u parameter required' }, { status: 400 });
   }
+
+  // Public endpoint (pre-login wizard) — cap per IP to stop DB-enumeration floods.
+  const ipLimit = await rateLimit(`uname:ip:${getClientIp(req)}`, 60, 60);
+  if (!ipLimit.allowed) return tooManyRequests(ipLimit.retryAfter);
 
   const result = await validateUsername(u);
 

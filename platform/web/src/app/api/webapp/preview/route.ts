@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { validateApiKey, unauthorizedResponse } from '@/lib/api-auth';
+import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
 
 const TIMEOUT_MS = 8_000;
 const MAX_BYTES = 1_000_000; // 1 MB
@@ -101,6 +102,10 @@ function parseMeta(html: string, baseUrl: URL): {
 export async function GET(req: NextRequest) {
   const auth = await validateApiKey(req);
   if (!auth.valid) return unauthorizedResponse(auth.error);
+
+  // Per-API-key cap — this endpoint makes an outbound fetch (egress) per call.
+  const limit = await rateLimit(`preview:user:${auth.userId}`, 30, 60);
+  if (!limit.allowed) return tooManyRequests(limit.retryAfter);
 
   const url = req.nextUrl.searchParams.get('url');
   if (!url) {

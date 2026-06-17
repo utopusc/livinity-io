@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
 import pool from '@/lib/db';
 import { sendPasswordResetEmail } from '@/lib/email';
+import { rateLimit, getClientIp, tooManyRequests } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,6 +12,19 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+
+    // Per-IP flood guard (requester-based → a 429 is safe here).
+    const ipLimit = await rateLimit(`forgot:ip:${getClientIp(req)}`, 20, 3600);
+    if (!ipLimit.allowed) return tooManyRequests(ipLimit.retryAfter);
+    // Per-email cap. Anti-enumeration: exceeding it returns the SAME success
+    // shape as the normal path (a 429 would reveal the email was targeted).
+    const emailLimit = await rateLimit(`forgot:email:${normalizedEmail}`, 5, 3600);
+    if (!emailLimit.allowed) {
+      return NextResponse.json({
+        success: true,
+        message: 'If an account exists with that email, a reset link has been sent.',
+      });
+    }
 
     // Always return success to prevent email enumeration
     const result = await pool.query<{ id: string; email: string }>(

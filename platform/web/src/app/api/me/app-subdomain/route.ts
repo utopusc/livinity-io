@@ -39,6 +39,7 @@ import {
   deprovisionAppSubdomain,
   CfApiError,
 } from '@/lib/cf-saas';
+import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
 
 // app_slug: 2-32 chars, lowercase alphanumeric + hyphens, no leading/trailing
 // hyphen. Matches DNS label semantics (subset of RFC 1035) and the
@@ -56,6 +57,11 @@ export async function POST(req: NextRequest) {
   if (!auth.valid) {
     return unauthorizedResponse(auth.error);
   }
+
+  // Per-user cap — each provision is 2-3 Cloudflare API calls against the shared
+  // zone; stops a single key from exhausting the CF API rate limit / DNS quota.
+  const subLimit = await rateLimit(`appsub:user:${auth.userId}`, 10, 60);
+  if (!subLimit.allowed) return tooManyRequests(subLimit.retryAfter);
 
   // 2. Parse + validate body
   let body: ProvisionBody;
