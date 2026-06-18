@@ -114,28 +114,6 @@ class Migration {
 		this.logger.log('Migration successful')
 	}
 
-	async migrateBackThatMacUpPort() {
-		// Check if the Back That Mac Up app is installed
-		const isBackThatMacUpInstalled = ((await this.livinityd.store.get('apps')) || []).includes('back-that-mac-up')
-		if (!isBackThatMacUpInstalled) return
-
-		// Check if app has already been migrated
-		const composePath = `${this.livinityd.dataDirectory}/app-data/back-that-mac-up/docker-compose.yml`
-		const newSambaPortMapping = '1445:445'
-		const compose = (await readYaml(composePath)) as any
-		if (compose.services.timemachine.ports[0] === newSambaPortMapping) return
-		this.logger.log('Old Back That Mac Up app found, migrating...')
-
-		// Update the docker-compose.yml file to use the new samba port mapping
-		// to avoid collisions with LivOS Samba port
-		compose.services.timemachine.ports = [newSambaPortMapping]
-		await writeYaml(composePath, compose)
-		this.logger.log('Back That Mac Up app migrated')
-
-		// Add notification
-		await this.livinityd.notifications.add('migrated-back-that-mac-up')
-	}
-
 	async migrateDownloadsDirectory() {
 		const legacyDownloadsPath = `${this.livinityd.dataDirectory}/data/storage/downloads`
 		const newDownloadsPath = `${this.livinityd.files.getBaseDirectory('/Home')}/Downloads`
@@ -174,13 +152,6 @@ class Migration {
 			await this.migrateLegacyLinuxData()
 		} catch (error) {
 			this.logger.error(`Failed to migrate legacy Linux data`, error)
-		}
-
-		// Check for the Back That Mac Up app and migrate it if it exists
-		try {
-			await this.migrateBackThatMacUpPort()
-		} catch (error) {
-			this.logger.error(`Failed to migrate Back That Mac Up app`, error)
 		}
 
 		// Migrate Downloads directory to Home/Downloads
