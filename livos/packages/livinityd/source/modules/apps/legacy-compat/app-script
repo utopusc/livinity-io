@@ -26,11 +26,8 @@ USER_FILE="${LIVINITY_ROOT}/db/user.json"
 CURRENT_SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 
 APP_PROXY_SERVICE_NAME="app_proxy"
-# We'll pass this in from livinityd
-# REMOTE_TOR_ACCESS="false"
-# if [[ -f "${USER_FILE}" ]]; then
-#   REMOTE_TOR_ACCESS=$(cat "${USER_FILE}" | jq 'has("remoteTorAccess") and .remoteTorAccess')
-# fi
+# Phase 276 (276-05): the Remote Tor Access feature was removed — livinityd no
+# longer passes the tor-access env flag, so the tor hidden-service paths are gone.
 
 show_help() {
   cat << EOF
@@ -160,8 +157,7 @@ source_app() {
   local -r app_entropy_identifier="app-${app}-seed"
 
   # Load in existing Livinity .env
-  # So that apps in their exports.sh can access
-  # e.g. $TOR_PROXY_IP, $TOR_PROXY_PORT
+  # So that apps in their exports.sh can access env vars
   # [[ -f "${LIVINITY_ROOT}/.env" ]] && . "${LIVINITY_ROOT}/.env"
 
   export NETWORK_IP="${NETWORK_IP}"
@@ -173,8 +169,6 @@ source_app() {
   # Set env using all transitive dependencies exports.sh
   # Do this first so that no app exports can
   # Override any app specific exports defined below
-  EXPORTS_TOR_DATA_DIR="${LIVINITY_ROOT}/tor/data"
-
   APPS_TO_SOURCE="$(list_transitive_dependencies_of "$app")"
 
   # $app might not be in the 'installed apps list' yet
@@ -214,26 +208,12 @@ source_app() {
   
   export APP_DATA_DIR="${app_data_dir}"
   export APP_DOMAIN="${app_domain}"
-  export APP_HIDDEN_SERVICE="not-enabled.onion"
-  if [[ "${REMOTE_TOR_ACCESS}" == "true" ]]; then
-    export APP_HIDDEN_SERVICE="$(cat "${app_hidden_service_file}" 2>/dev/null || echo "notyetset.onion")"
-  fi
   export APP_SEED=$(derive_entropy "${app_entropy_identifier}")
   export APP_PASSWORD=$(derive_entropy "${app_entropy_identifier}-APP_PASSWORD")
 
-  # Tor specific exports
-  export TOR_DATA_DIR="${LIVINITY_ROOT}/tor/data"
-  export TOR_ENTRYPOINT_SCRIPT="${SCRIPT_DOCKER_FRAGMENTS}/tor-entrypoint.sh"
-  export TOR_HS_APP_DIR="/data/app-${app}"
-  export TOR_HS_PORTS="80:${APP_PROXY_HOSTNAME}:${APP_PROXY_PORT}"
-
-  # TODO: Look into why this needed to be commented out for Mark.
-  # tor_extra_hs_varname=$(echo "APP_${APP_ID^^}_TOR_HS_EXTRA_PORTS" | tr '-' '_')
-  # tor_hs_extra_ports="${!tor_extra_hs_varname:-}"
-
-  # if [[ ! -z "${tor_hs_extra_ports}" ]]; then
-  #   export TOR_HS_PORTS="${TOR_HS_PORTS} ${tor_hs_extra_ports}"
-  # fi
+  # Phase 276 (276-05): the APP_HIDDEN_SERVICE + tor exports were removed with the
+  # Remote Tor Access feature (the tor compose fragment / entrypoint are gone).
+  # No app compose references them anymore.
 
   # Other
   export LIVINITY_ROOT
@@ -276,8 +256,6 @@ else
   app_repo_dir="${SCRIPT_APP_REPO_DIR}"
   app_data_dir="${LIVINITY_ROOT}/app-data/${app}"
 
-  app_hidden_service_file="${LIVINITY_ROOT}/tor/data/app-${app}/hostname"
-  
   if [[ "${app}" == "installed" ]]; then
     for app in $(list_installed_apps); do
       if [[ "${app}" != "" ]]; then
@@ -327,7 +305,6 @@ compose() {
 
   # Define support compose files
   local -r app_proxy_compose_file="${SCRIPT_DOCKER_FRAGMENTS}/docker-compose.app_proxy.yml"
-  local -r tor_compose_file="${SCRIPT_DOCKER_FRAGMENTS}/docker-compose.tor.yml"
   local -r common_compose_file="${SCRIPT_DOCKER_FRAGMENTS}/docker-compose.common.yml"
   local -r app_compose_file="${app_data_dir}/docker-compose.yml"
 
@@ -343,12 +320,6 @@ compose() {
 
   if [[ "${has_app_proxy_service}" == "true" ]]; then
     compose_files+=( "--file" "${app_proxy_compose_file}" )
-  fi
-
-  # If remote Tor access is enabled
-  # Then include a compose file for Tor
-  if [[ "${REMOTE_TOR_ACCESS}" == "true" ]]; then
-    compose_files+=( "--file" "${tor_compose_file}" )
   fi
 
   # Add app's compose file last so that it can override
@@ -426,55 +397,6 @@ copy_app_files() {
   done
 }
 
-wait_for_tor_hs() {
-  local -r app="${1}"
-  
-  # Check if the app's hidden service hostname
-  # Has been already generated and exit early
-  if [[ -f "${app_hidden_service_file}" ]]; then
-    return
-  fi
-
-  # Check that the app has the App Proxy service defined
-  local -r app_compose_file="${app_data_dir}/docker-compose.yml"
-  has_app_proxy_service=$(cat "${app_compose_file}" | yq ".services | has(\"${APP_PROXY_SERVICE_NAME}\")")
-
-  if [[ "${has_app_proxy_service}" == "false" ]]; then
-    echo
-    >&2 echo "Warning: \"${app}\" has no '${APP_PROXY_SERVICE_NAME}' defined"
-    >&2 echo "         \"${app}\" needs this to generate Tor HS"
-    echo
-    return
-  fi
-
-  # If a tor service will start
-  # and there is no existing tor hs hostname
-  # Let's allow 10 seconds to generate it and then start the app
-  if [[ "${REMOTE_TOR_ACCESS}" == "true" ]]; then
-    echo "Generating hidden services for ${app}..."
-    # We must first start the App Proxy
-    # So that it's hostname is resolvable by Tor
-    # More details here: https://github.com/torproject/tor/blob/01bda6c23f58947ad1e20ea6367a5c260f53dfab/src/feature/hs/hs_common.c#L743
-    # And here: https://github.com/torproject/tor/blob/22552ad88e1e95ef9d2c6655c7602b7b25836075/src/lib/net/resolve.c#L297
-    # Otherwise Tor will throw this error:
-    # Unparseable address in hidden service port configuration.
-    compose "${app}" up --detach app_proxy
-    compose "${app}" up --detach tor_server
-
-    for attempt in $(seq 1 100); do
-      if [[ -f "${app_hidden_service_file}" ]]; then
-        echo "Hidden service file created successfully!"
-        break
-      fi
-      sleep 0.1
-    done
-
-    if [[ ! -f "${app_hidden_service_file}" ]]; then
-      echo "Hidden service file wasn't created"
-    fi
-  fi
-}
-
 start_app() {
   local -r app="${1}"
 
@@ -483,9 +405,6 @@ start_app() {
 
   # Now apply templates
   template_app "${app}"
-
-  # Wait for Tor's HS hostname to exist
-  wait_for_tor_hs "${app}"
 
   execute_hook "${app}" "pre-start"
 
