@@ -3,17 +3,19 @@ gsd_state_version: 1.0
 milestone: v45.0
 milestone_name: Security Hardening
 status: executing
-last_updated: "2026-06-16T23:34:01.852Z"
+last_updated: "2026-06-18T03:30:52.564Z"
 last_activity: 2026-06-16
 progress:
-  total_phases: 189
-  completed_phases: 98
-  total_plans: 635
-  completed_plans: 546
-  percent: 86
+  total_phases: 190
+  completed_phases: 99
+  total_plans: 641
+  completed_plans: 548
+  percent: 85
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
+
+> ✅ **276-01 DONE (2026-06-18) — WS2 Umbrel auth-server removal (the safe, independent quick win); 3 atomic commits; CODE ONLY, deploy via release-based `bash /opt/livos/update.sh`)** — removed the dead Umbrel `auth-server` image end-to-end WITHOUT touching tor or the live app launcher/network. **Task 1** `b30f4fc4`: deleted the entire `auth:` service (image `livos/auth-server:1.0.5`, env `UMBREL_AUTH_SECRET`, was lines 17-41) from `legacy-compat/docker-compose.yml`; kept `tor_proxy:` + the `networks:` block (`livinity_main_network`) byte-for-byte — the auth container (10.21.21.6:2000) was NEVER reverse-proxied (LivOS auth = Caddy `forward_auth` → livinityd `/auth/verify` verifySessionFull). **Task 2** `0a1dda61`: dropped the `getumbrel/auth-server:1.0.5|livos/auth-server:1.0.5` pull/retag row from BOTH install scripts in lockstep — `_dld_setup_docker_images()` (`deploy-livinityd.sh`) + `setup_docker_images()` (`livos/install.sh`); KEPT the `getumbrel/tor` row, both helper functions, their `docker tag` loops, and the call sites (line ~2922 / ~1813) — tor is removed separately in plan 276-05 after an operator box check (Remote Tor Access OFF). **Task 3** `b4c26a03`: `test-deploy-livinityd.sh` TEST 40 now asserts ONLY the tor retag entry (auth-server assertion removed); TEST 39 (helper-defined) + TEST 41 (pipeline-calls-helper) assertion logic UNCHANGED. **Deviation (Rule 3, comments-only):** the plan-level `<verification>` requires `grep -rE "livos/auth-server|getumbrel/auth-server"` == 0 across all 4 files, so stale auth-server mentions in the helper's `step`/header comments + install.sh:1785 inventory comment + TEST 39's header comment were also trimmed (no assertion/code-path changed). **Gates:** every task acceptance grep green; `bash -n` exit 0 on all 3 shell scripts; Bug #6 TEST 39/40/41 all PASS. **Deferred (out of scope, SCOPE BOUNDARY):** the full install-test suite exits 1 with 156 PASS / 8 FAIL — verified IDENTICAL on the pre-276-01 tree (`341014ba`), so 276-01 neither introduced nor fixed them (env-sensitive harness checks: `--skip-deploy`, mode-tunnel-args, pnpm config, mender-client4, NOPASSWD, `_DLD_LIVOS_USER`, Phase 219 MCP); logged in `deferred-items.md`. **Load-bearing files UNTOUCHED:** `docker-compose.common.yml`, the networks block, `app-script`, `app-environment.ts`. **CODE ONLY — NOT DEPLOYED** (livinityd=tsx no build; install-script changes affect FRESH installs only — existing boxes keep the stale auth-server image harmlessly). SUMMARY: `.planning/phases/276-app-store-supabase-browse-migration-box-side-umbrel-docker-i/276-01-SUMMARY.md`. (STATE narrative format — SDK counters no-op.) **Next: 276-02+ (WS1 dead-code removal) per the phase sequencing; tor removal in 276-05 is gated on a box check.**
 
 > ⏸️ **270-01 CHECKPOINT-PAUSED (2026-06-14) — code Tasks 1 & 2 DONE + committed; Task 3 is a `checkpoint:human-verify` operator live-UAT AWAITING DEPLOY + OPERATOR (phase NOT complete).** Subtractive, CODE-ONLY AionUi-patch change (2 files, ZERO `livos/` diff): (1) `scripts/aionui-patches/local-agents-install-section.js` `3a278d85` — added `HIDDEN_CLIS = { 'aion-cli': true }` + `VISIBLE_CLIS = SUPPORTED_CLIS.filter(...)`; render (`renderSection`) AND hydrate (`hydrate` header + `})(VISIBLE_CLIS[i]);` IIFE) loops now iterate `VISIBLE_CLIS` so no aion row is built/wired; `aion-cli` STAYS in the canonical `SUPPORTED_CLIS` 20-tuple + `CLI_META` (drift-lock with `install-scripts.ts`) — excluded ONLY at render/hydrate (byte-consistent w/ 269.1 overlay `AION_BINARY_NAME='aion'`). Added idempotent fail-safe `hideNativeStrip(panel)` (marks every direct tabpanel child EXCEPT `#liv-240-install-section` with `liv-270-native-hidden`), called from `mount()` via `existing ? existing.parentElement : findTabPanel()` (re-hides on AionUi re-render, MutationObserver-safe). (2) `scripts/aionui-patches/local-agents-install-section.css` `b5d59991` — append-only `.liv-270-native-hidden { display: none !important; }` (unique phase-prefixed class, no arco collision). **Gates PASS:** `node --check` EXIT 0; CSS verify `CSS-RULE-OK`; all Task 1/2 acceptance greps green; regression guard = ZERO `livos/` diff (agents-overlay.test.ts/caddy.test.ts untouched, recorded N/A on dev box w/ zero-diff proof); vite NOT required (no React surface). Apply bar / postToShell RCE boundary / renderIcon cascade / heading byte-stable. **NEXT (operator):** cut a release tag → `bash /opt/livos/update.sh` on Mini PC → FULL SW clear + hard-refresh + Re-detect → confirm ONE list, Aion gone from BOTH picker AND panel, all affordances work → type "approved". Live-adjustment branches: (a) Aion still shows after SW clear ⇒ stale cache not code (report `?v=` hash, confirm deploy shipped the patch); (b) native strip still visible ⇒ tighten `hideNativeStrip` to the native container (report DOM child shape) — fail-safe held, grid not broken. SUMMARY: `.planning/phases/270-unify-the-local-agents-panel-into-one-list-fix-aion-cli-stil/270-01-SUMMARY.md`. (STATE narrative format — SDK counters no-op; phase left NOT-complete pending the checkpoint.)
 
@@ -1796,7 +1798,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 271 (Liv AI agent polish) — 1 plans — 2026-06-15T23:10:58.924Z
+**Planned Phase:** 276 (App-store Supabase browse migration (box side) + Umbrel docker image cleanup + dead app-store code removal) — 5 plans — 2026-06-18T02:26:41.630Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
