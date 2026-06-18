@@ -149,17 +149,6 @@ function getBackupFailingContent(
 }
 
 /**
- * Handles "Back That Mac Up" migration notification.
- */
-function getMigratedBackThatMacUpContent(): NotificationContent {
-	return {
-		title: 'Back That Mac Up - Changes Required',
-		description:
-			'LivOS 1.4 introduces Shared Folders over your network, which can also serve as a Time Machine backup location.\nYour current macOS backups using the Back That Mac Up app will no longer work.\nYou can uninstall Back That Mac Up and instead create a new Shared Folder using Files for Time Machine.\nIf you’d still prefer to continue using the Back That Mac Up app:\n1. Go to Time Machine settings.\n2. Remove the backup destination.\n3. Go to Finder.\n4. Press CMD+K and add smb://livinity.local:1445.\n5. Enter "timemachine" (without quotes) as the username and password.\n6. Go back to Time Machine settings.\n7. Add a new location.\n8. Select Livinity.\nNote: If you previously used encryption, you will need to enter your encryption password. Time Machine will then resume backups with all your previous data intact.',
-	}
-}
-
-/**
  * Fallback handler for unknown notification types.
  */
 function getDefaultNotificationContent(notification: string): NotificationContent {
@@ -209,11 +198,6 @@ export function Notifications() {
 				clearNotification(notification)
 			}
 			return getBackupFailingContent(notification, backupRepositoriesQuery, onGoToBackups, onClearNotification)
-		}
-
-		// Handle specific notification types
-		if (notification === 'migrated-back-that-mac-up') {
-			return getMigratedBackThatMacUpContent()
 		}
 
 		// Default fallback for unknown notifications

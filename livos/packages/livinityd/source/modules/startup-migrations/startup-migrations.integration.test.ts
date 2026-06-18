@@ -40,53 +40,6 @@ test('legacy downloads directory is migrated', async () => {
 	await expect(fse.pathExists(newDownloadsFile)).resolves.toBe(true)
 })
 
-test('Back That Mac Up app port is migrated from 445 to 1445', async () => {
-	const {dataDirectory} = livinityd.instance
-	const appComposeFile = `${dataDirectory}/app-data/back-that-mac-up/docker-compose.yml`
-
-	// Create app directory structure
-	await fse.ensureFile(appComposeFile)
-
-	// Create docker-compose.yml with old port mapping
-	const oldComposeContent = {
-		version: '3.7',
-		services: {
-			timemachine: {
-				ports: ['445:445'],
-				random: 'property',
-			},
-			random: 'property',
-		},
-	}
-	await fse.writeFile(appComposeFile, yaml.dump(oldComposeContent))
-
-	// Mark app as installed in store
-	await livinityd.instance.store.set('apps', ['back-that-mac-up'])
-
-	// Check the docker-compose.yml has the expected value
-	await expect(readYaml(appComposeFile)).resolves.toMatchObject(oldComposeContent)
-
-	// Start livinityd
-	await livinityd.instance.start()
-
-	// Check if the docker-compose.yml has been updated with the new port mapping
-	// and all other values are the same
-	await expect(readYaml(appComposeFile)).resolves.toMatchObject({
-		version: '3.7',
-		services: {
-			timemachine: {
-				ports: ['1445:445'],
-				random: 'property',
-			},
-			random: 'property',
-		},
-	})
-
-	// Verify notification was created
-	const notifications = await livinityd.instance.notifications.get()
-	expect(notifications.includes('migrated-back-that-mac-up')).toBe(true)
-})
-
 test('first run writes version without adding a notification', async () => {
 	// Ensure no version is set on first run
 	const versionBefore = await livinityd.instance.store.get('version')
