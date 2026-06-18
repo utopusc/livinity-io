@@ -32,6 +32,22 @@ export default async function appEnvironment(livinityd: Livinityd, command: stri
 		},
 	}
 	if (command === 'up') {
+		// Phase 276 fix (v44.41 regression): the legacy-compat compose is now
+		// networks-only (auth/tor services were removed). `docker compose up` does
+		// NOT create a top-level network when there are no services — so the shared
+		// `livinity_main_network` never got created and EVERY installed app's
+		// `external: livinity_main_network` attach (via docker-compose.common.yml)
+		// failed ("network ... declared as external, but could not be found"),
+		// breaking all apps. Create the network explicitly + idempotently FIRST.
+		const subnet = '10.21.0.0/16' // matches the compose `$NETWORK_IP/16`
+		try {
+			await $(options as any)`docker network create --subnet ${subnet} livinity_main_network`
+		} catch {
+			// Network already exists (steady state) or a benign create race — fine.
+		}
+		// Still run the (now networks-only) compose up: harmless "no service
+		// selected" no-op, but `--remove-orphans` reaps any leftover auth/tor
+		// containers in the `livinity` project from before the removal.
 		await $(
 			options as any,
 		)`docker compose --project-name livinity --file ${composePath} ${command} --build --detach --remove-orphans`
