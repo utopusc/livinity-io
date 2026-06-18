@@ -497,7 +497,6 @@ export default class Apps {
 		// Template resolution chain:
 		// 1. Try builtin compose generation (no network needed)
 		// 2. Try platform DB via API (for apps added via web admin)
-		// 3. Fall back to community git repos (legacy)
 		let appTemplatePath: string
 		let isGeneratedTemplate = false
 
@@ -515,13 +514,7 @@ export default class Apps {
 				appTemplatePath = platformTemplate
 				isGeneratedTemplate = true
 			} else {
-				// Step 3: Fall back to community git repos
-				try {
-					appTemplatePath = await this.#livinityd.appStore.getAppTemplateFilePath(appId)
-					this.logger.log(`Using community repo template for ${appId}`)
-				} catch {
-					throw new Error(`App ${appId} not found: no builtin definition, no platform compose, and not in any app repository`)
-				}
+				throw new Error(`App ${appId} not found: no builtin definition and no platform compose`)
 			}
 		}
 
@@ -1953,11 +1946,7 @@ export default class Apps {
 				appTemplatePath = platformTemplate
 				isGeneratedTemplate = true
 			} else {
-				try {
-					appTemplatePath = await this.#livinityd.appStore.getAppTemplateFilePath(appId)
-				} catch {
-					throw new Error(`App ${appId} not found: no builtin definition, no platform compose, and not in any app repository`)
-				}
+				throw new Error(`App ${appId} not found: no builtin definition and no platform compose`)
 			}
 		}
 
