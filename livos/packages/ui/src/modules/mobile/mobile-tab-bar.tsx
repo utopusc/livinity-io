@@ -4,11 +4,11 @@ import {IconFolder, IconSettings, IconBrandDocker, IconServer} from '@tabler/ico
 
 const TABS = [
 	// AI Chat mobile tab removed with AI Chat teardown.
-	{id: 'files', label: 'Files', icon: IconFolder, appId: 'LIVINITY_files', route: '/files/Home', title: 'Files', appIcon: '/figma-exports/dock-files.png'},
-	{id: 'settings', label: 'Settings', icon: IconSettings, appId: 'LIVINITY_settings', route: '/settings', title: 'Settings', appIcon: '/figma-exports/dock-settings.png'},
+	{id: 'files', label: 'Files', icon: IconFolder, appId: 'LIVINITY_files', route: '/files/Home', title: 'Files', appIcon: '/figma-exports/dock-files-new.svg?v=285'},
+	{id: 'settings', label: 'Settings', icon: IconSettings, appId: 'LIVINITY_settings', route: '/settings', title: 'Settings', appIcon: '/figma-exports/dock-settings-new.svg?v=285'},
 	// Phase 24-01 — replaces the legacy 'server' app with the new Docker app.
 	{id: 'docker', label: 'Docker', icon: IconBrandDocker, appId: 'LIVINITY_docker', route: '/docker', title: 'Docker', appIcon: '/figma-exports/dock-server.svg'},
-	{id: 'server-control', label: 'Server', icon: IconServer, appId: 'LIVINITY_server-control', route: '/server-control', title: 'Server Management', appIcon: '/figma-exports/dock-settings.png'},
+	{id: 'server-control', label: 'Server', icon: IconServer, appId: 'LIVINITY_server-control', route: '/server-control', title: 'Server Management', appIcon: '/figma-exports/dock-server.svg?v=285'},
 ] as const
 
 export function MobileTabBar() {
