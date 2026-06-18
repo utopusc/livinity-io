@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v45.0
 milestone_name: Security Hardening
 status: executing
-last_updated: "2026-06-18T19:56:16.118Z"
+last_updated: "2026-06-18T20:10:39.692Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 191
   completed_phases: 100
   total_plans: 648
-  completed_plans: 553
+  completed_plans: 554
   percent: 85
 ---
 
@@ -1787,6 +1787,8 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
 - D-LIV-STYLED: Hermes runtime patterns adopted, KAWAII emoticons + ASCII frames NOT adopted.
 
 ## Blockers / Concerns
+
+- **2026-06-18 — Phase 285 Plan 03 Task 2 BLOCKED — Rule 4 / data-path correctness; RESEARCH §Open-Q3 is WRONG.** Task 1 (5 Umbrel-removal documentation comments) shipped cleanly: commit `9b7ea7bb`, all 3 install scripts pass `bash -n`, live Umbrel-compat (`umbrel-app.yml` fallback, `${UMBREL_ROOT}` injection) byte-identical. **Task 2 (remove `setup_docker_prerequisites()`) HALTED at the plan's own drift-defense STOP gate.** RESEARCH §Open-Q3 ("DEFINITIVE ANSWER: `data/app-data` has zero consumers, SAFE to remove") is factually inverted: production launches livinityd with `--data-directory /opt/livos/data` (`install.sh:1503`, `deploy-livinityd.sh:1907`) → `app.ts:74` makes the live per-app data root **`/opt/livos/data/app-data/<appId>`** — the exact `data/`-prefixed dir the helper `mkdir`s + `chown -R 1000:1000`s at install. Live consumers: `apps.ts:209/273/447/540/801/1635` (runtime), `factory-reset.sh:108-114` (container teardown loop), `compose-sanitizer.test.ts:7` / `inject-local-ai-clis.test.ts:31` / `files.test.ts:29`. Only the `data/tor/data` half is genuinely orphaned (tor_proxy deleted in P276). Removing the whole helper deletes install-time creation/chown of the LIVE app-data root = the "removing X is harmless" Phase-276 trap the CONTEXT warned against. **Operator/planner decision needed:** A (RECOMMENDED) strip only `data/tor`, keep `data/app-data`, rename helper; B leave helper as-is (lowest churn); C full removal (only after Linux `livos-itest` proves self-heal covers fresh-install + update). Correct RESEARCH §Open-Q3 before re-planning 285-03 Task 2. See `.planning/phases/285-umbrel-leftover-cleanup-and-docker-scroll-fix/285-03-SUMMARY.md`.
 
 - **2026-05-27 — Phase 226 BLOCKED at Plan 03 — Rule 4 architectural.** Mini PC `/etc/caddy/Caddyfile` is owned by livinityd's `caddy.ts` generator (Phase 86 / Phase 218 lineage), not statically managed. Plan 226-01's installer assumes static management — would (a) miss the `http://bruce.livinity.io {` live form on a too-narrow regex, and (b) get its `import` line edits wiped on next livinityd regen. Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` unchanged; no live Mini PC changes; all 6 services not regressed. **Side-effect:** commits `bef03544` + `1e56b8c9` on master + GitHub mean next `bash /opt/livos/update.sh` on Mini PC will abort at Step 4.7 (installer fail). Three Options for closure: **A (RECOMMENDED)** — Phase 226-04 patches caddy.ts to emit `/liv` handler inline inside bruce.livinity.io block emitter, ~50 LOC; **B** — same but drop snippet file entirely; **C** — caddy.ts emits both `import` lines + installer still lays snippet under conf.d/. Mitigations to unblock update.sh until decision: M1 ship 226-04, M2 revert `bef03544`+`1e56b8c9`, M3 patch installer to skip-with-warn (defeats Phase 226 purpose). Phase 227 (iframe mount) blocked until 226-04 + 226-03 retry. See `.planning/phases/226-caddy-liv-proxy-iframe-headers/226-03-DEPLOY-LOG.md` for full Findings 1+2+3 + Options + Mitigations.
 
