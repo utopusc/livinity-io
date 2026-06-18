@@ -2301,6 +2301,34 @@ sleep 2
 # (deploy marked failed, .deployed-sha NOT advanced) but the UI stays reachable.
 health_probe_or_rollback
 
+# ── App Store self-heal: re-seed livos:platform:api_key from .env (2026-06-18) ──
+# The platform api key is seeded into Redis ONLY on a fresh install
+# (deploy-livinityd.sh _dld_seed_platform_api_key, from the --api-key flag).
+# A reinstall / Redis wipe leaves the key empty while .env still holds
+# LIV_PLATFORM_API_KEY — and update.sh never re-seeded it, so the App Store
+# could not install any non-builtin app (livinityd fetchPlatformTemplate →
+# null → "App <id> not found: no builtin definition and no platform compose",
+# silently swallowed into the store iframe). Re-seed from .env here, every
+# update. Fully fail-tolerant: every redis-cli is `|| true` so this can NEVER
+# abort the Update.
+if command -v redis-cli >/dev/null 2>&1; then
+    _PAK_KEY=$(grep -oE '^LIV_PLATFORM_API_KEY=.+' /opt/livos/.env 2>/dev/null | head -1 | cut -d= -f2- || true)
+    _PAK_RURL=$(grep -E '^REDIS_URL=' /opt/livos/.env 2>/dev/null | cut -d= -f2- || true)
+    if [[ -n "${_PAK_KEY:-}" && -n "${_PAK_RURL:-}" ]]; then
+        _PAK_RPW=$(echo "$_PAK_RURL" | sed -E 's|redis://[^:]*:([^@]+)@.*|\1|')
+        _PAK_CUR=$(redis-cli -a "$_PAK_RPW" --no-auth-warning GET livos:platform:api_key 2>/dev/null || true)
+        if [[ "$_PAK_CUR" != "$_PAK_KEY" ]]; then
+            redis-cli -a "$_PAK_RPW" --no-auth-warning SET livos:platform:api_key "$_PAK_KEY" >/dev/null 2>&1 || true
+            redis-cli -a "$_PAK_RPW" --no-auth-warning SET livos:platform:enabled 1 >/dev/null 2>&1 || true
+            ok "Re-seeded livos:platform:api_key from .env (App Store install fix)"
+        else
+            info "livos:platform:api_key already in sync with .env"
+        fi
+    else
+        warn "App Store: no LIV_PLATFORM_API_KEY in /opt/livos/.env — non-builtin app install will fail until a key is provided."
+    fi
+fi
+
 info "Restarting liv-core..."
 systemctl restart liv-core.service
 sleep 1
