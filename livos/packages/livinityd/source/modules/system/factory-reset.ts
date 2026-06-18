@@ -13,7 +13,6 @@ const packageJson = (await import('../../../package.json', {assert: {type: 'json
 
 import type {ProgressStatus} from '../apps/schema.js'
 import type Livinityd from '../../index.js'
-import {LIVINITY_APP_STORE_REPO} from '../../constants.js'
 import {performUpdate, getUpdateStatus} from './update.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -521,12 +520,9 @@ export async function performReset(livinityd: Livinityd) {
 				await livinityd.store.set('user.hashedPassword', userHashedPassword!)
 			}
 			livinityd.version = packageJson.version
-			if (livinityd.appStore) {
-				livinityd.appStore.defaultAppStoreRepo = LIVINITY_APP_STORE_REPO
-			}
 			await livinityd.store.set('version', livinityd.version)
 			await livinityd.store.set('apps', [])
-			await livinityd.store.set('appRepositories', [LIVINITY_APP_STORE_REPO])
+			await livinityd.store.set('appRepositories', [])
 		} catch {}
 	}
 
