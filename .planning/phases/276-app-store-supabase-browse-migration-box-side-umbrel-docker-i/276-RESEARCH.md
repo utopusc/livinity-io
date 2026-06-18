@@ -6,6 +6,24 @@
 
 ---
 
+> ⚠️ **CORRECTION (2026-06-17, adversarial re-verify — 2 independent agents, 95–99%). This OVERRIDES any
+> WS2 guidance below that says to delete `docker-compose.common.yml` or treats legacy-compat as dead:**
+> - **`legacy-compat/docker-compose.common.yml` is LOAD-BEARING — DO NOT DELETE.** The live launcher
+>   `app-script` (run for EVERY app start/stop/install via `app.ts:406`→`app-script.ts`→`app-script:500`)
+>   UNCONDITIONALLY merges `--file docker-compose.common.yml` (`app-script:356`); it is the ONLY place apps
+>   attach to `livinity_main_network` (`compose-generator.ts` emits no network). Deleting it → `docker compose:
+>   no such file` → ALL app start/stop/install break.
+> - **legacy-compat `app-script` / `app-environment.ts` / the `networks:` block are the LIVE app launcher +
+>   network for ALL apps — not dead.** Only the `auth` + `tor_proxy` SERVICES inside the compose are dead.
+> - **KEEP:** `docker-compose.common.yml`, the `networks:` block, `app-script(.ts)`, `app-environment.ts`
+>   NETWORK_IP, `docker-compose.app_proxy.yml` (never merged — app.ts strips app_proxy). **Delete ONLY:** the
+>   `auth` service (276-01) + `tor_proxy` service + its fragments/torrc (276-05, after removing the
+>   `app-script` REMOTE_TOR_ACCESS branch).
+> - **tor is a LIVE feature** ("Remote Tor Access" toggle, default OFF), not dead cruft → removal is GATED on
+>   operator decision + box check. See 276-01-PLAN (auth, safe now) and 276-05-PLAN (tor, DEFERRED-GATED).
+
+---
+
 <user_constraints>
 ## User Constraints (from CONTEXT.md — operator decisions, locked)
 
