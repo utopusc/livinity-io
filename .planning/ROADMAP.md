@@ -4875,12 +4875,16 @@ Plans:
 
 ### Phase 276: App-store Supabase browse migration (box side) + Umbrel docker image cleanup + dead app-store code removal
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** The box App Store browse stays the live iframe of livinity.io/store (Supabase-backed) while all dead git-clone marketplace code is removed: stub `appStore.registry()` to `[]` (keep the route + RegistryApp type + builtinApps), delete the AppRepository/git-clone machinery + install Step 3, fix the 12 dead `livinity-apps-gallery` builtin icon URLs, delete the unrouted native grid UI + the dead sync-catalog importer, and remove the dead Umbrel `auth-server` + `tor` docker images end-to-end (compose services, both install scripts, install tests, sibling fragments, tarballs). WS3 (libva-utils) dropped — the package name is already correct. No desktop crash, no install regression.
+**Requirements**: WS1-A, WS1-B, WS1-C, WS1-D, WS1-E, WS2-A, WS2-B, WS2-C, WS2-D (de-facto, derived from CONTEXT/RESEARCH — no formal REQ-IDs mapped)
 **Depends on:** Phase 275
-**Plans:** 0 plans
+**Plans:** 5 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 276 to break down)
+- [ ] 276-01-PLAN.md — WS2 auth-server removal: delete the `auth` compose service + the pull/retag from both install scripts (lockstep) + obsolete install TESTs 39/40/41 (wave 1)
+- [ ] 276-02-PLAN.md — WS1 backend: stub `registry()`→[], delete git-clone machinery + install Step 3, fix 12 builtin gallery icon URLs + 2 route fallbacks (keep registry/builtinApps routes + RegistryApp type) (wave 1)
+- [ ] 276-03-PLAN.md — WS1 UI: delete the dead native app-store grid cluster + the dead sync-catalog importer (keep the iframe + install bridge + AvailableAppsProvider) (wave 1)
+- [ ] 276-04-PLAN.md — WS1 test harness: rework create-test-livinityd + apps.integration.test.ts off git-clone (resolve sparkles via Step-2 mock), delete the 3 git-clone-machinery test files (wave 2, depends on 276-02)
+- [ ] 276-05-PLAN.md — WS2 tor removal: delete the `tor_proxy` compose service (networks-only, Option a) + dead tor/auth env + sibling fragments + image tarballs + build/push scripts (wave 2, depends on 276-01)
 
 ---
