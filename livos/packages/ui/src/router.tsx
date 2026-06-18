@@ -32,10 +32,8 @@ import {Notifications} from './routes/notifications'
 import {Settings} from './routes/settings'
 
 // v34 — Native local-mode App Store imports REMOVED (route entries also removed below).
-// const AppStoreDiscover = React.lazy(() => import('./routes/app-store/discover'))
-// const AppStoreCategoryPage = React.lazy(() => import('./routes/app-store/category-page'))
-// const AppStoreAppPage = React.lazy(() => import('./routes/app-store/app-page'))
-// const CommunityAppStore = React.lazy(() => import('./routes/community-app-store'))
+// Phase 276 — the dead native grid cluster was deleted; browse is the iframe
+// (AppStoreWindowContent in window-content.tsx).
 // Phase 76 / Plan 76-04 — Agent Marketplace route. Sibling to /app-store
 // inside the SheetLayout. Lazy-loaded to keep the initial bundle lean
 // and to mirror the existing app-store / community-app-store pattern.
