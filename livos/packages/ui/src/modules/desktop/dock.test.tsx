@@ -60,7 +60,7 @@ vi.mock('@/providers/apps', () => ({
 		'LIVINITY_live-usage': {name: 'Live Usage', icon: '/figma-exports/dock-live-usage.png', systemAppTo: '?dialog=live-usage'},
 		'LIVINITY_app-store': {name: 'App Store', icon: '/figma-exports/dock-app-store.png', systemAppTo: '/app-store'},
 		'LIVINITY_server-control': {name: 'Server Management', icon: '/figma-exports/dock-server.svg', systemAppTo: '/server-control'},
-		'LIVINITY_my-devices': {name: 'Devices', icon: '/figma-exports/dock-settings.png', systemAppTo: '/my-devices'},
+		'LIVINITY_my-devices': {name: 'Devices', icon: '/figma-exports/dock-settings-new.svg?v=285', systemAppTo: '/my-devices'},
 		'LIVINITY_terminal': {name: 'Terminal', icon: '/figma-exports/dock-terminal.svg', systemAppTo: '/terminal'},
 		// Phase 235 — apps.tsx icon string carries a ?v cache-bust query
 		// so operator browsers that cached the pre-Plan-234-02 404 refetch
