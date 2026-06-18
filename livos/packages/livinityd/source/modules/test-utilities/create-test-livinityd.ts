@@ -6,7 +6,6 @@ import Livinityd from '../../index.js'
 import type {AppRouter} from '../server/trpc/index.js'
 
 import temporaryDirectory from '../utilities/temporary-directory.js'
-import runGitServer from './run-git-server.js'
 
 export default async function createTestLivinityd({autoLogin = false, autoStart = true} = {}) {
 	const directory = temporaryDirectory()
@@ -17,14 +16,18 @@ export default async function createTestLivinityd({autoLogin = false, autoStart 
 		jwt = newJwt
 	}
 
-	const gitServer = await runGitServer()
-
+	// Phase 276-04: the git-clone app-store resolution (install Step 3) was
+	// removed in plan 276-02. The harness no longer wires a local git server as
+	// the default app store repo — non-builtin apps now resolve via Step 2
+	// (fetchPlatformTemplate), which apps.integration.test.ts mocks to the local
+	// sparkles fixture. (run-git-server.js is kept; widget.integration.test.ts
+	// still uses its own runGitServer call.)
 	const dataDirectory = await directory.create()
 	const livinityd = new Livinityd({
 		dataDirectory,
 		port: 0,
 		logLevel: 'silent',
-		defaultAppStoreRepo: gitServer.url,
+		defaultAppStoreRepo: '',
 	})
 	if (autoStart) await livinityd.start()
 
@@ -74,7 +77,6 @@ export default async function createTestLivinityd({autoLogin = false, autoStart 
 
 	async function cleanup() {
 		await livinityd.stop()
-		await gitServer.close()
 		await directory.destroyRoot()
 	}
 

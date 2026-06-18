@@ -6,18 +6,36 @@ import yaml from 'js-yaml'
 
 import createTestLivinityd from '../test-utilities/create-test-livinityd.js'
 import {BACKUP_RESTORE_FIRST_START_FLAG} from '../../constants.js'
-import runGitServer from '../test-utilities/run-git-server.js'
 import type {AppManifest} from './schema.js'
 
 let livinityd: Awaited<ReturnType<typeof createTestLivinityd>>
-let communityAppStoreGitServer: Awaited<ReturnType<typeof runGitServer>>
+
+// Phase 276-04: install Step 3 (git-clone community repo) was removed in plan
+// 276-02, so `sparkles-hello-world` (NOT a builtin) can no longer be resolved by
+// the old test git server. The lifecycle suite now resolves it via Step 2
+// (fetchPlatformTemplate) by spying that method to return the local fixture
+// directory — preserving every assertion below (same id/icon/port/manifest/
+// backupIgnore). readManifestInDirectory reads livinity-app.yml +
+// docker-compose.yml from this dir; install rsyncs them into app-data first, so
+// the later manifest-mutation tests still write to app-data, not the fixture.
+const SPARKLES_FIXTURE_DIR = path.join(
+	__dirname,
+	'../test-utilities/fixtures/community-repo/sparkles-hello-world',
+)
 
 beforeAll(async () => {
-	;[livinityd, communityAppStoreGitServer] = await Promise.all([createTestLivinityd(), runGitServer()])
+	livinityd = await createTestLivinityd()
+	// fetchPlatformTemplate is a private method on the Apps instance — spy via
+	// `as any`. Returns the fixture dir for sparkles, null otherwise (so the
+	// `unknown-app-id` / unknown-app "not found" assertions stay green).
+	vi.spyOn(livinityd.instance.apps as any, 'fetchPlatformTemplate').mockImplementation(
+		async (...args: unknown[]) => ((args[0] as string) === 'sparkles-hello-world' ? SPARKLES_FIXTURE_DIR : null),
+	)
 })
 
 afterAll(async () => {
-	await Promise.all([communityAppStoreGitServer.close(), livinityd.cleanup()])
+	vi.restoreAllMocks()
+	await livinityd.cleanup()
 })
 
 // The following tests are stateful and must be run in order
