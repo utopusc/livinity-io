@@ -398,7 +398,7 @@ export function ContainerSection() {
 				</div>
 			) : (
 				/* Desktop table layout */
-				<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
+				<div className='rounded-xl border border-border-default bg-surface-base overflow-x-hidden overflow-y-auto'>
 					<Table>
 						<TableHeader>
 							<TableRow>
