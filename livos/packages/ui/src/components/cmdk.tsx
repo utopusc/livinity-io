@@ -159,8 +159,10 @@ function CmdkContent() {
 				onSelect={() => {
 					// Restore last visited path in Files app for better UX
 					const lastFilesPath = sessionStorage.getItem('lastFilesPath')
-
-					navigate(lastFilesPath || systemAppsKeyed['LIVINITY_files'].systemAppTo)
+					const target = lastFilesPath || systemAppsKeyed['LIVINITY_files'].systemAppTo
+					if (windowManager)
+						windowManager.openWindow('LIVINITY_files', target, 'Files', systemAppsKeyed['LIVINITY_files']?.icon || '')
+					else navigate(target)
 					setOpen(false)
 				}}
 			>
@@ -170,7 +172,10 @@ function CmdkContent() {
 				icon={systemAppsKeyed['LIVINITY_files'].icon}
 				value={t('files-sidebar.recents')}
 				onSelect={() => {
-					navigate(`/files${FILES_RECENTS_PATH}`)
+					const target = `/files${FILES_RECENTS_PATH}`
+					if (windowManager)
+						windowManager.openWindow('LIVINITY_files', target, 'Files', systemAppsKeyed['LIVINITY_files']?.icon || '')
+					else navigate(target)
 					setOpen(false)
 				}}
 			>
@@ -180,7 +185,10 @@ function CmdkContent() {
 				icon={systemAppsKeyed['LIVINITY_files'].icon}
 				value={t('files-sidebar.apps')}
 				onSelect={() => {
-					navigate(`/files${FILES_APPS_PATH}`)
+					const target = `/files${FILES_APPS_PATH}`
+					if (windowManager)
+						windowManager.openWindow('LIVINITY_files', target, 'Files', systemAppsKeyed['LIVINITY_files']?.icon || '')
+					else navigate(target)
 					setOpen(false)
 				}}
 			>
@@ -190,7 +198,10 @@ function CmdkContent() {
 				icon={systemAppsKeyed['LIVINITY_files'].icon}
 				value={t('files-sidebar.trash')}
 				onSelect={() => {
-					navigate(`/files${FILES_TRASH_PATH}`)
+					const target = `/files${FILES_TRASH_PATH}`
+					if (windowManager)
+						windowManager.openWindow('LIVINITY_files', target, 'Files', systemAppsKeyed['LIVINITY_files']?.icon || '')
+					else navigate(target)
 					setOpen(false)
 				}}
 			>
