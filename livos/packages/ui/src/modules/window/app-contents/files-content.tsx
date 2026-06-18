@@ -15,7 +15,7 @@ import {RecentsListing} from '@/features/files/components/listing/recents-listin
 import {SearchListing} from '@/features/files/components/listing/search-listing'
 import {TrashListing} from '@/features/files/components/listing/trash-listing'
 import {RewindOverlay} from '@/features/files/components/rewind'
-import {RewindOverlayProvider} from '@/features/files/components/rewind/overlay-context'
+import {RewindOverlayProvider, useRewindOverlay} from '@/features/files/components/rewind/overlay-context'
 import {Sidebar} from '@/features/files/components/sidebar'
 import {MobileSidebarWrapper} from '@/features/files/components/sidebar/mobile-sidebar-wrapper'
 import {HOME_PATH, APPS_PATH, RECENTS_PATH, SEARCH_PATH, TRASH_PATH} from '@/features/files/constants'
@@ -39,30 +39,84 @@ type FilesWindowContentProps = {
 	initialRoute: string
 }
 
+// Dialog names the launch suffix is allowed to auto-open inside the window.
+// The in-memory WindowRouterProvider has no browser URL, so the existing
+// ?dialog=/?rewind= auto-open mechanisms (which read useSearchParams /
+// window.location.search) never fire — we parse the suffix off initialRoute
+// once on mount instead. SECURITY: only honor a name on this fixed allow-list.
+const ALLOWED_DIALOGS = ['files-format-drive'] as const
+
 export default function FilesWindowContent({initialRoute}: FilesWindowContentProps) {
+	// Split the launch suffix off the route BEFORE deriving the files path, so
+	// WindowRouterProvider receives a clean path (not "…?rewind=open").
+	// initialRoute may carry "?rewind=open" or "?dialog=files-format-drive&deviceId=sdc".
+	const [routePart, queryPart] = initialRoute.split('?')
+	const suffixParams = new URLSearchParams(queryPart || '')
+
 	// Convert route to files path (remove /files prefix if present)
 	// Decode URI components so encoded names (e.g. "Untitled%20Folder") become filesystem paths
-	const raw = initialRoute.startsWith('/files')
-		? initialRoute.replace('/files', '') || HOME_PATH
-		: initialRoute || HOME_PATH
+	const raw = routePart.startsWith('/files')
+		? routePart.replace('/files', '') || HOME_PATH
+		: routePart || HOME_PATH
 	const filesPath = decodeURIComponent(raw)
+
+	// SECURITY — validate the parsed launch signal against a fixed allow-list.
+	const wantRewind = suffixParams.get('rewind') === 'open'
+	const dialogParam = suffixParams.get('dialog')
+	const wantFormat = dialogParam != null && (ALLOWED_DIALOGS as readonly string[]).includes(dialogParam)
+	// deviceId is an OPAQUE string passed straight to FormatDriveDialog, which
+	// self-gates on a real drive (`if (!drive ...) return null`). Never eval'd,
+	// never used in a dynamic import / DOM injection / URL write.
+	const formatDeviceId = wantFormat ? suffixParams.get('deviceId') : null
 
 	return (
 		<WindowRouterProvider initialRoute={filesPath}>
 			<ErrorBoundary FallbackComponent={ErrorBoundaryCardFallback}>
-				<FilesWindowRouter />
+				<FilesWindowRouter initialRewind={wantRewind} initialFormatDeviceId={formatDeviceId} />
 			</ErrorBoundary>
 		</WindowRouterProvider>
 	)
 }
 
-function FilesWindowRouter() {
+/**
+ * Fires a MOUNT-ONLY effect that translates the parsed launch suffix into a
+ * programmatic dialog open. Rendered under RewindOverlayProvider so
+ * useRewindOverlay() resolves. The suffix is a one-shot launch signal.
+ */
+function InitialDialogTrigger({
+	rewind,
+	formatDeviceId,
+	onFormat,
+}: {
+	rewind: boolean
+	formatDeviceId: string | null
+	onFormat: (id: string) => void
+}) {
+	const {setRepoOpen} = useRewindOverlay()
+	useEffect(() => {
+		if (rewind) setRepoOpen(true)
+		else if (formatDeviceId) onFormat(formatDeviceId)
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []) // mount-only — the suffix is a one-shot launch signal
+	return null
+}
+
+function FilesWindowRouter({
+	initialRewind,
+	initialFormatDeviceId,
+}: {
+	initialRewind: boolean
+	initialFormatDeviceId: string | null
+}) {
 	const {currentRoute, navigate, goBack, canGoBack} = useWindowRouter()
 	const {setSelectedItems} = useFilesStore()
 	const setIsSelectingOnMobile = useFilesStore((state) => state.setIsSelectingOnMobile)
 
 	const isMobile = useIsMobile()
 	const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
+
+	// Forced (windowed) format-drive device — opens FormatDriveDialog without a browser URL.
+	const [forcedFormatDeviceId, setForcedFormatDeviceId] = useState<string | null>(null)
 
 	// Ensure we have a valid path
 	const currentPath = currentRoute || HOME_PATH
@@ -108,6 +162,11 @@ function FilesWindowRouter() {
 		>
 			<FilesDndWrapper>
 				<RewindOverlayProvider>
+					<InitialDialogTrigger
+						rewind={initialRewind}
+						formatDeviceId={initialFormatDeviceId}
+						onFormat={setForcedFormatDeviceId}
+					/>
 					<FileViewer />
 
 					<div className='flex h-full flex-col'>
@@ -172,7 +231,10 @@ function FilesWindowRouter() {
 						<AddNetworkShareDialog />
 					</Suspense>
 					<Suspense>
-						<FormatDriveDialog />
+						<FormatDriveDialog
+							forcedDeviceId={forcedFormatDeviceId}
+							onForcedClose={() => setForcedFormatDeviceId(null)}
+						/>
 					</Suspense>
 				</RewindOverlayProvider>
 			</FilesDndWrapper>
