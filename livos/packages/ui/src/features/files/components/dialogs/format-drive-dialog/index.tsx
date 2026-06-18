@@ -58,11 +58,31 @@ function FilesystemCard({
 	)
 }
 
-export default function FormatDriveDialog() {
+type FormatDriveDialogProps = {
+	/**
+	 * When set, open the dialog for this device WITHOUT reading the browser URL.
+	 * Used by the windowed Files surface (in-memory router has no browser URL).
+	 * The parent owns this state and clears it via `onForcedClose` when the dialog closes.
+	 */
+	forcedDeviceId?: string | null
+	/** Called when the forced-open instance is dismissed so the parent can clear `forcedDeviceId`. */
+	onForcedClose?: () => void
+}
+
+export default function FormatDriveDialog({forcedDeviceId, onForcedClose}: FormatDriveDialogProps = {}) {
 	const dialogProps = useDialogOpenProps('files-format-drive')
 	const {disks, formatExternalStorageDevice, isFormatting} = useExternalStorage()
 	const [filesystem, setFilesystem] = useState<'ext4' | 'exfat'>('ext4')
 	const [label, setLabel] = useState('')
+
+	// Open if EITHER the browser URL says so (full-page legacy path) OR a forcedDeviceId
+	// was provided (windowed surface). No browser-URL write is performed for the forced path.
+	const open = dialogProps.open || Boolean(forcedDeviceId)
+
+	const handleOpenChange = (nextOpen: boolean) => {
+		dialogProps.onOpenChange(nextOpen)
+		if (!nextOpen && forcedDeviceId) onForcedClose?.()
+	}
 
 	const resetForm = () => {
 		setFilesystem('ext4')
@@ -71,15 +91,16 @@ export default function FormatDriveDialog() {
 
 	// Reset form when dialog closes
 	useEffect(() => {
-		if (!dialogProps.open) {
+		if (!open) {
 			resetForm()
 		}
-	}, [dialogProps.open])
+	}, [open])
 
-	// Find the drive that needs formatting from query params
-	// The dialog is opened via ?dialog=files-format-drive&deviceId=sdc
+	// Find the drive that needs formatting.
+	// deviceId comes EITHER from the prop (windowed surface) OR the browser URL
+	// (full-page legacy path, opened via ?dialog=files-format-drive&deviceId=sdc).
 	const urlParams = new URLSearchParams(window.location.search)
-	const deviceId = urlParams.get('deviceId')
+	const deviceId = forcedDeviceId ?? urlParams.get('deviceId')
 	const drive = disks?.find((d) => d.id === deviceId)
 
 	if (!drive || drive.isFormatting) return null
@@ -94,12 +115,12 @@ export default function FormatDriveDialog() {
 			filesystem,
 			label: label || drive.name.slice(0, MAX_LABEL_LENGTH),
 		})
-		dialogProps.onOpenChange(false)
+		handleOpenChange(false)
 		resetForm()
 	}
 
 	return (
-		<AlertDialog {...dialogProps}>
+		<AlertDialog open={open} onOpenChange={handleOpenChange}>
 			<AlertDialogContent className='max-sm:px-4'>
 				<AlertDialogHeader className='max-sm:py-0'>
 					<div className='flex flex-row items-center gap-5 sm:flex-col sm:items-start sm:gap-4'>
