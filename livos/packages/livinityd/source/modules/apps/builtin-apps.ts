@@ -93,7 +93,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     description: 'n8n is an extendable workflow automation tool. With a fair-code distribution model, n8n will always have visible source code, be available to self-host, and allow you to add your own custom functions, logic and apps.',
     website: 'https://n8n.io',
     developer: 'n8n GmbH',
-    icon: 'https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/n8n/icon.svg',
+    icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/n8n.svg',
     docker: {
       image: 'n8nio/n8n:latest',
       environment: {
@@ -144,7 +144,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     description: 'Portainer is a lightweight management UI which allows you to easily manage your Docker environments.',
     website: 'https://www.portainer.io',
     developer: 'Portainer.io',
-    icon: 'https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/portainer/icon.svg',
+    icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/portainer.svg',
     docker: {
       image: 'portainer/portainer-ce:latest',
       volumes: ['/data', '/var/run/docker.sock:/var/run/docker.sock'],
@@ -182,7 +182,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     description: 'Home Assistant is a free and open-source software for home automation designed to be a central control system for smart home devices.',
     website: 'https://www.home-assistant.io',
     developer: 'Home Assistant',
-    icon: 'https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/home-assistant/icon.svg',
+    icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/home-assistant.svg',
     docker: {
       image: 'homeassistant/home-assistant:stable',
       environment: { TZ: 'Europe/Istanbul' },
@@ -221,7 +221,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     description: 'Jellyfin is a Free Software Media System that puts you in control of managing and streaming your media.',
     website: 'https://jellyfin.org',
     developer: 'Jellyfin Contributors',
-    icon: 'https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/jellyfin/icon.svg',
+    icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/jellyfin.svg',
     docker: {
       image: 'jellyfin/jellyfin:latest',
       volumes: ['/config', '/cache', '/media'],
@@ -260,7 +260,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     description: 'Nextcloud Hub is the industry-leading, fully open-source, on-premises content collaboration platform.',
     website: 'https://nextcloud.com',
     developer: 'Nextcloud GmbH',
-    icon: 'https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/nextcloud/icon.svg',
+    icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nextcloud.svg',
     docker: {
       image: 'nextcloud:latest',
       volumes: ['/var/www/html'],
@@ -301,7 +301,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     description: 'Run VS Code on any machine anywhere and access it in the browser.',
     website: 'https://coder.com',
     developer: 'Coder',
-    icon: 'https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/code-server/icon.svg',
+    icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/code-server.png',
     docker: {
       image: 'codercom/code-server:latest',
       volumes: ['/home/coder/.config', '/home/coder/project'],
@@ -344,7 +344,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     description: 'Uptime Kuma is a fancy self-hosted monitoring tool like "Uptime Robot".',
     website: 'https://uptime.kuma.pet',
     developer: 'Louis Lam',
-    icon: 'https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/uptime-kuma/icon.svg',
+    icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/uptime-kuma.svg',
     docker: {
       image: 'louislam/uptime-kuma:latest',
       volumes: ['/app/data'],
@@ -379,7 +379,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     description: 'Gitea is a painless self-hosted Git service similar to GitHub, Bitbucket, and GitLab.',
     website: 'https://gitea.io',
     developer: 'Gitea',
-    icon: 'https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/gitea/icon.svg',
+    icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/gitea.svg',
     docker: {
       image: 'gitea/gitea:latest',
       environment: { USER_UID: '1000', USER_GID: '1000' },
@@ -421,7 +421,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     description: 'Grafana allows you to query, visualize, alert on and understand your metrics.',
     website: 'https://grafana.com',
     developer: 'Grafana Labs',
-    icon: 'https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/grafana/icon.svg',
+    icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/grafana.svg',
     docker: {
       image: 'grafana/grafana:latest',
       volumes: ['/var/lib/grafana'],
@@ -462,7 +462,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     description: 'PostgreSQL is a powerful, open source object-relational database system.',
     website: 'https://www.postgresql.org',
     developer: 'PostgreSQL Global Development Group',
-    icon: 'https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/postgresql/icon.svg',
+    icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/postgresql.svg',
     docker: {
       image: 'postgres:16',
       volumes: ['/var/lib/postgresql/data'],
@@ -1341,7 +1341,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     description: 'Suna is an open-source autonomous agent platform (Manus alternative) — agents run 24/7 in isolated Docker sandboxes with shared filesystem, credentials, and history. 60+ skills, 3000+ integrations.\n\n**Setup requires a free Supabase Cloud project** (managed Postgres + Auth, no extra Mini PC services). Visit supabase.com → New Project → Settings → API → copy the 3 values into the install form below.\n\nLLM backend auto-configured to use your Claude subscription via Livinity Broker — no LLM API key prompt.\n\nApache 2.0 licensed.',
     website: 'https://kortix.com',
     developer: 'Kortix AI',
-    icon: 'https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/suna/icon.svg',
+    icon: 'https://avatars.githubusercontent.com/u/128464470',
     repo: 'https://github.com/kortix-ai/suna',
     requiresAiProvider: true,  // Phase 43.2 → broker env auto-injection (incl. OPENCODE_CONFIG_JSON)
     docker: {
@@ -1506,7 +1506,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     description: 'Bytebot Desktop is an XFCE-based Linux desktop image (1280x960) packaged for AI agent control. Apache 2.0 licensed. Designed to be driven programmatically by the Liv Agent — typically not started directly; the Liv Agent spawns this on demand. Includes Firefox, file manager, terminal, and a VNC server (websockify on port 9990) for live screen viewing.',
     website: 'https://github.com/bytebot-ai/bytebot',
     developer: 'Bytebot AI',
-    icon: 'https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/bytebot/icon.svg',
+    icon: 'https://raw.githubusercontent.com/bytebot-ai/bytebot/main/docs/images/bytebot-logo.png',
     repo: 'https://github.com/bytebot-ai/bytebot',
     docker: {
       image: 'ghcr.io/bytebot-ai/bytebot-desktop:edge',

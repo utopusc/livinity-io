@@ -107,9 +107,12 @@ export const apps = router({
 					}
 					const hasCredentials = !!defaultUsername || !!defaultPassword
 					const showCredentialsBeforeOpen = hasCredentials && !(await app.store.get('hideCredentialsBeforeOpen'))
-					// Check if this is a builtin app, use our icon from GitHub gallery
+					// Use the manifest icon, falling back to the builtin app's icon.
+					// Phase 276: dropped the dead community-gallery synthesized
+					// URL — a missing icon falls through to the box's onError
+					// APP_ICON_PLACEHOLDER_SRC (LauncherIcon/app-icon).
 					const builtinApp = getBuiltinApp(app.id)
-					const appIcon = icon ?? builtinApp?.icon ?? `https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/${app.id}/icon.svg`
+					const appIcon = icon ?? builtinApp?.icon ?? undefined
 
 					// Get subdomain for this app (if configured)
 					// Phase 141-03: `host` carries the canonical FQDN (e.g.
@@ -646,10 +649,10 @@ export const apps = router({
 						name = manifest.name || inst.appId
 						icon = manifest.icon || ''
 						path = manifest.path || ''
-						// Use builtin icon if available
+						// Use builtin icon if available; Phase 276 dropped the dead
+						// gallery fallback (leave icon '' → LauncherIcon placeholder).
 						const builtinApp = getBuiltinApp(inst.appId)
 						if (!icon && builtinApp?.icon) icon = builtinApp.icon
-						if (!icon) icon = `https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/${inst.appId}/icon.svg`
 					} catch { /* use defaults */ }
 				}
 				// Check Docker container state
