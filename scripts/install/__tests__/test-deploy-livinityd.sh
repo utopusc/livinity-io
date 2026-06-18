@@ -942,9 +942,10 @@ fi
 
 # TEST 39: Bug #6 — _dld_setup_docker_images helper present (Mini PC pattern)
 # Phase 105 UAT discovered livinityd's legacy-compat docker-compose references
-# livos/auth-server:1.0.5 + livos/tor:0.4.7.8 by image: field. These don't exist
-# under livos/* on Docker Hub — they're local re-tags of getumbrel/* per
-# Mini PC's livos/install.sh:408-443 setup_docker_images() pattern.
+# the livos/tor:0.4.7.8 image by image: field. It doesn't exist under livos/* on
+# Docker Hub — it's a local re-tag of getumbrel/tor per Mini PC's
+# livos/install.sh setup_docker_images() pattern. (The auth-server re-tag was
+# removed in plan 276-01 with the dead Umbrel auth service.)
 info "TEST 39 (Bug #6): _dld_setup_docker_images helper defined"
 
 if grep -qE '^_dld_setup_docker_images\(\) \{' "$DEPLOY_SH"; then
@@ -953,14 +954,14 @@ else
     fail "_dld_setup_docker_images helper MISSING — livinityd Apps module will crash on docker compose up (105-05 Bug #6 regression)"
 fi
 
-# TEST 40: Bug #6 — helper pulls getumbrel/auth-server:1.0.5 + retags as livos/*
-info "TEST 40 (Bug #6): pull+retag entries for auth-server + tor"
+# TEST 40: Bug #6 — helper pulls getumbrel/tor + retags as livos/tor
+# (auth-server entry removed in plan 276-01 with the dead Umbrel auth service)
+info "TEST 40 (Bug #6): pull+retag entry for tor"
 
-if grep -qE '"getumbrel/auth-server:1\.0\.5\|livos/auth-server:1\.0\.5"' "$DEPLOY_SH" && \
-   grep -qE '"getumbrel/tor:0\.4\.7\.8\|livos/tor:0\.4\.7\.8"' "$DEPLOY_SH"; then
-    pass "pull+retag entries match Mini PC pattern (getumbrel/* → livos/*) (105-05 Bug #6)"
+if grep -qE '"getumbrel/tor:0\.4\.7\.8\|livos/tor:0\.4\.7\.8"' "$DEPLOY_SH"; then
+    pass "tor pull+retag entry matches Mini PC pattern (getumbrel/tor → livos/tor) (105-05 Bug #6)"
 else
-    fail "pull+retag entries MISSING or malformed (expected Mini PC livos/install.sh:413-414 pattern) (105-05 Bug #6 regression)"
+    fail "tor pull+retag entry MISSING or malformed (expected Mini PC livos/install.sh:413 pattern) (105-05 Bug #6 regression)"
 fi
 
 # TEST 41: Bug #6 — pipeline calls _dld_setup_docker_images between streaming
