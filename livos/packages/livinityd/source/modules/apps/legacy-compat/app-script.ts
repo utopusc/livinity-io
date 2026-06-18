@@ -18,7 +18,6 @@ export default async function appScript(livinityd: Livinityd, command: string, a
 	// party app had its repo uninstalled") — that empty-string state is now the
 	// permanent one. Builtin/platform apps don't use SCRIPT_APP_REPO_DIR.
 	const SCRIPT_APP_REPO_DIR = ''
-	const torEnabled = await livinityd.store.get('torEnabled')
 	return $({
 		stdio: inheritStdio ? 'inherit' : 'pipe',
 		env: {
@@ -27,11 +26,9 @@ export default async function appScript(livinityd: Livinityd, command: string, a
 			JWT_SECRET: await livinityd.server.getJwtSecret(),
 			SCRIPT_APP_REPO_DIR,
 			BITCOIN_NETWORK: 'mainnet', // Needed for legacy reasons otherwise the Bitcoin app fails to start
-			TOR_PROXY_IP: '10.21.21.11',
-			TOR_PROXY_PORT: '9050',
-			TOR_PASSWORD: 'mLcLDdt5qqMxlq3wv8Din3UD44bTZHzRFhIktw38kWg=',
-			TOR_HASHED_PASSWORD: '16:158FBE422B1A9D996073BE2B9EC38852C70CE12362CA016F8F6859C426',
-			REMOTE_TOR_ACCESS: torEnabled ? 'true' : 'false',
+			// Phase 276 (276-05): the tor-access env was removed with the Remote
+			// Tor Access feature — app-script no longer merges the tor compose
+			// fragment (that branch is gone), so the tor env is dead.
 		},
 	})`${scriptPath} ${command} ${arg}`
 }
