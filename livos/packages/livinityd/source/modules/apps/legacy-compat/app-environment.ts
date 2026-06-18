@@ -21,11 +21,13 @@ export default async function appEnvironment(livinityd: Livinityd, command: stri
 			// NETWORK_IP feeds the compose `networks:` block (subnet for
 			// livinity_main_network). Phase 276: the dead auth/tor service env
 			// keys were removed with the auth (276-01) + tor (276-05) services —
-			// the networks-only compose only references $NETWORK_IP.
+			// the networks-only compose only references $NETWORK_IP. The dead
+			// JWT_SECRET + LIVINITYD_RPC_HOST injections were stripped too
+			// (276 hygiene) — their only consumer was the removed auth-server;
+			// no point handing livinityd's real signing key to a compose env
+			// nothing reads.
 			// TODO: Load this from somewhere more appropriate
 			NETWORK_IP: '10.21.0.0',
-			JWT_SECRET: await livinityd.server.getJwtSecret(),
-			LIVINITYD_RPC_HOST: `host.docker.internal:${livinityd.server.port}`, // TODO: Check host.docker.internal works on linux
 			LIVINITY_LEGACY_COMPAT_DIR: currentDirname,
 		},
 	}

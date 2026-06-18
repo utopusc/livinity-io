@@ -23,7 +23,9 @@ export default async function appScript(livinityd: Livinityd, command: string, a
 		env: {
 			SCRIPT_LIVINITY_ROOT: livinityd.dataDirectory,
 			SCRIPT_DOCKER_FRAGMENTS: currentDirname,
-			JWT_SECRET: await livinityd.server.getJwtSecret(),
+			// Phase 276 hygiene: JWT_SECRET injection removed — the only consumer
+			// was the deleted Umbrel auth-server; no app-script hook or app compose
+			// reads it, so livinityd's signing key is no longer exposed to the app env.
 			SCRIPT_APP_REPO_DIR,
 			BITCOIN_NETWORK: 'mainnet', // Needed for legacy reasons otherwise the Bitcoin app fails to start
 			// Phase 276 (276-05): the tor-access env was removed with the Remote
