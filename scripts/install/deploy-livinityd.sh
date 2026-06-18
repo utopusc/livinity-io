@@ -771,21 +771,21 @@ _dld_install_docker() {
 
 # ── 4c. LivOS Docker images (Phase 105-05 UAT Bug #6 fix) ───────────────────
 # Mirror of Mini PC's livos/install.sh:408-443 setup_docker_images() helper.
-# legacy-compat/docker-compose.yml references `livos/auth-server:1.0.5` and
-# `livos/tor:0.4.7.8` by image: field. These images don't exist on Docker Hub
-# under the `livos/` namespace — they're local re-tags of Umbrel's official
-# images. Without this helper, livinityd's Apps module crashes on first
-# `docker compose up` (UAT Bug #6 from Phase 105 mainserver test 2026-05-12).
+# legacy-compat/docker-compose.yml references `livos/tor:0.4.7.8` by image:
+# field. This image doesn't exist on Docker Hub under the `livos/` namespace —
+# it's a local re-tag of Umbrel's official image. Without this helper,
+# livinityd's Apps module crashes on first `docker compose up` (UAT Bug #6 from
+# Phase 105 mainserver test 2026-05-12). (The auth-server image was dropped in
+# plan 276-01 along with the dead Umbrel auth service.)
 #
-# Upstream provenance (both MIT, byte-identical):
-#   getumbrel/auth-server:1.0.5  →  livos/auth-server:1.0.5  +  :latest alias
+# Upstream provenance (MIT, byte-identical):
 #   getumbrel/tor:0.4.7.8        →  livos/tor:0.4.7.8        +  :latest alias
 #
 # Idempotent: if `livos/<name>:<tag>` already exists locally, skip pull/retag.
 # FAIL hard on pull failure — these images are required for livinityd Apps
 # module startup; first-install cannot proceed without them.
 _dld_setup_docker_images() {
-    step "Plan 105-05 Bug #6 — setup LivOS Docker images (livos/auth-server + livos/tor)"
+    step "Plan 105-05 Bug #6 — setup LivOS Docker images (livos/tor)"
 
     if ! command -v docker >/dev/null 2>&1; then
         fail "docker CLI not on PATH — install Docker first or use a system that already has it"
@@ -795,9 +795,10 @@ _dld_setup_docker_images() {
     fi
 
     # Pull-and-retag table: source-image|destination-image (Mini PC pattern,
-    # livos/install.sh:412-414 verbatim equivalent).
+    # livos/install.sh:413 verbatim equivalent). The auth-server entry was
+    # removed in plan 276-01 (the dead Umbrel auth service is gone); tor stays
+    # until plan 276-05.
     local images=(
-        "getumbrel/auth-server:1.0.5|livos/auth-server:1.0.5"
         "getumbrel/tor:0.4.7.8|livos/tor:0.4.7.8"
     )
 

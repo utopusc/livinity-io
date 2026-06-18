@@ -408,9 +408,10 @@ main() {
     setup_docker_images() {
         info "Setting up LivOS Docker images..."
 
-        # Pull upstream images and retag as livos/ for consistent local naming
+        # Pull upstream images and retag as livos/ for consistent local naming.
+        # The auth-server entry was removed in plan 276-01 (dead Umbrel auth
+        # service deleted); tor stays until plan 276-05.
         local images=(
-            "getumbrel/auth-server:1.0.5|livos/auth-server:1.0.5"
             "getumbrel/tor:0.4.7.8|livos/tor:0.4.7.8"
         )
 
@@ -1782,7 +1783,7 @@ FWSVC
     # === Install Flow ===
     # Dependency chain for docker compose:
     # 1. install_docker          -> Docker engine available
-    # 2. setup_docker_images     -> livos/auth-server + livos/tor images tagged
+    # 2. setup_docker_images     -> livos/tor image tagged
     # 3. build_project           -> /opt/livos/data directory created
     # 4. setup_docker_prerequisites -> tor/data (1000:1000) + app-data dirs ready
     # 5. start_services          -> livos.service starts livinityd -> docker compose up
