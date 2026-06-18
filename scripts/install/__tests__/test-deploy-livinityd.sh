@@ -940,40 +940,11 @@ else
     pass "livos.service does not use buggy 'pnpm --filter livinityd start' pattern (105-05 Bug #5 negative)"
 fi
 
-# TEST 39: Bug #6 — _dld_setup_docker_images helper present (Mini PC pattern)
-# Phase 105 UAT discovered livinityd's legacy-compat docker-compose references
-# the livos/tor:0.4.7.8 image by image: field. It doesn't exist under livos/* on
-# Docker Hub — it's a local re-tag of getumbrel/tor per Mini PC's
-# livos/install.sh setup_docker_images() pattern. (The auth-server re-tag was
-# removed in plan 276-01 with the dead Umbrel auth service.)
-info "TEST 39 (Bug #6): _dld_setup_docker_images helper defined"
-
-if grep -qE '^_dld_setup_docker_images\(\) \{' "$DEPLOY_SH"; then
-    pass "_dld_setup_docker_images helper defined (105-05 Bug #6)"
-else
-    fail "_dld_setup_docker_images helper MISSING — livinityd Apps module will crash on docker compose up (105-05 Bug #6 regression)"
-fi
-
-# TEST 40: Bug #6 — helper pulls getumbrel/tor + retags as livos/tor
-# (auth-server entry removed in plan 276-01 with the dead Umbrel auth service)
-info "TEST 40 (Bug #6): pull+retag entry for tor"
-
-if grep -qE '"getumbrel/tor:0\.4\.7\.8\|livos/tor:0\.4\.7\.8"' "$DEPLOY_SH"; then
-    pass "tor pull+retag entry matches Mini PC pattern (getumbrel/tor → livos/tor) (105-05 Bug #6)"
-else
-    fail "tor pull+retag entry MISSING or malformed (expected Mini PC livos/install.sh:413 pattern) (105-05 Bug #6 regression)"
-fi
-
-# TEST 41: Bug #6 — pipeline calls _dld_setup_docker_images between streaming
-# packages and JWT secret generation (image setup is a runtime dep, not a build dep)
-info "TEST 41 (Bug #6): pipeline calls _dld_setup_docker_images after streaming pkgs"
-
-if awk '/^deploy_livinityd\(\) \{/,/^\}/' "$DEPLOY_SH" | \
-   grep -B0 -A2 '_dld_install_streaming_packages' | grep -q '_dld_setup_docker_images'; then
-    pass "deploy_livinityd calls _dld_setup_docker_images after streaming packages (105-05 Bug #6)"
-else
-    fail "deploy_livinityd pipeline does NOT call _dld_setup_docker_images right after _dld_install_streaming_packages (105-05 Bug #6 regression)"
-fi
+# TESTS 39/40/41 (Bug #6) DELETED in Phase 276. They asserted the docker-image
+# pull/retag helper was DEFINED, had an Umbrel-image entry, and was CALLED in the
+# pipeline. Phase 276 (276-01 + 276-05) removed the dead Umbrel auth-server + tor
+# services from legacy-compat — the only consumers of the re-tagged Umbrel images
+# — so the helper + its call site + the upstream pull are all gone.
 
 # ── Phase 106 — bootstrap-layer hotfix back-port regression tests ───────────
 
@@ -1010,15 +981,16 @@ if awk '/^_dld_install_google_chrome\(\)/,/^}/' "$DEPLOY_SH" | grep -q "google-c
 else
     fail "Bug #9: helper body missing signed keyring pattern"
 fi
-# Pipeline order: streaming < google_chrome < docker_images
-bug9_order=$(awk '/^deploy_livinityd\(\)/,/^}/' "$DEPLOY_SH" | grep -nE "_dld_install_streaming_packages|_dld_install_google_chrome|_dld_setup_docker_images" | awk -F: '{print $1}')
+# Pipeline order: streaming < google_chrome
+# Phase 276: the trailing docker_images anchor was dropped (the pull/retag helper
+# was removed with the dead Umbrel auth/tor images).
+bug9_order=$(awk '/^deploy_livinityd\(\)/,/^}/' "$DEPLOY_SH" | grep -nE "_dld_install_streaming_packages|_dld_install_google_chrome" | awk -F: '{print $1}')
 bug9_a=$(echo "$bug9_order" | sed -n 1p)
 bug9_b=$(echo "$bug9_order" | sed -n 2p)
-bug9_c=$(echo "$bug9_order" | sed -n 3p)
-if [[ -n "$bug9_a" ]] && [[ -n "$bug9_b" ]] && [[ -n "$bug9_c" ]] && (( bug9_a < bug9_b && bug9_b < bug9_c )); then
-    pass "Bug #9: pipeline order streaming(${bug9_a}) < google_chrome(${bug9_b}) < docker_images(${bug9_c})"
+if [[ -n "$bug9_a" ]] && [[ -n "$bug9_b" ]] && (( bug9_a < bug9_b )); then
+    pass "Bug #9: pipeline order streaming(${bug9_a}) < google_chrome(${bug9_b})"
 else
-    fail "Bug #9: pipeline order broken (streaming=${bug9_a:-MISSING}, google_chrome=${bug9_b:-MISSING}, docker_images=${bug9_c:-MISSING})"
+    fail "Bug #9: pipeline order broken (streaming=${bug9_a:-MISSING}, google_chrome=${bug9_b:-MISSING})"
 fi
 
 # ── TEST_BUG_10_DESKTOP_USER: _dld_create_desktop_user defined + groups ─────
