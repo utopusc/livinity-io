@@ -4891,11 +4891,18 @@ Plans:
 
 ### Phase 285: Remove remaining Umbrel-heritage UI cruft (Files /files/Home redirect, dock icons, Time Machine notice) + dead install comments + Docker containers scroll fix
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Remove all remaining Umbrel-heritage UI cruft from LivOS: clicking Files opens a LivOS window instead of redirecting the browser to the full-page umbrelOS /files/Home layout; every dock/system icon is a LivOS asset (no Umbrel PNGs); the legacy "Back That Mac Up"/Time Machine boot notice is gone; install scripts carry no Umbrel-removal comments or the orphaned tor/auth dir-prep helper; and the Docker containers desktop table scrolls instead of clipping rows.
+**Requirements**: Item-1, Item-2, Item-3, Item-4, Item-5 (the 5 work items in 285-CONTEXT.md — no formal REQ-IDs)
 **Depends on:** Phase 276
+**Plans:** 7 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 285 to break down)
+- [ ] 285-01-PLAN.md — Item 5: fix Docker containers desktop table scroll (CSS flexbox)
+- [ ] 285-02-PLAN.md — Item 2a: repoint existing-SVG icons (Devices/Schedules/mobile tabs) + delete 8 orphan Umbrel PNGs
+- [ ] 285-03-PLAN.md — Item 4: remove install-script Umbrel comments + the orphaned setup_docker_prerequisites() helper
+- [ ] 285-04-PLAN.md — Item 3: remove the Back-That-Mac-Up/Time Machine notice (backend + UI + integration test)
+- [ ] 285-05-PLAN.md — Item 2b: author 3 new LivOS tiles (Home/Live Usage/App Store) + repoint + delete 5 now-orphan PNGs
+- [ ] 285-06-PLAN.md — Item 1a: remove the full-page /files route + repoint the two command palettes to windowed Files
+- [ ] 285-07-PLAN.md — Item 1b: bridge backups deep-links to the windowed Files (Strategy B) + repoint the 3 deep-links
 
 ---
