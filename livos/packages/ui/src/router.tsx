@@ -6,7 +6,6 @@ import {InstallPromptBanner} from '@/components/install-prompt-banner'
 import {UpdateNotification} from '@/components/update-notification'
 import {CmdkProvider, useCmdkOpen} from '@/components/cmdk'
 import {ErrorBoundaryComponentFallback} from '@/components/ui/error-boundary-component-fallback'
-import {filesRoutes} from '@/features/files/routes'
 import {DesktopContextMenu} from '@/modules/desktop/desktop-context-menu'
 import {MobileAppProvider} from '@/modules/mobile/mobile-app-context'
 import {MobileAppRenderer} from '@/modules/mobile/mobile-app-renderer'
@@ -144,7 +143,12 @@ export const router = createBrowserRouter([
 			{
 				Component: SheetLayout,
 				children: [
-					...filesRoutes,
+					// /files full-page route REMOVED 2026-06-18 (Phase 285, Item 1 — Option A).
+					// Files now opens ONLY as a LivOS window via window-manager →
+					// app-contents/files-content.tsx (FilesWindowContent). No browser-URL
+					// change to /files/Home and no umbrelOS full-page 3-col layout. Every
+					// launch entry (dock, launchpad, desktop-folder, the apple-spotlight +
+					// cmdk palettes, and the 3 backups deep-links) targets the window now.
 					// v36 LivOS Design Port — /settings/* route REMOVED from
 					// SheetLayout 2026-05-15 per user direction "ben hic bir
 					// sekilde livos un /yoneldnirme yapmasini istemyiorum". The
@@ -164,7 +168,6 @@ export const router = createBrowserRouter([
 					// v36 — /agent-marketplace SheetLayout entry REMOVED 2026-05-15 per
 					// user "buna benzer yerleride kaldir". Component import preserved
 					// for future v37 window-manager conversion; deep links now 404.
-					// /files PRESERVED — OwnCloud daily driver depends on URL deep-linking.
 					// v32-redo-stage1a: /marketplace route removed (source dir deleted)
 				],
 			},
