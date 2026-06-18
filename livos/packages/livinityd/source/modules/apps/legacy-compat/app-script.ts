@@ -12,12 +12,12 @@ export default async function appScript(livinityd: Livinityd, command: string, a
 	const currentFilename = fileURLToPath(import.meta.url)
 	const currentDirname = dirname(currentFilename)
 	const scriptPath = join(currentDirname, 'app-script')
-	// Allow repo to be unset, needed if the repo hasn't been pulled yet after a mmigration
-	// or a 3rd party app had it's repo uninstalled.
-	let SCRIPT_APP_REPO_DIR = ''
-	try {
-		SCRIPT_APP_REPO_DIR = await livinityd.appStore.getAppTemplateFilePath(arg)
-	} catch {}
+	// Phase 276 (WS1-A): the community git-clone app store was removed, so there
+	// is no per-app repo template dir to resolve. This was always allowed to be
+	// unset (the legacy comment: "if the repo hasn't been pulled yet … or a 3rd
+	// party app had its repo uninstalled") — that empty-string state is now the
+	// permanent one. Builtin/platform apps don't use SCRIPT_APP_REPO_DIR.
+	const SCRIPT_APP_REPO_DIR = ''
 	const torEnabled = await livinityd.store.get('torEnabled')
 	return $({
 		stdio: inheritStdio ? 'inherit' : 'pipe',

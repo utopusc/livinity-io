@@ -6,7 +6,7 @@ import fse from 'fs-extra'
 // TODO: import packageJson from '../package.json' assert {type: 'json'}
 const packageJson = (await import('../package.json', {assert: {type: 'json'}})).default
 
-import {LIVINITY_APP_STORE_REPO, BACKUP_RESTORE_FIRST_START_FLAG} from './constants.js'
+import {BACKUP_RESTORE_FIRST_START_FLAG} from './constants.js'
 import createLogger, {type LogLevel} from './modules/utilities/logger.js'
 import FileStore from './modules/utilities/file-store.js'
 import Migration from './modules/startup-migrations/index.js'
@@ -426,7 +426,7 @@ export default class Livinityd {
 		dataDirectory,
 		port = 80,
 		logLevel = 'normal',
-		defaultAppStoreRepo = LIVINITY_APP_STORE_REPO,
+		defaultAppStoreRepo = '',
 	}: LivinitydOptions) {
 		this.developmentMode = process?.env?.NODE_ENV === 'development'
 		this.dataDirectory = path.resolve(dataDirectory)

@@ -1,15 +1,20 @@
-import pRetry from 'p-retry'
-
 import type Livinityd from '../../index.js'
-import runEvery from '../utilities/run-every.js'
-import AppRepository from './app-repository.js'
-import {getBuiltinApp} from './builtin-apps.js'
 
+// Phase 276 (WS1-A): the community git-clone app store was removed (the
+// `utopusc/livinity-apps` repo was deleted). Browse now lives entirely in the
+// `https://livinity.io/store` iframe (reads Supabase); install resolves via
+// Step 1 (builtin, generateAppTemplate) + Step 2 (Supabase /api/apps/<id>).
+//
+// This class is kept as a THIN SHELL because index.ts still does
+// `new AppStore(...)` / `.start()` / `.stop()` and routes.ts still exposes
+// `registry` / `addRepository` / `removeRepository`. `registry()` returns `[]`
+// so the desktop-wide AvailableAppsProvider resolves empty (never throws) and
+// the `RegistryApp` type (derived from the registry route output) still holds.
 export default class AppStore {
 	#livinityd: Livinityd
-	#stopUpdating?: () => void
 	logger: Livinityd['logger']
-	updateInterval = '5m'
+	// Kept as a harmless field — index.ts's constructor still passes it and
+	// factory-reset historically assigned it. Unused by the shell.
 	defaultAppStoreRepo: string
 
 	constructor(livinityd: Livinityd, {defaultAppStoreRepo}: {defaultAppStoreRepo: string}) {
@@ -20,184 +25,29 @@ export default class AppStore {
 	}
 
 	async start() {
-		this.logger.log('Initialising app store')
-
-		// Set default app repository on first start
-		if ((await this.#livinityd.store.get('appRepositories')) === undefined) {
-			await this.#livinityd.store.set('appRepositories', [this.defaultAppStoreRepo])
-		}
-
-		// Initialise repositories
-		this.logger.log(`Initialising default repository...`)
-		try {
-			const repositories = await this.getRepositories()
-			const defaultRepository = repositories.find((repository) => repository.url === this.defaultAppStoreRepo)
-			if (!defaultRepository) throw new Error(`Default repository ${this.defaultAppStoreRepo} not found`)
-			await pRetry(
-				async () => {
-					await defaultRepository.update()
-				},
-				{
-					onFailedAttempt: (error) => {
-						this.logger.error(
-							`Failed to initialise default repository ${defaultRepository.url}, will retry ${error.retriesLeft} more times.`,
-							error,
-						)
-					},
-					retries: 5, // This will do exponential backoff for 1s, 2s, 4s, 8s, 16s
-				},
-			)
-			this.logger.log(`Default repository initialised!`)
-		} catch (error) {
-			this.logger.error(`Failed to initialise default repository`, error)
-		}
-
-		// Kick off update loop
-		this.logger.log(`Checking repositories for updates every ${this.updateInterval}`)
-		this.#stopUpdating = runEvery(this.updateInterval, () => this.update(), {runInstantly: true})
+		this.logger.log('App store initialised (registry disabled — browse is the web iframe)')
 	}
 
-	async stop() {
-		if (this.#stopUpdating) this.#stopUpdating()
-	}
+	async stop() {}
 
-	async getRepositories() {
-		const repositoryUrls = await this.#livinityd.store.get('appRepositories')
-		// Phase 257-02 (WS-C, LIVOS-024): persisted repository URLs are already
-		// operator-curated/trusted, so construct them with isAdmin:true — the
-		// SSRF gate must not retroactively break an already-added private/overlay
-		// store. New adds go through addRepository's adminProcedure-gated path.
-		const repositories = repositoryUrls.map((url) => new AppRepository(this.#livinityd, url, {isAdmin: true}))
-
-		return repositories
-	}
-
-	async update() {
-		const repositories = await this.getRepositories()
-		if (!repositories) throw new Error('App store not initialised')
-		for (const repository of repositories) {
-			try {
-				await repository.update()
-			} catch (error) {
-				this.logger.error(`Failed to update ${repository.url}`, error)
-			}
-		}
-	}
-
+	// Registry browse is the web iframe now; the native grid is gone. Returning
+	// `[]` keeps the route output an array (RegistryApp type) and lets the
+	// desktop-wide provider resolve empty without throwing.
 	async registry() {
-		const repositories = await this.getRepositories()
-		if (!repositories) throw new Error('App store not initialised')
-		const registryPromises = repositories.map((repository) =>
-			repository.readRegistry().catch((error) => {
-				this.logger.error(`Failed to read registry from ${repository.url}`, error)
-				return null
-			}),
-		)
-		const registry = await Promise.all(registryPromises)
-
-		// Augment each app with builtin manifest data (installOptions,
-		// requiresAiProvider) when a matching id exists in BUILTIN_APPS. The
-		// sibling utopusc/livinity-apps repo manifests don't carry installOptions,
-		// so without this merge the install dialog never prompts for env overrides
-		// (ZEP_API_KEY, N8N_BASIC_AUTH_*, etc.) for builtin apps installed via the
-		// store path. Augmentation lets the marketplace UI read these fields from
-		// the registry app directly without a separate builtinApps query.
-		const augmented = registry.filter(Boolean).map((repo) => {
-			if (!repo) return repo
-			return {
-				...repo,
-				apps: repo.apps.map((app) => {
-					const builtin = getBuiltinApp(app.id)
-					if (!builtin) return app
-					return {
-						...app,
-						installOptions: (app as any).installOptions ?? builtin.installOptions,
-						requiresAiProvider: app.requiresAiProvider ?? builtin.requiresAiProvider,
-						port: app.port ?? builtin.port,
-					}
-				}),
-			}
-		})
-
-		return augmented as Array<Awaited<ReturnType<typeof AppRepository.prototype.readRegistry>>>
+		return [] as Array<any>
 	}
 
-	async addRepository(url: string) {
-		// Phase 257-02 (WS-C, LIVOS-024): construct (and thereby SSRF-validate) the
-		// repository FIRST so a private/loopback/metadata host or non-http(s) scheme
-		// is rejected before any dedup/persist. addRepository is reached only via the
-		// adminProcedure-gated route (256-03), so isAdmin:true matches validateUrl's
-		// operator carve-out; any non-admin/automated path that constructs an
-		// AppRepository directly stays strict (isAdmin defaults false). this.url is
-		// the raw input (cache-dir + dedup key stability — see AppRepository ctor).
-		const repository = new AppRepository(this.#livinityd, url, {isAdmin: true})
-
-		// Check if repo already exists
-		const existingRepositories = await this.getRepositories()
-		if (existingRepositories.some((existingRepo) => existingRepo.url === url)) {
-			throw new Error(`Repository ${url} already exists`)
-		}
-
-		this.logger.log(`Adding new repository: ${url}`)
-
-		// Initialise it
-		await repository.update()
-
-		// Save the repository URL
-		await this.#livinityd.store.getWriteLock(async ({get, set}) => {
-			const repositoryUrls = await get('appRepositories')
-			repositoryUrls.push(url)
-			await set('appRepositories', [...new Set(repositoryUrls)])
-		})
-
-		this.logger.log(`Added new repository: ${url}`)
-		return true
+	// No-op — there are no git repositories to update. Still callable from the
+	// post-restore reinstall path in apps.ts.
+	async update() {
+		/* registry disabled — nothing to update */
 	}
 
-	async removeRepository(url: string) {
-		if (this.defaultAppStoreRepo === url) {
-			throw new Error(`Cannot remove default repository`)
-		}
-
-		// Check if repo exists
-		const existingRepositories = await this.getRepositories()
-		if (!existingRepositories.some((existingRepo) => existingRepo.url === url)) {
-			throw new Error(`Repository ${url} does not exist`)
-		}
-
-		this.logger.log(`Removing repository: ${url}`)
-
-		// Remove the repository URL
-		await this.#livinityd.store.getWriteLock(async ({get, set}) => {
-			const repositoryUrls = await get('appRepositories')
-			const updatedRepositoryUrls = repositoryUrls.filter((repoUrl) => repoUrl !== url)
-			await set('appRepositories', updatedRepositoryUrls)
-		})
-
-		this.logger.log(`Removed repository: ${url}`)
-		return true
+	async addRepository(_url: string): Promise<boolean> {
+		throw new Error('App repositories are no longer supported (the community git store was removed in Phase 276)')
 	}
 
-	async getAppTemplateFilePath(appId: string) {
-		// Throw on invalid appId
-		if (!/^[a-zA-Z0-9-_]+$/.test(appId)) throw new Error(`Invalid app ID: ${appId}`)
-
-		const registry = await this.registry()
-
-		// Find the app in the registry
-		for (const repo of registry) {
-			const app = repo.apps.find((app) => app.id === appId)
-			if (app) {
-				// Find the repository path
-				const repositories = await this.getRepositories()
-				const repoPath = repositories.find((repository) => repository.url === repo.url)!.path
-
-				if (!repoPath) throw new Error(`Repository path not found for ${repo.url}`)
-
-				return `${repoPath}/${appId}`
-			}
-		}
-
-		throw new Error(`App with ID ${appId} not found in any repository`)
+	async removeRepository(_url: string): Promise<boolean> {
+		throw new Error('App repositories are no longer supported (the community git store was removed in Phase 276)')
 	}
 }
