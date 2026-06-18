@@ -4888,3 +4888,14 @@ Plans:
 - [ ] 276-05-PLAN.md — WS2 tor removal: delete the `tor_proxy` compose service (networks-only, Option a) + dead tor/auth env + sibling fragments + image tarballs + build/push scripts (wave 2, depends on 276-01)
 
 ---
+
+### Phase 285: Remove remaining Umbrel-heritage UI cruft (Files /files/Home redirect, dock icons, Time Machine notice) + dead install comments + Docker containers scroll fix
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 276
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 285 to break down)
+
+---
