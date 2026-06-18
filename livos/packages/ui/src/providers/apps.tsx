@@ -96,7 +96,7 @@ export const systemApps = [
 	{
 		id: 'LIVINITY_my-devices',
 		name: 'Devices',
-		icon: '/figma-exports/dock-settings.png',
+		icon: '/figma-exports/dock-settings-new.svg?v=285',
 		systemApp: true,
 		systemAppTo: '/my-devices',
 	},
@@ -104,7 +104,7 @@ export const systemApps = [
 	{
 		id: 'LIVINITY_schedules',
 		name: 'Schedules',
-		icon: '/figma-exports/dock-settings.png',
+		icon: '/figma-exports/dock-settings-new.svg?v=285',
 		systemApp: true,
 		systemAppTo: '/schedules',
 	},
