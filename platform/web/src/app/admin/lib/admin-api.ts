@@ -477,34 +477,6 @@ export function getAbuseSignals(): Promise<AbuseSignalsResult> {
   return adminGet<AbuseSignalsResult>('/api/admin/abuse-signals');
 }
 
-export type SyncCatalogResult = {
-  repo: string;
-  ref: string;
-  total_in_repo: number;
-  processed: number;
-  offset: number;
-  limit: number;
-  next_offset: number | null;
-  created: number;
-  updated: number;
-  skipped: number;
-  errors: { entry: string; error: string }[];
-};
-
-export async function syncCatalog(opts: { limit?: number; offset?: number } = {}): Promise<SyncCatalogResult> {
-  const params = new URLSearchParams();
-  if (opts.limit != null) params.set('limit', String(opts.limit));
-  if (opts.offset != null) params.set('offset', String(opts.offset));
-  const qs = params.toString();
-  const res = await fetch(`/api/admin/sync-catalog${qs ? `?${qs}` : ''}`, {
-    method: 'POST',
-    headers: authHeaders(),
-    credentials: 'same-origin',
-  });
-  if (!res.ok) throw new Error(`syncCatalog ${res.status}: ${await res.text()}`);
-  return res.json() as Promise<SyncCatalogResult>;
-}
-
 // ---------------------------------------------------------------------------
 // AUM: admin-action audit log row + result shapes
 // ---------------------------------------------------------------------------

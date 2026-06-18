@@ -3,13 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AdminShell } from '../admin-shell';
 import { Toast } from '../components/toast';
-import {
-  listApps,
-  updateApp,
-  syncCatalog,
-  type AdminApp,
-  type SyncCatalogResult,
-} from '../lib/admin-api';
+import { listApps, updateApp, type AdminApp } from '../lib/admin-api';
 
 type ToastState = { msg: string; error?: boolean } | null;
 
@@ -17,7 +11,6 @@ export default function AdminStoreCurationPage() {
   const [apps, setApps] = useState<AdminApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
 
   const load = useCallback(async () => {
@@ -51,41 +44,17 @@ export default function AdminStoreCurationPage() {
     }
   }
 
-  async function handleSync() {
-    setSyncing(true);
-    try {
-      const result: SyncCatalogResult = await syncCatalog({ limit: 20 });
-      setToast({
-        msg: `Sync: ${result.created} new, ${result.updated} updated, ${result.skipped} skipped${result.errors.length ? `, ${result.errors.length} errors` : ''}${result.next_offset != null ? ` (more at offset ${result.next_offset})` : ''}`,
-      });
-      await load();
-    } catch (err) {
-      setToast({ msg: err instanceof Error ? err.message : String(err), error: true });
-    } finally {
-      setSyncing(false);
-    }
-  }
-
   return (
     <AdminShell>
       <div className="admin-page">
         <header className="admin-page-head">
           <h1>Store curation</h1>
           <p className="admin-page-sub">
-            Toggle featured / verified flags. Sync pulls new manifests from{' '}
-            <code>utopusc/livinity-apps</code> (chunks of 20).
+            Toggle featured / verified flags on the catalog apps.
           </p>
         </header>
 
         <div style={{ display: 'flex', gap: 10, marginBottom: 4 }}>
-          <button
-            type="button"
-            className="admin-btn"
-            disabled={syncing || loading}
-            onClick={handleSync}
-          >
-            {syncing ? 'Syncing…' : 'Sync from GitHub'}
-          </button>
           <button type="button" className="admin-btn" disabled={loading} onClick={() => void load()}>
             Refresh
           </button>
