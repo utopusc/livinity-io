@@ -13,6 +13,7 @@ import {
 } from '@/features/files/constants'
 import {useQueryParams} from '@/hooks/use-query-params'
 import {systemAppsKeyed} from '@/providers/apps'
+import {useWindowManagerOptional} from '@/providers/window-manager'
 import {cn} from '@/shadcn-lib/utils'
 import {t} from '@/utils/i18n'
 
@@ -206,6 +207,7 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 	const [searchValue, setSearchValue] = useState('')
 	const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
 	const navigate = useNavigate()
+	const windowManager = useWindowManagerOptional()
 	const {addLinkSearchParams} = useQueryParams()
 	const listRef = useRef<HTMLDivElement>(null)
 	const reduceMotion = useReducedMotion()
@@ -281,26 +283,44 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 				icon: <TbFolder className='text-neutral-500' />,
 				action: () => {
 					const lastFilesPath = sessionStorage.getItem('lastFilesPath')
-					navigate(lastFilesPath || systemAppsKeyed['LIVINITY_files'].systemAppTo)
+					const target = lastFilesPath || systemAppsKeyed['LIVINITY_files'].systemAppTo
+					const filesIcon = systemAppsKeyed['LIVINITY_files']?.icon || ''
+					if (windowManager) windowManager.openWindow('LIVINITY_files', target, 'Files', filesIcon)
+					else navigate(target)
 				},
 			},
 			{
 				label: t('files-sidebar.recents'),
 				description: 'Recently accessed files',
 				icon: <TbFolder className='text-neutral-500' />,
-				action: () => navigate(`/files${FILES_RECENTS_PATH}`),
+				action: () => {
+					const target = `/files${FILES_RECENTS_PATH}`
+					if (windowManager)
+						windowManager.openWindow('LIVINITY_files', target, 'Files', systemAppsKeyed['LIVINITY_files']?.icon || '')
+					else navigate(target)
+				},
 			},
 			{
 				label: t('files-sidebar.apps'),
 				description: 'App data files',
 				icon: <TbFolder className='text-neutral-500' />,
-				action: () => navigate(`/files${FILES_APPS_PATH}`),
+				action: () => {
+					const target = `/files${FILES_APPS_PATH}`
+					if (windowManager)
+						windowManager.openWindow('LIVINITY_files', target, 'Files', systemAppsKeyed['LIVINITY_files']?.icon || '')
+					else navigate(target)
+				},
 			},
 			{
 				label: t('files-sidebar.trash'),
 				description: 'Deleted files',
 				icon: <TbFolder className='text-neutral-500' />,
-				action: () => navigate(`/files${FILES_TRASH_PATH}`),
+				action: () => {
+					const target = `/files${FILES_TRASH_PATH}`
+					if (windowManager)
+						windowManager.openWindow('LIVINITY_files', target, 'Files', systemAppsKeyed['LIVINITY_files']?.icon || '')
+					else navigate(target)
+				},
 			},
 			{
 				label: 'Settings',
