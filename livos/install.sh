@@ -405,43 +405,10 @@ main() {
         ok "Docker $(docker --version | cut -d' ' -f3 | tr -d ',') installed"
     }
 
-    setup_docker_images() {
-        info "Setting up LivOS Docker images..."
-
-        # Pull upstream images and retag as livos/ for consistent local naming.
-        # The auth-server entry was removed in plan 276-01 (dead Umbrel auth
-        # service deleted); tor stays until plan 276-05.
-        local images=(
-            "getumbrel/tor:0.4.7.8|livos/tor:0.4.7.8"
-        )
-
-        for entry in "${images[@]}"; do
-            local src="${entry%%|*}"
-            local dst="${entry##*|}"
-
-            # Check if destination image already exists
-            if docker image inspect "$dst" &>/dev/null; then
-                ok "Image $dst already exists"
-                continue
-            fi
-
-            info "Pulling $src..."
-            if ! docker pull "$src"; then
-                fail "Failed to pull $src — Docker images are required for LivOS. Check your internet connection and retry."
-            fi
-
-            info "Tagging as $dst..."
-            docker tag "$src" "$dst"
-
-            # Also tag as latest
-            local dst_latest="${dst%%:*}:latest"
-            docker tag "$src" "$dst_latest"
-
-            ok "Image $dst ready"
-        done
-
-        ok "LivOS Docker images configured"
-    }
+    # Phase 276 (276-01 + 276-05): the docker-image pull/retag helper was REMOVED.
+    # The dead Umbrel auth-server + tor services in legacy-compat (the only
+    # consumers of the re-tagged Umbrel images) are gone, so nothing pulls/retags
+    # any upstream Umbrel image at install anymore.
 
     setup_docker_prerequisites() {
         info "Preparing Docker container prerequisites..."
@@ -1783,11 +1750,12 @@ FWSVC
     # === Install Flow ===
     # Dependency chain for docker compose:
     # 1. install_docker          -> Docker engine available
-    # 2. setup_docker_images     -> livos/tor image tagged
-    # 3. build_project           -> /opt/livos/data directory created
-    # 4. setup_docker_prerequisites -> tor/data (1000:1000) + app-data dirs ready
-    # 5. start_services          -> livos.service starts livinityd -> docker compose up
+    # 2. build_project           -> /opt/livos/data directory created
+    # 3. setup_docker_prerequisites -> app-data dirs ready
+    # 4. start_services          -> livos.service starts livinityd -> docker compose up
     # Note: docker compose env vars come from app-environment.ts at runtime, NOT .env
+    # Phase 276: the docker-image pull/retag step was removed with the dead Umbrel
+    # tor service — no upstream Umbrel image is pulled at install anymore.
 
     # === Pre-flight ===
     step "Pre-flight checks"
@@ -1811,7 +1779,6 @@ FWSVC
     install_pm2
     install_redis
     install_docker
-    setup_docker_images
     install_python
     install_postgresql
     install_caddy

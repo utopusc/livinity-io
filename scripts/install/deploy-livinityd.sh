@@ -682,13 +682,12 @@ _dld_clone_source() {
 
 # ── 4b'. Docker engine (field bug 2026-06-11) ────────────────────────────────
 # The Mini PC + early UAT boxes all had Docker pre-installed, so the pipeline
-# only ever CONSUMED docker (_dld_setup_docker_images below hard-fails without
-# it). A fresh user PC ships with no Docker at all → install it here, BEFORE
-# _dld_create_desktop_user (so the `docker` group exists when the user is
-# created) and _dld_setup_docker_images. Official Docker apt repo first
-# (codename probe + LTS fallback — same pattern as cloudflared in
-# mode-tunnel.sh); distro-archive docker.io as the fallback channel. Both
-# provide the `docker compose` v2 plugin livinityd's Apps module needs.
+# only ever CONSUMED docker. A fresh user PC ships with no Docker at all →
+# install it here, BEFORE _dld_create_desktop_user (so the `docker` group exists
+# when the user is created). Official Docker apt repo first (codename probe + LTS
+# fallback — same pattern as cloudflared in mode-tunnel.sh); distro-archive
+# docker.io as the fallback channel. Both provide the `docker compose` v2 plugin
+# livinityd's Apps module needs.
 _dld_install_docker() {
     step "Installing Docker engine (fresh boxes ship without it)"
 
@@ -769,80 +768,11 @@ _dld_install_docker() {
     ok "Docker engine ready: $(docker --version 2>/dev/null)"
 }
 
-# ── 4c. LivOS Docker images (Phase 105-05 UAT Bug #6 fix) ───────────────────
-# Mirror of Mini PC's livos/install.sh:408-443 setup_docker_images() helper.
-# legacy-compat/docker-compose.yml references `livos/tor:0.4.7.8` by image:
-# field. This image doesn't exist on Docker Hub under the `livos/` namespace —
-# it's a local re-tag of Umbrel's official image. Without this helper,
-# livinityd's Apps module crashes on first `docker compose up` (UAT Bug #6 from
-# Phase 105 mainserver test 2026-05-12). (The auth-server image was dropped in
-# plan 276-01 along with the dead Umbrel auth service.)
-#
-# Upstream provenance (MIT, byte-identical):
-#   getumbrel/tor:0.4.7.8        →  livos/tor:0.4.7.8        +  :latest alias
-#
-# Idempotent: if `livos/<name>:<tag>` already exists locally, skip pull/retag.
-# FAIL hard on pull failure — these images are required for livinityd Apps
-# module startup; first-install cannot proceed without them.
-_dld_setup_docker_images() {
-    step "Plan 105-05 Bug #6 — setup LivOS Docker images (livos/tor)"
-
-    if ! command -v docker >/dev/null 2>&1; then
-        fail "docker CLI not on PATH — install Docker first or use a system that already has it"
-    fi
-    if ! docker info >/dev/null 2>&1; then
-        fail "Docker daemon not reachable — start docker.service before re-running install"
-    fi
-
-    # Pull-and-retag table: source-image|destination-image (Mini PC pattern,
-    # livos/install.sh:413 verbatim equivalent). The auth-server entry was
-    # removed in plan 276-01 (the dead Umbrel auth service is gone); tor stays
-    # until plan 276-05.
-    local images=(
-        "getumbrel/tor:0.4.7.8|livos/tor:0.4.7.8"
-    )
-
-    for entry in "${images[@]}"; do
-        local src="${entry%%|*}"
-        local dst="${entry##*|}"
-
-        if docker image inspect "$dst" >/dev/null 2>&1; then
-            ok "Image $dst already present — skipping pull"
-            continue
-        fi
-
-        info "Pulling $src..."
-        # Install-hardening audit 2026-06-11 (P1): retry transient Hub hiccups
-        # (CGNAT-shared-IP 429s, flaky wifi) instead of aborting the install
-        # after the heavy build. Final failure is WARN, not fail — these
-        # images are needed at first APP install, not first boot, and a
-        # re-run (or the daemon's own pull) can fetch them later.
-        local pull_ok=0 attempt
-        for attempt in 1 2 3; do
-            if docker pull "$src" 2>&1 | tail -3; then
-                pull_ok=1
-                break
-            fi
-            warn "docker pull $src failed (attempt ${attempt}/3) — retrying in $((attempt * 5))s"
-            sleep $((attempt * 5))
-        done
-        if (( pull_ok == 0 )); then
-            warn "Failed to pull $src after 3 attempts — continuing; apps needing it will pull on first install (check Docker Hub egress / rate limits)"
-            continue
-        fi
-
-        info "Tagging $src → $dst"
-        docker tag "$src" "$dst" || fail "Failed to tag $src as $dst"
-
-        # Also alias as :latest so docker-compose `image: livos/<name>` (no tag)
-        # references resolve. Mirrors Mini PC line 437.
-        local dst_latest="${dst%%:*}:latest"
-        docker tag "$src" "$dst_latest" || true
-        ok "Image $dst (+ ${dst_latest}) ready"
-    done
-
-    ok "LivOS Docker images configured"
-}
+# ── 4c. LivOS Docker images — REMOVED (Phase 276) ───────────────────────────
+# Phase 276 (276-01 + 276-05) removed the dead Umbrel auth-server + tor services
+# from legacy-compat (the only consumers of the re-tagged Umbrel images), so the
+# pull/retag helper is gone. No install path pulls any upstream Umbrel image now;
+# livinityd's Apps module no longer references them.
 
 # ── 4b. Streaming subsystem apt packages (105-02 G2 — update.sh:339-405) ────
 # Idempotent apt-install for ffmpeg, x11/xdotool, ydotool, xvfb, fluxbox,
@@ -2911,7 +2841,7 @@ deploy_livinityd() {
     info "Scope: livinityd (Plan 104-11) + liv-core/liv-worker/liv-memory (Plan 104-12) + update.sh 1:1 port (105-02) + MCP seed (109) + domain-config seed (112)."
 
     _dld_install_system_packages
-    _dld_install_docker                   # field bug 2026-06-11 — fresh user PCs ship without Docker; BEFORE desktop-user (docker group) + docker-images
+    _dld_install_docker                   # field bug 2026-06-11 — fresh user PCs ship without Docker; BEFORE desktop-user (docker group)
     _dld_ensure_build_memory              # audit P1 — temp swapfile + NODE_OPTIONS so vite/Next builds can't OOM on 4-8GB boxes
     _dld_check_ports                      # audit P1 — 8080/3010/3020/3200 must be free (or LivOS-owned on re-runs)
     _dld_setup_postgres
@@ -2920,7 +2850,6 @@ deploy_livinityd() {
     _dld_clone_source
     _dld_install_streaming_packages       # 105-02 G2 — streaming apt + ydotoold unit
     _dld_install_google_chrome            # 106 Bug #9 — google-chrome-stable (WebApp Launcher blocker)
-    _dld_setup_docker_images              # 105-05 Bug #6 — pull+retag getumbrel/* → livos/* (Mini PC pattern)
     _dld_generate_jwt_secret              # 105-01: moved earlier — secrets BEFORE pnpm install per CONTEXT pipeline order
     _dld_write_env_file                   # 105-01: moved earlier
     _dld_seed_mcp_servers                 # Phase 109 — auto-seed liv:mcp:config (sequential-thinking + luse)
