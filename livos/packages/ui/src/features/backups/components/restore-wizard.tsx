@@ -5,7 +5,7 @@ import {useMemo, useState} from 'react'
 import {FormProvider, useForm, type Resolver, type SubmitHandler} from 'react-hook-form'
 import {Trans} from 'react-i18next/TransWithoutContext'
 import {TbCalendarTime, TbDatabase} from 'react-icons/tb'
-import {Link} from 'react-router-dom'
+import {useNavigate} from 'react-router-dom'
 import {z} from 'zod'
 
 import {ErrorAlert} from '@/components/ui/alert'
@@ -38,6 +38,8 @@ import {useNetworkStorage} from '@/features/files/hooks/use-network-storage'
 import {formatFilesystemDate} from '@/features/files/utils/format-filesystem-date'
 import {formatFilesystemSize} from '@/features/files/utils/format-filesystem-size'
 import {useLanguage} from '@/hooks/use-language'
+import {systemAppsKeyed} from '@/providers/apps'
+import {useWindowManagerOptional} from '@/providers/window-manager'
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -723,6 +725,20 @@ function BackupsStep({
 
 function ReviewStep({repository, backup}: {repository?: BackupRepository; backup?: Backup}) {
 	const [lang] = useLanguage()
+	const navigate = useNavigate()
+	const windowManager = useWindowManagerOptional()
+
+	// Open the windowed Files with the rewind overlay auto-opening (Task 2's
+	// suffix parser reads ?rewind=open). Falls back to navigate when no window manager.
+	const openRewind = () => {
+		const route = '/files/Home?rewind=open'
+		if (windowManager) {
+			windowManager.openWindow('LIVINITY_files', route, 'Files', systemAppsKeyed['LIVINITY_files']?.icon || '')
+		} else {
+			navigate(route)
+		}
+	}
+
 	const when = backup?.time
 	const label = when ? formatFilesystemDate(when, lang) : t('backups-restore.unknown-date')
 	const size = backup?.size
@@ -761,7 +777,9 @@ function ReviewStep({repository, backup}: {repository?: BackupRepository; backup
 				description={
 					<Trans
 						i18nKey='backups-restore.restore-warning'
-						components={[<Link to='/files?rewind=open' className='underline' key='rewind' />]}
+						components={[
+							<a role='button' className='underline cursor-pointer' onClick={openRewind} key='rewind' />,
+						]}
 					/>
 				}
 			/>

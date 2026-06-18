@@ -7,6 +7,8 @@ import {useNavigate} from 'react-router-dom'
 import {FadeInImg} from '@/components/ui/fade-in-img'
 import backupsIcon from '@/features/backups/assets/backups-icon.png'
 import {useBackups} from '@/features/backups/hooks/use-backups'
+import {systemAppsKeyed} from '@/providers/apps'
+import {useWindowManagerOptional} from '@/providers/window-manager'
 import {useSettingsDialogProps} from '@/routes/settings/_components/shared'
 import {Button} from '@/shadcn-components/ui/button'
 import {
@@ -28,6 +30,13 @@ import {t} from '@/utils/i18n'
 export function BackupsMobileDrawer() {
 	const dialogProps = useSettingsDialogProps()
 	const navigate = useNavigate()
+	const windowManager = useWindowManagerOptional()
+	// Open the windowed Files (suffix on the route is read by FilesWindowContent's parser).
+	const openFilesWindow = (route: string) => {
+		const icon = systemAppsKeyed['LIVINITY_files']?.icon || ''
+		if (windowManager) windowManager.openWindow('LIVINITY_files', route, 'Files', icon)
+		else navigate(route, {preventScrollReset: true})
+	}
 	const {repositories: backupRepositories, isLoadingRepositories: isLoadingBackups} = useBackups()
 
 	const goToSetup = useCallback(() => {
@@ -84,7 +93,7 @@ export function BackupsMobileDrawer() {
 									<div className='text-12 text-text-tertiary'>{t('backups-restore-full-description')}</div>
 								</div>
 							</DropdownMenuItem>
-							<DropdownMenuItem onSelect={() => navigate('/files/Home?rewind=open', {preventScrollReset: true})}>
+							<DropdownMenuItem onSelect={() => openFilesWindow('/files/Home?rewind=open')}>
 								<div className='flex flex-col'>
 									<div className='text-14 font-medium'>{t('backups-rewind')}</div>
 									<div className='text-12 text-text-tertiary'>{t('backups-rewind-description')}</div>
