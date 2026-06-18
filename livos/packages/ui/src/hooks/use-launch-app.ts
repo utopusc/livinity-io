@@ -4,7 +4,7 @@ import {useApps} from '@/providers/apps'
 import {trpcReact} from '@/trpc/trpc'
 import {useLinkToDialog} from '@/utils/dialog'
 import {t} from '@/utils/i18n'
-import {appToUrl, appToUrlWithAppPath, isOnionPage, urlJoin} from '@/utils/misc'
+import {appToUrl, appToUrlWithAppPath, urlJoin} from '@/utils/misc'
 
 interface LaunchOptions {
 	/** Optional sub-path to append to the app URL */
@@ -43,12 +43,6 @@ export function useLaunchApp() {
 		// Show credentials dialog before first open (unless bypassed)
 		if (app.credentials?.showBeforeOpen && !opts?.direct) {
 			navigate(linkToDialog('default-credentials', {for: appId, direct: 'true'}))
-			return
-		}
-
-		// Tor-only apps require .onion access
-		if (app.torOnly && !isOnionPage()) {
-			alert(t('app-only-over-tor', {app: app.name}))
 			return
 		}
 

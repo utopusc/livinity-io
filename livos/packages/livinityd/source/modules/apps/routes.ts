@@ -71,7 +71,6 @@ export const apps = router({
 	// List all apps
 	list: privateProcedure.query(async ({ctx}) => {
 		const apps = ctx.apps.instances
-		const torEnabled = await ctx.livinityd.store.get('torEnabled')
 
 		// Get all subdomain configs to include in app data
 		// Phase 141-03: also expose the optional canonical FQDN `host` minted
@@ -96,12 +95,10 @@ export const apps = router({
 							deterministicPassword,
 							dependencies,
 							implements: implements_,
-							torOnly,
 						},
 						selectedDependencies,
 					] = await Promise.all([app.readManifest(), app.getSelectedDependencies()])
 
-					const hiddenService = torEnabled ? await app.readHiddenService() : ''
 					if (deterministicPassword) {
 						defaultPassword = await app.deriveDeterministicPassword()
 					}
@@ -139,12 +136,10 @@ export const apps = router({
 							defaultPassword,
 							showBeforeOpen: showCredentialsBeforeOpen,
 						},
-						hiddenService,
 						widgets,
 						dependencies,
 						selectedDependencies,
 						implements: implements_,
-						torOnly,
 					}
 				} catch (error) {
 					ctx.apps.logger.error(`Failed to read manifest for app ${app.id}`, error)
@@ -168,12 +163,10 @@ export const apps = router({
 					subdomain: builtinApp.installOptions?.subdomain || nativeApp.id,
 					native: true as const,
 					credentials: {defaultUsername: undefined, defaultPassword: undefined, showBeforeOpen: false},
-					hiddenService: '',
 					widgets: undefined,
 					dependencies: undefined,
 					selectedDependencies: undefined,
 					implements: undefined,
-					torOnly: undefined,
 				})
 			}
 		}
@@ -423,9 +416,6 @@ export const apps = router({
 		.mutation(async ({ctx, input}) => ctx.apps.trackOpen(input.appId)),
 
 	recentlyOpened: privateProcedure.query(({ctx}) => ctx.apps.recentlyOpened()),
-
-	setTorEnabled: privateProcedure.input(z.boolean()).mutation(({ctx, input}) => ctx.apps.setTorEnabled(input)),
-	getTorEnabled: privateProcedure.query(({ctx}) => ctx.apps.getTorEnabled()),
 
 	setSelectedDependencies: privateProcedure
 		.input(

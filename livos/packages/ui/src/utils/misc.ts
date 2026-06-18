@@ -43,10 +43,6 @@ export function pathJoin(base: string, segment: string): string {
 
 /** Resolve the external URL for an installed app based on current hostname */
 export function appToUrl(app: UserApp): string {
-	if (isOnionPage()) {
-		return `${location.protocol}//${app.hiddenService}`
-	}
-
 	// Local development — use port-based URL
 	if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
 		return `${location.protocol}//${location.hostname}:${app.port}`
@@ -101,11 +97,6 @@ export function appToUrl(app: UserApp): string {
 /** Resolve app URL including the app's configured path */
 export function appToUrlWithAppPath(app: UserApp): string {
 	return urlJoin(appToUrl(app), app.path ?? '')
-}
-
-/** Check if the current page is accessed via a Tor .onion address */
-export function isOnionPage(): boolean {
-	return location.origin.includes('.onion')
 }
 
 /** Preload an image by creating a hidden Image element */

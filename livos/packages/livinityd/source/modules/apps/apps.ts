@@ -121,7 +121,6 @@ export default class Apps {
 	logger: Livinityd['logger']
 	instances: App[] = []
 	nativeInstances: NativeApp[] = []
-	isTorBeingToggled = false
 
 	constructor(livinityd: Livinityd) {
 		this.#livinityd = livinityd
@@ -159,11 +158,6 @@ export default class Apps {
 		// Set apps to empty array on first start
 		if ((await this.#livinityd.store.get('apps')) === undefined) {
 			await this.#livinityd.store.set('apps', [])
-		}
-
-		// Set torEnabled to false on first start
-		if ((await this.#livinityd.store.get('torEnabled')) === undefined) {
-			await this.#livinityd.store.set('torEnabled', false)
 		}
 
 		// Set recentlyOpenedApps to empty array on first start
@@ -981,36 +975,6 @@ export default class Apps {
 
 	async recentlyOpened() {
 		return this.#livinityd.store.get('recentlyOpenedApps')
-	}
-
-	async setTorEnabled(torEnabled: boolean) {
-		if (this.isTorBeingToggled) {
-			throw new Error(
-				'Tor is already in the process of being toggled. Please wait until the current process is finished.',
-			)
-		}
-		this.isTorBeingToggled = true
-		try {
-			const currentTorEnabled = await this.#livinityd.store.get('torEnabled')
-
-			// Check if we're applying the current setting
-			if (currentTorEnabled === torEnabled) {
-				throw new Error(`Tor is already ${torEnabled ? 'enabled' : 'disabled'}`)
-			}
-
-			// Toggle Tor
-			await this.stop()
-			await this.#livinityd.store.set('torEnabled', torEnabled)
-			await this.start()
-
-			return true
-		} finally {
-			this.isTorBeingToggled = false
-		}
-	}
-
-	async getTorEnabled() {
-		return this.#livinityd.store.get('torEnabled')
 	}
 
 	async setSelectedDependencies(appId: string, dependencies: Record<string, string>) {

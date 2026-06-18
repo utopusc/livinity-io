@@ -35,7 +35,6 @@ export function Prefetcher() {
 
 			// Settings switches
 			utils.user.is2faEnabled,
-			utils.apps.getTorEnabled,
 
 			// Advanced settings switches
 			utils.system.getReleaseChannel,

@@ -4,7 +4,6 @@ import path from 'node:path'
 import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 import {$} from 'execa'
-import fse from 'fs-extra'
 import stripAnsi from 'strip-ansi'
 
 import type {ProgressStatus} from '../apps/schema.js'
@@ -231,14 +230,6 @@ export default router({
 			return {filename: input.filename, content: tail, truncated: true, totalLines: lines.length}
 		}),
 
-	hiddenService: privateProcedure.query(async ({ctx}) => {
-		try {
-			return await fse.readFile(`${ctx.livinityd.dataDirectory}/tor/data/web/hostname`, 'utf-8')
-		} catch (error) {
-			ctx.livinityd.logger.error(`Failed to read hidden service for ui`, error)
-			return ''
-		}
-	}),
 	device: privateProcedure.query(() => detectDevice()),
 	cpuTemperature: privateProcedure.query(() => getCpuTemperature()),
 	systemDiskUsage: privateProcedure.query(({ctx}) => getSystemDiskUsage(ctx.livinityd)),

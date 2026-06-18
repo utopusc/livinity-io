@@ -85,15 +85,6 @@ export default class App {
 		return readYaml(`${this.dataDirectory}/docker-compose.yml`) as Promise<Compose>
 	}
 
-	async readHiddenService() {
-		try {
-			return await fse.readFile(`${this.#livinityd.dataDirectory}/tor/data/app-${this.id}/hostname`, 'utf-8')
-		} catch (error) {
-			this.logger.error(`Failed to read hidden service for app ${this.id}`, error)
-			return ''
-		}
-	}
-
 	async deriveDeterministicPassword() {
 		const livinitySeed = await fse.readFile(`${this.#livinityd.dataDirectory}/db/livinity-seed/seed`)
 		const identifier = `app-${this.id}-seed-APP_PASSWORD`
