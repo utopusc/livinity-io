@@ -35,7 +35,9 @@ import {useNetworkStorage} from '@/features/files/hooks/use-network-storage'
 import {formatFilesystemSize} from '@/features/files/utils/format-filesystem-size'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useQueryParams} from '@/hooks/use-query-params'
+import {systemAppsKeyed} from '@/providers/apps'
 import {useConfirmation} from '@/providers/confirmation'
+import {useWindowManagerOptional} from '@/providers/window-manager'
 import {Button} from '@/shadcn-components/ui/button'
 import {
 	DropdownMenu,
@@ -407,6 +409,13 @@ function DestinationStep({
 	const form = useFormContext<FormValues>()
 	const {params, addLinkSearchParams} = useQueryParams()
 	const navigate = useNavigate()
+	const windowManager = useWindowManagerOptional()
+	// Open the windowed Files (suffix on the route is read by FilesWindowContent's parser).
+	const openFilesWindow = (route: string) => {
+		const icon = systemAppsKeyed['LIVINITY_files']?.icon || ''
+		if (windowManager) windowManager.openWindow('LIVINITY_files', route, 'Files', icon)
+		else navigate(route)
+	}
 	const initialTabParam = params.get('backups-setup-tab')
 	const isMobile = useIsMobile()
 
@@ -585,7 +594,7 @@ function DestinationStep({
 											selected={false}
 											onClick={() => {
 												if (disk.isFormatting) return
-												navigate(`/files/Home?dialog=files-format-drive&deviceId=${disk.id}`)
+												openFilesWindow(`/files/Home?dialog=files-format-drive&deviceId=${disk.id}`)
 											}}
 										>
 											<div className='mb-2 flex h-12 w-12 items-center justify-center'>
