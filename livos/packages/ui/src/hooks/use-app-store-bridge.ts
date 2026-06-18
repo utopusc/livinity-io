@@ -452,6 +452,13 @@ export function useAppStoreBridge(
 			} catch (err) {
 				clearInterval(pollInterval)
 				const message = err instanceof Error ? err.message : 'Install failed'
+				// Surface install failures in the LivOS HOST console. The {success:false}
+				// reply below only reaches the cross-origin store iframe's console, so
+				// without this a real backend error (e.g. an unset/invalid
+				// livos:platform:api_key → "App ... not found: no builtin definition and
+				// no platform compose") looks like a silent no-op to anyone watching the
+				// host devtools. Root-caused 2026-06-18 (box install silently failing).
+				console.error(`[app-store] install failed for ${appId}:`, message, err)
 				sendToIframe({type: 'installed', appId, success: false, error: message})
 			}
 			// Always send updated status and invalidate queries after install attempt
