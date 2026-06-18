@@ -131,35 +131,35 @@ function DockExample() {
 		<>
 			<div className='flex items-center gap-4 rounded-15 bg-neutral-800 p-3'>
 				<DockItem
-					bg='/figma-exports/dock-home.svg?v=285'
+					bg='/figma-exports/dock-home.png'
 					mouseX={mouseX}
 					notificationCount={0}
 					iconSize={iconSize}
 					iconSizeZoomed={iconSizeZoomed}
 				/>
 				<DockItem
-					bg='/figma-exports/dock-home.svg?v=285'
+					bg='/figma-exports/dock-home.png'
 					mouseX={mouseX}
 					notificationCount={1}
 					iconSize={iconSize}
 					iconSizeZoomed={iconSizeZoomed}
 				/>
 				<DockItem
-					bg='/figma-exports/dock-home.svg?v=285'
+					bg='/figma-exports/dock-home.png'
 					mouseX={mouseX}
 					notificationCount={2}
 					iconSize={iconSize}
 					iconSizeZoomed={iconSizeZoomed}
 				/>
 				<DockItem
-					bg='/figma-exports/dock-home.svg?v=285'
+					bg='/figma-exports/dock-home.png'
 					mouseX={mouseX}
 					notificationCount={99}
 					iconSize={iconSize}
 					iconSizeZoomed={iconSizeZoomed}
 				/>
 				<DockItem
-					bg='/figma-exports/dock-home.svg?v=285'
+					bg='/figma-exports/dock-home.png'
 					mouseX={mouseX}
 					notificationCount={999}
 					iconSize={iconSize}
@@ -182,7 +182,7 @@ function DockItemInteractive() {
 
 	return (
 		<DockItem
-			bg='/figma-exports/dock-home.svg?v=285'
+			bg='/figma-exports/dock-home.png'
 			mouseX={mouseX}
 			open={open}
 			onClick={() => setOpen(true)}
