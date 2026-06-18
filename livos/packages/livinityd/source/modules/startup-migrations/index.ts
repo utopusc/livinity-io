@@ -83,7 +83,6 @@ class Migration {
 			password: z.string(),
 			installedApps: z.array(z.string()).optional(),
 			repos: z.array(z.string()),
-			remoteTorAccess: z.boolean().optional(),
 			otpUri: z.string().optional(),
 		})
 		const legacyDataJson = await fse.readJson(userJsonPath)
@@ -95,7 +94,8 @@ class Migration {
 		if (legacyData.otpUri) await this.livinityd.user.enable2fa(legacyData.otpUri)
 		await this.livinityd.store.set('appRepositories', legacyData.repos)
 		if (legacyData.installedApps) await this.livinityd.store.set('apps', legacyData.installedApps)
-		if (legacyData.remoteTorAccess) await this.livinityd.store.set('torEnabled', legacyData.remoteTorAccess)
+		// Phase 276 (276-05): the legacy Remote Tor Access migration was dropped
+		// with the feature removal (the tor store key no longer exists).
 
 		// Showcase widgets for migrating users
 		await this.livinityd.store.set('widgets', ['livinity:memory', 'livinity:system-stats', 'livinity:storage'])

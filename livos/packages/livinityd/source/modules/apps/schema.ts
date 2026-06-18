@@ -133,7 +133,6 @@ export const AppManifestSchema = z.object({
 				.optional(),
 		})
 		.optional(),
-	torOnly: z.boolean().optional(),
 	// In bytes
 	installSize: z.number().int().optional(),
 	// TODO: Define this type

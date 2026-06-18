@@ -64,10 +64,6 @@ test.sequential('trackOpen() throws invalid error when no user is registered', a
 	await expect(livinityd.client.apps.trackOpen.mutate({appId: 'sparkles-hello-world'})).rejects.toThrow('Invalid token')
 })
 
-test.sequential('trackOpen() throws invalid error when no user is registered', async () => {
-	await expect(livinityd.client.apps.setTorEnabled.mutate(true)).rejects.toThrow('Invalid token')
-})
-
 test.sequential('getBackupIgnoredPaths() throws invalid error when no user is registered', async () => {
 	await expect(livinityd.client.apps.getBackupIgnoredPaths.query({appId: 'sparkles-hello-world'})).rejects.toThrow(
 		'Invalid token',
@@ -142,7 +138,6 @@ test.sequential('list() lists installed apps', async () => {
 				defaultPassword: '',
 			},
 			dependencies: [],
-			hiddenService: '',
 			path: '',
 			state: 'ready',
 			version: '1.0.0',
@@ -307,13 +302,6 @@ test.sequential('livinityd restart starts all non-stopped apps', async () => {
 test.sequential('trackOpen() tracks an app open', async () => {
 	await expect(livinityd.client.apps.update.mutate({appId: 'sparkles-hello-world'})).resolves.toStrictEqual(true)
 	// TODO: Check this actually worked
-})
-
-test.sequential('setTorEnabled() toggles the Tor setting', async () => {
-	await expect(livinityd.client.apps.setTorEnabled.mutate(true)).resolves.toStrictEqual(true)
-	await expect(livinityd.client.apps.getTorEnabled.query()).resolves.toStrictEqual(true)
-	await expect(livinityd.client.apps.setTorEnabled.mutate(false)).resolves.toStrictEqual(true)
-	await expect(livinityd.client.apps.getTorEnabled.query()).resolves.toStrictEqual(false)
 })
 
 test.sequential('uninstall() uninstalls an app', async () => {

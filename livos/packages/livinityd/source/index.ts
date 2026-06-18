@@ -283,7 +283,6 @@ type StoreSchema = {
 	apps: string[]
 	appRepositories: string[]
 	widgets: string[]
-	torEnabled?: boolean
 	user: {
 		name: string
 		hashedPassword: string
