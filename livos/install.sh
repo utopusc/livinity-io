@@ -405,11 +405,6 @@ main() {
         ok "Docker $(docker --version | cut -d' ' -f3 | tr -d ',') installed"
     }
 
-    # Phase 276 (276-01 + 276-05): the docker-image pull/retag helper was REMOVED.
-    # The dead Umbrel auth-server + tor services in legacy-compat (the only
-    # consumers of the re-tagged Umbrel images) are gone, so nothing pulls/retags
-    # any upstream Umbrel image at install anymore.
-
     setup_docker_prerequisites() {
         info "Preparing Docker container prerequisites..."
 
@@ -1754,8 +1749,6 @@ FWSVC
     # 3. setup_docker_prerequisites -> app-data dirs ready
     # 4. start_services          -> livos.service starts livinityd -> docker compose up
     # Note: docker compose env vars come from app-environment.ts at runtime, NOT .env
-    # Phase 276: the docker-image pull/retag step was removed with the dead Umbrel
-    # tor service — no upstream Umbrel image is pulled at install anymore.
 
     # === Pre-flight ===
     step "Pre-flight checks"
