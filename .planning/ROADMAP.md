@@ -4898,7 +4898,7 @@ Plans:
 
 Plans:
 - [ ] 285-01-PLAN.md — Item 5: fix Docker containers desktop table scroll (CSS flexbox)
-- [ ] 285-02-PLAN.md — Item 2a: repoint existing-SVG icons (Devices/Schedules/mobile tabs) + delete 8 orphan Umbrel PNGs
+- [x] 285-02-PLAN.md — Item 2a: repoint existing-SVG icons (Devices/Schedules/mobile tabs) + delete 8 orphan Umbrel PNGs ✅ 2026-06-18 (`29c50390`/`f29e51ef`/`c1d43bbe`) — see [285-02-SUMMARY.md](phases/285-umbrel-leftover-cleanup-and-docker-scroll-fix/285-02-SUMMARY.md)
 - [ ] 285-03-PLAN.md — Item 4: remove install-script Umbrel comments + the orphaned setup_docker_prerequisites() helper
 - [ ] 285-04-PLAN.md — Item 3: remove the Back-That-Mac-Up/Time Machine notice (backend + UI + integration test)
 - [ ] 285-05-PLAN.md — Item 2b: author 3 new LivOS tiles (Home/Live Usage/App Store) + repoint + delete 5 now-orphan PNGs

@@ -3,17 +3,19 @@ gsd_state_version: 1.0
 milestone: v45.0
 milestone_name: Security Hardening
 status: executing
-last_updated: "2026-06-18T05:05:00.000Z"
+last_updated: "2026-06-18T19:56:16.118Z"
 last_activity: 2026-06-18
 progress:
-  total_phases: 190
+  total_phases: 191
   completed_phases: 100
-  total_plans: 641
+  total_plans: 648
   completed_plans: 553
-  percent: 86
+  percent: 85
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
+
+> ✅ **285-02 DONE (2026-06-18) — Umbrel icon repoint (Item 2a "safe half") + 8 orphan-PNG delete; 3 atomic commits; CODE ONLY (UI, deploy via release-based `bash /opt/livos/update.sh` → vite-built UI).** SEQUENTIAL executor on main tree (worktrees disabled this phase — pnpm monorepo build gate needs `node_modules`). **Task 1** `29c50390` (feat): `apps.tsx` Devices (`LIVINITY_my-devices`) + Schedules (`LIVINITY_schedules`) icons → `dock-settings-new.svg?v=285`; `mobile-tab-bar.tsx` Files→`dock-files-new.svg?v=285`, Settings→`dock-settings-new.svg?v=285`, Server→`dock-server.svg?v=285` (all existing LivOS SVGs). **Task 2** `f29e51ef` (test): `dock.test.tsx` Devices mock icon literal → `dock-settings-new.svg?v=285`, character-for-character matching apps.tsx; dock.test.tsx 9/9 GREEN. **Task 3** `c1d43bbe` (chore): `git rm` 8 grep-verified zero-importer Umbrel PNGs (`dock-chrome`/`dock-preview`/`dock-widgets`/`dock-remote-desktop`, `app-facebook`/`app-gmail`/`app-whatsapp`/`app-youtube`); KEPT the 5 still-referenced PNGs (`dock-home`/`dock-live-usage`/`dock-app-store`/`dock-settings`/`dock-files` — Plan 05 repoints+deletes those in lock-step) + all LivOS assets. **Gate:** `pnpm --filter ui build` exit 0 (twice — post-repoint + post-delete); every acceptance `grep -c` returned expected counts. **NOTE (not a deviation):** plan's `pnpm --filter ui test -- dock` is a NO-SCRIPT no-op (ui pkg has only `test:run`); ran real `pnpm --filter ui test:run src/modules/desktop/dock.test.tsx` → 9/9. The broad `test:run dock` substring surfaces 19 PRE-EXISTING `localStorage is not defined` failures in `routes/docker/**` unit tests (last touched Phase 29-01 `6949a23b`, untouched here, OUT OF SCOPE → logged in deferred-items.md). SUMMARY: `.planning/phases/285-umbrel-leftover-cleanup-and-docker-scroll-fix/285-02-SUMMARY.md`. (STATE narrative format — SDK counters no-op as in 276-05; `update-progress` recalculated frontmatter to 85% 553/648.) **NEXT in Phase 285: Plan 05 (Item 2b) authors 3 new tiles (dock-home/live-usage/app-store .svg) + repoints Home/Live-Usage/App-Store in apps.tsx + live-usage/app-store mock strings in dock.test.tsx, THEN deletes the remaining 5 PNGs in lock-step.**
 
 > ✅ **276-05 DONE (2026-06-18) — WS2 Umbrel `tor` image + the "Remote Tor Access" feature removed END-TO-END; 5 atomic commits; CODE ONLY (deploy via release-based `bash /opt/livos/update.sh`); Gate #1 PASSED (operator chose remove), Gate #2 = human PRE-RELEASE box check (SSH blocked here).** Branch `phase-276-appstore-deadcode`. **Task 1** `1adae0e6`: deleted the `tor_proxy:` service → `legacy-compat/docker-compose.yml` is networks-only (`livinity_main_network` KEPT so boot `up` still creates the shared app network); removed the dead auth/tor env from `app-environment.ts` (`GATEWAY_IP`/`DASHBOARD_IP`/`MANAGER_IP`/`AUTH_*`/`TOR_*`/`LIVINITY_AUTH_SECRET`/`LIVINITY_TORRC`+`torEnabled` lookup), kept `NETWORK_IP`. **Task 2** `73a57e26`: removed the app-script `REMOTE_TOR_ACCESS` merge branch + `tor_compose_file` (BEFORE tor.yml delete) AND the dead tor surface it fed (`wait_for_tor_hs()`+call, `APP_HIDDEN_SERVICE`/`TOR_*` exports, `EXPORTS_TOR_DATA_DIR`, `app_hidden_service_file`) + the tor env in `app-script.ts`; LEFT the unconditional common.yml + app compose merges intact. **Task 3** `2ebe202f`: deleted `_dld_setup_docker_images()`/`setup_docker_images()` + call sites in BOTH install scripts; deleted TESTs 39/40/41 and FIXED the Bug #9 order test (deviation — it anchored on the removed helper; now asserts `streaming<google_chrome`). **Task 4** `6d20aa2c`: deleted `docker-compose.tor.yml`+`tor-entrypoint.sh`+`tor-*-torrc`, `docker/build-images.sh`, and the whole `docker-images/` dir (tarballs+README+push); KEPT `docker-compose.common.yml`+`docker-compose.app_proxy.yml`; `docker/` dir kept (non-empty). **Task 5** `ef84a1b3`: removed the Remote Tor Access UI + all `torEnabled`/`hiddenService`/`torOnly` plumbing (apps.ts/app.ts/routes.ts/schema.ts/system-routes/startup-migrations/index.ts + advanced.tsx/cmdk.tsx/misc.ts/use-launch-app.ts/prefetch.tsx; DELETED dead `mobile/tor.tsx`+`use-tor-enabled.ts`). **Gates:** every task acceptance grep green; `bash -n` exit 0 ×3 scripts; livinityd tsc total 310→305 with ZERO new errors in any touched source file (all deltas reductions); `pnpm --filter ui build` exit 0; routes.test.ts+schema.test.ts 12 passed. **Deferred/infra:** install suite still exits 1 on the SAME 8 PRE-EXISTING env-sensitive failures (proven by stash-diff; logged in deferred-items.md); `apps.integration.test.ts` RUN infra-blocked (Linux D-Bus needed; verified clean via tsc + `vitest list`). **Load-bearing UNTOUCHED:** `docker-compose.common.yml` (BYTE-UNCHANGED), the networks block, app-script core merges, `NETWORK_IP`. SUMMARY: `.planning/phases/276-app-store-supabase-browse-migration-box-side-umbrel-docker-i/276-05-SUMMARY.md`. (STATE narrative format — SDK counters no-op; advance-plan/record-metric returned no-op on this custom STATE.md.) **Phase 276 plans 01–05 now all DONE (WS1 + WS2 complete; WS3 dropped). NEXT: cut a release tag → operator runs the PRE-RELEASE box check (Remote Tor Access OFF, nothing on livinity_main_network mid-flight) → `bash /opt/livos/update.sh` → verify apps still start + desktop loads.**
 
@@ -692,7 +694,7 @@ Status: Ready for Phase 214 (Store admin-only gate + UX polish)
 - CARRY-P212-RLS-POLICIES — real RLS policies on 4 tables → P214
 - CARRY-P212-LEGACY-ADMIN-UNIFY — migrate legacy api-key admin routes to cookie path (cosmetic)
 
-Last activity: 2026-06-16
+Last activity: 2026-06-18
 
 ### ✅ Phase 209 SHIPPED (commit `8ad89ee6`)
 
@@ -760,7 +762,7 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 ## Next Planned Phase
 
 - **Phase:** 999.1
-- **Status:** Executing Phase --phase=278
+- **Status:** Executing Phase --phase
 - **Plan count:** 5
 - **CONTEXT:** .planning/phases/248-luse-display-lifecycle/248-CONTEXT.md
 - **Wave plan:** Wave 1 (248-01 backend display-manager ✅) → Wave 2 (248-02 MCP tool registrations ✅) → Wave 3 (248-03 TTL GC sweep — NEXT) → Wave 4 (248-04 canonical docs + shim sync) → Wave 5 (248-05 Mini PC deploy + UAT)
@@ -768,8 +770,8 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 
 ## Current Position
 
-Phase: --phase=278 (--name=codebase-dehardcode-multitenant) — EXECUTING
-Plan: 1 of --plans=1
+Phase: --phase (285) — EXECUTING
+Plan: 1 of --name
 
 **Plan 251-09 (4 tasks — 3 commits: `4929916f` docs PORTABILITY-AUDIT + `6bc1ee70` docs REMEDIATION-BACKLOG + final docs flip)** — Wave-2 synthesis closing Phase 251. Aggregated the eight Wave-1 findings docs (251-01…251-08) into two artifacts under the phase dir. **PORTABILITY-AUDIT.md** (156 lines): a 30-row per-dimension COVERED/GAP/RISK matrix across 8 dimensions (luse-redis / display-backend / binaries / identity / paths / systemd-env / terminal / installer-path) with severity (P0/P1/P2) + evidence refs, plus the two explicit operator verdicts. **Q1 (any session-introduced hardcode that breaks portability?)** → YES: three NEW hardcodes — `xterm` hard-dep (P0, ENOENT silently swallowed at `tools.ts:1198`), PTY `username:'bruce'` triple-pin with no `livos:desktop:user` lookup (P1, `ws-handler.ts:466`+`types.ts:31`+`session.ts:77,82-89`), `/opt/livos` Redis-fallback literal (P2 RISK, `server.ts:124`); plus two un-reproducible live-only hand artifacts (`redis-env.conf` drop-in + manual `apt install xterm imagemagick xserver-xephyr`) that mask gaps on the Mini PC. **Q2 (would a brand-new install come up seamlessly with terminal + Luse?)** → **NO-GO**, with **5 P0 blockers**: (1) `xserver-xephyr` not installed → `create_display` default mode fails as a *false-positive success* (no `child.on('error')` in `display-manager.ts:224-253`); (2) `xterm` not installed → `launch_app_in_display(terminal)` silently no-ops; (3) PTY sudoers gap → `bruce→bruce` `sudo --user bruce --login bash` prompts for a password it can't supply; (4) `livos:v43:terminal_panel` flag never seeded → dock entry hidden + WS 4403; (5) `get.livinity.io` → install-script mapping UNPROVABLE from repo (4 entrypoints; only Path A seeds `liv:mcp:config` → AionUi luse; Path B writes `CHANGEME`, Path C seeds no MCP config). `imagemagick`/`import` confirmed NOT a code dependency (251-03) — excluded. **REMEDIATION-BACKLOG.md** (153 lines): 16 items R1-R16 ordered P0→P1→P2, each with file:line + exact change + effort (S/M/L) + kind (installer/code/both), a copy-pasteable apt remediation block (covers R1/R2/R7/R16), and a 5-wave Phase 252 sequencing recommendation. De-duplicated the four cross-referenced findings to single owners (PTY-bruce→R4+R8, GDM-Xauthority→R6, redis-env→R5, empty-catalog→R9+R12). **Task 3 (optional live Mini PC ssh corroboration) SKIPPED** per D-251-LIVE-OPTIONAL — never blocks synthesis; the one genuinely live-only question (`get.livinity.io` alias) is a DNS/Vercel question unanswerable by SSH to the box, captured as backlog R11. Read-only synthesis — zero source touched (D-251-READONLY held), sacred SHA `f3538e1d…` trivially preserved (`[sacred-sha] PASS: 20 files verified` on both content commits). 0 deviations from plan. Self-check PASSED (both reports exist + exceed min_lines; both commits present in git log). SUMMARY at `.planning/phases/251-fresh-install-portability-audit/251-SUMMARY.md`. **Phase 251 CLOSED 9/9.** Next: Phase 252 (remediation) is fully seeded by REMEDIATION-BACKLOG.md — zero further analysis needed to start.
 
@@ -1800,7 +1802,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 276 (App-store Supabase browse migration (box side) + Umbrel docker image cleanup + dead app-store code removal) — 5 plans — 2026-06-18T02:26:41.630Z
+**Planned Phase:** 285 (Remove remaining Umbrel-heritage UI cruft + Docker scroll fix) — 7 plans — 2026-06-18T19:43:29.615Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
