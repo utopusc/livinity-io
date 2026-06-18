@@ -39,7 +39,7 @@ export const systemApps = [
 	{
 		id: 'LIVINITY_home',
 		name: 'Home',
-		icon: '/figma-exports/dock-home.png',
+		icon: '/figma-exports/dock-home.svg?v=285',
 		systemApp: true,
 		systemAppTo: '/',
 	},
@@ -60,7 +60,7 @@ export const systemApps = [
 	{
 		id: 'LIVINITY_live-usage',
 		name: 'Live Usage',
-		icon: '/figma-exports/dock-live-usage.png',
+		icon: '/figma-exports/dock-live-usage.svg?v=285',
 		systemApp: true,
 		// NOTE: using this will clear existing search params
 		// In practice, this means cmdk will clear params and clicking dock icon will not
@@ -69,7 +69,7 @@ export const systemApps = [
 	{
 		id: 'LIVINITY_app-store',
 		name: 'App Store',
-		icon: '/figma-exports/dock-app-store.png',
+		icon: '/figma-exports/dock-app-store.svg?v=285',
 		systemApp: true,
 		systemAppTo: '/app-store',
 	},
