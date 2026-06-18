@@ -768,12 +768,6 @@ _dld_install_docker() {
     ok "Docker engine ready: $(docker --version 2>/dev/null)"
 }
 
-# ── 4c. LivOS Docker images — REMOVED (Phase 276) ───────────────────────────
-# Phase 276 (276-01 + 276-05) removed the dead Umbrel auth-server + tor services
-# from legacy-compat (the only consumers of the re-tagged Umbrel images), so the
-# pull/retag helper is gone. No install path pulls any upstream Umbrel image now;
-# livinityd's Apps module no longer references them.
-
 # ── 4b. Streaming subsystem apt packages (105-02 G2 — update.sh:339-405) ────
 # Idempotent apt-install for ffmpeg, x11/xdotool, ydotool, xvfb, fluxbox,
 # gstreamer, websockify, VAAPI userspace + ydotoold systemd unit.

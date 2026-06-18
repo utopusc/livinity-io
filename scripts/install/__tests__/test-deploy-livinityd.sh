@@ -940,12 +940,6 @@ else
     pass "livos.service does not use buggy 'pnpm --filter livinityd start' pattern (105-05 Bug #5 negative)"
 fi
 
-# TESTS 39/40/41 (Bug #6) DELETED in Phase 276. They asserted the docker-image
-# pull/retag helper was DEFINED, had an Umbrel-image entry, and was CALLED in the
-# pipeline. Phase 276 (276-01 + 276-05) removed the dead Umbrel auth-server + tor
-# services from legacy-compat — the only consumers of the re-tagged Umbrel images
-# — so the helper + its call site + the upstream pull are all gone.
-
 # ── Phase 106 — bootstrap-layer hotfix back-port regression tests ───────────
 
 # ── TEST_BUG_7_MENDER: _dld_install_system_packages contains mender-client4 ─
@@ -982,8 +976,6 @@ else
     fail "Bug #9: helper body missing signed keyring pattern"
 fi
 # Pipeline order: streaming < google_chrome
-# Phase 276: the trailing docker_images anchor was dropped (the pull/retag helper
-# was removed with the dead Umbrel auth/tor images).
 bug9_order=$(awk '/^deploy_livinityd\(\)/,/^}/' "$DEPLOY_SH" | grep -nE "_dld_install_streaming_packages|_dld_install_google_chrome" | awk -F: '{print $1}')
 bug9_a=$(echo "$bug9_order" | sed -n 1p)
 bug9_b=$(echo "$bug9_order" | sed -n 2p)
