@@ -1,5 +1,5 @@
 import {motion} from 'framer-motion'
-import {useState} from 'react'
+import {useEffect, useRef, useState} from 'react'
 import {FaRegPlayCircle} from 'react-icons/fa'
 import {FaRegCirclePause} from 'react-icons/fa6'
 import {Link, useNavigate} from 'react-router-dom'
@@ -7,6 +7,7 @@ import {arrayIncludes} from 'ts-extras'
 
 import {LauncherIcon} from '@/components/launcher-icon'
 import {useAppInstall} from '@/hooks/use-app-install'
+import {useAppOpenReady} from '@/hooks/use-app-open-ready'
 import {useLaunchApp} from '@/hooks/use-launch-app'
 import {LIVINITY_APP_STORE_ID} from '@/modules/app-store/constants'
 import {getAppStoreAppFromInstalledApp} from '@/modules/app-store/utils'
@@ -18,7 +19,7 @@ import {cn} from '@/shadcn-lib/utils'
 import {AppStateOrLoading, progressBarStates, progressStates} from '@/trpc/trpc'
 import {useLinkToDialog} from '@/utils/dialog'
 import {t} from '@/utils/i18n'
-import {assertUnreachable} from '@/utils/misc'
+import {appToUrl, assertUnreachable} from '@/utils/misc'
 
 import {useCurrentUser} from '@/hooks/use-current-user'
 
@@ -168,6 +169,44 @@ export function AppIconConnected({appId}: {appId: string}) {
 	const {isPinned, pin, unpin} = useDockPins()
 	const pinnedInDock = isPinned('app', appId)
 
+	// Phase 287 verify-live gate. This is a DERIVED presentational concept — it is
+	// NEVER a new AppState union member (the AppLabel switch below ends in
+	// assertUnreachable; widening the union would force a switch change and risk
+	// the tsc=305 baseline). When the backend reports the app up (ready/running)
+	// but the operator's OWN resolver has not yet confirmed the per-app host
+	// resolves, openReady.phase is 'provisioning'/'rechecking' and we render a
+	// "Hazırlanıyor…" overlay + suppress the launch so no DNS query is formed for
+	// an unconfirmed host.
+	const openReady = useAppOpenReady(appId)
+	const isOpenReady = openReady.phase === 'ready'
+	// Honest already-poisoned handling: if we stay un-ready past this budget, the
+	// operator's resolver likely negative-cached before propagation (UNFIXABLE
+	// server-side). After the budget we surface the non-blocking flushdns hint +
+	// an "Open anyway" escape. Never spin forever.
+	const STUCK_BUDGET_MS = 20000
+	const [stuck, setStuck] = useState(false)
+	const [showProvisioning, setShowProvisioning] = useState(false)
+	const stuckTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+	useEffect(() => {
+		if (isOpenReady) {
+			// Resolved — clear any pending stuck timer + reset the escape UI.
+			if (stuckTimer.current) clearTimeout(stuckTimer.current)
+			setStuck(false)
+			return
+		}
+		// Still provisioning/rechecking — arm (once) the budget timer so the
+		// Open-anyway escape becomes reachable and the operator is never trapped.
+		if (!stuckTimer.current) {
+			stuckTimer.current = setTimeout(() => setStuck(true), STUCK_BUDGET_MS)
+		}
+		return () => {
+			if (stuckTimer.current) {
+				clearTimeout(stuckTimer.current)
+				stuckTimer.current = undefined
+			}
+		}
+	}, [isOpenReady])
+
 	const uninstall = async () => {
 		const res = await appInstall.uninstall()
 		if (res?.uninstallTheseFirst) {
@@ -209,6 +248,16 @@ export function AppIconConnected({appId}: {appId: string}) {
 		// (in-memory lifecycle) both mean "app is up and openable" (cf.
 		// use-app-store-bridge.ts which gates open on `running || ready`).
 		if (state === 'ready' || state === 'running') {
+			// Phase 287 gate: even when the backend says the app is up, do NOT
+			// launch until the operator's OWN resolver has confirmed the per-app
+			// host resolves. Surface the "Hazırlanıyor…" overlay (+ Open-anyway
+			// escape after the budget) instead of opening — clicking must never
+			// form a DNS query for an unconfirmed host. (useLaunchApp itself also
+			// withholds the window.open; this just shows the visible state.)
+			if (!isOpenReady) {
+				setShowProvisioning(true)
+				return
+			}
 			return launchApp(appId)
 		}
 		// Start the app if it's stopped
@@ -221,10 +270,28 @@ export function AppIconConnected({appId}: {appId: string}) {
 		}
 	}
 
+	// The one sanctioned bypass (T-287-13 accept): a deliberate, user-initiated
+	// window.open on the SAME per-app URL the gate would have opened. It does NOT
+	// mint a token or skip the app login — Caddy forward_auth still gates the app.
+	const openAnyway = () => {
+		try {
+			window.open(appToUrl(userApp.app), '_blank')?.focus()
+		} catch {
+			// no-op: appToUrl only computes a string; nothing to clean up
+		}
+		setShowProvisioning(false)
+	}
+
+	// Show the provisioning overlay when the operator clicked an up-but-not-ready
+	// app, OR proactively whenever a ready/running app is still rechecking, so the
+	// state is visible without requiring a click.
+	const appIsUp = state === 'ready' || state === 'running'
+	const provisioningVisible = appIsUp && !isOpenReady && (showProvisioning || openReady.phase === 'rechecking')
+
 	return (
 		<>
 			<ContextMenu>
-				<ContextMenuTrigger className='group'>
+				<ContextMenuTrigger className='group relative'>
 					<AppIcon
 						label={userApp.app.name}
 						src={userApp.app.icon}
@@ -232,6 +299,42 @@ export function AppIconConnected({appId}: {appId: string}) {
 						state={state}
 						progress={appInstall.progress}
 					/>
+					{/* Phase 287 — PRESENTATIONAL provisioning overlay. Derived from
+					    useAppOpenReady (NOT a new AppState member, NOT an AppLabel
+					    case — the switch still ends in assertUnreachable). Shows
+					    "Hazırlanıyor…" + a spinner while the operator's resolver is
+					    still being confirmed; after the budget it surfaces the honest
+					    flushdns hint + an "Open anyway" escape so the user is never
+					    trapped (T-287-15). */}
+					{provisioningVisible && (
+						<div className='pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-start pt-3'>
+							<div className='relative aspect-square w-12 shrink-0 rounded-xl bg-black/55 md:w-16 md:rounded-2xl'>
+								<div className='absolute inset-0 flex items-center justify-center'>
+									<div className='h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white md:h-6 md:w-6' />
+								</div>
+							</div>
+							<div
+								className='pointer-events-auto mt-1.5 max-w-[var(--app-w)] rounded-md bg-black/70 px-1.5 py-0.5 text-center text-[10px] font-medium leading-tight text-white'
+								onClick={(e) => e.stopPropagation()}
+							>
+								<div className='truncate'>{t('app.provisioning')}</div>
+								{stuck && (
+									<div className='mt-1 space-y-1'>
+										<div className='whitespace-normal text-[9px] font-normal leading-snug text-white/80'>
+											{t('open.flushdns-hint')}
+										</div>
+										<button
+											type='button'
+											onClick={openAnyway}
+											className='w-full rounded bg-white/20 px-1.5 py-0.5 text-[9px] font-medium text-white hover:bg-white/30'
+										>
+											{t('open.open-anyway')}
+										</button>
+									</div>
+								)}
+							</div>
+						</div>
+					)}
 				</ContextMenuTrigger>
 				<ContextMenuContent>
 					{userApp.app.credentials &&
