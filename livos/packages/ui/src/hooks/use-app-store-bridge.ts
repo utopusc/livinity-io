@@ -417,6 +417,13 @@ export function useAppStoreBridge(
 			sendToIframe({type: 'progress', appId, progress: 0})
 			sendToIframe({type: 'status', apps: [{id: appId, status: 'installing', progress: 0}]})
 
+			// Phase 287-followup — surface the install on the DESKTOP grid immediately,
+			// not just inside the store iframe. apps.list gains an `installing` entry
+			// once the box commits the instance; invalidating here (start) pulls it in
+			// so the desktop tile + download bar appear without a manual page refresh.
+			utilsRef.current.apps.list.invalidate()
+			utilsRef.current.apps.myApps.invalidate()
+
 			// Start polling for progress during install
 			const pollInterval = setInterval(async () => {
 				try {
@@ -424,6 +431,11 @@ export function useAppStoreBridge(
 					if (stateResult.progress > 0) {
 						sendToIframe({type: 'progress', appId, progress: Math.round(stateResult.progress)})
 					}
+					// Phase 287-followup — keep the desktop grid reconciling each tick so the
+					// freshly-committed `installing` tile appears within ~2s (the apps.list
+					// self-poll in providers/apps.tsx then drives it to completion). apps.list
+					// is cheap; myApps (per-instance docker inspect) stays a start+end invalidate.
+					utilsRef.current.apps.list.invalidate()
 					// Stop polling if no longer installing
 					if (stateResult.state !== 'installing') {
 						clearInterval(pollInterval)

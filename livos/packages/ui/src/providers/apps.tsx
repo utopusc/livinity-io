@@ -167,7 +167,22 @@ type AppsContextT = {
 const AppsContext = createContext<AppsContextT | null>(null)
 
 export function AppsProvider({children}: {children: React.ReactNode}) {
-	const appsQ = trpcReact.apps.list.useQuery()
+	// Phase 287-followup — while ANY app is mid-install, poll apps.list every 2s so
+	// the desktop tile + its download bar appear and fill live WITHOUT a manual page
+	// refresh. The store-bridge invalidates apps.list at install start + each tick to
+	// surface the freshly-committed `installing` entry (see use-app-store-bridge.ts);
+	// this self-poll then drives that tile to completion. v5 refetchInterval receives
+	// the query (not data); predicate returns false once nothing is installing so the
+	// poll stops (a wedged `installing` is reconciled server-side, routes.ts).
+	const appsQ = trpcReact.apps.list.useQuery(undefined, {
+		refetchInterval: (query) => {
+			const data = query.state.data
+			return Array.isArray(data) &&
+				data.some((a) => !('error' in a) && 'state' in a && a.state === 'installing')
+				? 2000
+				: false
+		},
+	})
 	const myAppsQ = trpcReact.apps.myApps.useQuery()
 	// Phase 94-05 — pull the user's persisted WebApp rows. The fetch is
 	// fire-and-forget on first render; the desktop grid's loading state is
