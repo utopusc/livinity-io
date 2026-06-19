@@ -746,7 +746,6 @@ export default class Apps {
 		if (meteredKeyId) {
 			await app.store.set('meteredKeyId', meteredKeyId).catch(() => {})
 		}
-		this.instances.push(app)
 
 		// Filter environment overrides to only allow keys declared in the builtin manifest
 		let filteredEnvOverrides = environmentOverrides
@@ -762,6 +761,35 @@ export default class Apps {
 				}
 			}
 		}
+
+		// Phase 288: the install tail (instance-register -> docker up -> store
+		// persist -> provisionAppSubdomain -> registerAppSubdomain -> re-poll) is
+		// factored into #finishInstall so deployCustom() reuses it verbatim.
+		return this.#finishInstall(appId, manifest, app, filteredEnvOverrides)
+	}
+
+	/**
+	 * Phase 288: the shared install TAIL, extracted verbatim from install() with
+	 * NO behavior change. Both install() and deployCustom() call this after the
+	 * compose has been staged + sanitized + injected. It owns the single
+	 * `this.instances.push(app)` (and its rollback on docker-up failure), runs
+	 * `docker compose up`, persists the installed app, provisions the Phase-287
+	 * verify-live subdomain (username appended server-side — pass ONLY the slug),
+	 * registers it in Caddy (pRetry), reports the install event, and kicks the
+	 * Phase-287 box-side re-poll. Returns false on docker-up failure, true on
+	 * success.
+	 */
+	async #finishInstall(
+		appId: string,
+		manifest: AppManifest,
+		app: App,
+		filteredEnvOverrides?: Record<string, string>,
+	): Promise<boolean> {
+		// Phase 288: recompute the app data dir deterministically (same formula
+		// install()/deployCustom() use to stage the compose) so the requiresLocalAiClis
+		// ACL grant below keeps working without threading an extra parameter.
+		const appDataDirectory = `${this.#livinityd.dataDirectory}/app-data/${appId}`
+		this.instances.push(app)
 
 		// Complete the install process via the app script
 		try {
