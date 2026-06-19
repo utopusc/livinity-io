@@ -68,6 +68,7 @@ export function AppCard({ app, featured = false }: AppCardProps) {
     instanceName,
     isEmbedded,
     getAppStatus,
+    getAppProvisioning,
     getInstallProgress,
     sendInstall,
     sendOpen,
@@ -82,6 +83,8 @@ export function AppCard({ app, featured = false }: AppCardProps) {
   const cat = CATEGORIES[app.category];
 
   const status = isEmbedded ? getAppStatus(app.id) : 'not_installed';
+  // Phase 287 — app is up but its per-app subdomain DNS is not yet client-live.
+  const provisioning = isEmbedded ? getAppProvisioning(app.id) : false;
   const progress = getInstallProgress(app.id);
   const isInstalled = status === 'running' || status === 'stopped';
 
@@ -194,6 +197,19 @@ export function AppCard({ app, featured = false }: AppCardProps) {
                   }
                 >
                   <Icon name="check" size={12} /> Added
+                </span>
+              ) : provisioning ? (
+                // Phase 287 — subdomain DNS not yet client-live. The LivOS
+                // bridge already withholds the actual window.open on this same
+                // signal (handleOpen gate); show a disabled "Preparing…" state
+                // so the user gets honest feedback instead of a no-op click.
+                <span
+                  className="install ghost card-install"
+                  aria-disabled="true"
+                  style={{ pointerEvents: 'none', opacity: 0.7 }}
+                  title="Preparing…"
+                >
+                  Preparing…
                 </span>
               ) : (
                 <button

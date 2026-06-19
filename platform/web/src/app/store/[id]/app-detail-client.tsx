@@ -51,6 +51,7 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
     instanceName,
     isEmbedded,
     getAppStatus,
+    getAppProvisioning,
     getInstallProgress,
     appCredentials,
     clearCredentials,
@@ -96,6 +97,8 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
   }, [appId, token]);
 
   const status = isEmbedded ? getAppStatus(appId) : 'not_installed';
+  // Phase 287 — app is up but its per-app subdomain DNS is not yet client-live.
+  const provisioning = isEmbedded ? getAppProvisioning(appId) : false;
   const isInstalled = status === 'running' || status === 'stopped';
   const currentSubdomain = isEmbedded ? getAppSubdomain(appId) : undefined;
   const defaultCreds = isEmbedded ? getAppDefaultCreds(appId) : undefined;
@@ -203,6 +206,7 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
           <InstallStateButton
             isEmbedded={isEmbedded}
             status={status}
+            provisioning={provisioning}
             section={app.section}
             progress={getInstallProgress(appId)}
             onInstall={() =>
@@ -400,6 +404,7 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
 function InstallStateButton({
   isEmbedded,
   status,
+  provisioning,
   section,
   progress,
   onInstall,
@@ -408,6 +413,7 @@ function InstallStateButton({
 }: {
   isEmbedded: boolean;
   status: ReturnType<ReturnType<typeof useStore>['getAppStatus']>;
+  provisioning: boolean;
   section: App['section'];
   progress: number;
   onInstall: () => void;
@@ -473,6 +479,24 @@ function InstallStateButton({
   }
 
   if (status === 'running' || status === 'stopped') {
+    // Phase 287 — app is up but its per-app subdomain DNS is not yet
+    // client-confirmed live. The LivOS bridge already withholds the actual
+    // window.open on this same signal (handleOpen gate); show a disabled
+    // "Preparing…" affordance so the user never gets a no-op click and sees
+    // the honest state. Only the URL-opening sections have an Open button to
+    // disable — webapp/ai render an "Added" badge (no per-app host) and never
+    // form DNS, so they fall through to their existing branch.
+    if (provisioning && section !== 'webapp' && section !== 'ai') {
+      return (
+        <div
+          className="install ghost"
+          aria-disabled="true"
+          style={{ pointerEvents: 'none', opacity: 0.7 }}
+        >
+          <span>Preparing…</span>
+        </div>
+      );
+    }
     // Phase 157 round 3 — webapps + MCP/agent/GSD don't have a "URL to
     // open" shape that makes sense from the store. Webapps live as
     // desktop icons (clicking the iframe Open button would route to a
