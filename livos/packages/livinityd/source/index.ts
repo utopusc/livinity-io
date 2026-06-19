@@ -32,6 +32,7 @@ import {seedLocalEnvironment} from './modules/docker/environments.js'
 import {seedBuiltinTools} from './modules/seed-builtin-tools.js'
 import {drainInstallPendingRedisKeys} from './modules/drain-install-pending-redis.js'
 import {seedAionUiMcpConfig} from './modules/mcp-registrar/index.js'
+import {ensureLivDeploySeeded} from './modules/mcp-registrar/liv-deploy-selfheal.js'
 // Phase 169-05 — Vault graph factory import is kept here (source/index.ts) for
 // grep visibility per the 169-05 sacred-guard contract; the actual app.use()
 // mount happens inside server/index.ts via the mountVaultGraphRoutes helper,
@@ -721,6 +722,16 @@ export default class Livinityd {
 		// API contract:     .planning/phases/241-mcp-auto-add-liv-tools/241-RESEARCH.md §1
 		try {
 			const aionUiBaseUrl = process.env.AIONUI_BASE_URL ?? 'http://127.0.0.1:3020'
+			// Phase 288 — existing-box self-heal. _dld_seed_mcp_servers SKIPS when
+			// liv:mcp:config already exists as a HASH (deploy-livinityd.sh:1454), so
+			// existing boxes never pick up the new liv-deploy seed entry on Update.
+			// HSET-if-missing (HSETNX) BEFORE seedAionUiMcpConfig so the catalog
+			// already contains liv-deploy when the registrar reads it this same boot.
+			// Never throws; never clobbers an operator-customized entry.
+			await ensureLivDeploySeeded(this.ai.redis, process.env.LIV_API_KEY, {
+				info: (m) => this.logger.log(m),
+				warn: (m, e) => this.logger.error(m, e),
+			})
 			const r = await seedAionUiMcpConfig({
 				redis: this.ai.redis,
 				aionUiBaseUrl,
