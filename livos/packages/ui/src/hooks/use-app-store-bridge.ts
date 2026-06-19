@@ -333,6 +333,12 @@ export function useAppStoreBridge(
 						resolved = true
 						clearInterval(pollInterval)
 						if (ev.error) {
+							// Surface v37 install failures in the LivOS HOST console — the
+							// {success:false} reply below only reaches the cross-origin store
+							// iframe's console (mirrors handleInstall:486). This is why a
+							// native sudo_denied (missing /etc/sudoers.d/livos-native) looked
+							// like a silent no-op. Root-caused Phase 289 / WS-D.
+							console.error('[app-store] v37 install failed for', appId, `(section: ${section})`, ev.error)
 							sendToIframe({type: 'installed', appId, success: false, error: ev.error})
 						} else {
 							sendToIframe({type: 'progress', appId, progress: 100})
@@ -366,6 +372,7 @@ export function useAppStoreBridge(
 					sendToIframe({type: 'installed', appId, success: true})
 					reportEvent(appId, 'install')
 				} else {
+					console.error('[app-store] v37 install failed for', appId, `(section: ${section})`, outcome.message)
 					sendToIframe({
 						type: 'installed',
 						appId,
@@ -373,10 +380,12 @@ export function useAppStoreBridge(
 						error: outcome.message,
 					})
 				}
-			} catch {
+			} catch (err) {
 				// Mutation failed (network/timeout) — DO NOT clear polling.
 				// The server-side install may still be running; let polling
-				// detect the done state and report final outcome.
+				// detect the done state and report final outcome. Log to the
+				// HOST console so a dropped install request isn't invisible.
+				console.error('[app-store] v37 install request failed (network/timeout) for', appId, `(section: ${section})`, err)
 				return
 			}
 			await sendStatusToIframe()
