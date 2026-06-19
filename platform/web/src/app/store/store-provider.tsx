@@ -91,6 +91,8 @@ function StoreProviderInner({ children }: { children: React.ReactNode }) {
         sendUninstall: bridge.sendUninstall,
         sendOpen: bridge.sendOpen,
         getAppStatus: bridge.getAppStatus,
+        // Phase 287 — per-app provisioning flag (subdomain DNS not yet ready).
+        getAppProvisioning: bridge.getAppProvisioning,
         // Progress & credentials (Phase 22)
         installProgress: bridge.installProgress,
         getInstallProgress: bridge.getInstallProgress,

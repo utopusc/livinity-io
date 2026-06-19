@@ -27,6 +27,10 @@ function isAllowedOrigin(origin: string): boolean {
 export function usePostMessage() {
   const [isEmbedded, setIsEmbedded] = useState(false);
   const [installedApps, setInstalledApps] = useState<Map<string, AppStatus['status']>>(new Map());
+  // Phase 287 — apps that are up but whose per-app subdomain DNS is not yet
+  // client-confirmed live. Drives the disabled "Preparing…" Open button so the
+  // store never surfaces a clickable link before the host resolves.
+  const [appProvisioning, setAppProvisioning] = useState<Map<string, boolean>>(new Map());
   const [appSubdomains, setAppSubdomains] = useState<Map<string, string>>(new Map());
   const [appDefaultCreds, setAppDefaultCreds] = useState<Map<string, {username: string; password: string}>>(new Map());
   const [installProgress, setInstallProgress] = useState<Map<string, number>>(new Map());
@@ -70,9 +74,12 @@ export function usePostMessage() {
           // Full status update -- replace the map (per BRIDGE-04)
           const map = new Map<string, AppStatus['status']>();
           const subMap = new Map<string, string>();
+          // Phase 287 — parallel provisioning map (subdomain not yet client-live).
+          const provisioningMap = new Map<string, boolean>();
           for (const app of data.apps) {
             map.set(app.id, app.status);
             if (app.subdomain) subMap.set(app.id, app.subdomain);
+            if (app.provisioning) provisioningMap.set(app.id, true);
           }
           const credMap = new Map<string, {username: string; password: string}>();
           for (const app of data.apps) {
@@ -81,6 +88,7 @@ export function usePostMessage() {
             }
           }
           setInstalledApps(map);
+          setAppProvisioning(provisioningMap);
           setAppSubdomains(subMap);
           setAppDefaultCreds(credMap);
           if (data.instance) setInstanceInfo(data.instance);
@@ -228,6 +236,13 @@ export function usePostMessage() {
     return installedApps.get(appId) || 'not_installed';
   }, [installedApps]);
 
+  // Phase 287 — true while the app's per-app subdomain DNS is not yet
+  // client-confirmed live (mirrors getAppStatus). The store uses it to render a
+  // disabled "Preparing…" Open button instead of a no-op click.
+  const getAppProvisioning = useCallback((appId: string): boolean => {
+    return appProvisioning.get(appId) ?? false;
+  }, [appProvisioning]);
+
   const getInstallProgress = useCallback((appId: string): number => {
     return installProgress.get(appId) ?? 0;
   }, [installProgress]);
@@ -271,6 +286,7 @@ export function usePostMessage() {
     sendUninstall,
     sendOpen,
     getAppStatus,
+    getAppProvisioning,
     getAppSubdomain,
     getAppDefaultCreds,
     sendUpdateSubdomain,

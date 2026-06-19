@@ -93,6 +93,11 @@ export type AppStatus = {
   subdomain?: string;
   defaultUsername?: string;
   defaultPassword?: string;
+  // Phase 287 — true when the app is up but its per-app subdomain DNS is not
+  // yet client-confirmed live. The store disables its Open button ("Preparing…")
+  // so it never surfaces a clickable link before the host resolves (the LivOS
+  // bridge withholds the actual window.open on the same signal — failure-mode #5).
+  provisioning?: boolean;
 };
 
 export type InstanceInfo = {
@@ -147,6 +152,8 @@ export interface StoreContextValue {
   sendUninstall: (appId: string, section?: Section) => void;
   sendOpen: (appId: string) => void;
   getAppStatus: (appId: string) => AppStatus['status'];
+  // Phase 287 — per-app provisioning flag (subdomain DNS not yet client-ready).
+  getAppProvisioning: (appId: string) => boolean;
   // Progress & credentials (Phase 22)
   installProgress: Map<string, number>;
   getInstallProgress: (appId: string) => number;
