@@ -408,12 +408,10 @@ start_app() {
 
   execute_hook "${app}" "pre-start"
 
-  # Ensure app data directory is owned by 1000:1000 (most containers run as UID 1000)
-  # This prevents EACCES errors when containers try to write to mounted volumes
-  local app_data="${LIVINITY_ROOT}/app-data/${app}"
-  if [[ -d "${app_data}" ]]; then
-    chown -R 1000:1000 "${app_data}" 2>/dev/null || true
-  fi
+  # Phase 286: the old hardcoded-uid chown of the whole app dir here always silently
+  # failed (livinityd runs non-root) and clobbered management-file ownership. Volume
+  # ownership is now reconciled per-service to the correct uid via the TypeScript
+  # reconciler (reconcile-volume-ownership.ts) BEFORE this script runs.
 
   # Start all the app's containers
   compose "${app}" up --detach --build

@@ -12,11 +12,13 @@ import randomToken from '../../modules/utilities/random-token.js'
 import type Livinityd from '../../index.js'
 import appEnvironment from './legacy-compat/app-environment.js'
 import App, {readManifestInDirectory} from './app.js'
+import {reconcileAppVolumeOwnership} from './reconcile-volume-ownership.js'
 import type {AppManifest, AppSettings} from './schema.js'
 import {fillSelectedDependencies} from '../utilities/dependencies.js'
 import {getBuiltinApp} from './builtin-apps.js'
 import {NativeApp, NATIVE_APP_CONFIGS} from './native-app.js'
 import {generateAppTemplate} from './compose-generator.js'
+import {shouldPreferCatalog} from './builtin-precedence.js'
 import {injectAiProviderConfig} from './inject-ai-provider.js'
 import {
 	detectHostAiClis,
@@ -220,6 +222,29 @@ export default class Apps {
 		// get confused.
 		for (const app of this.instances) app.state = 'starting'
 
+		// Phase 286 (SC3): boot backfill — reconcile volume ownership for EVERY
+		// installed app so existing broken boxes self-heal on restart/Update. Each
+		// call is idempotent/no-op when ownership is already correct. Best-effort
+		// per app; one failure never blocks boot. Concurrency-capped (5) so a box
+		// with many apps does not add minutes to boot — chowns are idempotent +
+		// commutative so parallelism is safe.
+		const BACKFILL_CONCURRENCY = 5
+		const backfillStart = Date.now()
+		const backfillQueue = [...this.instances]
+		const backfillWorkers = Array.from({length: Math.min(BACKFILL_CONCURRENCY, backfillQueue.length)}, async () => {
+			for (;;) {
+				const app = backfillQueue.shift()
+				if (!app) return
+				await reconcileAppVolumeOwnership(app, {projectName: app.id}).catch((error) =>
+					this.logger.error(`[reconcile] boot backfill failed for ${app.id}`, error),
+				)
+			}
+		})
+		await Promise.all(backfillWorkers)
+		this.logger.log(
+			`[reconcile] boot backfill done for ${this.instances.length} app(s) in ${Date.now() - backfillStart}ms`,
+		)
+
 		// Attempt to pre-load local Docker images
 		try {
 			// Loop over iamges in /images
@@ -261,17 +286,11 @@ export default class Apps {
 			this.logger.error(`Failed to start app environment`, error)
 		}
 
-		try {
-			// Set permissions for tor data directory
-			await $`sudo chown -R 1000:1000 ${this.#livinityd.dataDirectory}/tor`
-		} catch (error) {
-			this.logger.error(`Failed to set permissions for Tor data directory`, error)
-		}
-
-		// Fix all app-data permissions before starting (containers run as UID 1000)
-		try {
-			await $`chown -R 1000:1000 ${this.#livinityd.dataDirectory}/app-data`.catch(() => {})
-		} catch {}
+		// Phase 286: the old boot-time hardcoded-uid permission fixes (the Tor dir,
+		// removed in P276, and a blanket fix over /app-data) are gone — both
+		// silently failed (livinityd is non-root) and the blanket one also clobbered
+		// management-file ownership. The boot backfill above now reconciles each
+		// app's data volumes to the correct per-service uid via the docker group.
 
 		this.logger.log('Starting apps')
 		// Snapshot of currently installed apps (minus apps missing their data directories that will be reinstalled)
@@ -319,6 +338,21 @@ export default class Apps {
 						const username = match?.[1] || 'unknown'
 						const projectName = `${inst.appId}-user-${username}`
 						try {
+							// Phase 286: reconcile per-user volume ownership before the up.
+							await reconcileAppVolumeOwnership(
+								{
+									id: inst.appId,
+									dataDirectory: inst.volumePath,
+									readCompose: async () =>
+										(await import('js-yaml')).default.load(
+											await fse.readFile(composePath, 'utf8'),
+										) as any,
+									logger: this.logger,
+								},
+								{projectName, appDataDir: inst.volumePath, rootDir: this.#livinityd.dataDirectory},
+							).catch((error) =>
+								this.logger.error(`[reconcile] per-user boot failed for ${inst.containerName}`, error),
+							)
 							await $`docker compose --file ${composePath} --project-name ${projectName} up -d`
 							this.logger.log(`Started per-user container ${inst.containerName}`)
 						} catch (error) {
@@ -446,8 +480,6 @@ export default class Apps {
 			// Create minimal data directory for manifest
 			const appDataDirectory = `${this.#livinityd.dataDirectory}/app-data/${appId}`
 			await fse.mkdirp(appDataDirectory)
-			// Ensure owned by 1000:1000 (most containers run as UID 1000)
-			await $`chown -R 1000:1000 ${appDataDirectory}`.catch(() => {})
 			// Write a minimal livinity-app.yml manifest
 			const builtinApp = getBuiltinApp(appId)
 			if (builtinApp) {
@@ -488,27 +520,48 @@ export default class Apps {
 
 		this.logger.log(`Installing app ${appId}`)
 
-		// Template resolution chain:
-		// 1. Try builtin compose generation (no network needed)
-		// 2. Try platform DB via API (for apps added via web admin)
+		// Phase 286 (SC5): catalog>builtin precedence. For plain builtins the
+		// catalog def (named volume + pinned image + unique port) is strictly
+		// better, so try it FIRST and fall back to the builtin only if the catalog
+		// has no entry. Allowlisted specials (AI-broker/docker.sock/privileged)
+		// keep builtin precedence — the catalog cannot replicate their injected
+		// behavior. (Old order tried generateAppTemplate first, shadowing the
+		// catalog for every app present in both — proven by n8n.)
 		let appTemplatePath: string
 		let isGeneratedTemplate = false
 
-		// Step 1: Try builtin compose generation
-		const generatedPath = await generateAppTemplate(appId)
-		if (generatedPath) {
-			this.logger.log(`Using builtin compose template for ${appId}`)
-			appTemplatePath = generatedPath
-			isGeneratedTemplate = true
-		} else {
-			// Step 2: Try fetching compose from platform API
+		const preferCatalog = shouldPreferCatalog(appId)
+		if (preferCatalog) {
 			const platformTemplate = await this.fetchPlatformTemplate(appId)
 			if (platformTemplate) {
-				this.logger.log(`Using platform DB compose template for ${appId}`)
+				this.logger.log(`Using platform DB compose template for ${appId} (catalog>builtin)`)
 				appTemplatePath = platformTemplate
 				isGeneratedTemplate = true
 			} else {
-				throw new Error(`App ${appId} not found: no builtin definition and no platform compose`)
+				const generatedPath = await generateAppTemplate(appId)
+				if (generatedPath) {
+					this.logger.log(`Using builtin compose template for ${appId} (no catalog entry)`)
+					appTemplatePath = generatedPath
+					isGeneratedTemplate = true
+				} else {
+					throw new Error(`App ${appId} not found: no platform compose and no builtin definition`)
+				}
+			}
+		} else {
+			const generatedPath = await generateAppTemplate(appId)
+			if (generatedPath) {
+				this.logger.log(`Using builtin compose template for ${appId} (allowlisted special)`)
+				appTemplatePath = generatedPath
+				isGeneratedTemplate = true
+			} else {
+				const platformTemplate = await this.fetchPlatformTemplate(appId)
+				if (platformTemplate) {
+					this.logger.log(`Using platform DB compose template for ${appId}`)
+					appTemplatePath = platformTemplate
+					isGeneratedTemplate = true
+				} else {
+					throw new Error(`App ${appId} not found: no builtin definition and no platform compose`)
+				}
 			}
 		}
 
@@ -555,8 +608,10 @@ export default class Apps {
 			}
 		} catch {}
 
-		// Ensure app data directory is owned by 1000:1000 (most containers run as UID 1000)
-		await $`chown -R 1000:1000 ${appDataDirectory}`.catch(() => {})
+		// Phase 286: no post-rsync `chown 1000:1000` here — app.install() reconciles
+		// data-volume ownership to each service's real uid before its own up, and we
+		// must NOT chown the whole app dir (it would clobber management-file ownership
+		// that livinityd needs to keep writable). See reconcile-volume-ownership.ts.
 
 		// Clean up generated template directory (not needed after rsync)
 		if (isGeneratedTemplate) {
@@ -769,15 +824,65 @@ export default class Apps {
 			)
 		}
 
-		// Register subdomain in Caddy for reverse proxy
+		// Phase 286 (SC6): verify the published host port == manifest.port (the
+		// value Caddy reverse_proxies to via SubdomainConfig.port). A mismatch means
+		// Caddy will proxy to a port nothing listens on → 502. Log it so the gap is
+		// visible (do not auto-rewrite — the compose is authoritative; catalog
+		// composes carry explicit 41xxx mappings).
+		try {
+			const composeCheck = await app.readCompose()
+			const svcNames = Object.keys(composeCheck.services ?? {})
+			const mainSvc =
+				svcNames.find((n) => n === appId || n === 'server' || n === 'app' || n === 'web') ||
+				svcNames.find((n) => !['docker', 'dind', 'tor', 'proxy', 'sidecar', 'init'].includes(n)) ||
+				svcNames[0]
+			const ports = (composeCheck.services?.[mainSvc]?.ports ?? []) as string[]
+			const hostPorts = ports
+				.map((p) => p.toString())
+				.map((p) => {
+					const parts = p.replace('/udp', '').replace('/tcp', '').split(':')
+					return parts.length >= 2 ? parseInt(parts[parts.length - 2], 10) : NaN
+				})
+				.filter((n) => !Number.isNaN(n))
+			if (hostPorts.length > 0 && !hostPorts.includes(manifest.port)) {
+				this.logger.error(
+					`Phase 286 (SC6): port mismatch for ${appId} — manifest.port=${manifest.port} but published host ports are [${hostPorts.join(',')}]. Caddy will proxy to ${manifest.port} which may 502.`,
+				)
+			}
+		} catch (error) {
+			this.logger.error(`Phase 286 (SC6): port-match check failed for ${appId}`, error)
+		}
+
+		// Register subdomain in Caddy for reverse proxy.
+		// Phase 286 (SC6): retry on transient Caddy/Redis failures and SURFACE a
+		// final failure loudly. Previously a single regen failure silently dropped
+		// the Caddy block → the subdomain 404'd even though the container was healthy.
 		try {
 			const builtinApp = getBuiltinApp(appId)
 			const subdomain = builtinApp?.installOptions?.subdomain || (manifest as any).subdomain
 			const fullHost = provisioned ? hostFromUrl(provisioned.url) : undefined
-			await this.registerAppSubdomain(appId, manifest.port, subdomain, fullHost)
+			await pRetry(() => this.registerAppSubdomain(appId, manifest.port, subdomain, fullHost), {
+				retries: 3,
+				onFailedAttempt: (error) => {
+					this.logger.error(
+						`Attempt ${error.attemptNumber} registering subdomain for ${appId} failed. ${error.retriesLeft} retries left.`,
+						error,
+					)
+				},
+			})
 		} catch (error) {
-			this.logger.error(`Failed to register subdomain for ${appId}`, error)
-			// Don't fail install if subdomain registration fails
+			// Final failure after retries — surface loudly. The container is up but
+			// unreachable via its subdomain until Caddy is rebuilt; do NOT pretend it
+			// succeeded. Still don't hard-fail the install (the data + container are
+			// intact; a later restart's boot regen / reapply can recover the block).
+			// NOTE: do NOT call reportInstallEvent here — its signature is
+			// (appId, action: 'install'|'uninstall'); a new event value would be a
+			// tsc type error (breaks the 305 baseline). The loud logger.error below is
+			// sufficient operator visibility for SC6.
+			this.logger.error(
+				`Phase 286 (SC6): subdomain registration FAILED for ${appId} after retries — app is installed but may 404 via its subdomain until Caddy is rebuilt.`,
+				error,
+			)
 		}
 
 		// Report install event to platform (fire-and-forget)
@@ -835,6 +940,12 @@ export default class Apps {
 				await fse.writeFile(composeFile, yaml.dump(composeData))
 				this.logger.log(`reapplyAppConfig: re-injected broker config for ${appId} (userId=${userId})`)
 				// Recreate container so new env reaches the process.
+				// Phase 286: reconcile volume ownership before recreate.
+				try {
+					await reconcileAppVolumeOwnership(this.getApp(appId), {projectName: appId})
+				} catch (error) {
+					this.logger.error(`[reconcile] reapply (broker) failed for ${appId}`, error)
+				}
 				try {
 					await $({cwd: appDataDirectory})`docker compose up -d --force-recreate`
 					this.logger.log(`reapplyAppConfig: recreated container for ${appId}`)
@@ -864,6 +975,12 @@ export default class Apps {
 					const composeData = yaml.load(composeContent)
 					injectLocalAiClisConfig(composeData, detected, appDataDirectory, {requiresLocalAiClis: true})
 					await fse.writeFile(composeFile, yaml.dump(composeData))
+					// Phase 286: reconcile volume ownership before recreate.
+					try {
+						await reconcileAppVolumeOwnership(this.getApp(appId), {projectName: appId})
+					} catch (error) {
+						this.logger.error(`[reconcile] reapply (local-ai) failed for ${appId}`, error)
+					}
 					try {
 						await $({cwd: appDataDirectory})`docker compose up -d --force-recreate`
 						this.logger.log(`reapplyAppConfig: re-mounted host AI CLIs + recreated container for ${appId}`)
@@ -1897,20 +2014,39 @@ export default class Apps {
 		const existing = await getUserAppInstance(userId, appId)
 		if (existing) throw new Error(`User ${user.username} already has ${appId} installed`)
 
-		// Template resolution chain (same as install())
+		// Template resolution chain (same as install()).
+		// Phase 286 (SC5): catalog>builtin precedence — plain builtins prefer the
+		// catalog def; allowlisted specials keep builtin precedence. Mirrors the
+		// install() flip above (same fall-through semantics).
 		let appTemplatePath: string
 		let isGeneratedTemplate = false
-		const generatedPath = await generateAppTemplate(appId)
-		if (generatedPath) {
-			appTemplatePath = generatedPath
-			isGeneratedTemplate = true
-		} else {
+		if (shouldPreferCatalog(appId)) {
 			const platformTemplate = await this.fetchPlatformTemplate(appId)
 			if (platformTemplate) {
 				appTemplatePath = platformTemplate
 				isGeneratedTemplate = true
 			} else {
-				throw new Error(`App ${appId} not found: no builtin definition and no platform compose`)
+				const generatedPath = await generateAppTemplate(appId)
+				if (generatedPath) {
+					appTemplatePath = generatedPath
+					isGeneratedTemplate = true
+				} else {
+					throw new Error(`App ${appId} not found: no platform compose and no builtin definition`)
+				}
+			}
+		} else {
+			const generatedPath = await generateAppTemplate(appId)
+			if (generatedPath) {
+				appTemplatePath = generatedPath
+				isGeneratedTemplate = true
+			} else {
+				const platformTemplate = await this.fetchPlatformTemplate(appId)
+				if (platformTemplate) {
+					appTemplatePath = platformTemplate
+					isGeneratedTemplate = true
+				} else {
+					throw new Error(`App ${appId} not found: no builtin definition and no platform compose`)
+				}
 			}
 		}
 
@@ -2027,6 +2163,19 @@ export default class Apps {
 
 		// Start the container
 		try {
+			// Phase 286: reconcile per-user volume ownership before the up.
+			await reconcileAppVolumeOwnership(
+				{
+					id: appId,
+					dataDirectory: userDataDir,
+					readCompose: async () =>
+						(await import('js-yaml')).default.load(
+							await fse.readFile(`${userDataDir}/docker-compose.yml`, 'utf8'),
+						) as any,
+					logger: this.logger,
+				},
+				{projectName: `${appId}-user-${user.username}`, appDataDir: userDataDir, rootDir: this.#livinityd.dataDirectory},
+			).catch((error) => this.logger.error(`[reconcile] per-user install failed for ${appId}`, error))
 			await $`docker compose --file ${userDataDir}/docker-compose.yml --project-name ${appId}-user-${user.username} up -d`
 		} catch (error) {
 			this.logger.error(`Failed to start per-user container for ${appId} (user: ${user.username})`, error)
