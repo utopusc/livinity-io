@@ -2281,6 +2281,73 @@ else
     info "liv-assistant.service unit source not found — skipping install (the unit may already be installed from a prior Phase 223-05 deploy)"
 fi
 
+# ── Step 7.10: Phase 289 (WS-D) — native-install provisioning (sudoers + apt-repo helper) ──
+# Native apps install via host `sudo -n /usr/bin/apt-get install` (native-installer.ts:432),
+# which needs the /etc/sudoers.d/livos-native NOPASSWD grant. The fresh-install path
+# (deploy-livinityd.sh:_dld_template_app_units) installs it, but the day-2 update.sh path
+# NEVER did → on updated boxes the grant is absent → `sudo: a password is required` →
+# `sudo_denied` → native install refused → no desktop tile. apt-repo apps (Brave/Signal/
+# Spotify/Firefox) ALSO need /usr/local/lib/livos/livos-add-apt-repo.sh, which is copied by
+# NO path today. This step installs both, idempotently, every Update. Fully fail-tolerant:
+# a missing source or a chown error never aborts the Update.
+step "Phase 289 (WS-D): native-install provisioning (sudoers.d/livos-native + apt-repo helper)"
+
+_set_desktop_identity   # Phase 277.1 — self-derive the desktop user (no literal bruce)
+
+# --- (a) sudoers.d/livos-native — install + template the subject to the desktop user --------
+_NATIVE_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-native"
+if [[ ! -f "$_NATIVE_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _NATIVE_SUDOERS_SRC="$TEMP_DIR/scripts/install/sudoers.d/livos-native"
+fi
+_NATIVE_SUDOERS_DST="/etc/sudoers.d/livos-native"
+if [[ -f "$_NATIVE_SUDOERS_SRC" ]]; then
+    _NATIVE_SUDOERS_TMP=$(mktemp)
+    if [[ "$_DESKTOP_USER" != "bruce" ]]; then
+        # Template the `bruce ALL=(root) NOPASSWD: …` subject AND the `=(bruce)` group spec
+        # (the source uses `=(root)` for the run-as, so only the leading subject needs sed;
+        # match both forms defensively, exactly like deploy-livinityd.sh:2743).
+        sed -E "s/^bruce([[:space:]]+ALL=)/${_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DESKTOP_USER})/g" \
+            "$_NATIVE_SUDOERS_SRC" > "$_NATIVE_SUDOERS_TMP"
+    else
+        cp -f "$_NATIVE_SUDOERS_SRC" "$_NATIVE_SUDOERS_TMP"
+    fi
+    if [[ ! -f "$_NATIVE_SUDOERS_DST" ]] || ! cmp -s "$_NATIVE_SUDOERS_TMP" "$_NATIVE_SUDOERS_DST"; then
+        install -m 0440 -o root -g root "$_NATIVE_SUDOERS_TMP" "$_NATIVE_SUDOERS_DST"
+        # SAFETY-CRITICAL: a malformed sudoers file can break sudo system-wide. Validate the
+        # INSTALLED file; if visudo rejects it, REMOVE it (native apt installs stay denied —
+        # the prior state — rather than risk a broken sudoers).
+        if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_NATIVE_SUDOERS_DST" >/dev/null 2>&1; then
+            warn "visudo rejected $_NATIVE_SUDOERS_DST — removing (native apt installs stay denied until fixed)"
+            rm -f "$_NATIVE_SUDOERS_DST"
+        else
+            ok "sudoers.d/livos-native installed (subject: ${_DESKTOP_USER})"
+        fi
+    else
+        info "sudoers.d/livos-native already current (subject: ${_DESKTOP_USER})"
+    fi
+    rm -f "$_NATIVE_SUDOERS_TMP"
+else
+    info "sudoers.d/livos-native source not found — skipping (native apt installs unavailable)"
+fi
+
+# --- (b) livos-add-apt-repo.sh — the apt-repo privileged helper (missing from EVERY path) ---
+_APT_REPO_SRC="$LIVOS_DIR/scripts/install/livos-add-apt-repo.sh"
+if [[ ! -f "$_APT_REPO_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _APT_REPO_SRC="$TEMP_DIR/scripts/install/livos-add-apt-repo.sh"
+fi
+_APT_REPO_DST="/usr/local/lib/livos/livos-add-apt-repo.sh"
+if [[ -f "$_APT_REPO_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_APT_REPO_DST" ]] || ! cmp -s "$_APT_REPO_SRC" "$_APT_REPO_DST"; then
+        install -m 0755 -o root -g root "$_APT_REPO_SRC" "$_APT_REPO_DST"
+        ok "livos-add-apt-repo.sh installed at $_APT_REPO_DST"
+    else
+        info "livos-add-apt-repo.sh already current"
+    fi
+else
+    info "livos-add-apt-repo.sh source not found — skipping (apt-repo apps unavailable)"
+fi
+
 # ── Phase 202-10: desktop-user ownership hook (recurring P198/P199/P200/P201 patch) ──
 # When update.sh runs as root, rsync + pnpm install + builds end up root-owned.
 # livos.service runs as the LivOS desktop user, and pnpm-store / .next / dist
