@@ -77,7 +77,10 @@ export const apps = router({
 		// by Server5 (Phase 140 hyphen-pattern) so the UI can render the
 		// correct public URL without recomputing `${subdomain}.${mainDomain}`.
 		const allSubdomains = await ctx.apps.getAllSubdomains()
-		const subdomainMap = new Map(allSubdomains.map(s => [s.appId, {subdomain: s.subdomain, host: s.host}]))
+		// Phase 287: also carry the verify-live readiness so the UI can gate every
+		// open affordance (show "Provisioning…" until the per-app host resolves)
+		// instead of handing the operator a clickable link that NXDOMAINs.
+		const subdomainMap = new Map(allSubdomains.map(s => [s.appId, {subdomain: s.subdomain, host: s.host, subdomainReady: s.subdomainReady, readySource: s.readySource}]))
 
 		const appData = await Promise.all(
 			apps.map(async (app) => {
@@ -119,6 +122,11 @@ export const apps = router({
 					const sdEntry = subdomainMap.get(app.id)
 					const subdomain = sdEntry?.subdomain || app.id
 					const host = sdEntry?.host
+					// Phase 287: undefined/false → UI treats the app as still-provisioning
+					// (fail-safe). readySource encodes Tier-1 'platform-doh' vs the WEAK
+					// Tier-2 'box-resolver' floor.
+					const subdomainReady = sdEntry?.subdomainReady
+					const readySource = sdEntry?.readySource
 
 					return {
 						id: app.id,
@@ -130,6 +138,8 @@ export const apps = router({
 						state: app.state,
 						subdomain,
 						host,
+						subdomainReady,
+						readySource,
 						native: false as const,
 						credentials: {
 							defaultUsername,
