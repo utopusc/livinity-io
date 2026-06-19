@@ -4905,4 +4905,27 @@ Plans:
 - [x] 285-06-PLAN.md — Item 1a: remove the full-page /files route + repoint the two command palettes to windowed Files ✅ 2026-06-18 (`6ca16017`/`6ded94e9`/`e33b811a`) — see [285-06-SUMMARY.md](phases/285-umbrel-leftover-cleanup-and-docker-scroll-fix/285-06-SUMMARY.md)
 - [ ] 285-07-PLAN.md — Item 1b: bridge backups deep-links to the windowed Files (Strategy B) + repoint the 3 deep-links
 
+### Phase 286: App-install end-to-end fix so all store apps actually work on every box (volume ownership reconciliation, health verification, catalog>builtin precedence, Caddy reachability)
+
+**Goal:** Every store app (all 535+, builtin and Supabase-catalog) installs and *actually works* on ANY box — the container starts with the correct uid (no EACCES crash-loop on named-volume or bind-mount data), is verified healthy/running BEFORE being marked ready (no "Up but 502"), and is reachable end-to-end through Caddy — regardless of the desktop user's uid (1000 vs 1001) or whether livinityd runs as root. Already-installed broken apps self-heal on the next Update. Zero changes to the operator's live box (source-code fix only).
+**Requirements**: SC1-SC7 (success criteria below)
+**Depends on:** Phase 285
+**Plans:** 5 plans (4 waves)
+
+**Success criteria:**
+- SC1 — Volume ownership reconciliation: before every `docker compose up`, each volume (named + bind) is chowned to the consuming service's real uid (compose `user:` → image `Config.User` → default 1000) via a root helper container (works through the `docker` group despite non-root livinityd). The 4 currently crash-looping classes (n8n=node/1000, postgres user:1000, redis user:1000, syncthing) start without EACCES.
+- SC2 — Broken hardcoded `chown 1000:1000`/`chmod 777` calls removed (apps.ts:273/450/559, app.ts:330, app-script:415); management files (compose/.env/yml) stay owned by livinityd's user so reinstall/update never breaks.
+- SC3 — Boot backfill: on livinityd start, all installed apps are reconciled → existing broken boxes self-heal on Update.
+- SC4 — Health/readiness verification: app state is only set 'ready' after the main container is Running (and healthy if a healthcheck is defined); a crash-looping app reports an error state, not "ready".
+- SC5 — Catalog>builtin precedence audited/fixed: installs use the well-engineered catalog defs (named volume + pinned image + unique port 41000-41534) instead of stale shadowing builtin defs; AI-broker/special builtins preserved.
+- SC6 — Caddy reachability hardened: registerAppSubdomain/rebuildCaddyFromState failures are surfaced/retried (not silently swallowed); published host port matches the container listen port; network-create errors are validated (not bare-caught).
+- SC7 — uid-agnostic & non-destructive: the fix works whether the desktop user is uid 1000 or 1001 and whether livinityd is root or not; chowns are idempotent/no-op on already-correct apps; postgres PGDATA keeps 700 (chown not chmod).
+
+Plans:
+- [ ] 286-01-PLAN.md (Wave 1) — Volume-ownership reconciler + wire 5 up-chokepoints + boot backfill + remove broken chown/chmod sites (SC1/SC2/SC3/SC7)
+- [ ] 286-02-PLAN.md (Wave 2, deps 01) — Health/readiness verification (poll Running+healthy before state=ready) (SC4)
+- [ ] 286-03-PLAN.md (Wave 2, deps 01) — Catalog>builtin precedence (allowlist of special builtins + catalog-first resolution) (SC5)
+- [ ] 286-04-PLAN.md (Wave 3, deps 01,03) — Caddy reachability hardening (retry+surface register, port-match verify, narrow network-create catch) (SC6)
+- [ ] 286-05-PLAN.md (Wave 4, deps 01-04) — Verification gate (tsc<=305 + tests) + representative install matrix + ship notes (SC1-SC7)
+
 ---
