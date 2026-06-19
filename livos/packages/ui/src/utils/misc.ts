@@ -41,7 +41,14 @@ export function pathJoin(base: string, segment: string): string {
 	return base.replace(/\/$/, '') + '/' + segment.replace(/^\//, '')
 }
 
-/** Resolve the external URL for an installed app based on current hostname */
+/**
+ * Resolve the external URL for an installed app based on current hostname.
+ *
+ * 287 GUARD: do NOT add an unconditional window.open / <a href> / <link rel=preconnect|dns-prefetch|prefetch> / <iframe src> / auto-open toast / server-side host probe for the per-app host. Any of these forms a DNS query before the client confirms the record resolves and silently re-introduces NXDOMAIN negative-cache poisoning (Phase 287). Gate every open on useAppOpenReady / isHostReady.
+ * This function only COMPUTES the FQDN string — it must never itself trigger a
+ * DNS lookup (no fetch/Image/link to the returned host). Callers are responsible
+ * for gating the actual open on client-confirmed readiness.
+ */
 export function appToUrl(app: UserApp): string {
 	// Local development — use port-based URL
 	if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
