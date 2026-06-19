@@ -16,6 +16,8 @@ import {fillSelectedDependencies} from '../utilities/dependencies.js'
 import type Livinityd from '../../index.js'
 import {validateManifest, type AppSettings} from './schema.js'
 import appScript from './legacy-compat/app-script.js'
+import {reconcileAppVolumeOwnership} from './reconcile-volume-ownership.js'
+import {pollContainerHealth} from './health-poll.js'
 
 async function readYaml(path: string) {
 	return yaml.load(await fse.readFile(path, 'utf8'))
@@ -319,23 +321,16 @@ export default class App {
 
 		await this.patchComposeFile(environmentOverrides)
 
-		// Ensure volume mount directories exist with proper permissions
-		try {
-			const compose = await this.readCompose()
-			for (const service of Object.values(compose.services || {})) {
-				for (const vol of (service.volumes || []) as string[]) {
-					const hostPath = vol.split(':')[0]
-					if (hostPath && hostPath.startsWith(this.dataDirectory)) {
-						await fse.mkdirp(hostPath)
-						await $`chmod -R 777 ${hostPath}`.catch(() => {})
-					}
-				}
-			}
-		} catch {
-			// Non-fatal — some apps work without this
-		}
-
 		await this.pull()
+
+		// Phase 286 (SC1/SC2/SC7): reconcile volume ownership to each service's
+		// REAL uid via a root alpine helper container (works through the docker
+		// group even though livinityd is non-root). Replaces the silently-failing
+		// `chmod 777` block — chmod broke postgres PGDATA and the path check never
+		// matched the unexpanded ${APP_DATA_DIR} token anyway. Runs AFTER pull so
+		// `docker image inspect` can resolve Config.User for no-`user:` images
+		// (e.g. n8n=node) on first install.
+		await reconcileAppVolumeOwnership(this, {projectName: this.id})
 
 		await pRetry(() => appScript(this.#livinityd, 'install', this.id), {
 			onFailedAttempt: (error) => {
@@ -346,7 +341,22 @@ export default class App {
 			},
 			retries: 2,
 		})
-		this.state = 'ready'
+
+		// Phase 286 (SC4): verify the main container is actually Running (+ healthy
+		// if a healthcheck exists) before claiming 'ready'. A crash-looper now lands
+		// an error state instead of the old "Up but 502" lie.
+		try {
+			const mainContainer = await this.getMainContainerName()
+			if (mainContainer) {
+				await pollContainerHealth(mainContainer, {logger: this.logger})
+			}
+			this.state = 'ready'
+		} catch (error) {
+			this.logger.error(`App ${this.id} did not become healthy after install`, error)
+			this.state = 'unknown'
+			this.stateProgress = 0
+			throw error
+		}
 		this.stateProgress = 0
 
 		return true
@@ -394,6 +404,9 @@ export default class App {
 		// We re-run the patch here to fix an edge case where 0.5.x imported apps
 		// wont run because they haven't been patched.
 		await this.patchComposeFile()
+		// Phase 286: reconcile volume ownership before the start chokepoint too
+		// (handles restarts + apps installed before this fix).
+		await reconcileAppVolumeOwnership(this, {projectName: this.id})
 		await pRetry(() => appScript(this.#livinityd, 'start', this.id), {
 			onFailedAttempt: (error) => {
 				this.logger.error(
@@ -403,7 +416,19 @@ export default class App {
 			},
 			retries: 2,
 		})
-		this.state = 'ready'
+
+		// Phase 286 (SC4): same health gate on the start path.
+		try {
+			const mainContainer = await this.getMainContainerName()
+			if (mainContainer) {
+				await pollContainerHealth(mainContainer, {logger: this.logger})
+			}
+			this.state = 'ready'
+		} catch (error) {
+			this.logger.error(`App ${this.id} did not become healthy after start`, error)
+			this.state = 'unknown'
+			throw error
+		}
 
 		// Enable auto-start on boot
 		await this.setAutoStart(true)
@@ -543,6 +568,25 @@ export default class App {
 		const inheritStdio = false
 		const result = await appScript(this.#livinityd, 'logs', this.id, inheritStdio)
 		return stripAnsi(result.stdout)
+	}
+
+	// Phase 286 (SC4): resolve the container name of the app's MAIN service so the
+	// health poll knows which container to inspect. Reuses the EXACT mainService
+	// selection rule from patchComposeFile() so we poll the same service Caddy
+	// reverse-proxies to. The container_name (set by patchComposeFile to the
+	// forced legacy scheme) is the source of truth; fall back to the deterministic
+	// `${appId}_${service}_1` name if absent.
+	private async getMainContainerName(): Promise<string | undefined> {
+		const compose = await this.readCompose()
+		const serviceNames = Object.keys(compose.services ?? {})
+		if (serviceNames.length === 0) return undefined
+		const mainServiceName = serviceNames.find(name =>
+			name === this.id || name === 'server' || name === 'app' || name === 'web'
+		) || serviceNames.find(name =>
+			!['docker', 'dind', 'tor', 'proxy', 'sidecar', 'init'].includes(name)
+		) || serviceNames[0]
+		const service = compose.services![mainServiceName]
+		return service.container_name || `${this.id}_${mainServiceName}_1`
 	}
 
 	async getContainerIp(service: string) {

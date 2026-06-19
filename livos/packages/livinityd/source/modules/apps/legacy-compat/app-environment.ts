@@ -42,8 +42,19 @@ export default async function appEnvironment(livinityd: Livinityd, command: stri
 		const subnet = '10.21.0.0/16' // matches the compose `$NETWORK_IP/16`
 		try {
 			await $(options as any)`docker network create --subnet ${subnet} livinity_main_network`
-		} catch {
-			// Network already exists (steady state) or a benign create race — fine.
+		} catch (error: any) {
+			// Phase 286 (SC6): tolerate the steady-state "already exists" + benign
+			// create races, but SURFACE any other failure (driver/subnet/daemon
+			// error) instead of bare-catching it — a silently-failed shared network
+			// breaks EVERY app's `external: livinity_main_network` attach.
+			const msg = String(error?.stderr || error?.message || error)
+			if (/already exists|being used|in use/i.test(msg)) {
+				// steady state — fine
+			} else {
+				// Re-log loudly; the network is required for all app attaches.
+				console.error(`[app-environment] docker network create FAILED (non-benign): ${msg}`)
+				throw error
+			}
 		}
 		// Reap any leftover auth/tor containers from before the P276 removal via
 		// --remove-orphans. The compose is now networks-only (no services), so
