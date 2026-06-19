@@ -40,6 +40,7 @@ import {
 import {applyCaddyConfig, generateFullCaddyfile, writeCaddyfile, reloadCaddy, type SubdomainConfig, type CaddyConfig} from '../domain/caddy.js'
 import {buildCaddyConfigFromState, type CaddyStateInstance, type CaddyStateSubdomain} from '../domain/caddy-state.js'
 import {getTunnelStatus} from '../domain/tunnel.js'
+import {verifyDns} from '../domain/dns-check.js'
 import {
 	allocatePort,
 	createUserAppInstance,
@@ -861,15 +862,26 @@ export default class Apps {
 			const builtinApp = getBuiltinApp(appId)
 			const subdomain = builtinApp?.installOptions?.subdomain || (manifest as any).subdomain
 			const fullHost = provisioned ? hostFromUrl(provisioned.url) : undefined
-			await pRetry(() => this.registerAppSubdomain(appId, manifest.port, subdomain, fullHost), {
-				retries: 3,
-				onFailedAttempt: (error) => {
-					this.logger.error(
-						`Attempt ${error.attemptNumber} registering subdomain for ${appId} failed. ${error.retriesLeft} retries left.`,
-						error,
-					)
+			await pRetry(
+				() =>
+					this.registerAppSubdomain(
+						appId,
+						manifest.port,
+						subdomain,
+						fullHost,
+						provisioned?.ready,
+						provisioned?.readyAt,
+					),
+				{
+					retries: 3,
+					onFailedAttempt: (error) => {
+						this.logger.error(
+							`Attempt ${error.attemptNumber} registering subdomain for ${appId} failed. ${error.retriesLeft} retries left.`,
+							error,
+						)
+					},
 				},
-			})
+			)
 		} catch (error) {
 			// Final failure after retries — surface loudly. The container is up but
 			// unreachable via its subdomain until Caddy is rebuilt; do NOT pretend it
@@ -887,6 +899,17 @@ export default class Apps {
 
 		// Report install event to platform (fire-and-forget)
 		this.reportInstallEvent(appId, 'install').catch(() => {})
+
+		// Phase 287: box-side advisory re-poll (Tier-2, WEAK floor). Only when
+		// Tier-1 (platform DoH) was NOT ready, loop the box's own resolver until
+		// the host resolves, then flip subdomainReady on the persisted config.
+		// WEAK: the box resolver (Tailscale MagicDNS / resolv.conf) is NOT the
+		// operator's client resolver — this is a floor for the slow-box case, not
+		// proof the client can reach it. NEVER throws into the install path.
+		if (provisioned && !provisioned.ready) {
+			const reHost = hostFromUrl(provisioned.url)
+			if (reHost) void this.rePollSubdomainReady(appId, reHost).catch(() => {})
+		}
 
 		return true
 	}
@@ -1906,7 +1929,14 @@ export default class Apps {
 		}
 	}
 
-	async registerAppSubdomain(appId: string, port: number, subdomain?: string, fullHost?: string): Promise<void> {
+	async registerAppSubdomain(
+		appId: string,
+		port: number,
+		subdomain?: string,
+		fullHost?: string,
+		ready?: boolean,
+		readyAt?: number,
+	): Promise<void> {
 		const domainConfig = await this.getDomainConfig()
 		if (!domainConfig?.active) {
 			this.logger.log(`No active domain configured, skipping subdomain registration for ${appId}`)
@@ -1946,6 +1976,11 @@ export default class Apps {
 			...(fullHost ? {host: fullHost.toLowerCase()} : {}),
 			...(upstreamBearer ? {upstreamBearer} : {}),
 			...(publicAccess ? {publicAccess} : {}),
+			// Phase 287: persist the Tier-1 platform-DoH readiness. A falsy `ready`
+			// MUST omit the field so a pre-287 / not-yet-ready blob defaults to
+			// NOT-ready on read (fail-safe → the UI shows Provisioning, never a
+			// clickable broken link). The Tier-2 box-resolver re-poll flips it later.
+			...(ready ? {subdomainReady: true, readyAt, readySource: 'platform-doh' as const} : {}),
 		}
 
 		if (existingIdx >= 0) {
@@ -1964,6 +1999,46 @@ export default class Apps {
 
 		const displayHost = newSub.host ?? `${subdomainName}.${domainConfig.domain}`
 		this.logger.log(`Registered subdomain ${displayHost} -> localhost:${port} for ${appId}`)
+	}
+
+	/**
+	 * Phase 287 — Tier-2 box-resolver advisory re-poll. Runs ONLY when Tier-1
+	 * (platform DoH, from the Vercel route) did not confirm the record at install
+	 * time. Loops the box's OWN resolver (`verifyDns(host, '', true)` — tunnelMode
+	 * floor = "resolves anywhere = pass") on a hard 60s budget / 5s interval; on
+	 * the first resolve it flips `subdomainReady=true` + `readySource:'box-resolver'`
+	 * on the persisted SubdomainConfig.
+	 *
+	 * WEAK signal: the box resolver (Tailscale MagicDNS / resolv.conf) is NOT the
+	 * operator's client resolver, so this is a floor for the slow-box case only,
+	 * not proof the operator's browser can resolve it. Fire-and-forget + fully
+	 * advisory: it NEVER throws into the install path (caller wraps it in
+	 * `.catch(() => {})`), and it never overwrites an existing readiness flag.
+	 */
+	private async rePollSubdomainReady(appId: string, host: string): Promise<void> {
+		const deadline = Date.now() + 60_000
+		while (Date.now() < deadline) {
+			try {
+				const {resolved, match} = await verifyDns(host, '', true)
+				if (resolved && match) {
+					const subs = await this.getSubdomains()
+					const idx = subs.findIndex((s) => s.appId === appId)
+					if (idx >= 0 && !subs[idx].subdomainReady) {
+						subs[idx] = {
+							...subs[idx],
+							subdomainReady: true,
+							readyAt: Date.now(),
+							readySource: 'box-resolver',
+						}
+						await this.setSubdomains(subs)
+					}
+					return
+				}
+			} catch {
+				/* advisory — ignore and retry */
+			}
+			await new Promise((r) => setTimeout(r, 5_000))
+		}
 	}
 
 	/**
