@@ -2758,6 +2758,22 @@ _dld_template_app_units() {
     else
         info "sudoers.d/livos-native source not found — skipping (native apt installs unavailable)"
     fi
+
+    # 3. Phase 289 (WS-D) — copy the apt-repo privileged helper (the apt-repo install method
+    # for Brave/Signal/Spotify/Firefox calls /usr/local/lib/livos/livos-add-apt-repo.sh via the
+    # sudoers grant). This was missing from EVERY path → apt-repo apps broke on fresh installs.
+    local _apt_repo_src="${_DLD_STAGE_DIR}/scripts/install/livos-add-apt-repo.sh"
+    [[ -f "$_apt_repo_src" ]] || _apt_repo_src="${_DLD_LIVOS_DIR}/scripts/install/livos-add-apt-repo.sh"
+    local _apt_repo_dst="/usr/local/lib/livos/livos-add-apt-repo.sh"
+    if [[ -f "$_apt_repo_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_apt_repo_dst" ]] || ! cmp -s "$_apt_repo_src" "$_apt_repo_dst"; then
+            install -m 0755 -o root -g root "$_apt_repo_src" "$_apt_repo_dst"
+            ok "livos-add-apt-repo.sh installed at $_apt_repo_dst"
+        fi
+    else
+        info "livos-add-apt-repo.sh source not found — skipping (apt-repo apps unavailable on fresh install)"
+    fi
 }
 
 _dld_cleanup_temp_dir() {
