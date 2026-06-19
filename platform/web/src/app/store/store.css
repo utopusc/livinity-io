@@ -254,6 +254,9 @@ button, input { font: inherit; color: inherit; }
   grid-template-columns: 240px 1fr;
   height: calc(100% - 64px - 52px);
   overflow: hidden;
+  /* WS-A (Phase 289): allow the 1fr main column to shrink below its
+     content so the iframe never produces a horizontal scrollbar. */
+  min-width: 0;
 }
 .page.no-sidebar { grid-template-columns: 1fr; }
 
@@ -311,6 +314,11 @@ button, input { font: inherit; color: inherit; }
 
 .main {
   overflow-y: auto;
+  /* WS-A (Phase 289): grid items default to min-width:auto and refuse to
+     shrink below content — the silent horizontal-overflow source. min-width:0
+     lets the 1fr main column shrink; overflow-x:hidden is the hard clamp. */
+  min-width: 0;
+  overflow-x: hidden;
   padding: 32px 40px 64px;
 }
 
@@ -486,11 +494,11 @@ button, input { font: inherit; color: inherit; }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* WS-A (Phase 289): auto-fill so the grid wraps responsively at any
+     iframe width (400px–1500px) instead of a hard 4-col track. */
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px;
 }
-.grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
-.grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
 
 .card {
   display: flex;
