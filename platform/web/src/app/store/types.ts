@@ -5,7 +5,10 @@ export const SECTIONS: { key: Section; label: string; tagline: string }[] = [
   { key: 'app', label: 'Apps', tagline: 'Self-hosted Docker apps' },
   { key: 'webapp', label: 'Web Apps', tagline: 'Hosted services as desktop windows' },
   { key: 'native', label: 'Native', tagline: 'Linux desktop apps' },
-  { key: 'ai', label: 'AI', tagline: 'MCP servers, agents & planning skills' },
+  // Phase 289 WS-C — the `ai` tab (MCP + AI) was removed from the store strip
+  // per operator requirements #4 + #6. `'ai'` is intentionally KEPT in the
+  // `Section` union (above) + server-side VALID_SECTIONS so already-installed
+  // MCP rows still round-trip status without a tsc cascade or 500.
   { key: 'plugin', label: 'Plugins', tagline: 'Extend LivOS backend + UI' },
 ];
 

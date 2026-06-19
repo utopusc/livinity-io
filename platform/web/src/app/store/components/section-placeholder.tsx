@@ -39,7 +39,7 @@ const PLACEHOLDER_TITLES: Record<
   plugin: {
     lead: 'Operator',
     em: 'extensions',
-    line: 'Signed plugins that extend LivOS with new backend routes and UI — starting with Livinity Broker.',
+    line: 'Signed plugins that extend LivOS with new backend routes and UI.',
   },
 };
 
@@ -71,7 +71,11 @@ const PLACEHOLDER_SAMPLES: Record<Exclude<Section, 'app'>, string[]> = {
     'Bug triager agent',
     'GSD',
   ],
-  plugin: ['Livinity Broker'],
+  // Phase 289 WS-C — the lone reference plugin row was hard-deleted, so there
+  // is no live plugin sample to advertise. Keep the `plugin` key (typed
+  // Record<Exclude<Section,'app'>,string[]>); an empty list renders an empty
+  // placeholder-list gracefully (`[].map` yields nothing).
+  plugin: [],
 };
 
 export function SectionPlaceholder({ section }: { section: Exclude<Section, 'app'> }) {

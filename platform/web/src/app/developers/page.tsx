@@ -315,15 +315,9 @@ export default function DevelopersPage() {
               starting fork.
             </p>
           </div>
-          <div className="dev-card">
-            <div className="dev-card-eyebrow">livinity-broker</div>
-            <h4>The first plugin</h4>
-            <p>
-              Claude API at <code>/p/livinity-broker/v1/*</code> via the
-              user's Anthropic subscription. Demonstrates path-mounted routes
-              and a plugin-managed settings widget.
-            </p>
-          </div>
+          {/* Phase 289 WS-C — the reference-plugin card was removed because its
+              catalog row was hard-deleted from the store. The dev-grid-3 now
+              holds 2 cards (hello-world + SDK types). */}
           <div className="dev-card">
             <div className="dev-card-eyebrow">SDK types</div>
             <h4>@livinity/plugin-sdk</h4>
