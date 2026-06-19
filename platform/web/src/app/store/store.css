@@ -495,8 +495,12 @@ button, input { font: inherit; color: inherit; }
 .grid {
   display: grid;
   /* WS-A (Phase 289): auto-fill so the grid wraps responsively at any
-     iframe width (400px–1500px) instead of a hard 4-col track. */
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+     iframe width (400px–1500px) instead of a hard 4-col track.
+     280px min keeps the HORIZONTAL card (icon + name/tag + install button)
+     at its original comfortable ~285px width — restores the 4-col look at
+     wide widths and wraps to 3/2/1 as the window narrows. 220px was too
+     tight: it produced 5–6 cramped columns that squashed the row card. */
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px;
 }
 
