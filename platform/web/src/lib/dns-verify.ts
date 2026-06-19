@@ -109,3 +109,49 @@ export function generateVerificationToken(): string {
 }
 
 export const RELAY_SERVER_IP = RELAY_IP;
+
+/**
+ * Phase 287 — verify-live DNS gate (Tier-1, public DoH).
+ *
+ * Query a single public DoH resolver for one record type and report whether the
+ * `Answer` array is non-empty. ANY answer (A or CNAME) means the record EXISTS
+ * — this is intentionally NOT a RELAY_IP equality test (that is dead BYO-relay
+ * code in `checkARecordDoH`). A non-ok response or a fetch throw resolves to
+ * `false` so a single-resolver hiccup can never reject the poll.
+ */
+async function dohAnswers(resolver: string, name: string, type: 'A' | 'CNAME'): Promise<boolean> {
+  try {
+    const url = `${resolver}?name=${encodeURIComponent(name)}&type=${type}`;
+    const res = await fetch(url, { headers: { Accept: 'application/dns-json' } });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { Answer?: unknown[] };
+    return Array.isArray(data.Answer) && data.Answer.length > 0; // ANY answer = record exists
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Poll PUBLIC DoH resolvers until a freshly-provisioned host resolves, or the
+ * deadline passes. Queries BOTH `1.1.1.1` and `dns.google` for `type=A` AND
+ * `type=CNAME`; "live" = any non-empty `Answer` on EITHER resolver (a proxied
+ * CNAME yields a CNAME answer and/or CF-edge A records).
+ *
+ * ADVISORY ONLY — this proves the record EXISTS at a public resolver. It NEVER
+ * throws: on timeout it returns `{ ready: false, readyAt: null }`. The caller
+ * (the app-subdomain provision route) MUST still return HTTP 200 on a timeout —
+ * the CF resources + DB row already exist; propagation lag is not a failure.
+ */
+export async function pollSubdomainLive(
+  hostname: string,
+  { intervalMs = 1000, timeoutMs = 12000 } = {},
+): Promise<{ ready: boolean; readyAt: number | null }> {
+  const deadline = Date.now() + timeoutMs;
+  const resolvers = ['https://1.1.1.1/dns-query', 'https://dns.google/resolve'];
+  while (Date.now() < deadline) {
+    const checks = resolvers.flatMap((r) => [dohAnswers(r, hostname, 'A'), dohAnswers(r, hostname, 'CNAME')]);
+    if ((await Promise.all(checks)).some(Boolean)) return { ready: true, readyAt: Date.now() };
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return { ready: false, readyAt: null }; // advisory: record exists, just not propagated to public resolver yet
+}
