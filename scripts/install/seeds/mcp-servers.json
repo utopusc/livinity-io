@@ -138,6 +138,20 @@
       "enabled": true,
       "installedAt": 0
     },
+    "liv-deploy": {
+      "name": "liv-deploy",
+      "transport": "stdio",
+      "command": "/usr/bin/npx",
+      "args": ["tsx", "/opt/livos/packages/livinityd/source/modules/mcp/local/liv-deploy/index.ts"],
+      "env": {
+        "LIVINITYD_API_URL": "http://127.0.0.1:8080",
+        "LIV_API_KEY": "__LIVOS_LIV_API_KEY__"
+      },
+      "description": "Deploy a custom Docker image / compose to this LivOS box and mint {slug}-{user}.livinity.io. Destructive (gated). Talks back to livinityd via LIVINITYD_API_URL + LIV_API_KEY.",
+      "category": "system",
+      "enabled": true,
+      "installedAt": 0
+    },
     "liv-system": {
       "name": "liv-system",
       "transport": "stdio",

@@ -2,8 +2,9 @@
  * Phase 241-01 — redis-catalog.test.ts
  *
  * Unit tests for readSystemMcpCatalog — reads Redis hash `liv:mcp:config`,
- * filters to SYSTEM_MCP_NAMES (5 Liv system MCPs), parses each JSON value,
- * skips malformed entries with a warn log. No live Redis — pure mock client.
+ * filters to SYSTEM_MCP_NAMES (6 Liv system MCPs — Phase 288 added liv-deploy),
+ * parses each JSON value, skips malformed entries with a warn log. No live
+ * Redis — pure mock client.
  *
  * Reference contracts:
  *   - livos/packages/livinityd/source/modules/server/trpc/mcp-config-router.ts L60-67
@@ -88,18 +89,19 @@ describe('readSystemMcpCatalog', () => {
 		expect(out[0].cfg.command).toBe('node')
 	})
 
-	test('returns all 5 system MCPs when present', async () => {
+	test('returns all 6 system MCPs when present', async () => {
 		const redis = makeFakeRedis({
 			luse: makeStdioEntry('luse', 'node'),
 			'liv-docker': makeStdioEntry('liv-docker', 'liv-docker-mcp'),
 			'liv-system': makeStdioEntry('liv-system', 'liv-system-mcp'),
 			'liv-apps': makeStdioEntry('liv-apps', 'liv-apps-mcp'),
 			'liv-vault': makeStdioEntry('liv-vault', 'liv-vault-mcp'),
+			'liv-deploy': makeStdioEntry('liv-deploy', 'liv-deploy-mcp'),
 		})
 		const {logger} = makeCapturingLogger()
 		const out = await readSystemMcpCatalog(redis, logger)
 		const names = out.map((t) => t.name).sort()
-		expect(names).toEqual(['liv-apps', 'liv-docker', 'liv-system', 'liv-vault', 'luse'])
+		expect(names).toEqual(['liv-apps', 'liv-deploy', 'liv-docker', 'liv-system', 'liv-vault', 'luse'])
 	})
 
 	test('malformed JSON is skipped + logged warn (other entries pass through)', async () => {
@@ -118,15 +120,16 @@ describe('readSystemMcpCatalog', () => {
 		expect(warns[0].err).toBeInstanceOf(Error)
 	})
 
-	test('SYSTEM_MCP_NAMES is exactly the 5 locked names — Set + tuple in sync', () => {
+	test('SYSTEM_MCP_NAMES is exactly the 6 locked names — Set + tuple in sync', () => {
 		expect([...SYSTEM_MCP_NAMES]).toEqual([
 			'luse',
 			'liv-docker',
 			'liv-system',
 			'liv-apps',
 			'liv-vault',
+			'liv-deploy',
 		])
-		expect(SYSTEM_MCP_NAMES_SET.size).toBe(5)
+		expect(SYSTEM_MCP_NAMES_SET.size).toBe(6)
 		for (const name of SYSTEM_MCP_NAMES) {
 			expect(SYSTEM_MCP_NAMES_SET.has(name)).toBe(true)
 		}
