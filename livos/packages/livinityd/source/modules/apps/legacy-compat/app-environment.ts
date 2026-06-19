@@ -45,12 +45,22 @@ export default async function appEnvironment(livinityd: Livinityd, command: stri
 		} catch {
 			// Network already exists (steady state) or a benign create race — fine.
 		}
-		// Still run the (now networks-only) compose up: harmless "no service
-		// selected" no-op, but `--remove-orphans` reaps any leftover auth/tor
-		// containers in the `livinity` project from before the removal.
-		await $(
-			options as any,
-		)`docker compose --project-name livinity --file ${composePath} ${command} --build --detach --remove-orphans`
+		// Reap any leftover auth/tor containers from before the P276 removal via
+		// --remove-orphans. The compose is now networks-only (no services), so
+		// `docker compose up --detach` exits NON-ZERO ("no service selected") on
+		// current Docker Compose — which threw out of appEnvironment('up') and
+		// broke EVERY app install (the install call site, apps.ts:715, is NOT
+		// wrapped in the tolerant try/catch + pRetry the startup path uses). Drop
+		// --build/--detach (a no-service `up` then exits 0) AND tolerate any
+		// non-zero exit defensively — the shared network is already created
+		// explicitly above, so this compose-up is now purely orphan cleanup.
+		try {
+			await $(
+				options as any,
+			)`docker compose --project-name livinity --file ${composePath} up --remove-orphans`
+		} catch {
+			// "no service selected" on the networks-only compose — harmless no-op.
+		}
 	} else {
 		await $(options as any)`docker compose --project-name livinity --file ${composePath} ${command}`
 	}
