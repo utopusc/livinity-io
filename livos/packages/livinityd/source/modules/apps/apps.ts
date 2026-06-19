@@ -1265,7 +1265,7 @@ export default class Apps {
 	private async provisionAppSubdomain(
 		appId: string,
 		port: number,
-	): Promise<{subdomain: string; url: string} | null> {
+	): Promise<{subdomain: string; url: string; ready?: boolean; readyAt?: number} | null> {
 		try {
 			const apiKey = await this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY)
 			if (!apiKey) {
@@ -1284,13 +1284,22 @@ export default class Apps {
 				return null
 			}
 
-			const data = (await response.json()) as {subdomain?: string; url?: string}
+			// Phase 287: also capture the Tier-1 platform-DoH readiness signal the
+			// Vercel route now returns (Plan 01). `ready` is advisory — absent/false
+			// just means the box must rely on the Tier-2 box-resolver re-poll (or the
+			// UI's client probe). Never required: malformed/missing → undefined.
+			const data = (await response.json()) as {
+				subdomain?: string
+				url?: string
+				ready?: boolean
+				readyAt?: number
+			}
 			if (!data.subdomain || !data.url) {
 				this.logger.error(`CF subdomain provisioning returned malformed response for ${appId}`)
 				return null
 			}
 			this.logger.log(`Provisioned CF subdomain ${data.subdomain} for ${appId} -> ${data.url}`)
-			return {subdomain: data.subdomain, url: data.url}
+			return {subdomain: data.subdomain, url: data.url, ready: data.ready, readyAt: data.readyAt}
 		} catch (error) {
 			this.logger.error(`Failed to provision CF subdomain for ${appId}`, error)
 			return null

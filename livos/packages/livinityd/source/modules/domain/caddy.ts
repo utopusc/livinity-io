@@ -198,6 +198,23 @@ export interface SubdomainConfig {
 	 * 258-01 adds the field ONLY — the emit carve-out that reads it is 258-02.
 	 */
 	publicAccess?: PublicAccessConfig
+	/**
+	 * Phase 287 — verify-live readiness. true once the per-app host
+	 * `{app}-{user}.livinity.io` is confirmed to RESOLVE (record exists).
+	 * OPTIONAL + omit-when-absent: a pre-287 Redis blob missing this MUST
+	 * parse fine and default to NOT-ready (fail-safe → the UI shows
+	 * "Provisioning…", never a clickable broken link).
+	 */
+	subdomainReady?: boolean
+	/** Phase 287 — epoch ms when readiness was first confirmed. */
+	readyAt?: number
+	/**
+	 * Phase 287 — which tier confirmed readiness. 'platform-doh' (Tier-1,
+	 * strong: the Vercel route saw the record on a public resolver) vs
+	 * 'box-resolver' (Tier-2, WEAK: the box's own resolver saw it; the box
+	 * resolver is NOT the operator's client resolver, so this is a floor only).
+	 */
+	readySource?: 'platform-doh' | 'box-resolver'
 }
 
 export interface CaddyConfig {
