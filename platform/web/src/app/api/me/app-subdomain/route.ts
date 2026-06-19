@@ -39,6 +39,7 @@ import {
   deprovisionAppSubdomain,
   CfApiError,
 } from '@/lib/cf-saas';
+import { pollSubdomainLive } from '@/lib/dns-verify';
 import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
 
 // app_slug: 2-32 chars, lowercase alphanumeric + hyphens, no leading/trailing
@@ -229,10 +230,31 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // 8. Phase 287: verify-live gate. Poll a PUBLIC DoH resolver so the box learns
+  //    whether the freshly-created host has propagated before it surfaces a
+  //    clickable link. ADVISORY — a timeout returns ready:false, NEVER 503; the
+  //    CF resources + DB row already exist, so propagation lag is not a failure.
+  //    `cfResult.subdomain` is the full hyphen label (e.g. `open-webui-bruce`),
+  //    so `${cfResult.subdomain}.livinity.io` is the canonical host.
+  //    pollSubdomainLive never throws, but wrap defensively so an unexpected
+  //    error can never downgrade this success path to an error status.
+  let ready = false;
+  let readyAt: number | null = null;
+  try {
+    ({ ready, readyAt } = await pollSubdomainLive(`${cfResult.subdomain}.livinity.io`));
+  } catch (err) {
+    console.error(
+      `[140-05/POST] verify-live poll errored for user=${username} app=${appSlug} (non-fatal, advisory)`,
+      err,
+    );
+  }
+
   return NextResponse.json({
     subdomain: cfResult.subdomain,
     url: cfResult.url,
     dns_record_id: cfResult.dns_record_id,
     app_slug: appSlug,
+    ready,
+    readyAt,
   });
 }
