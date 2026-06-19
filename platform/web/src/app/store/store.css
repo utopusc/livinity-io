@@ -500,6 +500,29 @@ button, input { font: inherit; color: inherit; }
   gap: 12px;
 }
 
+/* =========================================================
+   WS-A (Phase 289) — RESPONSIVE COLLAPSE
+   Replaces the dead mobile-artboard block (the shell never adds .mobile).
+   Keyed to the iframe viewport so these stay consistent with the
+   Tailwind `md:` off-canvas aside in components/sidebar.tsx.
+   ========================================================= */
+@media (max-width: 880px) {
+  /* Collapse the hard 240px sidebar track to match the off-canvas aside,
+     so there is no empty gap / over-narrow cards at narrow widths. */
+  .page { grid-template-columns: 1fr; }
+}
+@media (max-width: 700px) {
+  /* Stack the featured hero and release the span-2 featured card. */
+  .featured-hero { grid-template-columns: 1fr; min-height: auto; }
+  .card.featured-card { grid-column: auto; }
+  .main { padding: 24px 20px 48px; }
+  /* Detail page: stack the 1fr/280px install-panel grid so the detail
+     route also fits without a horizontal scrollbar (ported from the
+     removed mobile-artboard block — the only remaining narrow overflow). */
+  .detail-grid { grid-template-columns: 1fr; gap: 24px; }
+  .install-panel { grid-column: 1 / -1; }
+}
+
 .card {
   display: flex;
   gap: 14px;
@@ -1009,48 +1032,6 @@ button, input { font: inherit; color: inherit; }
   line-height: 1.55;
 }
 .state-actions { display: inline-flex; gap: 8px; }
-
-/* =========================================================
-   MOBILE ARTBOARD — 390-wide
-   ========================================================= */
-.ab.mobile { width: 390px; }
-.ab.mobile .tb {
-  grid-template-columns: auto auto;
-  padding: 12px 16px;
-  height: auto;
-}
-.ab.mobile .tb-search { display: none; }
-.ab.mobile .tb-user-name { display: none; }
-.ab.mobile .tb-brand .crumb { display: none; }
-.ab.mobile .sn {
-  padding: 0 16px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.ab.mobile .sn::-webkit-scrollbar { display: none; }
-.ab.mobile .sn-tab { padding: 0 14px; flex: none; }
-.ab.mobile .page { grid-template-columns: 1fr; }
-.ab.mobile .sb { display: none; }
-.ab.mobile .main { padding: 20px 16px 32px; }
-.ab.mobile .grid { grid-template-columns: 1fr; gap: 10px; }
-.ab.mobile .featured-hero { grid-template-columns: 1fr; min-height: auto; }
-.ab.mobile .featured-body { padding: 24px; }
-.ab.mobile .featured-title { font-size: 26px; }
-.ab.mobile .featured-visual { padding: 28px; }
-.ab.mobile .featured-icon { width: 88px; height: 88px; font-size: 40px; border-radius: 20px; }
-.ab.mobile .ph-title { font-size: 24px; }
-.ab.mobile .ph { flex-direction: column; align-items: flex-start; gap: 8px; }
-.ab.mobile .ph-meta { font-size: 10px; }
-.ab.mobile .detail-grid { grid-template-columns: 1fr; gap: 24px; }
-.ab.mobile .detail-hero { padding: 20px; }
-.ab.mobile .detail-header-row { grid-template-columns: 72px 1fr; gap: 14px; row-gap: 16px; }
-.ab.mobile .detail-icon { width: 72px; height: 72px; font-size: 28px; border-radius: 18px; }
-.ab.mobile .detail-name { font-size: 24px; }
-.ab.mobile .detail-tag { font-size: 13px; }
-.ab.mobile .install-panel { grid-column: 1 / -1; }
-.ab.mobile .detail-body { padding: 20px; }
-.ab.mobile .placeholder { padding: 40px 24px; }
-.ab.mobile .placeholder-title { font-size: 22px; }
 
 /* annotation pills — used in design canvas to call out DS tokens */
 .note-pill {
