@@ -15,7 +15,13 @@ export function useStore(): StoreContextValue {
 
 const VALID_SECTIONS: readonly Section[] = ['app', 'webapp', 'native', 'ai', 'plugin'];
 
-function StoreProviderInner({ children }: { children: React.ReactNode }) {
+function StoreProviderInner({
+  children,
+  initialApps,
+}: {
+  children: React.ReactNode;
+  initialApps?: AppSummary[];
+}) {
   const searchParams = useSearchParams();
   // Token rides in the URL on the iframe's first load, but Next.js client-side
   // navigation drops the query param. The middleware persists it as the
@@ -39,8 +45,13 @@ function StoreProviderInner({ children }: { children: React.ReactNode }) {
     ? (sectionHint as Section)
     : 'app';
 
-  const [apps, setApps] = useState<AppSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Phase 289 WS-B — seed from the RSC server-prefetch so the real catalog
+  // paints on first render. When seeded, start with loading=false so a seeded
+  // mount never flashes the "Loading apps…"/"Soon" empty state. The client
+  // useEffect below still runs as a refresh/fallback.
+  const seeded = (initialApps?.length ?? 0) > 0;
+  const [apps, setApps] = useState<AppSummary[]>(initialApps ?? []);
+  const [loading, setLoading] = useState(seeded ? false : true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -54,7 +65,10 @@ function StoreProviderInner({ children }: { children: React.ReactNode }) {
       setError('Connect your LivOS instance to browse apps');
       return;
     }
-    setLoading(true);
+    // Phase 289 WS-B — only show the loading screen when we did NOT seed from
+    // the server prefetch. A seeded mount already shows real apps; this fetch
+    // becomes a silent background refresh (no loading flash).
+    if (apps.length === 0) setLoading(true);
     fetch('/api/apps', { headers: { 'X-Api-Key': token } })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load apps');
@@ -113,7 +127,13 @@ function StoreProviderInner({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function StoreProvider({ children }: { children: React.ReactNode }) {
+export function StoreProvider({
+  children,
+  initialApps,
+}: {
+  children: React.ReactNode;
+  initialApps?: AppSummary[];
+}) {
   return (
     <Suspense
       fallback={
@@ -122,7 +142,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         </div>
       }
     >
-      <StoreProviderInner>{children}</StoreProviderInner>
+      <StoreProviderInner initialApps={initialApps}>{children}</StoreProviderInner>
     </Suspense>
   );
 }
