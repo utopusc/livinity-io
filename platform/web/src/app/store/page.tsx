@@ -94,8 +94,12 @@ export default function StorePage() {
     );
   }
 
-  // Empty section placeholder for non-app empty sections
-  if (selectedSection !== 'app' && sectionApps.length === 0) {
+  // Empty section placeholder for non-app empty sections.
+  // Phase 289 WS-B — belt-and-suspenders `!loading` guard: the `if (loading)`
+  // return above already short-circuits during the load, but keep this explicit
+  // so the "Coming in Phase X" placeholder can ONLY appear once loading is false
+  // and the section is genuinely empty (never during the catalog-fetch flash).
+  if (!loading && selectedSection !== 'app' && sectionApps.length === 0) {
     return (
       <div className="main" style={{ maxWidth: 840, margin: '0 auto' }}>
         <SectionPlaceholder section={selectedSection} />

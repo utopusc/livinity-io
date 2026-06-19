@@ -14,7 +14,7 @@ const SECTION_ICONS: Record<Section, IconName> = {
 };
 
 export function SectionTabs() {
-  const { selectedSection, setSelectedSection, setSelectedCategory, apps, token, instanceName } = useStore();
+  const { selectedSection, setSelectedSection, setSelectedCategory, apps, loading, token, instanceName } = useStore();
   const router = useRouter();
   const pathname = usePathname();
   const isStoreList = pathname === '/store';
@@ -62,10 +62,18 @@ export function SectionTabs() {
           >
             <Icon name={SECTION_ICONS[s.key]} size={14} />
             <span>{s.label}</span>
+            {/* Phase 289 WS-B — "Soon" is NOT a loading state. Only show it once
+                the catalog has loaded and the section is genuinely empty; during
+                the load show a neutral dot skeleton so we never flash "Soon" on
+                a section that is actually fully populated in Supabase. */}
             {count > 0 ? (
               <span className="count">{count}</span>
-            ) : (
+            ) : !loading && count === 0 ? (
               <span className="soon">Soon</span>
+            ) : (
+              <span className="count" aria-hidden="true" style={{ opacity: 0.4 }}>
+                ·
+              </span>
             )}
           </button>
         );
