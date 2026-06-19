@@ -714,3 +714,47 @@ CREATE TABLE IF NOT EXISTS user_app_subdomains (
 
 CREATE INDEX IF NOT EXISTS idx_user_app_subdomains_user
   ON user_app_subdomains (user_id);
+
+-- =========================================================================
+-- Phase 290 — shortcuts table (unified "Add Shortcut" launcher).
+--
+-- B1 FIX: there is NO migration runner — database/migrations/*.sql are
+-- documentation only (migrations/index.ts). The live schema is THIS file,
+-- applied at boot by initDatabase() via the idempotent CREATE TABLE/INDEX
+-- IF NOT EXISTS pass. So the shortcuts DDL lives here (NOT in a migration
+-- file). The gate is "table exists after boot", not "migration ran".
+--
+-- 100% ADDITIVE: the existing `webapps` table (line ~590) is UNTOUCHED. The
+-- webapps→shortcuts backfill + store-bridge cutover are a DEFERRED later wave
+-- (needs live-data box UAT) — no data is migrated here.
+--
+-- kind: 'web' | 'terminal' | 'local'. H1 — NO 'native' kind: native apps
+--   already render as desktop tiles via the server-merged apps.list; a
+--   kind:'native' shortcut would double-tile. The Native tab (later wave)
+--   creates ONLY a NativeAppConfig, never a shortcut row. (Only 'web' +
+--   'terminal' are wired in the dialog this session; 'local' is defined for
+--   forward-compat but its UI is deferred.)
+-- open_mode: 'iframe' | 'browser-stream' | 'local-port' | 'terminal'. L1 —
+--   'new-tab' is a runtime-only fallback of the open-mode engine, never stored.
+-- source: 'user' | 'deploy' | 'migrated'. L2 — dropped the unused 'catalog'.
+-- title + icon_url are BOTH NOT NULL (#3 — icon/title mandatory; no blank tiles).
+-- dedup_key is a sha256 over a kind-specific tuple (M2); UNIQUE(user_id,
+--   dedup_key) makes re-adding the same shortcut idempotent.
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS shortcuts (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind       TEXT NOT NULL CHECK (kind IN ('web','terminal','local')),
+  title      TEXT NOT NULL,
+  icon_url   TEXT NOT NULL,
+  open_mode  TEXT NOT NULL CHECK (open_mode IN ('iframe','browser-stream','local-port','terminal')),
+  payload    JSONB NOT NULL,
+  dedup_key  TEXT NOT NULL,
+  position   INTEGER NOT NULL DEFAULT 0,
+  source     TEXT NOT NULL DEFAULT 'user' CHECK (source IN ('user','deploy','migrated')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, dedup_key)
+);
+
+CREATE INDEX IF NOT EXISTS shortcuts_user_position_idx
+  ON shortcuts(user_id, position);

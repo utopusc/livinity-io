@@ -151,17 +151,34 @@ interface WebAppStreamWindowProps {
 	 * to the legacy unmount-cleanup path (kept defensively).
 	 */
 	windowId?: string
+	/**
+	 * Phase 290 — ADDITIVE override for the browser-stream open-mode of a
+	 * Shortcut. When provided, the URL/title come straight from the caller
+	 * (the SHORTCUT_ window arm) instead of a `webapp.list` row lookup — a
+	 * shortcut is NOT a webapps-table row, but the per-app X11 stream backend
+	 * (webapp.window.spawn) keys purely on the `webappId` UUID + the passed url,
+	 * so it works unchanged. When absent, behavior is byte-identical to before.
+	 */
+	urlOverride?: string
+	titleOverride?: string
 }
 
-export default function WebAppStreamWindow({webappId, windowId}: WebAppStreamWindowProps) {
+export default function WebAppStreamWindow({webappId, windowId, urlOverride, titleOverride}: WebAppStreamWindowProps) {
 	// 1. Pull this WebApp's row from the persisted list (URL is needed for
 	// the spawn input + the toolbar copy-URL action — D-95-15).
+	//
+	// Phase 290 — when an explicit urlOverride is supplied (Shortcut
+	// browser-stream), skip the webapps lookup entirely and synthesize the row.
 	const webappListQuery = trpcReact.webapp.list.useQuery(undefined, {
 		staleTime: 30_000,
+		enabled: !urlOverride,
 	})
 	const webapp = useMemo(
-		() => webappListQuery.data?.find((w) => w.id === webappId) ?? null,
-		[webappListQuery.data, webappId],
+		() =>
+			urlOverride
+				? {id: webappId, url: urlOverride, title: titleOverride ?? null}
+				: (webappListQuery.data?.find((w) => w.id === webappId) ?? null),
+		[urlOverride, titleOverride, webappListQuery.data, webappId],
 	)
 
 	// 2. Spawn the host Chrome window. webapp.window.spawn is registered

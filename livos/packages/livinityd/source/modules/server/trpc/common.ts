@@ -471,6 +471,25 @@ export const httpOnlyPaths = [
 	'webapp.list',
 	'webapp.delete',
 	'webapp.update',
+	// Phase 290 — `shortcut.*` (unified Add Shortcut launcher). Same
+	// WS-reconnect-survival rationale as the webapp.* CRUD cluster above:
+	//   - list is a desktop-render dependency (apps provider merges shortcuts
+	//     with Docker apps every render) → HTTP avoids the WS-handshake flicker.
+	//   - create/update/delete are autosave-adjacent mutations — the Add
+	//     Shortcut dialog calls create then invalidates list; a half-broken WS
+	//     after `systemctl restart livos` would silently drop the response and
+	//     the tile would never appear (memory pitfall B-12 / X-04).
+	//   - probeFrameable can take up to ~6s (network header probe) — same
+	//     long-fetch rationale as webapp.extractMetadata.
+	//   - terminalTemplates is a dialog-render dependency.
+	// Registered HERE in the SAME change that mounts shortcutRouter (H6) BEFORE
+	// any UI uses these paths.
+	'shortcut.list',
+	'shortcut.create',
+	'shortcut.update',
+	'shortcut.delete',
+	'shortcut.probeFrameable',
+	'shortcut.terminalTemplates',
 	// v33 Phase 95 — per-WebApp agent session state (webapp_agent_sessions
 	// table). Two procedures:
 	//   - webapp.agent.session.get   — fetched on WebApp window mount; gates

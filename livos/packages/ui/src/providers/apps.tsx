@@ -22,9 +22,21 @@ export type WebAppEntry = {
 	faviconUrl: string | null
 	createdAt: Date | string
 }
+// Phase 290 — unified Add Shortcut launcher entry. Additive 3rd desktop-entry
+// arm alongside the existing app/webapp arms (webapps stay untouched).
+export type ShortcutEntry = {
+	id: string
+	kind: 'web' | 'terminal' | 'local'
+	title: string
+	iconUrl: string
+	openMode: 'iframe' | 'browser-stream' | 'local-port' | 'terminal'
+	payload: unknown
+	createdAt: Date | string
+}
 export type DesktopEntry =
 	| {kind: 'app'; app: UserApp}
 	| {kind: 'webapp'; webapp: WebAppEntry}
+	| {kind: 'shortcut'; shortcut: ShortcutEntry}
 
 // `LIVINITY_` prefix to make extra clear the distinction between system app IDs and user installable ids.
 export const systemApps = [
@@ -159,6 +171,8 @@ type AppsContextT = {
 	isLoading: boolean
 	// Phase 94-05 — persisted user-defined WebApps (paste-a-URL desktop icons).
 	webapps: WebAppEntry[]
+	// Phase 290 — persisted shortcuts (web/terminal/local launcher tiles).
+	shortcuts: ShortcutEntry[]
 	// Unified ordered list for the desktop grid: Docker apps first (their
 	// existing order), then WebApps by createdAt ASC. Drag-arrange ordering
 	// is deferred to v34 (CONTEXT gray-area #order).
@@ -193,6 +207,12 @@ export function AppsProvider({children}: {children: React.ReactNode}) {
 		// Cheap query — keep cache fresh-ish so a delete from another tab
 		// reflects soon. Invalidations from create/delete mutations remain
 		// the primary refresh path.
+		staleTime: 30 * 1000,
+		retry: false,
+	})
+	// Phase 290 — persisted shortcuts (unified Add Shortcut launcher). Same
+	// lazy/non-blocking posture as webapps (loading state driven by appsQ only).
+	const shortcutsQ = trpcReact.shortcut.list.useQuery(undefined, {
 		staleTime: 30 * 1000,
 		retry: false,
 	})
@@ -252,11 +272,29 @@ export function AppsProvider({children}: {children: React.ReactNode}) {
 			})
 	}, [webappsQ.data])
 
+	// Phase 290 — normalize shortcut rows into the discriminated entry shape.
+	// Sort ASC by createdAt to match the webapps ordering convention.
+	const shortcuts: ShortcutEntry[] = useMemo(() => {
+		const rows = shortcutsQ.data ?? []
+		return [...rows]
+			.map((row) => ({
+				id: row.id,
+				kind: row.kind,
+				title: row.title,
+				iconUrl: row.iconUrl,
+				openMode: row.openMode,
+				payload: row.payload,
+				createdAt: row.createdAt,
+			}))
+			.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+	}, [shortcutsQ.data])
+
 	const desktopEntries: DesktopEntry[] = useMemo(() => {
 		const appEntries: DesktopEntry[] = userApps.map((app) => ({kind: 'app' as const, app}))
 		const webappEntries: DesktopEntry[] = webapps.map((w) => ({kind: 'webapp' as const, webapp: w}))
-		return [...appEntries, ...webappEntries]
-	}, [userApps, webapps])
+		const shortcutEntries: DesktopEntry[] = shortcuts.map((s) => ({kind: 'shortcut' as const, shortcut: s}))
+		return [...appEntries, ...webappEntries, ...shortcutEntries]
+	}, [userApps, webapps, shortcuts])
 
 	return (
 		<AppsContext.Provider
@@ -271,6 +309,7 @@ export function AppsProvider({children}: {children: React.ReactNode}) {
 				// behind the existing skeleton without flickering icons in late.
 				isLoading: appsQ.isLoading,
 				webapps,
+				shortcuts,
 				desktopEntries,
 			}}
 		>

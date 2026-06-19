@@ -17,6 +17,7 @@ import {AppIcon, AppIconConnected} from './app-icon'
 import {DesktopFolder} from './desktop-folder'
 import {DockSpacer} from './dock'
 import {WebAppIcon} from './webapp-icon'
+import {ShortcutIcon} from './shortcut-icon'
 import {WidgetMeta, getWidgetSize} from './widgets/widget-types'
 import {WidgetRenderer} from './widgets/widget-renderer'
 import {WidgetContextMenu} from './widgets/widget-context-menu'
@@ -204,7 +205,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 	const getQuery = trpcReact.user.get.useQuery()
 	const name = getQuery.data?.name
 
-	const {userApps, isLoading, webapps} = useApps()
+	const {userApps, isLoading, webapps, shortcuts} = useApps()
 	const {folders, update: updateFolders} = useDesktopFolders()
 	const {widgets, update: updateWidgets} = useDesktopWidgets()
 	const {layout, updateLayout} = useDesktopLayout()
@@ -314,6 +315,23 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		}))
 		appItems.push(...nativeAppItems)
 
+		// Phase 290 — persisted shortcuts (web/terminal/local launcher tiles).
+		// Same desktop grid surface as WebApps; ordering after them (drag-arrange
+		// shared + deferred). Keyed `shortcut-<id>` to avoid collision.
+		const shortcutItems: AppGridItem[] = shortcuts.map((sc) => ({
+			id: `shortcut-${sc.id}`,
+			node: (
+				<motion.div
+					initial={{opacity: 0, scale: 0}}
+					animate={{opacity: 1, scale: 1}}
+					transition={{type: 'spring', stiffness: 400, damping: 25}}
+				>
+					<ShortcutIcon shortcut={sc} />
+				</motion.div>
+			),
+		}))
+		appItems.push(...shortcutItems)
+
 		// System apps shown in grid on mobile (dock is hidden)
 		if (isMobile) {
 			const mobileSystemApps = [
@@ -389,7 +407,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		})
 
 		return [...appItems, ...folderItems, ...widgetItems]
-	}, [userApps, webapps, nativeApps, folders, widgets, isMobile, openApp, windowManager])
+	}, [userApps, webapps, shortcuts, nativeApps, folders, widgets, isMobile, openApp, windowManager])
 
 	// Phase 157 round 4 — conditional render deferred to AFTER all hooks
 	// have run. Returning `null` mid-function would have skipped the

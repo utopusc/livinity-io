@@ -13,12 +13,14 @@ import {addDesktopFolder} from '@/modules/desktop/desktop-content'
 import {trpcReact} from '@/trpc/trpc'
 import {WidgetPickerDialog} from './widgets/widget-picker-dialog'
 import {AddWebAppDialog} from './add-webapp-dialog'
+import {AddShortcutDialog} from './add-shortcut-dialog'
 
 export function DesktopContextMenu({children}: {children: React.ReactNode}) {
 	const [showWallpaper, setShowWallpaper] = useState(false)
 	const [showNewFolder, setShowNewFolder] = useState(false)
 	const [showWidgetPicker, setShowWidgetPicker] = useState(false)
 	const [showWebAppDialog, setShowWebAppDialog] = useState(false)
+	const [showShortcutDialog, setShowShortcutDialog] = useState(false)
 	const contentRef = useRef<HTMLDivElement>(null)
 	const anchorRef = useRef<HTMLDivElement>(null)
 
@@ -40,6 +42,13 @@ export function DesktopContextMenu({children}: {children: React.ReactNode}) {
 						}}
 					>
 						Add WebApp
+					</ContextMenuItem>
+					<ContextMenuItem
+						onSelect={() => {
+							setShowShortcutDialog(true)
+						}}
+					>
+						Add Shortcut
 					</ContextMenuItem>
 					<ContextMenuItem
 						onSelect={() => {
@@ -79,6 +88,9 @@ export function DesktopContextMenu({children}: {children: React.ReactNode}) {
 
 			{/* Add WebApp dialog (Phase 94-03) */}
 			<AddWebAppDialog open={showWebAppDialog} onOpenChange={setShowWebAppDialog} />
+
+			{/* Add Shortcut dialog (Phase 290 — additive; Add WebApp kept) */}
+			<AddShortcutDialog open={showShortcutDialog} onOpenChange={setShowShortcutDialog} />
 		</>
 	)
 }

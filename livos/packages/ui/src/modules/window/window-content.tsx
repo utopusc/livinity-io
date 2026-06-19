@@ -2,6 +2,7 @@ import React, {Suspense} from 'react'
 
 import {Loading} from '@/components/ui/loading'
 import {useTerminalPanelEnabled} from '@/hooks/use-terminal-panel-enabled'
+import {SHORTCUT_APP_ID_PREFIX, isShortcutKind} from '@/modules/shortcuts/shortcut-window-route'
 import {tw} from '@/utils/tw'
 
 // Lazy load content components for each app type
@@ -48,6 +49,12 @@ const LivAssistantWindow = React.lazy(() => import('./app-contents/liv-assistant
 // openWindow). Renders a LIVE, interactive noVNC stream of a real X display via
 // displays.getVncUrl + useWebAppVnc({viewOnly:false}) (locked decision #1).
 const X11DisplayStreamWindow = React.lazy(() => import('./app-contents/x11-display-stream-window'))
+// Phase 290 — ShortcutIframeWindow. Discriminator is the `SHORTCUT_<id>`
+// prefix on appId (set by the open-mode engine via openWindow). Renders an
+// iframe (with a timeout-only frame-deny watchdog) or, for the browser-stream
+// open-mode, reuses the WebApp X11 stream. The target URL + mode are encoded in
+// the window-manager `route` string (shortcut://<mode>?u=<url>).
+const ShortcutIframeWindow = React.lazy(() => import('./app-contents/shortcut-iframe-window'))
 
 const WEBAPP_APP_ID_PREFIX = 'WEBAPP_'
 const NATIVE_APP_ID_PREFIX = 'NATIVE_'
@@ -130,7 +137,10 @@ export function WindowContent({route, appId, windowId}: WindowContentProps) {
 		isWebAppKind(appId) ||
 		isNativeAppKind(appId) ||
 		isOpenUiAppKind(appId) ||
-		isDisplayKind(appId)
+		isDisplayKind(appId) ||
+		// H2 — Shortcut windows are full-height too. Added to the boolean chain
+		// (NOT the fullHeightApps exact-match Set, which can't match a prefix).
+		isShortcutKind(appId)
 	) {
 		return (
 			<div className='h-full overflow-hidden'>
@@ -198,6 +208,14 @@ export function WindowAppContent({appId, initialRoute, windowId}: {appId: string
 	if (isDisplayKind(appId)) {
 		const displayId = appId.slice(DISPLAY_APP_ID_PREFIX.length)
 		return <X11DisplayStreamWindow displayId={displayId} windowId={windowId} />
+	}
+
+	// Phase 290 — Shortcut window. appId is `SHORTCUT_<id>`; the URL + render
+	// mode are carried in `initialRoute` (shortcut://<mode>?u=<url>, set by the
+	// open-mode engine). Matched before the `switch` so the prefix wins.
+	if (isShortcutKind(appId)) {
+		const shortcutId = appId.slice(SHORTCUT_APP_ID_PREFIX.length)
+		return <ShortcutIframeWindow shortcutId={shortcutId} route={initialRoute} windowId={windowId} />
 	}
 
 	// Phase 231 retirement — legacy chat-iframe branch removed.

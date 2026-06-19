@@ -101,6 +101,10 @@ import {claudeAuthRouter} from './claude-auth-router.js'
 // half-broken WS dropping the response after `systemctl restart livos`.
 // CRUD procedures (create/list/delete/update) are deferred to P94.
 import {webappRouter} from '../../webapps/index.js'
+// Phase 290 — `shortcut.*` namespace (unified Add Shortcut launcher). Additive
+// alongside the existing `webapp.*` namespace (both stay live this session).
+// Paths registered in httpOnlyPaths (./common.ts) for WS-reconnect survival.
+import {shortcutRouter} from '../../shortcuts/index.js'
 import streamsRouter from '../../streaming/trpc-router.js'
 // Phase 254-01 — computer-use displays.* namespace (UI seam for the active-X-
 // displays hover panel + live-VNC display window). Mounted directly as the
@@ -336,6 +340,9 @@ export function createAppRouter(opts: {
 		// v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01).
 		// Phase 93-11 — webapp.window.* sub-router added in webappRouter.
 		webapp: webappRouter,
+		// Phase 290 — `shortcut.*` (unified Add Shortcut launcher). Additive;
+		// the `webapp.*` namespace above is untouched (both ship this session).
+		shortcut: shortcutRouter,
 		// v33 Phase 93 — streams.* (start/stop/list) namespace.
 		streams: streamsRouter,
 		// Phase 254-01 — displays.* (list/getVncUrl) namespace. UI seam for the
