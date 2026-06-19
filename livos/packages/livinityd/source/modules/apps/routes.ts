@@ -239,6 +239,39 @@ export const apps = router({
 			return result
 		}),
 
+	// Phase 288: AI custom-app deploy. The AI-authored compose/image is UNTRUSTED —
+	// ctx.apps.deployCustom forces isGeneratedTemplate=false so the non-builtin
+	// sanitizer ALWAYS runs (no docker.sock / host-path bind / privileged). It
+	// reuses the install tail for free Phase-287 verify-live DNS
+	// ({slug}-{user}.livinity.io). MVP: deploys as the box owner (admin); per-user
+	// isolation DEFERRED (see Apps.deployCustom).
+	deployCustom: privateProcedure
+		.input(
+			z.object({
+				slug: z.string().min(1),
+				dockerCompose: z.string().optional(),
+				image: z.string().optional(),
+				port: z.number().int().min(1).max(65535),
+				manifest: z.object({name: z.string(), icon: z.string().optional()}).optional(),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			// Mirror routes.ts install: thread the caller's admin status (legacy
+			// single-user with no currentUser stays admin-equivalent).
+			const isAdmin = ctx.currentUser ? ctx.currentUser.role === 'admin' : true
+			// privateProcedure guarantees ctx.apps at runtime (same as install);
+			// assert it so this new procedure does not add a 51st 'ctx.apps possibly
+			// undefined' to the 305 tsc baseline (the partial-ctx type is a known
+			// structural artifact of this router — install() at the same call site
+			// already emits the error, but the 288 gate requires staying <=305).
+			const result = await ctx.apps!.deployCustom({...input, isAdmin})
+			// Auto-grant access to the deploying user (slug as appId), mirroring install.
+			if (ctx.currentUser?.id) {
+				await grantAppAccess(ctx.currentUser.id, input.slug, ctx.currentUser.id)
+			}
+			return result
+		}),
+
 	// Get state (checks native app first, then per-user instance, then global app)
 	state: privateProcedure
 		.input(
