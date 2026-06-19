@@ -943,6 +943,129 @@ export default class Apps {
 	}
 
 	/**
+	 * Phase 288 — deploy an AI-authored custom Docker app onto THIS box and mint a
+	 * live `{slug}-{user}.livinity.io` URL by reusing the factored install tail.
+	 *
+	 * SECURITY (288): the AI-authored compose is UNTRUSTED. Unlike install(), which
+	 * sets `isGeneratedTemplate=true` for builtin/catalog templates and BYPASSES the
+	 * sanitizer, deployCustom forces `isGeneratedTemplate=false` so
+	 * `sanitizeNonBuiltinCompose` ALWAYS runs (no docker.sock, no host-net/pid/userns,
+	 * no privileged/cap_add, no host-path bind outside app-data — ComposeRejected
+	 * propagates and aborts the deploy). NEVER reuse the install() catalog branch for
+	 * AI input.
+	 *
+	 * MVP (288): deploys as the BOX OWNER (admin) — the same identity catalog installs
+	 * use via LIV_API_KEY -> getAdminUser (is-authenticated.ts:46). True per-user
+	 * isolation (thread the chatting user into installForUser + provision the subdomain
+	 * under the user's api_key) is DEFERRED to a follow-up phase. Do not silently ship
+	 * multi-user attribution. Future hardening (also DEFERRED): an image allow/deny
+	 * list + per-deploy resource limits + a tool-level rate limit.
+	 */
+	async deployCustom(input: {
+		slug: string
+		dockerCompose?: string
+		image?: string
+		port: number
+		manifest?: {name: string; icon?: string}
+		isAdmin?: boolean
+	}): Promise<boolean> {
+		const {slug, image, port} = input
+		// 1. Validate.
+		if (!slug || typeof slug !== 'string') throw new Error('deployCustom: slug is required')
+		if (await this.isInstalled(slug)) throw new Error(`App ${slug} is already installed`)
+		if (!input.dockerCompose && !image) throw new Error('deployCustom: dockerCompose or image is required')
+		if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('deployCustom: a valid port (1-65535) is required')
+
+		this.logger.log(`Phase 288: deployCustom for ${slug} (port=${port}, source=${input.dockerCompose ? 'compose' : 'image'})`)
+
+		const yaml = (await import('js-yaml')).default
+
+		// 2. Synthesize a one-service compose from a bare image, else use the
+		// AI-supplied compose string verbatim.
+		const composeString =
+			input.dockerCompose ??
+			yaml.dump({
+				services: {
+					[slug]: {
+						image,
+						ports: [`127.0.0.1:${port}:${port}`],
+						restart: 'unless-stopped',
+					},
+				},
+			})
+
+		// 3. Stage the compose + a synthesized manifest to a tmpdir, mirroring
+		// fetchPlatformTemplate's write pattern (apps.ts ~:1160-1204) but sourcing
+		// the compose from the AI input instead of GET /api/apps/{slug}.
+		const tmpDir = path.join(os.tmpdir(), `livos-deploy-${slug}-${Date.now()}`)
+		await fse.mkdirp(tmpDir)
+		await fse.writeFile(path.join(tmpDir, 'docker-compose.yml'), composeString)
+		const synthManifest = {
+			manifestVersion: '1.0.0',
+			id: slug,
+			name: input.manifest?.name || slug,
+			tagline: '',
+			category: 'other',
+			version: '1.0.0',
+			port,
+			description: '',
+			website: '',
+			developer: '',
+			support: '',
+			gallery: [],
+			icon: input.manifest?.icon || undefined,
+		}
+		await fse.writeFile(path.join(tmpDir, 'livinity-app.yml'), yaml.dump(synthManifest, {lineWidth: -1, noRefs: true}))
+
+		// 4. SECURITY (288): AI compose is UNTRUSTED. Force isGeneratedTemplate=false
+		// so sanitizeNonBuiltinCompose ALWAYS runs (the builtin/catalog path bypasses
+		// it). NEVER reuse the install() catalog branch for AI input. This is the
+		// entire security premise of deployCustom — DO NOT reassign this to true.
+		const isGeneratedTemplate = false
+
+		// 5. Stage into app-data/{slug} (copy install()'s rsync + volume-precreate).
+		const appDataDirectory = `${this.#livinityd.dataDirectory}/app-data/${slug}`
+		await fse.mkdirp(appDataDirectory)
+		await $`rsync --archive --verbose --exclude ".gitkeep" ${tmpDir}/. ${appDataDirectory}`
+		// Pre-create volume mount directories so Docker doesn't create them as root.
+		try {
+			const composeFile = `${appDataDirectory}/docker-compose.yml`
+			const composeContent = await fse.readFile(composeFile, 'utf8')
+			const volumeMatches = composeContent.matchAll(/\$\{APP_DATA_DIR\}\/([^:]+):/g)
+			for (const match of volumeMatches) {
+				const subDir = match[1].trim()
+				await fse.mkdirp(`${appDataDirectory}/${subDir}`)
+			}
+		} catch {}
+		await fse.remove(tmpDir).catch(() => {})
+
+		// 6. THE SANITIZER GATE — security crux. Verbatim from install() (apps.ts
+		// ~:632-642). isGeneratedTemplate is FORCED false above so this ALWAYS runs.
+		// Let ComposeRejected propagate (do NOT catch) — the deploy MUST abort on an
+		// irremediable directive (docker.sock / host-path bind / etc.).
+		if (!isGeneratedTemplate) {
+			const composeFile = `${appDataDirectory}/docker-compose.yml`
+			const composeContent = await fse.readFile(composeFile, 'utf8')
+			const composeData = yaml.load(composeContent)
+			const {compose, removed} = sanitizeNonBuiltinCompose(composeData, appDataDirectory)
+			await fse.writeFile(composeFile, yaml.dump(compose))
+			this.logger.log(`LIVOS-013: sanitized deployCustom compose for ${slug} removed=${removed.join(',') || '(none)'}`)
+		}
+
+		// 7. Read the staged manifest and run the shared install tail (docker up ->
+		// provisionAppSubdomain (pass ONLY the slug; username appended server-side) ->
+		// registerAppSubdomain -> Phase-287 re-poll). DNS minted for free.
+		let manifest: AppManifest
+		try {
+			manifest = await readManifestInDirectory(appDataDirectory)
+		} catch {
+			throw new Error('deployCustom: staged manifest not found')
+		}
+		const app = new App(this.#livinityd, slug)
+		return this.#finishInstall(slug, manifest, app)
+	}
+
+	/**
 	 * Auto-heal an already-installed app: re-runs broker injection if the manifest
 	 * declares `requiresAiProvider: true` (catches pre-fix installs that were
 	 * created before Phase 43.2 added single-user inject) and re-registers the
