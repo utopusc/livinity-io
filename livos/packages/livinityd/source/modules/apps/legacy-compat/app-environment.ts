@@ -40,20 +40,30 @@ export default async function appEnvironment(livinityd: Livinityd, command: stri
 		// failed ("network ... declared as external, but could not be found"),
 		// breaking all apps. Create the network explicitly + idempotently FIRST.
 		const subnet = '10.21.0.0/16' // matches the compose `$NETWORK_IP/16`
-		try {
-			await $(options as any)`docker network create --subnet ${subnet} livinity_main_network`
-		} catch (error: any) {
-			// Phase 286 (SC6): tolerate the steady-state "already exists" + benign
-			// create races, but SURFACE any other failure (driver/subnet/daemon
-			// error) instead of bare-catching it — a silently-failed shared network
-			// breaks EVERY app's `external: livinity_main_network` attach.
-			const msg = String(error?.stderr || error?.message || error)
-			if (/already exists|being used|in use/i.test(msg)) {
-				// steady state — fine
-			} else {
-				// Re-log loudly; the network is required for all app attaches.
-				console.error(`[app-environment] docker network create FAILED (non-benign): ${msg}`)
-				throw error
+		// Phase 286 hotfix (v44.45): create the network ONLY if missing. The earlier
+		// narrowed catch parsed error.stderr/message for "already exists", but with
+		// stdio:'inherit' execa does NOT capture stderr — so the steady-state
+		// "already exists" error matched NEITHER field and got RE-THROWN, breaking
+		// EVERY app install. Inspect-first is idempotent and never hits that error;
+		// a genuine create failure (network still absent afterwards) is still surfaced.
+		const networkExists = async () =>
+			$({...(options as any), stdio: 'pipe'})`docker network inspect livinity_main_network`
+				.then(() => true)
+				.catch(() => false)
+		if (!(await networkExists())) {
+			try {
+				await $(options as any)`docker network create --subnet ${subnet} livinity_main_network`
+			} catch (error: any) {
+				// If the network exists now, it was a benign create race — fine.
+				// Otherwise the create genuinely failed (driver/subnet/daemon) → surface.
+				if (!(await networkExists())) {
+					console.error(
+						`[app-environment] docker network create FAILED (non-benign): ${String(
+							error?.stderr || error?.message || error,
+						)}`,
+					)
+					throw error
+				}
 			}
 		}
 		// Reap any leftover auth/tor containers from before the P276 removal via

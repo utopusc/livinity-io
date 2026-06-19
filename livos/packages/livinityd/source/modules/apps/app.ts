@@ -352,10 +352,14 @@ export default class App {
 			}
 			this.state = 'ready'
 		} catch (error) {
-			this.logger.error(`App ${this.id} did not become healthy after install`, error)
-			this.state = 'unknown'
+			// Phase 286 hotfix (v44.45): health is ADVISORY — NEVER fail the install.
+			// The container exists (restart:unless-stopped keeps retrying); a slow or
+			// not-yet-healthy app must not break install (the old `throw` here marked
+			// umami/pastefy/openclaw/campfire "Failed to start"). Log + mark ready so
+			// the app appears and can be opened/retried.
+			this.logger.error(`App ${this.id} not healthy yet after install (non-fatal)`, error)
+			this.state = 'ready'
 			this.stateProgress = 0
-			throw error
 		}
 		this.stateProgress = 0
 
@@ -425,9 +429,9 @@ export default class App {
 			}
 			this.state = 'ready'
 		} catch (error) {
-			this.logger.error(`App ${this.id} did not become healthy after start`, error)
-			this.state = 'unknown'
-			throw error
+			// Phase 286 hotfix (v44.45): health is ADVISORY — NEVER fail the start.
+			this.logger.error(`App ${this.id} not healthy yet after start (non-fatal)`, error)
+			this.state = 'ready'
 		}
 
 		// Enable auto-start on boot
