@@ -45,7 +45,12 @@ type StoreToLivOSMessage =
 // fetch back to livinity.io apex).
 type InstallPayload = {appId: string; section: Section; name?: string; category?: string; manifest?: unknown; iconUrl?: string}
 
-type AppStatusEntry = {id: string; status: 'running' | 'stopped' | 'not_installed' | 'installing' | 'uninstalling'; progress?: number; subdomain?: string; defaultUsername?: string; defaultPassword?: string}
+// Phase 287 — `provisioning` flags an app whose per-app subdomain DNS
+// record is not yet client-confirmed live (subdomainReady !== true). The
+// store iframe uses it to render a disabled "Preparing…" Open button so
+// nothing surfaces a clickable/openable link before the host resolves
+// (avoids forming the NXDOMAIN negative-cache; failure-mode #5).
+type AppStatusEntry = {id: string; status: 'running' | 'stopped' | 'not_installed' | 'installing' | 'uninstalling'; progress?: number; subdomain?: string; defaultUsername?: string; defaultPassword?: string; provisioning?: boolean}
 
 type InstanceInfo = {
 	hostname: string
@@ -162,17 +167,25 @@ export function useAppStoreBridge(
 				if ('error' in app) {
 					return {id: app.id, status: 'not_installed' as const}
 				}
-				const sub = subdomains.find((s: {appId: string}) => s.appId === app.id)
+				const sub = subdomains.find((s: {appId: string; subdomainReady?: boolean}) => s.appId === app.id) as
+					| {appId: string; subdomain?: string; subdomainReady?: boolean}
+					| undefined
 				const creds = 'credentials' in app && app.credentials ? app.credentials : null
 				const credFields = creds?.defaultUsername || creds?.defaultPassword
 					? {defaultUsername: creds.defaultUsername || '', defaultPassword: creds.defaultPassword || ''}
 					: {}
 				const state = app.state
+				// Phase 287 — an app that is up (running/ready) but whose per-app
+				// subdomain DNS is not yet client-confirmed live is "provisioning":
+				// the store must NOT surface a clickable Open link for it. Same
+				// signal `handleOpen` gates on (sub.subdomainReady). subdomainReady
+				// rides on the raw SubdomainConfig[] from domain.getStatus (Plan 02).
+				const provisioning = !!sub && sub.subdomainReady !== true && (state === 'running' || state === 'ready')
 				if (state === 'installing') {
 					return {id: app.id, status: 'installing' as const, subdomain: sub?.subdomain, ...credFields}
 				}
 				if (state === 'running' || state === 'ready') {
-					return {id: app.id, status: 'running' as const, subdomain: sub?.subdomain, ...credFields}
+					return {id: app.id, status: 'running' as const, subdomain: sub?.subdomain, ...(provisioning ? {provisioning: true} : {}), ...credFields}
 				}
 				if (state === 'stopped' || state === 'stopping') {
 					return {id: app.id, status: 'stopped' as const, subdomain: sub?.subdomain, ...credFields}
@@ -525,9 +538,13 @@ export function useAppStoreBridge(
 		[sendToIframe, sendStatusToIframe, reportEvent],
 	)
 
+	// 287 GUARD: do NOT add an unconditional window.open / preconnect / prefetch / iframe-src for the per-app host here. This is a SEPARATE open-gate from useLaunchApp and must stay gated on sub.subdomainReady or NXDOMAIN poisoning reopens (Phase 287 failure-mode #5).
 	const handleOpen = useCallback(async (appId: string) => {
 		const domain = domainRef.current?.domain
 		if (!domain) {
+			// No per-app subdomain in play — opens the SAME origin (no per-app
+			// host, forms no per-app DNS query), so this branch is unaffected by
+			// the readiness gate below.
 			window.open(`${window.location.origin}/${appId}`, '_blank')
 			return
 		}
@@ -541,7 +558,22 @@ export function useAppStoreBridge(
 		// livinity.io platform, dot pattern otherwise (custom domains).
 		try {
 			const domainStatus = await trpcClient.domain.getStatus.query()
-			const sub = (domainStatus.subdomains || []).find((s: {appId: string}) => s.appId === appId)
+			const sub = (domainStatus.subdomains || []).find(
+				(s: {appId: string; subdomainReady?: boolean}) => s.appId === appId,
+			) as {appId: string; host?: string; subdomain?: string; subdomainReady?: boolean} | undefined
+			// Phase 287 — INDEPENDENT open-gate (separate from useLaunchApp,
+			// failure-mode #5): if the per-app subdomain DNS is not yet
+			// client-confirmed live, do NOT window.open the per-app host. Opening
+			// it now would form an NXDOMAIN lookup the resolver negative-caches,
+			// trapping the app behind a stale "ERR_NAME_NOT_RESOLVED" until the
+			// TTL clears. Surface the provisioning state to the iframe instead so
+			// it disables its Open button ("Preparing…"). This is gated on its
+			// OWN signal here — the Plan-05 useLaunchApp gate does NOT cover this
+			// postMessage-driven path.
+			if (!sub?.subdomainReady) {
+				await sendStatusToIframe()
+				return
+			}
 			// Phase 141-03 canonical FQDN (Server5-minted) takes precedence
 			// when present — same precedence appToUrl uses for app.host.
 			if (sub?.host) {
@@ -557,15 +589,13 @@ export function useAppStoreBridge(
 				window.open(`https://${subdomain}.${domain}`, '_blank')
 			}
 		} catch {
-			const livinityIoSuffix = '.livinity.io'
-			if (domain.endsWith(livinityIoSuffix)) {
-				const userPart = domain.slice(0, -livinityIoSuffix.length)
-				window.open(`https://${appId}-${userPart}.livinity.io`, '_blank')
-			} else {
-				window.open(`https://${appId}.${domain}`, '_blank')
-			}
+			// Phase 287 — on a getStatus failure we cannot confirm the host is
+			// ready, so fail CLOSED: do NOT speculatively window.open the per-app
+			// host (that is exactly the NXDOMAIN-poisoning surface this gate
+			// removes). Re-push status so the iframe keeps its honest state.
+			await sendStatusToIframe()
 		}
-	}, [])
+	}, [sendStatusToIframe])
 
 	const handleUpdateSubdomain = useCallback(
 		async (appId: string, subdomain: string) => {
