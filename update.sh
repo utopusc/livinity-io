@@ -1634,6 +1634,42 @@ else
     done
 fi
 
+# ── Phase 288 — Liv deploy schema doc (ALL CLI backends) ───────────────────
+# Seeds the deploy_app compose+manifest schema reference next to the persona so
+# Liv authors a VALID, sanitizer-passing compose before calling deploy_app (no
+# docker.sock / host binds / privileged). Written to a SEPARATE filename
+# (LIV-DEPLOY.md) so it NEVER clobbers the persona file (CLAUDE.md/AGENTS.md/
+# GEMINI.md). Reuses the already-resolved $_PERSONA_USER / $_PERSONA_HOME from
+# the persona step above; idempotent via cmp -s.
+step "Phase 288: Liv deploy schema doc (all CLI backends)"
+_LIV_DEPLOY_SCHEMA_SRC="$TEMP_DIR/scripts/install/seeds/liv-deploy-schema.md"
+[[ -f "$_LIV_DEPLOY_SCHEMA_SRC" ]] || _LIV_DEPLOY_SCHEMA_SRC="$LIVOS_DIR/scripts/install/seeds/liv-deploy-schema.md"
+# Re-resolve the desktop user/home with the same 3-fallback chain in case the
+# persona step above was skipped (its src missing) and left these empty.
+[[ -n "$_PERSONA_USER" ]] || _PERSONA_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1)
+[[ -n "$_PERSONA_USER" ]] || _PERSONA_USER=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1; exit}')
+[[ -n "$_PERSONA_USER" ]] || _PERSONA_USER=$(stat -c '%U' /opt/livos 2>/dev/null)
+[[ -n "$_PERSONA_HOME" ]] || _PERSONA_HOME=$(getent passwd "$_PERSONA_USER" 2>/dev/null | cut -d: -f6)
+[[ -n "$_PERSONA_HOME" ]] || _PERSONA_HOME="/home/$_PERSONA_USER"
+if [[ ! -f "$_LIV_DEPLOY_SCHEMA_SRC" ]]; then
+    warn "Phase 288: liv-deploy-schema.md seed not found — skipping deploy-schema seed"
+else
+    # subdir:file pairs — one per CLI convention, but a SEPARATE filename so the
+    # persona files are never overwritten.
+    for _SCHEMA_TARGET in ".claude:LIV-DEPLOY.md" ".codex:LIV-DEPLOY.md" ".gemini:LIV-DEPLOY.md"; do
+        _S_DIR="${_SCHEMA_TARGET%%:*}"
+        _S_FILE="${_SCHEMA_TARGET##*:}"
+        _S_DST="$_PERSONA_HOME/$_S_DIR/$_S_FILE"
+        if [[ -f "$_S_DST" ]] && cmp -s "$_LIV_DEPLOY_SCHEMA_SRC" "$_S_DST"; then
+            ok "Phase 288: deploy schema already current ($_S_DST)"
+        else
+            sudo -u "$_PERSONA_USER" mkdir -p "$_PERSONA_HOME/$_S_DIR"
+            sudo -u "$_PERSONA_USER" tee "$_S_DST" < "$_LIV_DEPLOY_SCHEMA_SRC" > /dev/null
+            ok "Phase 288: deploy schema written to $_S_DST (user=$_PERSONA_USER)"
+        fi
+    done
+fi
+
 # ── Phase 245.3 — liv-assistant restart to pick up settings + wrapper ──────
 # Live-applies the 245.2 wrapper + 245.3 settings to any future Claude Code spawns.
 # Without restart, in-flight chat sessions keep their pre-fix env/settings.
