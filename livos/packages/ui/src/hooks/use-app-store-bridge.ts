@@ -396,16 +396,16 @@ export function useAppStoreBridge(
 		[reportEvent, sendStatusToIframe, sendToIframe],
 	)
 
-	// v44.59 — Flathub install from the platform/web store. Mirrors
-	// handleInstallV37 MINUS the manifest-guard (Flathub rows carry only a
-	// flatpakAppId marker, no apt manifest) and MINUS the v37Progress poller
-	// (apps.native.installFlathub is a single best-effort mutation — flatpak
-	// install streams to the host; there is no per-app v37Progress channel).
+	// v44.59/v44.61 — Flathub install from the platform/web store. v44.61 (REQ1)
+	// adds a v37Progress poll + a client-side creep so the card's bar always MOVES
+	// (the box now records progress under `progressId` via the installFlathub route;
+	// `flatpak install` may emit little/no % to a pipe, so the creep guarantees the
+	// operator never sees a stuck 0%).
 	//
 	// CRITICAL appId discipline: every iframe reply (progress/status/installed)
-	// echoes the STORE catalog appId (the row's id), but the MUTATION input keys
-	// on the reverse-DNS flatpakAppId (e.g. org.gimp.GIMP). Never mix the two —
-	// the store tracks installed-state by the catalog appId it sent.
+	// echoes the STORE catalog appId (the row's id); the MUTATION input keys on the
+	// reverse-DNS flatpakAppId (e.g. org.gimp.GIMP). We pass progressId = the catalog
+	// appId so the poll queries the SAME channel the route records to.
 	const handleInstallFlathub = useCallback(
 		async ({
 			appId,
@@ -420,30 +420,78 @@ export function useAppStoreBridge(
 		}) => {
 			sendToIframe({type: 'progress', appId, progress: 0})
 			sendToIframe({type: 'status', apps: [{id: appId, status: 'installing', progress: 0}]})
+
+			// Client creep: asymptotic → ~90% over ~60s so the bar moves even when the
+			// box reports no real % (guaranteed motion). The server's real % (when
+			// present) takes over via Math.max below.
+			let resolved = false
+			const startedAt = Date.now()
+			const POLL_DEADLINE_MS = 10 * 60_000
+			const creepFor = (elapsedMs: number) => Math.round(90 * (1 - Math.exp(-elapsedMs / 30_000)))
+			const pollInterval = setInterval(async () => {
+				if (resolved) {
+					clearInterval(pollInterval)
+					return
+				}
+				if (Date.now() - startedAt > POLL_DEADLINE_MS) {
+					clearInterval(pollInterval)
+					return
+				}
+				let serverPct = 0
+				try {
+					const ev = await trpcClient.apps.v37Progress.query({appId})
+					if (ev && ev.pct > 0) serverPct = Math.round(ev.pct)
+					if (ev?.done) {
+						resolved = true
+						clearInterval(pollInterval)
+						if (ev.error) {
+							console.error('[app-store] flathub install failed for', appId, `(flatpak: ${flatpakAppId})`, ev.error)
+							sendToIframe({type: 'installed', appId, success: false, error: ev.error})
+						} else {
+							sendToIframe({type: 'progress', appId, progress: 100})
+							sendToIframe({type: 'installed', appId, success: true})
+							reportEvent(appId, 'install')
+						}
+						await sendStatusToIframe()
+						utilsRef.current.apps.native.list.invalidate()
+						return
+					}
+				} catch {
+					// ignore poll errors — the mutation result is the source of truth
+				}
+				const progress = Math.min(99, Math.max(serverPct, creepFor(Date.now() - startedAt)))
+				sendToIframe({type: 'progress', appId, progress})
+			}, 2000)
+
 			try {
 				const r = await trpcClient.apps.native.installFlathub.mutate({
 					appId: flatpakAppId,
+					progressId: appId,
 					name,
 					iconUrl,
 				})
+				if (resolved) return
+				resolved = true
+				clearInterval(pollInterval)
 				if (r.ok) {
 					sendToIframe({type: 'progress', appId, progress: 100})
 					sendToIframe({type: 'installed', appId, success: true})
 					reportEvent(appId, 'install')
 				} else {
-					// installFlathub throws a TRPCError on failure (caught below), so this
-					// branch is defensive — surface in the HOST console like handleInstallV37.
+					// installFlathub throws a TRPCError on failure (caught below); defensive.
 					console.error('[app-store] flathub install failed for', appId, `(flatpak: ${flatpakAppId})`, r.message)
 					sendToIframe({type: 'installed', appId, success: false, error: r.message})
 				}
 			} catch (err) {
+				if (resolved) return
+				resolved = true
+				clearInterval(pollInterval)
 				const message = err instanceof Error ? err.message : 'flathub install failed'
 				console.error('[app-store] flathub install failed for', appId, `(flatpak: ${flatpakAppId})`, message, err)
 				sendToIframe({type: 'installed', appId, success: false, error: message})
-			} finally {
-				await sendStatusToIframe()
-				utilsRef.current.apps.native.list.invalidate()
 			}
+			await sendStatusToIframe()
+			utilsRef.current.apps.native.list.invalidate()
 		},
 		[reportEvent, sendStatusToIframe, sendToIframe],
 	)

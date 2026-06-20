@@ -39,7 +39,10 @@
 # trailing `*` only matches the bundle path argument, keeping the grant tightly scoped —
 # same reasoning as `apt-get install -y *` above (snapd accepts only a real .snap file).
 # AppImage (libfuse2) and Flatpak (--user scope) need NO root grant, so only snap is here.
-Cmnd_Alias LIVOS_NATIVE = /usr/bin/apt-get install -y *, /usr/bin/apt-get update, /usr/local/lib/livos/livos-add-apt-repo.sh *, /usr/bin/snap install --dangerous *
+# v44.61 (Phase 290 R11) — also allow `snap remove <name>` so the UI Uninstall can free a
+# snap-installed app's disk (the trailing `*` matches only the snap name; snapd accepts
+# only a real installed snap). flatpak uninstall (--user) + AppImage unlink need NO grant.
+Cmnd_Alias LIVOS_NATIVE = /usr/bin/apt-get install -y *, /usr/bin/apt-get update, /usr/local/lib/livos/livos-add-apt-repo.sh *, /usr/bin/snap install --dangerous *, /usr/bin/snap remove *
 
 Defaults!LIVOS_NATIVE env_keep += "DEBIAN_FRONTEND"
 

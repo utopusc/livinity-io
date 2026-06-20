@@ -33,7 +33,8 @@ interface BrowseResult {
 const ALL = '__all__';
 
 export function NativeAppStore() {
-  const { isEmbedded, getAppStatus, getInstallProgress, sendInstall, sendOpen } = useStore();
+  const { isEmbedded, getAppStatus, getInstallProgress, sendInstall, sendOpen, sendUninstall } =
+    useStore();
 
   const [categories, setCategories] = useState<string[]>([]);
   const [activeCat, setActiveCat] = useState<string>(ALL);
@@ -241,6 +242,7 @@ export function NativeAppStore() {
                   })
                 }
                 onOpen={() => sendOpen(app.appId)}
+                onUninstall={() => sendUninstall(app.appId, 'native')}
               />
             ))}
           </div>
@@ -273,6 +275,7 @@ function NativeAppCard({
   progress,
   onInstall,
   onOpen,
+  onUninstall,
 }: {
   app: NativeApp;
   isEmbedded: boolean;
@@ -280,6 +283,7 @@ function NativeAppCard({
   progress: number;
   onInstall: () => void;
   onOpen: () => void;
+  onUninstall: () => void;
 }) {
   const isInstalled = status === 'running' || status === 'stopped';
 
@@ -328,14 +332,27 @@ function NativeAppCard({
           )}
 
           {isInstalled && (
-            <button
-              type="button"
-              className="install primary card-install"
-              onClick={onOpen}
-              title="Open"
-            >
-              <Icon name="open" size={12} /> Open
-            </button>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button
+                type="button"
+                className="install primary card-install"
+                onClick={onOpen}
+                title="Open"
+              >
+                <Icon name="open" size={12} /> Open
+              </button>
+              {/* v44.61 (REQ2c) — Uninstall: sends an `uninstall` postMessage so the
+                  box runs the real flatpak uninstall (frees disk) + drops the tile. */}
+              <button
+                type="button"
+                className="install ghost card-install"
+                onClick={onUninstall}
+                title="Uninstall"
+                aria-label={`Uninstall ${app.name}`}
+              >
+                Uninstall
+              </button>
+            </div>
           )}
 
           {status === 'uninstalling' && (

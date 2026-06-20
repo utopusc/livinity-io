@@ -21,7 +21,7 @@ import {Button} from '@/shadcn-components/ui/button'
 import {Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle} from '@/shadcn-components/ui/dialog'
 import {Input} from '@/shadcn-components/ui/input'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/shadcn-components/ui/tabs'
-import {trpcReact} from '@/trpc/trpc'
+import {trpcClient, trpcReact} from '@/trpc/trpc'
 
 import {normalizeAptInput} from './apt-input'
 import {IconPicker} from './icon-picker'
@@ -780,6 +780,32 @@ function NativeTab({active}: {active: boolean}) {
 	const createMut = trpcReact.apps.native.create.useMutation()
 	const installMut = trpcReact.apps.native.installFromHost.useMutation()
 
+	// v44.61 (REQ3) — also surface persisted NativeAppConfigs (apps.native.list) in
+	// the "Installed on this device" grid. scanHostApps DROPS flatpak/snap Execs, so
+	// store-installed flatpak apps never appear via the scan — merging the config list
+	// makes them show, and gives each a real Remove (uninstall) button (REQ2a).
+	const nativeListQ = trpcReact.apps.native.list.useQuery(undefined, {
+		enabled: active,
+		staleTime: 30 * 1000,
+		retry: false,
+	})
+	const uninstallMut = trpcReact.apps.native.uninstall.useMutation()
+	const [removingId, setRemovingId] = useState<string | null>(null)
+
+	const removeNativeConfig = async (id: string) => {
+		setRemovingId(id)
+		try {
+			await uninstallMut.mutateAsync({id})
+			await utils.apps.native.list.invalidate().catch(() => {})
+			await utils.apps.native.scanHostApps.invalidate().catch(() => {})
+			await utils.apps.list.invalidate().catch(() => {})
+		} catch {
+			/* surfaced via uninstallMut.isError below */
+		} finally {
+			setRemovingId(null)
+		}
+	}
+
 	// ── App store (catalog) ─────────────────────────────────────────────────────
 	// A generic, unbranded app store. Browse by category (All = popular) OR search;
 	// the grid accumulates pages and a "Load more" button appends the next page.
@@ -853,20 +879,51 @@ function NativeTab({active}: {active: boolean}) {
 
 	const installFlathubMut = trpcReact.apps.native.installFlathub.useMutation()
 	const [installingId, setInstallingId] = useState<string | null>(null)
+	const [installPct, setInstallPct] = useState(0)
 	const [flathubResult, setFlathubResult] = useState<string | null>(null)
 
+	// v44.61 (REQ1) — install with a moving progress bar. The box records progress
+	// under progressId (== the flatpak appId here) into apps.v37Progress; we poll it
+	// AND run a client-side creep so the bar always moves even if flatpak emits no %.
 	const installFlathubApp = async (app: {appId: string; name: string; iconUrl?: string}) => {
 		setInstallingId(app.appId)
+		setInstallPct(0)
 		setFlathubResult(null)
+		let done = false
+		const startedAt = Date.now()
+		const creepFor = (ms: number) => Math.round(90 * (1 - Math.exp(-ms / 30_000)))
+		const poll = setInterval(async () => {
+			if (done) {
+				clearInterval(poll)
+				return
+			}
+			let serverPct = 0
+			try {
+				const ev = await trpcClient.apps.v37Progress.query({appId: app.appId})
+				if (ev && ev.pct > 0) serverPct = Math.round(ev.pct)
+			} catch {
+				/* server is source of truth — keep creeping */
+			}
+			setInstallPct(Math.min(99, Math.max(serverPct, creepFor(Date.now() - startedAt))))
+		}, 1500)
 		try {
-			const r = await installFlathubMut.mutateAsync({appId: app.appId, name: app.name, iconUrl: app.iconUrl})
+			const r = await installFlathubMut.mutateAsync({
+				appId: app.appId,
+				progressId: app.appId,
+				name: app.name,
+				iconUrl: app.iconUrl,
+			})
+			setInstallPct(100)
 			setFlathubResult(`Installed ${r.name}.`)
 			await utils.apps.native.list.invalidate().catch(() => {})
 			await utils.apps.native.scanHostApps.invalidate().catch(() => {})
 		} catch (e) {
 			setFlathubResult(`Failed: ${e instanceof Error ? e.message : 'install failed'}`)
 		} finally {
+			done = true
+			clearInterval(poll)
 			setInstallingId(null)
+			setInstallPct(0)
 		}
 	}
 
@@ -884,12 +941,42 @@ function NativeTab({active}: {active: boolean}) {
 	const [debProgress, setDebProgress] = useState<number | null>(null)
 	const [debResult, setDebResult] = useState<string | null>(null)
 
+	// v44.61 (REQ3) — merge persisted configs (already installed → Remove) with the
+	// host scan (not-yet-a-tile → Add), deduped by binaryPath. The shared
+	// /usr/bin/flatpak + /usr/bin/snap wrapper paths are EXCLUDED from the dedupe set
+	// (else one flatpak config would swallow every scanned app); flatpak apps never
+	// appear in the scan anyway, so there's nothing to collide with.
+	type ScannedApp = NonNullable<typeof scanQ.data>[number]
+	type NativeCfg = NonNullable<typeof nativeListQ.data>[number]
+	type InstalledEntry = {kind: 'config'; cfg: NativeCfg} | {kind: 'scanned'; app: ScannedApp}
+
+	const installedMerged = useMemo<InstalledEntry[]>(() => {
+		const configs = nativeListQ.data ?? []
+		const scanned = scanQ.data ?? []
+		const configBinaries = new Set(
+			configs
+				.map((c) => c.binaryPath)
+				.filter((b) => b !== '/usr/bin/flatpak' && b !== '/usr/bin/snap'),
+		)
+		const out: InstalledEntry[] = configs.map((cfg) => ({kind: 'config' as const, cfg}))
+		for (const app of scanned) {
+			if (configBinaries.has(app.binaryPath)) continue
+			out.push({kind: 'scanned', app})
+		}
+		return out.sort((a, b) => {
+			const an = a.kind === 'config' ? a.cfg.name : a.app.name
+			const bn = b.kind === 'config' ? b.cfg.name : b.app.name
+			return an.localeCompare(bn)
+		})
+	}, [nativeListQ.data, scanQ.data])
+
 	const filtered = useMemo(() => {
 		const q = query.trim().toLowerCase()
-		const apps = scanQ.data ?? []
-		if (!q) return apps
-		return apps.filter((a) => a.name.toLowerCase().includes(q))
-	}, [scanQ.data, query])
+		if (!q) return installedMerged
+		return installedMerged.filter((e) =>
+			(e.kind === 'config' ? e.cfg.name : e.app.name).toLowerCase().includes(q),
+		)
+	}, [installedMerged, query])
 
 	const addScanned = async (app: NonNullable<typeof scanQ.data>[number]) => {
 		setAddedId(app.id)
@@ -1116,7 +1203,18 @@ function NativeTab({active}: {active: boolean}) {
 					</div>
 				)}
 				{installingId !== null ? (
-					<p className='text-[11px] text-gray-500'>Installing… this can take a few minutes.</p>
+					<div className='flex flex-col gap-1'>
+						<div className='flex items-center justify-between text-[11px] text-gray-500'>
+							<span>Installing… this can take a few minutes.</span>
+							<span className='font-mono tabular-nums text-gray-700'>{installPct}%</span>
+						</div>
+						<div className='h-1 w-full overflow-hidden rounded-full bg-gray-200'>
+							<div
+								className='h-full rounded-full bg-emerald-500 transition-[width]'
+								style={{width: `${installPct}%`}}
+							/>
+						</div>
+					</div>
 				) : null}
 				{flathubResult ? (
 					<p
@@ -1135,44 +1233,83 @@ function NativeTab({active}: {active: boolean}) {
 			<div className='flex flex-col gap-2 border-t border-gray-200 pt-4'>
 				<p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Installed on this device</p>
 				<Input placeholder='Search installed apps…' value={query} onValueChange={setQuery} autoFocus={active} />
-				{scanQ.isLoading ? (
+				{scanQ.isLoading && nativeListQ.isLoading ? (
 					<p className='py-4 text-center text-sm text-gray-500'>Scanning…</p>
-				) : scanQ.isError ? (
+				) : scanQ.isError && (nativeListQ.data ?? []).length === 0 ? (
 					<p className='py-4 text-center text-sm text-red-600'>{scanQ.error?.message ?? 'Scan failed.'}</p>
 				) : filtered.length === 0 ? (
 					<p className='py-4 text-center text-sm text-gray-500'>No installed apps found.</p>
 				) : (
 					<div className='grid max-h-[260px] grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6'>
-						{filtered.map((app) => (
-							<button
-								key={app.id}
-								type='button'
-								disabled={createMut.isPending}
-								onClick={() => void addScanned(app)}
-								className='flex flex-col items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 p-2 text-center transition-colors hover:bg-gray-100 disabled:opacity-50'
-								title={app.binaryPath}
-							>
-								<span className='relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-white'>
-									<span className='absolute text-[9px] text-gray-400'>app</span>
-									{app.iconUrl ? (
-										// REQ3d — render the scanner-resolved iconUrl; onError hides the
-										// <img> so the placeholder behind it shows through.
-										// eslint-disable-next-line jsx-a11y/alt-text
-										<img
-											src={app.iconUrl}
-											loading='lazy'
-											className='relative h-6 w-6 object-contain'
-											onError={(e) => {
-												;(e.currentTarget as HTMLImageElement).style.display = 'none'
-											}}
-										/>
-									) : null}
-								</span>
-								<span className='w-full truncate text-[11px] text-gray-700'>
-									{addedId === app.id ? 'Adding…' : app.name}
-								</span>
-							</button>
-						))}
+						{filtered.map((entry) =>
+							entry.kind === 'scanned' ? (
+								<button
+									key={'s-' + entry.app.id}
+									type='button'
+									disabled={createMut.isPending}
+									onClick={() => void addScanned(entry.app)}
+									className='flex flex-col items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 p-2 text-center transition-colors hover:bg-gray-100 disabled:opacity-50'
+									title={entry.app.binaryPath}
+								>
+									<span className='relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-white'>
+										<span className='absolute text-[9px] text-gray-400'>app</span>
+										{entry.app.iconUrl ? (
+											// REQ3d — render the scanner-resolved iconUrl; onError hides the
+											// <img> so the placeholder behind it shows through.
+											// eslint-disable-next-line jsx-a11y/alt-text
+											<img
+												src={entry.app.iconUrl}
+												loading='lazy'
+												className='relative h-6 w-6 object-contain'
+												onError={(e) => {
+													;(e.currentTarget as HTMLImageElement).style.display = 'none'
+												}}
+											/>
+										) : null}
+									</span>
+									<span className='w-full truncate text-[11px] text-gray-700'>
+										{addedId === entry.app.id ? 'Adding…' : entry.app.name}
+									</span>
+								</button>
+							) : (
+								// v44.61 (REQ2a) — an already-installed config tile. The × button runs the
+								// REAL uninstall (apps.native.uninstall): flatpak/snap/AppImage are removed
+								// from disk; apt/system tiles are just un-tiled (package kept).
+								<div
+									key={'c-' + entry.cfg.id}
+									className='relative flex flex-col items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/40 p-2 text-center'
+									title={entry.cfg.binaryPath}
+								>
+									<button
+										type='button'
+										disabled={removingId !== null}
+										onClick={() => void removeNativeConfig(entry.cfg.id)}
+										aria-label={'Remove ' + entry.cfg.name}
+										title={'Remove ' + entry.cfg.name}
+										className='absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-200 text-[10px] leading-none text-gray-600 transition-colors hover:bg-red-500 hover:text-white disabled:opacity-50'
+									>
+										{removingId === entry.cfg.id ? '·' : '×'}
+									</button>
+									<span className='relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-white'>
+										<span className='absolute text-[9px] text-gray-400'>app</span>
+										{entry.cfg.iconUrl ? (
+											// eslint-disable-next-line jsx-a11y/alt-text
+											<img
+												src={entry.cfg.iconUrl}
+												loading='lazy'
+												className='relative h-6 w-6 object-contain'
+												onError={(e) => {
+													;(e.currentTarget as HTMLImageElement).style.display = 'none'
+												}}
+											/>
+										) : null}
+									</span>
+									<span className='w-full truncate text-[11px] text-gray-700'>
+										{removingId === entry.cfg.id ? 'Removing…' : entry.cfg.name}
+									</span>
+								</div>
+							),
+						)}
 					</div>
 				)}
 				{createMut.isError ? (

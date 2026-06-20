@@ -930,35 +930,38 @@ export class NativeInstaller implements InstallHandler<'native'> {
 		const progress = progressFactory(emit, appId, 'native')
 		const homeDir = userHome(ctx.userId)
 
-		progress(10, 'Removing .desktop')
-		const desktopPath = path.join(
-			homeDir,
-			'.local/share/applications',
-			`${appId}.desktop`,
-		)
-		await fs.unlink(desktopPath).catch(() => {})
-
-		progress(40, 'Removing Redis config')
-		// Phase 157 follow-up — look up the UUID via the catalog mapping
-		// FIRST (precise), fall back to name/id match (legacy installs).
-		const mappedUuid = await ctx.redis
-			.get(`liv:apps:native-catalog:${appId}`)
-			.catch(() => null)
+		progress(10, 'Locating app')
+		// Phase 157 follow-up — look up the UUID via the catalog mapping FIRST
+		// (precise). v44.61: try the RAW appId key (the new shape — flathub now keys
+		// here) AND the legacy slugifyDebName(appId) key, then fall back to a
+		// name/id match (very old installs).
+		const mappedUuid =
+			(await ctx.redis.get(`liv:apps:native-catalog:${appId}`).catch(() => null)) ??
+			(await ctx.redis
+				.get(`liv:apps:native-catalog:${slugifyDebName(appId)}`)
+				.catch(() => null))
 		const configs = await this.configStore.list()
 		const match = mappedUuid
 			? configs.find((c: NativeAppConfig) => c.id === mappedUuid)
-			: configs.find(
-					(c: NativeAppConfig) => c.name === appId || c.id === appId,
-				)
-		if (match) await this.configStore.delete(match.id)
-		await ctx.redis.del(`liv:apps:native-catalog:${appId}`).catch(() => {})
+			: configs.find((c: NativeAppConfig) => c.name === appId || c.id === appId)
 
-		// Best-effort apt-remove for AppImage / standalone binary path —
-		// we skip apt-remove for shared packages to avoid breaking the
-		// system (e.g. `gimp` is removable, but `libreoffice` shares deps
-		// with many things; an explicit deny-list is operator-curated and
-		// lives in scripts/install/sudoers.d/livos-native).
-		progress(70, 'Cleaning binary')
+		// v44.61 (REQ2) — REAL removal (flatpak uninstall --user / snap remove /
+		// AppImage unlink) BEFORE we drop the config. Previously the app stayed
+		// installed (disk never freed); the dialog even said so. apt/system tiles
+		// are left installed by removeInstalledApp (no apt-remove grant).
+		if (match) {
+			progress(40, 'Removing app')
+			await removeInstalledApp(match, ctx, {home: homeDir})
+			await this.configStore.delete(match.id)
+		}
+
+		progress(70, 'Cleaning up')
+		// Remove BOTH possible catalog-mapping keys + the LivOS .desktop + any
+		// AppImage binary keyed on the catalog appId (legacy install layout).
+		await ctx.redis.del(`liv:apps:native-catalog:${appId}`).catch(() => {})
+		await ctx.redis.del(`liv:apps:native-catalog:${slugifyDebName(appId)}`).catch(() => {})
+		const desktopPath = path.join(homeDir, '.local/share/applications', `${appId}.desktop`)
+		await fs.unlink(desktopPath).catch(() => {})
 		const appimagePath = path.join(homeDir, '.local/bin', appId)
 		await fs.unlink(appimagePath).catch(() => {})
 
@@ -1466,11 +1469,12 @@ export async function installLocalFlatpak(
 	}
 
 	await configStore.upsert(config)
-	const slug = slugifyDebName(appId)
+	// v44.61 (REQ2c) — key on the raw flatpak app-id (see installFlathubApp) so
+	// installed-state detection + uninstall resolve the same id consistently.
 	await ctx.redis
-		.set(`liv:apps:native-catalog:${slug}`, config.id)
+		.set(`liv:apps:native-catalog:${appId}`, config.id)
 		.catch((err) =>
-			ctx.logger.error(`installLocalFlatpak: failed to write catalog mapping for ${slug}`, err),
+			ctx.logger.error(`installLocalFlatpak: failed to write catalog mapping for ${appId}`, err),
 		)
 
 	return {ok: true, name: displayName, nativeConfigId: config.id}
@@ -1481,6 +1485,86 @@ export async function installLocalFlatpak(
 // "-" (which would be parsed as a flag by `flatpak install`) and any char outside
 // the reverse-DNS app-id charset.
 const FLATHUB_APP_ID_RE = /^[A-Za-z0-9._][A-Za-z0-9._-]*$/
+
+/**
+ * v44.61 (REQ1) — parse a flatpak-install progress percentage from a chunk of
+ * flatpak stdout/stderr. flatpak renders OSTree pull progress as "… 42%" lines
+ * (and sometimes a "12.3 MB / 50.0 MB" byte ratio). Returns the FIRST percentage
+ * found, clamped to 5..95 (0 and 100 are reserved for the route's start/done
+ * ticks), or null when the chunk carries no parseable progress. Pure; exported
+ * for unit tests. Robust to flatpak printing little/no progress: when this never
+ * returns a number, the client-side creep (bridge + Add-Shortcut dialog) still
+ * moves the bar — so the operator never sees a stuck 0%.
+ */
+export function parseFlatpakProgress(chunk: string): number | null {
+	// Prefer an explicit "NN%" token (1–3 digits).
+	const pctMatch = chunk.match(/(\d{1,3})\s*%/)
+	if (pctMatch) {
+		const pct = Number(pctMatch[1])
+		if (Number.isFinite(pct)) return Math.max(5, Math.min(95, pct))
+	}
+	// Fall back to a "X <unit> / Y <unit>" byte ratio (same unit on both sides).
+	const ratio = chunk.match(/([\d.]+)\s*(?:kB|MB|GB)\s*\/\s*([\d.]+)\s*(?:kB|MB|GB)/i)
+	if (ratio) {
+		const done = Number(ratio[1])
+		const total = Number(ratio[2])
+		if (Number.isFinite(done) && Number.isFinite(total) && total > 0) {
+			return Math.max(5, Math.min(95, Math.round((done / total) * 100)))
+		}
+	}
+	return null
+}
+
+/** Injectable spawn seam for spawnFlatpakInstallWithProgress (unit tests). */
+export interface FlatpakInstallStreamDeps {
+	spawnImpl?: typeof spawn
+}
+
+/**
+ * v44.61 (REQ1) — run `flatpak install … flathub <appId>` while STREAMING
+ * progress. The argv is BYTE-IDENTICAL to the proven buffered path
+ * (installFlathubApp's exec branch) — only buffered→streamed reading differs,
+ * so the install behaviour itself is unchanged (zero hang risk). We read
+ * stdout/stderr incrementally and call onProgress on each parseable %. Never
+ * throws — resolves {code, stderr} (code -1 on a spawn error).
+ */
+export async function spawnFlatpakInstallWithProgress(
+	appId: string,
+	opts: {
+		onProgress: (pct: number, msg: string) => void
+		logger: InstallContext['logger']
+		deps?: FlatpakInstallStreamDeps
+	},
+): Promise<{code: number; stderr: string}> {
+	const spawnFn = opts.deps?.spawnImpl ?? spawn
+	return new Promise((resolve) => {
+		let child: ReturnType<typeof spawn>
+		try {
+			child = spawnFn(
+				'flatpak',
+				['install', '--user', '--noninteractive', '--assumeyes', 'flathub', appId],
+				{stdio: ['ignore', 'pipe', 'pipe']},
+			)
+		} catch (err) {
+			resolve({code: -1, stderr: err instanceof Error ? err.message : String(err)})
+			return
+		}
+		let stderr = ''
+		const onChunk = (buf: Buffer, isErr: boolean) => {
+			const s = buf.toString('utf8')
+			if (isErr) stderr += s
+			opts.logger.info(`[flatpak] ${s.trimEnd()}`)
+			const pct = parseFlatpakProgress(s)
+			if (pct !== null) opts.onProgress(pct, 'Downloading…')
+		}
+		child.stdout?.on('data', (b: Buffer) => onChunk(b, false))
+		child.stderr?.on('data', (b: Buffer) => onChunk(b, true))
+		child.on('error', (err) =>
+			resolve({code: -1, stderr: `${stderr}${err instanceof Error ? err.message : String(err)}`}),
+		)
+		child.on('close', (code) => resolve({code: code ?? -1, stderr}))
+	})
+}
 
 /**
  * v44.57 — install a Flathub app by app-id via `flatpak install --user … flathub
@@ -1494,8 +1578,8 @@ export async function installFlathubApp(
 	appId: string,
 	ctx: InstallContext,
 	configStore: NativeAppConfigStore,
-	opts: {name?: string; iconUrl?: string} = {},
-	deps: InstallLocalAppDeps = {},
+	opts: {name?: string; iconUrl?: string; onProgress?: (pct: number, msg: string) => void} = {},
+	deps: InstallLocalAppDeps & {spawnInstall?: typeof spawnFlatpakInstallWithProgress} = {},
 ): Promise<InstallLocalAppResult> {
 	const exec = deps.exec ?? execCmd
 
@@ -1518,11 +1602,22 @@ export async function installFlathubApp(
 	await ensureFlathubRemote(exec, ctx.logger)
 
 	// (c) Install from the fixed "flathub" remote (--user, non-interactive). NO shell.
-	const {code, stderr} = await exec(
-		'flatpak',
-		['install', '--user', '--noninteractive', '--assumeyes', 'flathub', appId],
-		ctx.logger,
-	)
+	// v44.61 (REQ1) — when a progress sink is provided (the installFlathub route
+	// passes one that feeds recordProgress → apps.v37Progress), STREAM the install
+	// (same argv) so we can forward live %. Without it, the proven buffered exec
+	// path runs unchanged (back-compat; the unit tests pass only `exec`).
+	let code: number
+	let stderr: string
+	if (opts.onProgress) {
+		const streamFn = deps.spawnInstall ?? spawnFlatpakInstallWithProgress
+		;({code, stderr} = await streamFn(appId, {onProgress: opts.onProgress, logger: ctx.logger}))
+	} else {
+		;({code, stderr} = await exec(
+			'flatpak',
+			['install', '--user', '--noninteractive', '--assumeyes', 'flathub', appId],
+			ctx.logger,
+		))
+	}
 	if (code !== 0) {
 		const errText = stderr.trim()
 		if (/remote .*flathub.* not found|No remote refs found/i.test(errText)) {
@@ -1554,11 +1649,17 @@ export async function installFlathubApp(
 	}
 
 	await configStore.upsert(config)
-	const slug = slugifyDebName(appId)
+	// v44.61 (REQ2c) — map under the RAW flatpak app-id (was slugifyDebName). The
+	// store card + desktop bridge track installed-state by this exact app-id, so a
+	// slug ("org-gimp-gimp") never matched the card's appId ("org.gimp.GIMP") → the
+	// card never showed Installed and the Uninstall affordance never appeared.
+	// The raw app-id passes FLATHUB_APP_ID_RE (a safe Redis key) and matches the apt
+	// native path, which already keys on the raw catalog appId. uninstall looks this
+	// key up first (then the legacy slug as a fallback).
 	await ctx.redis
-		.set(`liv:apps:native-catalog:${slug}`, config.id)
+		.set(`liv:apps:native-catalog:${appId}`, config.id)
 		.catch((err) =>
-			ctx.logger.error(`installFlathubApp: failed to write catalog mapping for ${slug}`, err),
+			ctx.logger.error(`installFlathubApp: failed to write catalog mapping for ${appId}`, err),
 		)
 
 	return {ok: true, name: config.name, nativeConfigId: config.id}
@@ -1719,4 +1820,135 @@ export async function installLocalSnap(
 		)
 
 	return {ok: true, name: displayName, nativeConfigId: config.id}
+}
+
+// ─── v44.61 (REQ2) — REAL per-format uninstall ──────────────────────────────
+//
+// Before R11 the only "remove" path (apps.native.delete + NativeInstaller.uninstall)
+// deleted the NativeAppConfig + .desktop + Redis mapping but NEVER ran the real
+// `flatpak uninstall` / `snap remove`, so the app stayed installed (disk never
+// freed). These helpers derive the install format from the persisted config's
+// launch shape and run the real removal:
+//   - flatpak  → `flatpak uninstall --user` (NO sudo; frees disk + drops flatpak's
+//                own exported .desktop, which is why scanHostApps then loses it too)
+//   - snap     → `sudo -n /usr/bin/snap remove <name>` (NOPASSWD-allowlisted grant)
+//   - AppImage → unlink the ~/.local/bin binary + the synthesized .desktop
+//   - apt/system → LEFT installed (no apt-remove grant; shared-dep risk). This is
+//                also the correct behaviour for a tile that merely POINTS at an
+//                already-present system app (the "Installed on this device" picker):
+//                removing that tile must not uninstall the user's system package.
+
+export type NativeAppFormat = 'flatpak' | 'snap' | 'appimage' | 'apt'
+
+/**
+ * Detect the install format from a persisted NativeAppConfig's launch shape.
+ * Pure; exported for unit tests. `home` is the desktop user's $HOME (used to
+ * recognise the AppImage `~/.local/bin/<slug>` location).
+ */
+export function detectNativeFormat(cfg: NativeAppConfig, home: string): NativeAppFormat {
+	if (cfg.binaryPath === '/usr/bin/flatpak' && cfg.args?.[0] === 'run' && cfg.args[1]) {
+		return 'flatpak'
+	}
+	if (cfg.binaryPath === '/usr/bin/snap' && cfg.args?.[0] === 'run' && cfg.args[1]) {
+		return 'snap'
+	}
+	if (cfg.binaryPath.startsWith('/snap/bin/')) return 'snap'
+	// path.posix — these are always POSIX paths on the box; path.join would inject
+	// backslashes on a Windows dev/test host (mirrors native-scanner.ts:177).
+	const binDir = path.posix.join(home, '.local/bin') + '/'
+	if (cfg.binaryPath.startsWith(binDir)) return 'appimage'
+	return 'apt'
+}
+
+export interface RemoveResult {
+	/** true when a real uninstall ran (flatpak/snap/AppImage) — disk was freed. */
+	freedDisk: boolean
+	/** Human note for the UI (e.g. apt apps stay installed; snap grant missing). */
+	message?: string
+}
+
+/** Injectable seams for removeInstalledApp (unit tests). */
+export interface RemoveDeps {
+	exec?: typeof execCmd
+	home?: string
+	fsImpl?: {unlink: typeof fs.unlink}
+}
+
+/**
+ * v44.61 (REQ2) — REAL removal of an installed native app, derived from its
+ * persisted NativeAppConfig. NEVER throws — returns a RemoveResult. The CALLER
+ * is responsible for deleting the NativeAppConfig + Redis mapping afterwards
+ * (this function only performs the OS-level removal).
+ */
+export async function removeInstalledApp(
+	cfg: NativeAppConfig,
+	ctx: InstallContext,
+	deps: RemoveDeps = {},
+): Promise<RemoveResult> {
+	const exec = deps.exec ?? execCmd
+	const homeDir = deps.home ?? userHome(ctx.userId)
+	const unlink = deps.fsImpl?.unlink ?? fs.unlink
+	const format = detectNativeFormat(cfg, homeDir)
+	try {
+		if (format === 'flatpak') {
+			const ref = cfg.args![1]
+			if (!FLATHUB_APP_ID_RE.test(ref)) {
+				return {freedDisk: false, message: 'invalid flatpak ref — tile removed only'}
+			}
+			const {code, stderr} = await exec(
+				'flatpak',
+				['uninstall', '--user', '--noninteractive', '--assumeyes', ref],
+				ctx.logger,
+			)
+			if (code !== 0) {
+				// "not installed" (already gone) is a benign success for our purposes.
+				if (/not installed|no.*matching|nothing to do/i.test(stderr)) return {freedDisk: true}
+				return {
+					freedDisk: false,
+					message: `flatpak uninstall exited ${code}: ${stderr.trim().slice(0, 300)}`,
+				}
+			}
+			return {freedDisk: true}
+		}
+		if (format === 'snap') {
+			const name = cfg.args?.[1] ?? path.basename(cfg.binaryPath)
+			if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) {
+				return {freedDisk: false, message: 'invalid snap name — tile removed only'}
+			}
+			const {code, stderr} = await exec(
+				'sudo',
+				['-n', '/usr/bin/snap', 'remove', name],
+				ctx.logger,
+				APT_ENV,
+			)
+			if (code !== 0) {
+				const denied = stderr.includes('sudo:') || stderr.includes('password is required')
+				return {
+					freedDisk: false,
+					message: denied
+						? 'Removing the snap needs a permission update — click Update on the box, then retry.'
+						: `snap remove exited ${code}: ${stderr.trim().slice(0, 300)}`,
+				}
+			}
+			return {freedDisk: true}
+		}
+		if (format === 'appimage') {
+			// Unlink the binary + the synthesized .desktop (installLocalAppImage wrote
+			// it under <home>/.local/share/applications/<slug>.desktop).
+			await unlink(cfg.binaryPath).catch(() => {})
+			const slug = slugifyDebName(cfg.name)
+			await unlink(
+				path.posix.join(homeDir, '.local/share/applications', `${slug}.desktop`),
+			).catch(() => {})
+			return {freedDisk: true}
+		}
+		// apt/system — leave the package installed (no apt-remove grant; the tile may
+		// also just point at an already-present system app). Tile removal is enough.
+		return {
+			freedDisk: false,
+			message: 'The shortcut was removed. The system package stays installed.',
+		}
+	} catch (err) {
+		return {freedDisk: false, message: err instanceof Error ? err.message : String(err)}
+	}
 }

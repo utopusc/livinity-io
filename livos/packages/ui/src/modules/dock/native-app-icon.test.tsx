@@ -52,16 +52,18 @@ describe('NativeAppIcon — wraps AppIcon + ContextMenu + AlertDialog (mirror of
 })
 
 describe('NativeAppIcon — tRPC wiring', () => {
-	it('calls trpcReact.apps.native.delete.useMutation for removal', () => {
-		expect(ICON_SRC).toMatch(/trpcReact\.apps\.native\.delete\.useMutation/)
+	// v44.61 (REQ2b) — the tile now runs the REAL uninstall (apps.native.uninstall),
+	// not the config-only delete, so flatpak/snap/AppImage apps are actually removed.
+	it('calls trpcReact.apps.native.uninstall.useMutation for removal', () => {
+		expect(ICON_SRC).toMatch(/trpcReact\.apps\.native\.uninstall\.useMutation/)
 	})
 
-	it('invalidates apps.native.list after a successful delete', () => {
+	it('invalidates apps.native.list after a successful uninstall', () => {
 		expect(ICON_SRC).toMatch(/apps\.native\.list\.invalidate/)
 	})
 
-	it('passes {id} to delete mutateAsync (matches native-routes.ts deleteInput)', () => {
-		expect(ICON_SRC).toMatch(/deleteMut\.mutateAsync\s*\(\s*\{\s*id\s*[:,}]/)
+	it('passes {id} to uninstall mutateAsync (matches native-routes.ts uninstall input)', () => {
+		expect(ICON_SRC).toMatch(/uninstallMut\.mutateAsync\s*\(\s*\{\s*id\s*[:,}]/)
 	})
 
 	it('invokes useLaunchNativeApp().launch on icon click with id + name (+ iconUrl P157 round 5)', () => {

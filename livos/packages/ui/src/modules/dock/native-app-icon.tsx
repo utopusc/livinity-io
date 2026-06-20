@@ -11,15 +11,17 @@
 //                → x11vnc stream started, returns {streamId, wsUrl}
 //                  (stream-window mount is a future hookup — UAT row 7)
 //
-// Right-click → Remove:
-//   ContextMenu → AlertDialog confirm → apps.native.delete mutation
+// Right-click → Remove (v44.61 / REQ2b):
+//   ContextMenu → AlertDialog confirm → apps.native.uninstall mutation
+//                → REAL removal (flatpak uninstall --user / snap remove /
+//                  AppImage unlink; apt/system tiles are just un-tiled)
 //                → invalidate apps.native.list (re-renders desktop grid)
 //
-// Auth note: apps.native.delete is admin-gated server-side (native-routes.ts:
-// 159-165, T-101-02 threat-register row). A non-admin user clicking Remove
-// will hit a TRPCError UNAUTHORIZED — caught by deleteMut.isError and
-// surfaced inline. We do NOT pre-hide the menu item; admin-gating is a
-// server-side correctness boundary, not a UX-feature gate.
+// Auth note: apps.native.uninstall is admin-gated server-side (it can run a
+// privileged snap remove + free disk). A non-admin user clicking Remove will
+// hit a TRPCError UNAUTHORIZED — caught by uninstallMut.isError and surfaced
+// inline. We do NOT pre-hide the menu item; admin-gating is a server-side
+// correctness boundary, not a UX-feature gate.
 
 import {useState} from 'react'
 
@@ -64,7 +66,8 @@ export interface NativeAppIconProps {
 export function NativeAppIcon({id, name, iconUrl, wmClassHint}: NativeAppIconProps) {
 	const launch = useLaunchNativeApp()
 	const utils = trpcReact.useUtils()
-	const deleteMut = trpcReact.apps.native.delete.useMutation()
+	// v44.61 (REQ2b) — uninstall (REAL removal), not delete (config-only).
+	const uninstallMut = trpcReact.apps.native.uninstall.useMutation()
 
 	const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
 
@@ -79,8 +82,9 @@ export function NativeAppIcon({id, name, iconUrl, wmClassHint}: NativeAppIconPro
 
 	const handleRemove = async () => {
 		try {
-			await deleteMut.mutateAsync({id})
+			await uninstallMut.mutateAsync({id})
 			await utils.apps.native.list.invalidate()
+			await utils.apps.list.invalidate().catch(() => {})
 		} finally {
 			setShowRemoveConfirm(false)
 		}
@@ -112,19 +116,20 @@ export function NativeAppIcon({id, name, iconUrl, wmClassHint}: NativeAppIconPro
 					<AlertDialogHeader>
 						<AlertDialogTitle>Remove {name}?</AlertDialogTitle>
 						<AlertDialogDescription>
-							The icon will be removed from the desktop. The native app itself
-							stays installed on the system.
+							Removes the icon from the desktop. Apps installed from the store
+							(Flatpak / Snap / AppImage) are also uninstalled to free disk;
+							system packages installed via apt are left in place.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogAction
 							variant='destructive'
 							onClick={handleRemove}
-							disabled={deleteMut.isPending}
+							disabled={uninstallMut.isPending}
 						>
-							{deleteMut.isPending ? 'Removing…' : 'Remove'}
+							{uninstallMut.isPending ? 'Removing…' : 'Remove'}
 						</AlertDialogAction>
-						<AlertDialogCancel disabled={deleteMut.isPending}>
+						<AlertDialogCancel disabled={uninstallMut.isPending}>
 							Cancel
 						</AlertDialogCancel>
 					</AlertDialogFooter>

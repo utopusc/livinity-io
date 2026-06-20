@@ -190,8 +190,13 @@ async function fullscreenNativeWindow(
 import {router, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
 import {getPool} from '../database/index.js'
 import {scanHostApps as scanHostAppsImpl, type ScannedNativeApp} from './native-scanner.js'
-import {validateAptPackages, APT_PACKAGE_RE, installFlathubApp} from './native-installer.js'
-import {getDispatcher, buildInstallContext} from './v37-install-service.js'
+import {
+	validateAptPackages,
+	APT_PACKAGE_RE,
+	installFlathubApp,
+	removeInstalledApp,
+} from './native-installer.js'
+import {getDispatcher, buildInstallContext, recordProgress} from './v37-install-service.js'
 import {
 	nativeAppConfigSchema,
 	NativeAppConfigStore,
@@ -743,6 +748,11 @@ export const nativeAppsRouter = router({
 					.regex(/^[A-Za-z0-9._][A-Za-z0-9._-]*$/),
 				name: z.string().min(1).max(64).optional(),
 				iconUrl: z.string().max(2048).optional(),
+				// v44.61 (REQ1) — the channel key for apps.v37Progress. The web store
+				// sends the CATALOG appId it tracks by (== the flatpak appId here), the
+				// desktop dialog sends the flatpak appId. Defaults to `appId` when absent
+				// (so old callers keep working). Pollers must query this same id.
+				progressId: z.string().min(1).max(255).optional(),
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
@@ -767,14 +777,84 @@ export const nativeAppsRouter = router({
 						ctx.logger?.error?.(m, extra as Error | undefined),
 				},
 			})
+			// v44.61 (REQ1) — record progress into the SAME in-memory map that
+			// apps.v37Progress polls (recordProgress / v37-install-service), so both
+			// the desktop dialog AND the web-store bridge can show a moving bar.
+			const progressId = input.progressId ?? input.appId
+			recordProgress({appId: progressId, section: 'native', pct: 0, message: 'Starting…', done: false})
 			const r = await installFlathubApp(input.appId, installCtx, store, {
 				name: input.name,
 				iconUrl: input.iconUrl,
+				onProgress: (pct, message) =>
+					recordProgress({appId: progressId, section: 'native', pct, message, done: false}),
+			})
+			recordProgress({
+				appId: progressId,
+				section: 'native',
+				pct: 100,
+				message: r.ok ? 'Installed' : `Failed: ${r.message ?? 'install failed'}`,
+				done: true,
+				...(r.ok ? {} : {error: r.message ?? 'install failed'}),
 			})
 			if (!r.ok) {
 				throw new TRPCError({code: 'BAD_REQUEST', message: r.message ?? 'install failed'})
 			}
 			return r
+		}),
+
+	// ─── v44.61 (REQ2) — REAL uninstall by NativeAppConfig UUID ────────────────
+	//
+	// The desktop tile right-click + the Add-Shortcut "Installed on this device"
+	// grid both hold the config UUID, so they uninstall precisely via this route
+	// (vs the catalog-appId path used by apps.uninstallV37 for the web store card).
+	// Detects the format from the config's launch shape and runs the real removal
+	// (flatpak uninstall --user / snap remove / AppImage unlink) BEFORE dropping the
+	// config + any Redis catalog mapping that points at it. Admin-gated (it can run
+	// a privileged snap remove + frees disk).
+	uninstall: adminProcedure
+		.input(z.object({id: z.string().uuid()}))
+		.mutation(async ({ctx, input}) => {
+			const store = requireStore(ctx)
+			const cfg = await store.get(input.id)
+			if (!cfg) {
+				// Already gone — idempotent success.
+				return {ok: true as const, freedDisk: false}
+			}
+			const pool = getPool()
+			if (!pool) {
+				throw new TRPCError({code: 'SERVICE_UNAVAILABLE', message: 'PostgreSQL pool unavailable'})
+			}
+			const redis = ctx.livinityd?.ai?.redis
+			if (!redis) {
+				throw new TRPCError({code: 'SERVICE_UNAVAILABLE', message: 'redis unavailable'})
+			}
+			const userId = ctx.currentUser?.id ?? 'admin'
+			const installCtx = buildInstallContext({
+				userId,
+				redis,
+				pg: pool,
+				logger: {
+					info: (m: string) => ctx.logger?.log?.(m),
+					warn: (m: string) => ctx.logger?.error?.(m),
+					error: (m: string, extra?: unknown) =>
+						ctx.logger?.error?.(m, extra as Error | undefined),
+				},
+			})
+			const result = await removeInstalledApp(cfg, installCtx)
+			await store.delete(input.id)
+			// Best-effort: drop any catalog-mapping key whose value is this config UUID
+			// (covers the raw-appId, slug, and apt catalog-appId key shapes) so
+			// apps.v37List stops reporting it installed.
+			try {
+				const keys = (await redis.keys('liv:apps:native-catalog:*')) as string[]
+				for (const k of keys) {
+					const v = await redis.get(k)
+					if (v === input.id) await redis.del(k)
+				}
+			} catch {
+				/* mapping cleanup is best-effort — the config delete already removed the tile */
+			}
+			return {ok: true as const, freedDisk: result.freedDisk, message: result.message}
 		}),
 
 	/**

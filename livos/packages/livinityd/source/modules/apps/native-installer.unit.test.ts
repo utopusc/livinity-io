@@ -18,6 +18,9 @@ import {
 	installLocalFlatpak,
 	installLocalSnap,
 	installFlathubApp,
+	parseFlatpakProgress,
+	detectNativeFormat,
+	removeInstalledApp,
 	type InstallLocalAppDeps,
 } from './native-installer.js'
 import type {NativeAppConfig} from './native-app-config.js'
@@ -363,5 +366,140 @@ describe('installFlathubApp (v44.57 — Flathub store install)', () => {
 		expect(cfg.name).toBe('GIMP')
 		// dotted app-ids omit the wmClassHint (would fail the wmClass regex).
 		expect(cfg.wmClassHint).toBeUndefined()
+	})
+
+	// v44.61 (REQ2c) — the catalog mapping now keys on the RAW flatpak app-id (not
+	// slugifyDebName) so the store card + bridge match installed-state correctly.
+	it('v44.61: writes the catalog mapping under the RAW flatpak app-id (not a slug)', async () => {
+		const sets: Array<{key: string; val: string}> = []
+		const ctx = {
+			userId: 'admin',
+			apiKey: '',
+			redis: {set: async (key: string, val: string) => void sets.push({key, val}), get: async () => null} as never,
+			pg: {} as never,
+			logger: NOOP_LOGGER,
+		} as never
+		const {exec} = flatpakExec({code: 0})
+		const res = await installFlathubApp('org.gimp.GIMP', ctx, makeStore(), {name: 'GIMP'}, {exec})
+		expect(res.ok).toBe(true)
+		const mapping = sets.find((s) => s.key.startsWith('liv:apps:native-catalog:'))
+		expect(mapping?.key).toBe('liv:apps:native-catalog:org.gimp.GIMP')
+	})
+
+	// v44.61 (REQ1) — onProgress streams via the injectable spawnInstall seam; the
+	// buffered exec install branch is NOT used when a progress sink is provided.
+	it('v44.61: onProgress path uses the streaming seam + forwards progress, exec install NOT called', async () => {
+		const {calls, exec} = flatpakExec({code: 0}) // version probe via exec, install via seam
+		const progressEvents: Array<{pct: number; msg: string}> = []
+		const spawnInstall = vi.fn(async (_appId: string, o: {onProgress: (pct: number, msg: string) => void}) => {
+			o.onProgress(42, 'Downloading…')
+			return {code: 0, stderr: ''}
+		})
+		const res = await installFlathubApp(
+			'org.gimp.GIMP',
+			makeCtx(),
+			makeStore(),
+			{name: 'GIMP', onProgress: (pct, msg) => progressEvents.push({pct, msg})},
+			{exec, spawnInstall: spawnInstall as never},
+		)
+		expect(res.ok).toBe(true)
+		expect(spawnInstall).toHaveBeenCalledTimes(1)
+		expect(progressEvents).toEqual([{pct: 42, msg: 'Downloading…'}])
+		// The buffered `flatpak install …` exec branch must NOT run on the onProgress path.
+		expect(calls.some((c) => c.cmd === 'flatpak' && c.args[0] === 'install')).toBe(false)
+	})
+})
+
+describe('parseFlatpakProgress (v44.61 REQ1 — flatpak % parser)', () => {
+	it('parses an explicit NN% token, clamped to 5..95', () => {
+		expect(parseFlatpakProgress('Installing… 42%')).toBe(42)
+		expect(parseFlatpakProgress('1%')).toBe(5) // clamp floor
+		expect(parseFlatpakProgress('99%')).toBe(95) // clamp ceil
+		expect(parseFlatpakProgress('   50 %  ')).toBe(50)
+	})
+	it('falls back to an "X MB / Y MB" byte ratio', () => {
+		expect(parseFlatpakProgress('12.5 MB / 50.0 MB')).toBe(25)
+		expect(parseFlatpakProgress('downloading 5.0 MB / 10.0 MB')).toBe(50)
+	})
+	it('returns null when no progress is present', () => {
+		expect(parseFlatpakProgress('Installing org.gimp.GIMP/x86_64/stable')).toBeNull()
+		expect(parseFlatpakProgress('')).toBeNull()
+	})
+})
+
+describe('detectNativeFormat (v44.61 REQ2 — uninstall format detection)', () => {
+	const HOME = '/home/livos'
+	const mk = (p: Partial<NativeAppConfig>): NativeAppConfig =>
+		({id: '00000000-0000-0000-0000-000000000000', name: 'x', binaryPath: '/usr/bin/x', ...p}) as NativeAppConfig
+	it('detects flatpak (/usr/bin/flatpak run <ref>)', () => {
+		expect(detectNativeFormat(mk({binaryPath: '/usr/bin/flatpak', args: ['run', 'org.gimp.GIMP']}), HOME)).toBe('flatpak')
+	})
+	it('detects snap (run wrapper AND /snap/bin/<name>)', () => {
+		expect(detectNativeFormat(mk({binaryPath: '/usr/bin/snap', args: ['run', 'spotify']}), HOME)).toBe('snap')
+		expect(detectNativeFormat(mk({binaryPath: '/snap/bin/spotify'}), HOME)).toBe('snap')
+	})
+	it('detects appimage (~/.local/bin/<slug>)', () => {
+		expect(detectNativeFormat(mk({binaryPath: `${HOME}/.local/bin/cursor`}), HOME)).toBe('appimage')
+	})
+	it('defaults to apt/system for /usr/bin + /opt', () => {
+		expect(detectNativeFormat(mk({binaryPath: '/usr/bin/gimp'}), HOME)).toBe('apt')
+		expect(detectNativeFormat(mk({binaryPath: '/opt/foo/bar'}), HOME)).toBe('apt')
+	})
+})
+
+describe('removeInstalledApp (v44.61 REQ2 — real per-format removal)', () => {
+	const HOME = '/home/livos'
+	const ctx = {userId: 'livos', apiKey: '', redis: {} as never, pg: {} as never, logger: NOOP_LOGGER} as never
+	const mk = (p: Partial<NativeAppConfig>): NativeAppConfig =>
+		({id: '00000000-0000-0000-0000-000000000000', name: 'GIMP', binaryPath: '/usr/bin/x', ...p}) as NativeAppConfig
+
+	it('flatpak: runs `flatpak uninstall --user` and frees disk', async () => {
+		const calls: Array<{cmd: string; args: readonly string[]}> = []
+		const exec: NonNullable<InstallLocalAppDeps['exec']> = async (cmd, args) => {
+			calls.push({cmd, args})
+			return {code: 0, stdout: '', stderr: ''}
+		}
+		const res = await removeInstalledApp(
+			mk({binaryPath: '/usr/bin/flatpak', args: ['run', 'org.gimp.GIMP']}),
+			ctx,
+			{exec, home: HOME},
+		)
+		expect(res.freedDisk).toBe(true)
+		expect(calls[0]).toEqual({
+			cmd: 'flatpak',
+			args: ['uninstall', '--user', '--noninteractive', '--assumeyes', 'org.gimp.GIMP'],
+		})
+	})
+
+	it('snap: surfaces a clean message when the sudo grant is missing (no disk freed)', async () => {
+		const exec: NonNullable<InstallLocalAppDeps['exec']> = async () => ({
+			code: 1,
+			stdout: '',
+			stderr: 'sudo: a password is required',
+		})
+		const res = await removeInstalledApp(mk({binaryPath: '/snap/bin/spotify'}), ctx, {exec, home: HOME})
+		expect(res.freedDisk).toBe(false)
+		expect(res.message).toMatch(/permission update|click Update/i)
+	})
+
+	it('appimage: unlinks the binary (frees disk) WITHOUT any sudo/exec', async () => {
+		const unlinked: string[] = []
+		const exec = vi.fn()
+		const res = await removeInstalledApp(mk({binaryPath: `${HOME}/.local/bin/cursor`}), ctx, {
+			exec: exec as never,
+			home: HOME,
+			fsImpl: {unlink: (async (p: string) => void unlinked.push(p)) as never},
+		})
+		expect(res.freedDisk).toBe(true)
+		expect(unlinked).toContain(`${HOME}/.local/bin/cursor`)
+		expect(exec).not.toHaveBeenCalled()
+	})
+
+	it('apt/system: leaves the package installed (tile-only removal)', async () => {
+		const exec = vi.fn()
+		const res = await removeInstalledApp(mk({binaryPath: '/usr/bin/gimp'}), ctx, {exec: exec as never, home: HOME})
+		expect(res.freedDisk).toBe(false)
+		expect(res.message).toMatch(/system package stays installed/i)
+		expect(exec).not.toHaveBeenCalled()
 	})
 })
