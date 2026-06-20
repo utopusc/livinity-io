@@ -56,6 +56,16 @@ import {
 	nativeAppConfigSchema,
 	type NativeAppConfig,
 } from './native-app-config.js'
+// Phase 290-r6 — derive the installed app's tile by re-scanning host .desktop
+// entries after a local .deb install (same parser the Native tab "Installed on
+// this device" picker uses, so the binaryPath is realpath-gated identically).
+import {
+	scanHostApps,
+	parseDesktopEntry,
+	buildScannedApp,
+	iconValueToUrl,
+	type ScannedNativeApp,
+} from './native-scanner.js'
 
 // ─── Manifest shape (SPEC §2.3) ──────────────────────────────────────────
 
@@ -123,6 +133,18 @@ function parseManifest(raw: unknown): NativeManifest | null {
 // dpkg never opens an interactive conffile prompt that would hang the install.
 const APT_ENV: Record<string, string> = {DEBIAN_FRONTEND: 'noninteractive'}
 const APT_CONFOLD: readonly string[] = ['-o', 'Dpkg::Options::=--force-confold']
+
+/**
+ * Phase 290-r6 — the ONE definition of the apt argv that installs a LOCAL .deb
+ * file (the deb-URL branch AND the new installLocalDeb helper share it, so the
+ * sudoers-allowlisted shape never drifts between the two callers). `debPath` is
+ * server-constructed (sanitized appId / randomUUID tmp name), and the `--`
+ * end-of-options marker precedes it — belt-and-suspenders under the sudoers
+ * `apt-get install -y *` wildcard so the path can never parse as an apt option.
+ */
+function aptInstallDebArgv(debPath: string): readonly string[] {
+	return ['-n', '/usr/bin/apt-get', 'install', '-y', ...APT_CONFOLD, '--', debPath]
+}
 // Allow-listed helper (shipped via scripts/install/livos-add-apt-repo.sh) that does
 // the privileged repo+key writes for the `apt-repo` install method. sudoers grants
 // `bruce` NOPASSWD on exactly this path so the installer never needs broad root.
@@ -591,9 +613,9 @@ export class NativeInstaller implements InstallHandler<'native'> {
 				() => undefined,
 			)
 			progress(60, 'Installing .deb (apt resolves dependencies)')
-			// `--` end-of-options: tmpDeb is server-constructed (sanitized appId),
-			// but pin the argv shape anyway (LIVOS-044 belt-and-suspenders).
-			const {code, stderr} = await execCmd('sudo', ['-n', '/usr/bin/apt-get', 'install', '-y', ...APT_CONFOLD, '--', tmpDeb], ctx.logger, APT_ENV)
+			// Phase 290-r6 — share the ONE apt-install-deb argv with installLocalDeb
+			// so the sudoers-allowlisted shape never diverges between callers.
+			const {code, stderr} = await execCmd('sudo', aptInstallDebArgv(tmpDeb), ctx.logger, APT_ENV)
 			await fs.unlink(tmpDeb).catch(() => {})
 			if (code !== 0) {
 				const sudoDenied = stderr.includes('sudo:') || stderr.includes('password is required')
@@ -945,4 +967,205 @@ export class NativeInstaller implements InstallHandler<'native'> {
 		progress(100, 'Done', true)
 		return ok(appId, 'native', {desktopEntryPath: desktopPath})
 	}
+}
+
+// ─── Phase 290-r6 — install a LOCAL .deb file (admin uploads) ────────────────
+//
+// An admin uploads a .deb (Discord / Chrome / etc. — apps NOT in apt) via the
+// gated POST /api/native/upload-deb route. The route streams + magic-byte
+// validates the bytes, then calls this helper. It reuses the EXACT proven apt
+// argv (aptInstallDebArgv) the deb-URL install branch uses (apt resolves deps),
+// then derives the desktop tile by re-scanning host .desktop entries — exactly
+// like the Native tab's "Installed on this device" picker, so the binaryPath is
+// realpath-gated identically and the persisted NativeAppConfig is schema-valid.
+//
+// SECURITY: a .deb runs maintainer scripts as ROOT via apt. The route enforces
+// the admin gate + .deb magic-byte validation BEFORE calling here; this helper
+// performs the privileged apt install (sudo -n, NOPASSWD-allowlisted) and runs
+// dpkg-deb / dpkg -L as the UNPRIVILEGED daemon user (NO sudo) to find the tile.
+
+export interface InstallLocalDebResult {
+	ok: boolean
+	name: string
+	nativeConfigId?: string
+	message?: string
+}
+
+/** Slug a display name into the [a-z0-9-] catalog-mapping key space. */
+function slugifyDebName(name: string): string {
+	const slug = name
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-+|-+$/g, '')
+		.slice(0, 64)
+	return slug || 'native-deb'
+}
+
+/**
+ * Optional injectable seams so the route's unit tests can drive installLocalDeb
+ * without a real apt/dpkg/host. Production passes nothing → the real apt argv +
+ * the real host scanner are used.
+ */
+export interface InstallLocalDebDeps {
+	exec?: typeof execCmd
+	scanHostApps?: typeof scanHostApps
+	home?: string
+}
+
+/**
+ * Install a local .deb and return a tile descriptor. `debPath` is a trusted,
+ * server-written temp path (the route writes it via a streamed pipeline to a
+ * randomUUID name). `opts.name` is the operator-facing display name (defaults
+ * to the dpkg Package field, then the filename).
+ */
+export async function installLocalDeb(
+	debPath: string,
+	ctx: InstallContext,
+	configStore: NativeAppConfigStore,
+	opts: {name?: string} = {},
+	deps: InstallLocalDebDeps = {},
+): Promise<InstallLocalDebResult> {
+	const exec = deps.exec ?? execCmd
+	const scan = deps.scanHostApps ?? scanHostApps
+	const homeDir = deps.home ?? userHome(ctx.userId)
+
+	// ── Discover the package name BEFORE install (unprivileged dpkg-deb). Used
+	//    to map dpkg -L → the .desktop tile and to default the display name. A
+	//    failure here is non-fatal: install can still succeed and we fall back to
+	//    the scan-diff path below.
+	let pkgName: string | null = null
+	try {
+		const {code, stdout} = await exec('dpkg-deb', ['-f', debPath, 'Package'], ctx.logger)
+		if (code === 0) {
+			const candidate = stdout.trim().split('\n')[0]?.trim()
+			if (candidate && APT_PACKAGE_RE.test(candidate)) pkgName = candidate
+		}
+	} catch {
+		/* dpkg-deb unavailable / unreadable — fall through to scan-diff */
+	}
+
+	// ── Snapshot installed binaryPaths BEFORE install so we can pick the NEW
+	//    app when dpkg -L doesn't surface a usable .desktop.
+	let beforeBinaries = new Set<string>()
+	try {
+		const before = await scan({home: homeDir})
+		beforeBinaries = new Set(before.map((a) => a.binaryPath))
+	} catch {
+		/* scan failure is non-fatal — diff just won't find a new app */
+	}
+
+	// ── Privileged install (apt resolves deps). Reuse the EXACT shared argv.
+	const {code, stderr} = await exec('sudo', aptInstallDebArgv(debPath), ctx.logger, APT_ENV)
+	if (code !== 0) {
+		const sudoDenied = stderr.includes('sudo:') || stderr.includes('password is required')
+		const message = sudoDenied
+			? `Installing the .deb failed: the installer is not permitted to run apt (sudo denied). exit ${code}`
+			: APT_PKG_NOT_FOUND_RE.test(stderr)
+				? // apt can emit a not-found for an UNMET DEPENDENCY referenced by the
+					// .deb (the .deb itself is local). Surface the apt stderr clearly.
+					`Installing the .deb failed — apt could not satisfy a dependency:\n${stderr.trim().slice(0, 800)}`
+				: `Installing the .deb failed (apt exit ${code}):\n${stderr.trim().slice(0, 800)}`
+		return {ok: false, name: opts.name ?? pkgName ?? 'native app', message}
+	}
+
+	// ── Derive the tile. Priority:
+	//    1. dpkg -L <pkg> → the package's own /usr/share/applications/*.desktop
+	//       (most accurate — it's THIS package's launcher), parsed + B1-gated.
+	//    2. scan-diff — the new app whose binaryPath wasn't installed before.
+	//    3. /usr/bin/<pkg> fallback (no .desktop shipped) if it passes the schema.
+	let scanned: ScannedNativeApp | null = null
+
+	if (pkgName) {
+		try {
+			const {code: lcode, stdout} = await exec('dpkg', ['-L', pkgName], ctx.logger)
+			if (lcode === 0) {
+				const desktopFiles = stdout
+					.split('\n')
+					.map((l) => l.trim())
+					.filter((l) => l.startsWith('/usr/share/applications/') && l.endsWith('.desktop'))
+				for (const desktopPath of desktopFiles) {
+					let content: string
+					try {
+						content = await fs.readFile(desktopPath, 'utf8')
+					} catch {
+						continue
+					}
+					const fields = parseDesktopEntry(content)
+					const app = buildScannedApp(fields, desktopPath, {home: homeDir})
+					if (app) {
+						scanned = app
+						break
+					}
+				}
+			}
+		} catch {
+			/* dpkg -L unavailable — fall through to scan-diff */
+		}
+	}
+
+	if (!scanned) {
+		try {
+			const after = await scan({home: homeDir})
+			scanned = after.find((a) => !beforeBinaries.has(a.binaryPath)) ?? null
+		} catch {
+			/* scan failure — fall through to the /usr/bin/<pkg> fallback */
+		}
+	}
+
+	// Resolve display name + binaryPath + icon from whatever we found.
+	const displayName = (opts.name?.trim() || scanned?.name || pkgName || 'native app').slice(0, 64)
+
+	let binaryPath: string | undefined = scanned?.binaryPath
+	if (!binaryPath && pkgName && APT_PACKAGE_RE.test(pkgName)) {
+		// Fallback: a CLI .deb ships no .desktop. Derive /usr/bin/<pkg> if it
+		// exists AND passes the schema's ABSOLUTE_PATH_RE (it does by construction
+		// for an APT_PACKAGE_RE name) so the tile is launchable.
+		const guess = `/usr/bin/${pkgName}`
+		if (existsSync(guess)) binaryPath = guess
+	}
+
+	// ── No launchable binary found: the install SUCCEEDED but we can't build a
+	//    desktop tile (e.g. a library/font .deb). Report ok with a generic name —
+	//    the caller surfaces "installed" without a tile rather than a false error.
+	if (!binaryPath) {
+		return {ok: true, name: displayName}
+	}
+
+	const iconUrl =
+		scanned?.iconUrl && isSchemaValidIconUrl(scanned.iconUrl)
+			? scanned.iconUrl
+			: scanned?.icon
+				? iconValueToUrl(scanned.icon)
+				: undefined
+
+	const config: NativeAppConfig = {
+		id: randomUUID(),
+		name: displayName,
+		iconUrl: iconUrl && isSchemaValidIconUrl(iconUrl) ? iconUrl : undefined,
+		binaryPath,
+		wmClassHint: scanned?.wmClassHint,
+	}
+	try {
+		nativeAppConfigSchema.parse(config)
+	} catch (err) {
+		// The binaryPath/icon failed the schema — install still succeeded, but we
+		// can't persist a tile. Report ok with the name (no false failure).
+		ctx.logger.warn(
+			`installLocalDeb: derived config failed schema for ${displayName}: ${err instanceof Error ? err.message : String(err)}`,
+		)
+		return {ok: true, name: displayName}
+	}
+
+	await configStore.upsert(config)
+
+	// Catalog mapping (mirror the install tail) so apps.v37List reports it
+	// installed + uninstall can find the UUID from the slug.
+	const slug = slugifyDebName(pkgName ?? displayName)
+	await ctx.redis
+		.set(`liv:apps:native-catalog:${slug}`, config.id)
+		.catch((err) =>
+			ctx.logger.error(`installLocalDeb: failed to write catalog mapping for ${slug}`, err),
+		)
+
+	return {ok: true, name: displayName, nativeConfigId: config.id}
 }

@@ -785,6 +785,15 @@ function NativeTab({active}: {active: boolean}) {
 	const [installResult, setInstallResult] = useState<string | null>(null)
 	const [addedId, setAddedId] = useState<string | null>(null)
 
+	// Upload a local .deb (Discord, Chrome, … — not in apt). RAW octet-stream
+	// body via XHR (mirrors /api/files/upload). The Native tab is already
+	// admin-gated, but the server route re-asserts admin (a .deb runs maintainer
+	// scripts as root).
+	const debInputRef = useRef<HTMLInputElement>(null)
+	const [debFile, setDebFile] = useState<File | null>(null)
+	const [debProgress, setDebProgress] = useState<number | null>(null)
+	const [debResult, setDebResult] = useState<string | null>(null)
+
 	const filtered = useMemo(() => {
 		const q = query.trim().toLowerCase()
 		const apps = scanQ.data ?? []
@@ -838,6 +847,67 @@ function NativeTab({active}: {active: boolean}) {
 		} catch (err) {
 			setInstallResult(err instanceof Error ? err.message : 'Install failed.')
 		}
+	}
+
+	const clearDeb = () => {
+		setDebFile(null)
+		setDebResult(null)
+		if (debInputRef.current) debInputRef.current.value = ''
+	}
+
+	// Upload + install a local .deb. RAW octet-stream body (NOT FormData / base64 /
+	// tRPC), mirroring the Files upload XHR. The LIVINITY_PROXY_TOKEN cookie is sent
+	// automatically — no auth header. The server validates magic bytes + admin and
+	// returns {ok, name?, message?}.
+	const handleDebUpload = () => {
+		if (!debFile || debProgress !== null) return
+		setDebResult(null)
+		const file = debFile
+		const xhr = new XMLHttpRequest()
+		xhr.open('POST', `/api/native/upload-deb?name=${encodeURIComponent(file.name)}`)
+		xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+
+		xhr.upload.onprogress = (e) => {
+			if (e.lengthComputable) setDebProgress(Math.round((e.loaded / e.total) * 100))
+		}
+
+		xhr.onload = async () => {
+			setDebProgress(null)
+			if (xhr.status >= 200 && xhr.status < 300) {
+				let body: {ok?: boolean; name?: string; message?: string} = {}
+				try {
+					body = JSON.parse(xhr.responseText) as typeof body
+				} catch {
+					/* fall through to the generic failure below */
+				}
+				if (body.ok) {
+					setDebResult(`Installed ${body.name ?? file.name}.`)
+					await utils.apps.native.list.invalidate().catch(() => {})
+					await utils.apps.native.scanHostApps.invalidate().catch(() => {})
+					setDebFile(null)
+					if (debInputRef.current) debInputRef.current.value = ''
+				} else {
+					setDebResult(`Failed: ${body.message ?? 'install failed'}`)
+				}
+			} else {
+				let message = xhr.statusText || 'upload failed'
+				try {
+					const body = JSON.parse(xhr.responseText) as {message?: string}
+					if (body.message) message = body.message
+				} catch {
+					/* keep statusText */
+				}
+				setDebResult(`Failed: ${message}`)
+			}
+		}
+
+		xhr.onerror = () => {
+			setDebProgress(null)
+			setDebResult('Failed: network error')
+		}
+
+		setDebProgress(0)
+		xhr.send(file)
 	}
 
 	return (
@@ -917,6 +987,71 @@ function NativeTab({active}: {active: boolean}) {
 				{installResult ? (
 					<p className={`text-xs ${installResult.startsWith('Failed') || installResult.includes('failed') ? 'text-red-600' : 'text-emerald-700'}`}>
 						{installResult}
+					</p>
+				) : null}
+			</div>
+
+			{/* Upload a local .deb (Discord, Chrome, … — apps not in apt). */}
+			<div className='flex flex-col gap-2 border-t border-gray-200 pt-4'>
+				<p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Upload a .deb file</p>
+				<div className='flex flex-wrap items-center gap-2'>
+					<input
+						ref={debInputRef}
+						type='file'
+						accept='.deb,application/vnd.debian.binary-package'
+						className='hidden'
+						id='native-deb-file'
+						onChange={(e) => {
+							const f = e.target.files?.[0] ?? null
+							setDebFile(f)
+							setDebResult(null)
+						}}
+					/>
+					<label
+						htmlFor='native-deb-file'
+						className='inline-flex cursor-pointer items-center rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100'
+					>
+						Choose .deb file…
+					</label>
+					<Button
+						type='button'
+						size='dialog'
+						variant='primary'
+						onClick={() => handleDebUpload()}
+						disabled={!debFile || debProgress !== null}
+					>
+						{debProgress !== null ? 'Installing…' : 'Install'}
+					</Button>
+				</div>
+
+				{debFile ? (
+					<div className='flex items-center gap-2 text-[11px] text-gray-600'>
+						<span className='truncate'>
+							{debFile.name} · {(debFile.size / (1024 * 1024)).toFixed(1)} MB
+						</span>
+						<button
+							type='button'
+							className='shrink-0 text-gray-500 underline hover:text-gray-700'
+							onClick={() => clearDeb()}
+						>
+							Remove
+						</button>
+					</div>
+				) : null}
+
+				{debProgress !== null ? (
+					<div className='h-1 w-full overflow-hidden rounded-full bg-gray-200'>
+						<div className='h-full rounded-full bg-emerald-500 transition-[width]' style={{width: `${debProgress}%`}} />
+					</div>
+				) : null}
+
+				<p className='text-[11px] text-gray-500'>
+					Installs a local .deb (Discord, Chrome, …). apt resolves dependencies; .deb scripts run as root — only
+					upload packages you trust.
+				</p>
+				{debResult ? (
+					<p className={`text-xs ${debResult.startsWith('Failed') || debResult.includes('failed') ? 'text-red-600' : 'text-emerald-700'}`}>
+						{debResult}
 					</p>
 				) : null}
 			</div>
