@@ -1304,6 +1304,29 @@ async function checkFlatpakAvailable(
 }
 
 /**
+ * v44.60 — self-provision the flathub --user remote so the app store works WITHOUT
+ * depending on update.sh having added it. The update.sh self-replace lag (cf. Phase 278)
+ * can leave the remote missing on the first Update, making `flatpak install --user …
+ * flathub <id>` fail with "remote flathub not found". Idempotent (`--if-not-exists`),
+ * runs as the unprivileged daemon/desktop user in --user scope (NO sudo). Best-effort:
+ * a failure here is non-fatal — the subsequent install surfaces the real error.
+ */
+async function ensureFlathubRemote(
+	exec: typeof execCmd,
+	logger: InstallContext['logger'],
+): Promise<void> {
+	try {
+		await exec(
+			'flatpak',
+			['remote-add', '--if-not-exists', '--user', 'flathub', 'https://dl.flathub.org/repo/flathub.flatpakrepo'],
+			logger,
+		)
+	} catch (err) {
+		logger.warn(`ensureFlathubRemote: ${err instanceof Error ? err.message : String(err)}`)
+	}
+}
+
+/**
  * v44.57 — shared Flatpak tile builder. A Flatpak app launches via
  * `/usr/bin/flatpak run <appId>`. The flathub https iconUrl (a full dl.flathub.org
  * URL) satisfies nativeAppConfigSchema.iconUrl so it PERSISTS on the tile — the key
@@ -1352,6 +1375,10 @@ export async function installLocalFlatpak(
 			message: 'Flatpak runtime is not installed yet — click Update on the box, then retry.',
 		}
 	}
+
+	// (1.5) v44.60 — ensure the flathub --user remote (idempotent) so the bundle's
+	// runtime dependency can be resolved from flathub. Best-effort, non-fatal.
+	await ensureFlathubRemote(exec, ctx.logger)
 
 	// (2) Snapshot the installed app-id set BEFORE.
 	const listAppIds = async (): Promise<Set<string>> => {
@@ -1485,6 +1512,10 @@ export async function installFlathubApp(
 			message: 'Flatpak runtime is not installed yet — click Update on the box, then retry.',
 		}
 	}
+
+	// (b.5) v44.60 — self-provision the flathub --user remote (idempotent). Removes the
+	// dependency on update.sh having added it, which the self-replace lag can defer.
+	await ensureFlathubRemote(exec, ctx.logger)
 
 	// (c) Install from the fixed "flathub" remote (--user, non-interactive). NO shell.
 	const {code, stderr} = await exec(
