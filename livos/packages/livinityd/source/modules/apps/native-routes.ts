@@ -190,7 +190,7 @@ async function fullscreenNativeWindow(
 import {router, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
 import {getPool} from '../database/index.js'
 import {scanHostApps as scanHostAppsImpl, type ScannedNativeApp} from './native-scanner.js'
-import {validateAptPackages, APT_PACKAGE_RE} from './native-installer.js'
+import {validateAptPackages, APT_PACKAGE_RE, installFlathubApp} from './native-installer.js'
 import {getDispatcher, buildInstallContext} from './v37-install-service.js'
 import {
 	nativeAppConfigSchema,
@@ -355,6 +355,149 @@ function makeStartStreamFn(sm: StreamManager, userId: string): StreamStartFn {
 	}
 }
 
+// ─── v44.58 r8 — generic app-store catalog mapping (Flathub-backed) ──────────
+//
+// OPERATOR REFINEMENT: the UI presents this as a GENERIC "Browse apps" store —
+// NO "Flathub" / "Flatpak" / "runtime" branding is surfaced to the user (the
+// upstream provider is an implementation detail). Internally it is the Flathub
+// v2 collection/search API (verified live 2026-06-20):
+//   GET  /api/v2/collection/popular?page=N&per_page=M           → Meilisearch shape
+//   GET  /api/v2/collection/category/<MainCategory>?page&per_page → Meilisearch shape
+//   POST /api/v2/search  {query, page, hits_per_page}            → Meilisearch shape
+// Every endpoint returns {hits:[…], page, totalPages, totalHits, hitsPerPage}
+// where each hit is {app_id, name, summary, icon, …}. `icon` is a full https
+// dl.flathub.org URL (or null) — it satisfies nativeAppConfigSchema.iconUrl so it
+// PERSISTS on the installed tile. We map hits → the SHARED tRPC contract
+// {appId, name, summary, iconUrl?}, filter app_id to the reverse-DNS charset so a
+// malformed hit can't reach the installer, and compute hasMore = page<totalPages
+// (with an hits.length===per_page fallback when totalPages is absent).
+
+export interface FlathubApp {
+	appId: string
+	name: string
+	summary: string
+	iconUrl?: string
+}
+
+/** A page of catalog results in the PINNED contract shape. */
+export interface FlathubPage {
+	apps: FlathubApp[]
+	hasMore: boolean
+}
+
+const FLATHUB_HIT_APP_ID_RE = /^[A-Za-z0-9._-]+$/
+
+/** Per-page fetch size for every collection/search query (PINNED ~30). */
+export const FLATHUB_PER_PAGE = 30
+
+/**
+ * The user-facing category labels (PINNED contract list) mapped to the
+ * Flathub freedesktop MainCategory slug each one queries. The slugs were
+ * verified live against /api/v2/collection/category/<slug> (all HTTP 200).
+ * The LABELS are deliberately generic (no "Flatpak"/"Flathub" wording).
+ */
+export const FLATHUB_CATEGORIES: ReadonlyArray<{label: string; slug: string}> = [
+	{label: 'Productivity', slug: 'Office'},
+	{label: 'Graphics & Photography', slug: 'Graphics'},
+	{label: 'Games', slug: 'Game'},
+	{label: 'Developer Tools', slug: 'Development'},
+	{label: 'Audio & Video', slug: 'AudioVideo'},
+	{label: 'Communication & News', slug: 'Network'},
+	{label: 'Utilities', slug: 'Utility'},
+	{label: 'Education', slug: 'Education'},
+	{label: 'Science & Engineering', slug: 'Science'},
+	{label: 'System', slug: 'System'},
+]
+
+/** The ordered category LABELS — the static flathubCategories() payload. */
+export function flathubCategoryLabels(): string[] {
+	return FLATHUB_CATEGORIES.map((c) => c.label)
+}
+
+/**
+ * Map a user-facing category LABEL (or its raw slug, case-insensitively) to the
+ * Flathub MainCategory slug. Returns undefined for an unknown/empty value so the
+ * caller can fall back to the POPULAR collection (never a 422 from a bad slug).
+ */
+export function flathubSlugForLabel(label: string | undefined): string | undefined {
+	if (!label) return undefined
+	const needle = label.trim().toLowerCase()
+	if (!needle) return undefined
+	for (const c of FLATHUB_CATEGORIES) {
+		if (c.label.toLowerCase() === needle || c.slug.toLowerCase() === needle) return c.slug
+	}
+	return undefined
+}
+
+function mapFlathubHits(hits: unknown[] | undefined): FlathubApp[] {
+	if (!Array.isArray(hits)) return []
+	const out: FlathubApp[] = []
+	for (const raw of hits) {
+		const h = raw as {app_id?: unknown; name?: unknown; summary?: unknown; icon?: unknown}
+		const appId = typeof h.app_id === 'string' ? h.app_id : ''
+		if (!appId || !FLATHUB_HIT_APP_ID_RE.test(appId)) continue
+		out.push({
+			appId,
+			name: typeof h.name === 'string' ? h.name : appId,
+			summary: typeof h.summary === 'string' ? h.summary : '',
+			iconUrl: typeof h.icon === 'string' && h.icon ? h.icon : undefined,
+		})
+	}
+	return out
+}
+
+/**
+ * Compute hasMore from a Meilisearch-shaped response. Prefer the authoritative
+ * `page < totalPages` signal; when totalPages is absent/non-numeric fall back to
+ * the "a full page came back ⇒ there is probably more" heuristic.
+ */
+export function flathubHasMore(
+	json: {page?: unknown; totalPages?: unknown},
+	hitsLen: number,
+	perPage: number,
+	requestedPage: number,
+): boolean {
+	const totalPages = typeof json.totalPages === 'number' ? json.totalPages : undefined
+	const page = typeof json.page === 'number' ? json.page : requestedPage
+	if (totalPages !== undefined) return page < totalPages
+	return hitsLen >= perPage
+}
+
+/** Clamp an incoming page to a sane 1-based integer. */
+export function flathubClampPage(page: number | undefined): number {
+	if (typeof page !== 'number' || !Number.isFinite(page)) return 1
+	const p = Math.floor(page)
+	return p < 1 ? 1 : p
+}
+
+/**
+ * Fetch one page of a Flathub COLLECTION (popular or category) and map it to the
+ * pinned {apps, hasMore} contract. Best-effort: a 5s-timeout, never-throw GET —
+ * returns {apps:[],hasMore:false} on ANY failure (timeout / non-200 / parse).
+ * `slug` undefined ⇒ the popular collection; set ⇒ /category/<slug>.
+ */
+async function fetchFlathubCollection(slug: string | undefined, page: number): Promise<FlathubPage> {
+	const p = flathubClampPage(page)
+	const path = slug ? `category/${encodeURIComponent(slug)}` : 'popular'
+	const url = `https://flathub.org/api/v2/collection/${path}?page=${p}&per_page=${FLATHUB_PER_PAGE}`
+	try {
+		const controller = new AbortController()
+		const timer = setTimeout(() => controller.abort(), 5000)
+		let json: {hits?: unknown[]; page?: unknown; totalPages?: unknown}
+		try {
+			const res = await fetch(url, {signal: controller.signal})
+			if (!res.ok) throw new Error(`flathub collection HTTP ${res.status}`)
+			json = (await res.json()) as typeof json
+		} finally {
+			clearTimeout(timer)
+		}
+		const apps = mapFlathubHits(json.hits)
+		return {apps, hasMore: flathubHasMore(json, apps.length, FLATHUB_PER_PAGE, p)}
+	} catch {
+		return {apps: [], hasMore: false}
+	}
+}
+
 // Input schemas
 
 const getInput = z.object({id: z.string().uuid()})
@@ -479,6 +622,159 @@ export const nativeAppsRouter = router({
 				() => {},
 			)
 			return outcome
+		}),
+
+	// ─── v44.58 r8 — generic APP STORE catalog (Add Shortcut → "Browse apps") ──
+	//
+	// A browsable+searchable catalog backed by the Flathub v2 API (an internal
+	// implementation detail — the UI surfaces NO "Flathub"/"Flatpak" branding).
+	// flathubCategories feeds the category dropdown; flathubBrowse feeds the grid
+	// (popular when no category, else that category collection; paginated);
+	// flathubSearch feeds the search grid (paginated). installFlathub installs via
+	// `flatpak install --user … flathub <appId>` (NO sudo — the unprivileged daemon
+	// user) and persists a tile whose iconUrl is the https catalog URL (so it
+	// PERSISTS). All admin-gated (the Native tab is M4 admin-gated in the UI;
+	// installs are mutations).
+	//
+	// flathubCategories/flathubBrowse/flathubSearch are best-effort, NEVER-throw
+	// QUERIES (an upstream outage must not break the dialog) — the browse/search
+	// queries return {apps:[], hasMore:false} on any failure. Mapping is shared:
+	// {appId, name, summary, iconUrl?} with the app_id filtered to the reverse-DNS
+	// charset. Only the FIRST page of popular is Redis-cached (key
+	// liv:flathub:popular:p1, 6h) — category/other pages are fetched live.
+
+	// flathubCategories — STATIC, no network. Returns the ordered user-facing
+	// category labels (each maps internally to a Flathub MainCategory slug).
+	flathubCategories: adminProcedure.query(async (): Promise<string[]> => {
+		return flathubCategoryLabels()
+	}),
+
+	// flathubBrowse — paginated grid. No/empty category ⇒ the POPULAR collection
+	// (page 1 Redis-cached 6h); a known category label/slug ⇒ that category
+	// collection (live). Returns {apps, hasMore} per the pinned contract.
+	flathubBrowse: adminProcedure
+		.input(
+			z.object({
+				category: z.string().max(64).optional(),
+				page: z.number().int().min(1).max(1000).optional(),
+			}),
+		)
+		.query(async ({ctx, input}): Promise<FlathubPage> => {
+			const page = flathubClampPage(input.page)
+			const slug = flathubSlugForLabel(input.category)
+
+			// Popular page 1 is cached (the hot default the dialog opens on). Any
+			// other page/category is fetched live (never cached). An unknown category
+			// label → slug undefined → falls back to popular (never a 422).
+			const isCachedPopular = !slug && page === 1
+			if (isCachedPopular) {
+				const cacheKey = 'liv:flathub:popular:p1'
+				const r = ctx.livinityd?.ai?.redis as
+					| {get(k: string): Promise<string | null>; set(...a: unknown[]): Promise<unknown>}
+					| undefined
+				const result = await fetchFlathubCollection(undefined, 1)
+				// Only cache a SUCCESSFUL fetch (don't poison the cache with an empty
+				// outage result). On a failed fetch, serve a previously-cached page.
+				if (result.apps.length > 0) {
+					try {
+						await r?.set(cacheKey, JSON.stringify(result), 'EX', 21600)
+					} catch {
+						/* cache write best-effort */
+					}
+					return result
+				}
+				try {
+					const cached = await r?.get(cacheKey)
+					if (cached) return JSON.parse(cached) as FlathubPage
+				} catch {
+					/* cache read best-effort */
+				}
+				return result // {apps:[], hasMore:false}
+			}
+
+			return fetchFlathubCollection(slug, page)
+		}),
+
+	// flathubSearch — paginated full-catalog search. Returns {apps, hasMore} (the
+	// totalPages signal drives "load more"). 5s timeout, never throws.
+	flathubSearch: adminProcedure
+		.input(
+			z.object({
+				query: z.string().min(1).max(128),
+				page: z.number().int().min(1).max(1000).optional(),
+			}),
+		)
+		.query(async ({input}): Promise<FlathubPage> => {
+			const page = flathubClampPage(input.page)
+			try {
+				const controller = new AbortController()
+				const timer = setTimeout(() => controller.abort(), 5000)
+				let json: {hits?: unknown[]; page?: unknown; totalPages?: unknown}
+				try {
+					const res = await fetch('https://flathub.org/api/v2/search', {
+						method: 'POST',
+						headers: {'Content-Type': 'application/json'},
+						body: JSON.stringify({
+							query: input.query,
+							hits_per_page: FLATHUB_PER_PAGE,
+							page,
+						}),
+						signal: controller.signal,
+					})
+					if (!res.ok) throw new Error(`flathub search HTTP ${res.status}`)
+					json = (await res.json()) as typeof json
+				} finally {
+					clearTimeout(timer)
+				}
+				const apps = mapFlathubHits(json.hits)
+				return {apps, hasMore: flathubHasMore(json, apps.length, FLATHUB_PER_PAGE, page)}
+			} catch {
+				return {apps: [], hasMore: false}
+			}
+		}),
+
+	installFlathub: adminProcedure
+		.input(
+			z.object({
+				appId: z
+					.string()
+					.min(1)
+					.max(255)
+					.regex(/^[A-Za-z0-9._][A-Za-z0-9._-]*$/),
+				name: z.string().min(1).max(64).optional(),
+				iconUrl: z.string().max(2048).optional(),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			const store = requireStore(ctx)
+			const pool = getPool()
+			if (!pool) {
+				throw new TRPCError({code: 'SERVICE_UNAVAILABLE', message: 'PostgreSQL pool unavailable'})
+			}
+			const redis = ctx.livinityd?.ai?.redis
+			if (!redis) {
+				throw new TRPCError({code: 'SERVICE_UNAVAILABLE', message: 'redis unavailable'})
+			}
+			const userId = ctx.currentUser?.id ?? 'admin'
+			const installCtx = buildInstallContext({
+				userId,
+				redis,
+				pg: pool,
+				logger: {
+					info: (m: string) => ctx.logger?.log?.(m),
+					warn: (m: string) => ctx.logger?.error?.(m),
+					error: (m: string, extra?: unknown) =>
+						ctx.logger?.error?.(m, extra as Error | undefined),
+				},
+			})
+			const r = await installFlathubApp(input.appId, installCtx, store, {
+				name: input.name,
+				iconUrl: input.iconUrl,
+			})
+			if (!r.ok) {
+				throw new TRPCError({code: 'BAD_REQUEST', message: r.message ?? 'install failed'})
+			}
+			return r
 		}),
 
 	/**

@@ -17,8 +17,10 @@ import {
 	assertAllowedDownloadUrl,
 	installLocalFlatpak,
 	installLocalSnap,
+	installFlathubApp,
 	type InstallLocalAppDeps,
 } from './native-installer.js'
+import type {NativeAppConfig} from './native-app-config.js'
 
 // ── Minimal stubs for the capability-check tests (no real apt/flatpak/snap). ──
 
@@ -247,5 +249,119 @@ describe('installLocalSnap — capability check (snapd not available)', () => {
 		expect(res.ok).toBe(false)
 		expect(res.message).toMatch(/snapd|not available/i)
 		expect(upsert).not.toHaveBeenCalled()
+	})
+})
+
+describe('installFlathubApp (v44.57 — Flathub store install)', () => {
+	// A store stub that CAPTURES the upserted config so we can assert the tile shape.
+	function makeCapturingStore() {
+		const ref: {value?: NativeAppConfig} = {}
+		const store = {
+			upsert: async (cfg: NativeAppConfig) => {
+				ref.value = cfg
+			},
+		} as never
+		return {store, captured: ref}
+	}
+
+	// An exec seam that returns 0 for the `flatpak --version` capability probe and a
+	// SCRIPTED result for the `flatpak install …` step (recordingExec keys by cmd
+	// only, so it can't distinguish the two `flatpak` invocations).
+	function flatpakExec(install: {code: number; stderr?: string}) {
+		const calls: Array<{cmd: string; args: readonly string[]}> = []
+		const exec: NonNullable<InstallLocalAppDeps['exec']> = async (cmd, args) => {
+			calls.push({cmd, args})
+			if (cmd === 'flatpak' && args[0] === '--version') return {code: 0, stdout: '', stderr: ''}
+			if (cmd === 'flatpak' && args[0] === 'install')
+				return {code: install.code, stdout: '', stderr: install.stderr ?? ''}
+			return {code: 0, stdout: '', stderr: ''}
+		}
+		return {calls, exec}
+	}
+
+	it('rejects an invalid app-id WITHOUT calling exec ("../x", "-foo", "a b")', async () => {
+		for (const bad of ['../x', '-foo', 'a b', '', '/etc/passwd']) {
+			const upsert = vi.fn()
+			const exec = vi.fn()
+			const res = await installFlathubApp(
+				bad,
+				makeCtx(),
+				makeStore(upsert),
+				{name: 'X'},
+				{exec: exec as never},
+			)
+			expect(res.ok).toBe(false)
+			expect(res.message).toMatch(/invalid flatpak app id/i)
+			// No spawn, no upsert — validation happens BEFORE the capability probe.
+			expect(exec).not.toHaveBeenCalled()
+			expect(upsert).not.toHaveBeenCalled()
+		}
+	})
+
+	it('returns ok:false WITHOUT installing when flatpak is missing (probe non-zero)', async () => {
+		const upsert = vi.fn()
+		const {calls, exec} = recordingExec({flatpak: {code: 127, stderr: 'command not found'}})
+		const res = await installFlathubApp(
+			'org.gimp.GIMP',
+			makeCtx(),
+			makeStore(upsert),
+			{name: 'GIMP'},
+			{exec},
+		)
+		expect(res.ok).toBe(false)
+		expect(res.message).toMatch(/Flatpak runtime is not installed/i)
+		// Only the `flatpak --version` probe ran — NO `flatpak install`, no upsert.
+		expect(calls).toHaveLength(1)
+		expect(calls[0]).toEqual({cmd: 'flatpak', args: ['--version']})
+		expect(calls.some((c) => c.args.includes('install'))).toBe(false)
+		expect(upsert).not.toHaveBeenCalled()
+	})
+
+	it('surfaces the "flathub remote not set up yet" message on the known stderr', async () => {
+		const {exec} = flatpakExec({code: 1, stderr: 'error: Remote "flathub" not found'})
+		const res = await installFlathubApp('org.gimp.GIMP', makeCtx(), makeStore(), {}, {exec})
+		expect(res.ok).toBe(false)
+		expect(res.message).toMatch(/flathub is still being set up/i)
+	})
+
+	it('returns a clean failure (incl. stderr) on a non-zero install with an unknown error', async () => {
+		const {exec} = flatpakExec({code: 1, stderr: 'error: app org.gimp.GIMP not found in remote'})
+		const res = await installFlathubApp('org.gimp.GIMP', makeCtx(), makeStore(), {}, {exec})
+		expect(res.ok).toBe(false)
+		expect(res.message).toMatch(/Installing the Flathub app failed/i)
+		expect(res.message).toMatch(/not found in remote/)
+	})
+
+	it('success path: builds a /usr/bin/flatpak run <appId> tile with the https iconUrl PERSISTED', async () => {
+		const {store, captured} = makeCapturingStore()
+		const {calls, exec} = flatpakExec({code: 0})
+		const ICON = 'https://dl.flathub.org/media/org/gimp/GIMP/icon.png'
+		const res = await installFlathubApp(
+			'org.gimp.GIMP',
+			makeCtx(),
+			store,
+			{name: 'GIMP', iconUrl: ICON},
+			{exec},
+		)
+		expect(res.ok).toBe(true)
+		expect(res.name).toBe('GIMP')
+		expect(res.nativeConfigId).toBeTruthy()
+
+		// The install command is `flatpak install --user --noninteractive --assumeyes flathub <appId>`.
+		const installCall = calls.find((c) => c.args.includes('install'))
+		expect(installCall).toEqual({
+			cmd: 'flatpak',
+			args: ['install', '--user', '--noninteractive', '--assumeyes', 'flathub', 'org.gimp.GIMP'],
+		})
+
+		// The persisted tile launches via /usr/bin/flatpak run <appId> and KEEPS the https icon.
+		const cfg = captured.value!
+		expect(cfg).toBeTruthy()
+		expect(cfg.binaryPath).toBe('/usr/bin/flatpak')
+		expect(cfg.args).toEqual(['run', 'org.gimp.GIMP'])
+		expect(cfg.iconUrl).toBe(ICON)
+		expect(cfg.name).toBe('GIMP')
+		// dotted app-ids omit the wmClassHint (would fail the wmClass regex).
+		expect(cfg.wmClassHint).toBeUndefined()
 	})
 })

@@ -1286,6 +1286,47 @@ export async function installLocalAppImage(
 }
 
 /**
+ * v44.57 — shared Flatpak capability guard. Returns true iff `flatpak --version`
+ * exits 0. Used by BOTH installLocalFlatpak (uploaded bundle) and installFlathubApp
+ * (Flathub store) so the "is flatpak present?" probe never drifts between paths.
+ * Never throws — a missing binary / thrown spawn both resolve to false.
+ */
+async function checkFlatpakAvailable(
+	exec: typeof execCmd,
+	logger: InstallContext['logger'],
+): Promise<boolean> {
+	try {
+		const {code} = await exec('flatpak', ['--version'], logger)
+		return code === 0
+	} catch {
+		return false
+	}
+}
+
+/**
+ * v44.57 — shared Flatpak tile builder. A Flatpak app launches via
+ * `/usr/bin/flatpak run <appId>`. The flathub https iconUrl (a full dl.flathub.org
+ * URL) satisfies nativeAppConfigSchema.iconUrl so it PERSISTS on the tile — the key
+ * win for the Flathub store. wmClassHint is intentionally OMITTED: dotted flatpak
+ * app-ids (org.gimp.GIMP) fail the wmClass regex /^[\w-]{1,64}$/.
+ */
+function buildFlatpakTile(
+	appId: string,
+	displayName: string,
+	iconUrl?: string,
+): NativeAppConfig {
+	return {
+		id: randomUUID(),
+		name: displayName.slice(0, 64),
+		iconUrl: iconUrl && isSchemaValidIconUrl(iconUrl) ? iconUrl : undefined,
+		binaryPath: '/usr/bin/flatpak',
+		args: ['run', appId],
+		// OMIT wmClassHint — flatpak app-ids contain dots (org.foo.Bar) → fail the
+		// wmClass regex /^[\w-]{1,64}$/.
+	}
+}
+
+/**
  * Phase 290-r? — install an uploaded Flatpak bundle (`.flatpak`). NO sudo: runs
  * as the daemon (desktop) user via `flatpak install --user`. Capability check
  * FIRST (flatpak on PATH), then snapshot the installed app-id set, install, diff
@@ -1303,17 +1344,8 @@ export async function installLocalFlatpak(
 	const fsImpl = deps.fsImpl ?? fs
 	const homeDir = deps.home ?? userHome(ctx.userId)
 
-	// (1) Capability check — flatpak runtime present?
-	try {
-		const {code} = await exec('flatpak', ['--version'], ctx.logger)
-		if (code !== 0) {
-			return {
-				ok: false,
-				name: opts.name ?? 'flatpak app',
-				message: 'Flatpak runtime is not installed yet — click Update on the box, then retry.',
-			}
-		}
-	} catch {
+	// (1) Capability check — flatpak runtime present? (shared guard.)
+	if (!(await checkFlatpakAvailable(exec, ctx.logger))) {
 		return {
 			ok: false,
 			name: opts.name ?? 'flatpak app',
@@ -1396,15 +1428,7 @@ export async function installLocalFlatpak(
 		}
 	}
 
-	const config: NativeAppConfig = {
-		id: randomUUID(),
-		name: displayName,
-		iconUrl: iconUrl && isSchemaValidIconUrl(iconUrl) ? iconUrl : undefined,
-		binaryPath: '/usr/bin/flatpak',
-		args: ['run', appId],
-		// OMIT wmClassHint — flatpak app-ids contain dots (org.foo.Bar) → fail the
-		// wmClass regex /^[\w-]{1,64}$/.
-	}
+	const config = buildFlatpakTile(appId, displayName, iconUrl)
 	try {
 		nativeAppConfigSchema.parse(config)
 	} catch (err) {
@@ -1423,6 +1447,90 @@ export async function installLocalFlatpak(
 		)
 
 	return {ok: true, name: displayName, nativeConfigId: config.id}
+}
+
+// v44.57 — Flathub app-id validator. flatpak refs are CASE-SENSITIVE (org.gimp.GIMP
+// ≠ org.gimp.gimp) so this is case-PRESERVING — do NOT lowercase. Rejects a leading
+// "-" (which would be parsed as a flag by `flatpak install`) and any char outside
+// the reverse-DNS app-id charset.
+const FLATHUB_APP_ID_RE = /^[A-Za-z0-9._][A-Za-z0-9._-]*$/
+
+/**
+ * v44.57 — install a Flathub app by app-id via `flatpak install --user … flathub
+ * <appId>`. NO sudo (runs as the unprivileged daemon/desktop user). The Flathub
+ * https iconUrl is passed straight through to the tile so it PERSISTS (it satisfies
+ * nativeAppConfigSchema.iconUrl — the whole point of the Flathub store). Best-effort
+ * fail-soft: returns {ok:false, message} on any clean failure, NEVER throws for an
+ * input/runtime problem (the route maps !ok → a BAD_REQUEST TRPCError).
+ */
+export async function installFlathubApp(
+	appId: string,
+	ctx: InstallContext,
+	configStore: NativeAppConfigStore,
+	opts: {name?: string; iconUrl?: string} = {},
+	deps: InstallLocalAppDeps = {},
+): Promise<InstallLocalAppResult> {
+	const exec = deps.exec ?? execCmd
+
+	// (a) Validate the app-id BEFORE any spawn — case-preserving, no leading "-".
+	if (!FLATHUB_APP_ID_RE.test(appId)) {
+		return {ok: false, name: opts.name ?? 'flatpak app', message: 'invalid flatpak app id'}
+	}
+
+	// (b) Capability check — flatpak runtime present? (shared guard.)
+	if (!(await checkFlatpakAvailable(exec, ctx.logger))) {
+		return {
+			ok: false,
+			name: opts.name ?? 'flatpak app',
+			message: 'Flatpak runtime is not installed yet — click Update on the box, then retry.',
+		}
+	}
+
+	// (c) Install from the fixed "flathub" remote (--user, non-interactive). NO shell.
+	const {code, stderr} = await exec(
+		'flatpak',
+		['install', '--user', '--noninteractive', '--assumeyes', 'flathub', appId],
+		ctx.logger,
+	)
+	if (code !== 0) {
+		const errText = stderr.trim()
+		if (/remote .*flathub.* not found|No remote refs found/i.test(errText)) {
+			return {
+				ok: false,
+				name: opts.name ?? 'flatpak app',
+				message: 'Flatpak/flathub is still being set up — click Update on the box, then retry.',
+			}
+		}
+		return {
+			ok: false,
+			name: opts.name ?? 'flatpak app',
+			message: `Installing the Flathub app failed (flatpak exit ${code}):\n${errText.slice(0, 800)}`,
+		}
+	}
+
+	// (d) Build the tile — pass the flathub https iconUrl through (it persists!).
+	const displayName = (opts.name?.trim() || appId).slice(0, 64)
+	const config = buildFlatpakTile(appId, displayName, opts.iconUrl)
+	try {
+		// Defense in depth — should always pass (buildFlatpakTile already gates the
+		// iconUrl). Do NOT false-fail an otherwise successful install.
+		nativeAppConfigSchema.parse(config)
+	} catch (err) {
+		ctx.logger.warn(
+			`installFlathubApp: derived config failed schema for ${displayName}: ${err instanceof Error ? err.message : String(err)}`,
+		)
+		return {ok: true, name: displayName}
+	}
+
+	await configStore.upsert(config)
+	const slug = slugifyDebName(appId)
+	await ctx.redis
+		.set(`liv:apps:native-catalog:${slug}`, config.id)
+		.catch((err) =>
+			ctx.logger.error(`installFlathubApp: failed to write catalog mapping for ${slug}`, err),
+		)
+
+	return {ok: true, name: config.name, nativeConfigId: config.id}
 }
 
 /**

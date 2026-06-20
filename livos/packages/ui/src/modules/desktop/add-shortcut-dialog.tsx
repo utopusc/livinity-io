@@ -780,6 +780,96 @@ function NativeTab({active}: {active: boolean}) {
 	const createMut = trpcReact.apps.native.create.useMutation()
 	const installMut = trpcReact.apps.native.installFromHost.useMutation()
 
+	// ── App store (catalog) ─────────────────────────────────────────────────────
+	// A generic, unbranded app store. Browse by category (All = popular) OR search;
+	// the grid accumulates pages and a "Load more" button appends the next page.
+	// Install persists a tile whose iconUrl is a full https catalog URL (so it
+	// satisfies nativeAppConfigSchema.iconUrl and PERSISTS on the tile).
+	type CatalogApp = {appId: string; name: string; summary: string; iconUrl?: string}
+
+	const [fhQuery, setFhQuery] = useState('')
+	const [fhDebounced, setFhDebounced] = useState('')
+	useDebounce(() => setFhDebounced(fhQuery), 300, [fhQuery])
+
+	// Selected category chip. `null` = All (popular collection). Cleared/ignored
+	// while a search is active.
+	const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+
+	const isSearching = fhDebounced.trim().length > 0
+
+	const categoriesQ = trpcReact.apps.native.flathubCategories.useQuery(undefined, {
+		enabled: active,
+		staleTime: 60 * 60 * 1000,
+		retry: false,
+	})
+	const categories = (categoriesQ.data ?? []) as string[]
+
+	// Accumulated-pages state. We reset to page 1 whenever the category OR the
+	// search query changes (the effect below), then APPEND each subsequent page.
+	const [page, setPage] = useState(1)
+	const [accApps, setAccApps] = useState<CatalogApp[]>([])
+	const [hasMore, setHasMore] = useState(false)
+
+	// The "view key" — changes exactly when the result set should reset. While
+	// searching, the category is irrelevant.
+	const viewKey = isSearching ? `s:${fhDebounced.trim()}` : `c:${selectedCategory ?? ''}`
+	const prevViewKeyRef = useRef(viewKey)
+	useEffect(() => {
+		if (prevViewKeyRef.current !== viewKey) {
+			prevViewKeyRef.current = viewKey
+			setPage(1)
+			setAccApps([])
+			setHasMore(false)
+		}
+	}, [viewKey])
+
+	const browseQ = trpcReact.apps.native.flathubBrowse.useQuery(
+		{category: selectedCategory ?? undefined, page},
+		{enabled: active && !isSearching, retry: false, staleTime: 5 * 60 * 1000},
+	)
+	const searchQ = trpcReact.apps.native.flathubSearch.useQuery(
+		{query: fhDebounced.trim(), page},
+		{enabled: active && isSearching, retry: false},
+	)
+	const showing = isSearching ? searchQ : browseQ
+
+	// Append each fetched page into the accumulator (keyed by appId to dedupe).
+	useEffect(() => {
+		const data = showing.data as {apps?: CatalogApp[]; hasMore?: boolean} | undefined
+		if (!data) return
+		const incoming = data.apps ?? []
+		if (page === 1) {
+			setAccApps(incoming)
+		} else {
+			setAccApps((prev) => {
+				const seen = new Set(prev.map((a) => a.appId))
+				return [...prev, ...incoming.filter((a) => !seen.has(a.appId))]
+			})
+		}
+		setHasMore(Boolean(data.hasMore))
+		// `showing.data` identity changes per fetch; page guards the append branch.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [showing.data])
+
+	const installFlathubMut = trpcReact.apps.native.installFlathub.useMutation()
+	const [installingId, setInstallingId] = useState<string | null>(null)
+	const [flathubResult, setFlathubResult] = useState<string | null>(null)
+
+	const installFlathubApp = async (app: {appId: string; name: string; iconUrl?: string}) => {
+		setInstallingId(app.appId)
+		setFlathubResult(null)
+		try {
+			const r = await installFlathubMut.mutateAsync({appId: app.appId, name: app.name, iconUrl: app.iconUrl})
+			setFlathubResult(`Installed ${r.name}.`)
+			await utils.apps.native.list.invalidate().catch(() => {})
+			await utils.apps.native.scanHostApps.invalidate().catch(() => {})
+		} catch (e) {
+			setFlathubResult(`Failed: ${e instanceof Error ? e.message : 'install failed'}`)
+		} finally {
+			setInstallingId(null)
+		}
+	}
+
 	const [query, setQuery] = useState('')
 	const [pkg, setPkg] = useState('')
 	const [installResult, setInstallResult] = useState<string | null>(null)
@@ -929,8 +1019,120 @@ function NativeTab({active}: {active: boolean}) {
 
 	return (
 		<div className='flex flex-col gap-5 pt-2'>
-			{/* Installed-on-device picker. */}
+			{/* App store — browse by category (All = popular) or search, paginated. */}
 			<div className='flex flex-col gap-2'>
+				<p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Browse apps</p>
+				<Input placeholder='Search apps…' value={fhQuery} onValueChange={setFhQuery} />
+
+				{/* Category chips: "All" + one per category. Hidden while searching. */}
+				{!isSearching ? (
+					<div className='flex flex-wrap gap-1.5'>
+						<button
+							type='button'
+							className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+								selectedCategory === null
+									? 'border-gray-400 bg-gray-200 text-gray-900'
+									: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+							}`}
+							onClick={() => setSelectedCategory(null)}
+						>
+							All
+						</button>
+						{categories.map((cat) => (
+							<button
+								key={cat}
+								type='button'
+								className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+									selectedCategory === cat
+										? 'border-gray-400 bg-gray-200 text-gray-900'
+										: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+								}`}
+								onClick={() => setSelectedCategory(cat)}
+							>
+								{cat}
+							</button>
+						))}
+					</div>
+				) : null}
+
+				{showing.isLoading && accApps.length === 0 ? (
+					<p className='py-4 text-center text-sm text-gray-500'>Loading apps…</p>
+				) : showing.isError && accApps.length === 0 ? (
+					<p className='py-4 text-center text-sm text-red-600'>
+						Couldn&apos;t load the app catalog. Check your connection and try again.
+					</p>
+				) : accApps.length === 0 ? (
+					<p className='py-4 text-center text-sm text-gray-500'>
+						{isSearching ? `No results for "${fhDebounced.trim()}".` : 'No apps found.'}
+					</p>
+				) : (
+					<div className='flex max-h-[300px] flex-col gap-1 overflow-y-auto'>
+						{accApps.map((app) => (
+							<div
+								key={app.appId}
+								className='flex items-center gap-3 rounded-md border border-gray-200 bg-white p-2'
+							>
+								<span className='flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50'>
+									{app.iconUrl ? (
+										// eslint-disable-next-line jsx-a11y/alt-text
+										<img
+											src={app.iconUrl}
+											loading='lazy'
+											className='h-8 w-8 object-contain'
+											onError={(e) => {
+												;(e.currentTarget as HTMLImageElement).style.display = 'none'
+											}}
+										/>
+									) : null}
+								</span>
+								<span className='min-w-0 flex-1'>
+									<span className='block truncate text-sm font-medium text-gray-900'>{app.name}</span>
+									{app.summary ? (
+										<span className='block truncate text-[11px] text-gray-500'>{app.summary}</span>
+									) : null}
+								</span>
+								<Button
+									type='button'
+									size='dialog'
+									variant='primary'
+									disabled={installingId !== null}
+									onClick={() => void installFlathubApp(app)}
+								>
+									{installingId === app.appId ? 'Installing…' : 'Install'}
+								</Button>
+							</div>
+						))}
+						{/* Load more — append the next page while the last response hasMore. */}
+						{hasMore ? (
+							<button
+								type='button'
+								disabled={showing.isFetching}
+								className='mt-1 rounded-md border border-gray-200 bg-gray-50 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50'
+								onClick={() => setPage((p) => p + 1)}
+							>
+								{showing.isFetching ? 'Loading…' : 'Load more'}
+							</button>
+						) : null}
+					</div>
+				)}
+				{installingId !== null ? (
+					<p className='text-[11px] text-gray-500'>Installing… this can take a few minutes.</p>
+				) : null}
+				{flathubResult ? (
+					<p
+						className={`text-xs ${
+							flathubResult.startsWith('Failed') || flathubResult.includes('failed')
+								? 'text-red-600'
+								: 'text-emerald-700'
+						}`}
+					>
+						{flathubResult}
+					</p>
+				) : null}
+			</div>
+
+			{/* Installed-on-device picker. */}
+			<div className='flex flex-col gap-2 border-t border-gray-200 pt-4'>
 				<p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Installed on this device</p>
 				<Input placeholder='Search installed apps…' value={query} onValueChange={setQuery} autoFocus={active} />
 				{scanQ.isLoading ? (

@@ -561,6 +561,11 @@ export const httpOnlyPaths = [
 	// Phase 157 round 5 — native-app close (was admin, now privateProcedure
 	// so the stream-window unmount cleanup runs for regular users).
 	'apps.native.close',
+	// v44.57 — Flathub store install (Add Shortcut → Native tab). A long external
+	// `flatpak install --user … flathub <appId>` admin mutation that must survive a
+	// WS reconnect (same rationale as apps.native.create/installFromHost). The
+	// flathubPopular/flathubSearch QUERIES stay on WS — they're cheap reads.
+	'apps.native.installFlathub',
 	// Phase 102-07 - Chrome Master Login tRPC routes (D-102-MASTER-LOGIN-UI).
 	// chromeMaster.startLogin spawns master Chrome on bruce's :0 display.
 	// chromeMaster.reset / .restoreBackup touch /opt/livos/data/chrome-master

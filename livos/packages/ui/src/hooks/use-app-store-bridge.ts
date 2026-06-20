@@ -396,6 +396,58 @@ export function useAppStoreBridge(
 		[reportEvent, sendStatusToIframe, sendToIframe],
 	)
 
+	// v44.59 — Flathub install from the platform/web store. Mirrors
+	// handleInstallV37 MINUS the manifest-guard (Flathub rows carry only a
+	// flatpakAppId marker, no apt manifest) and MINUS the v37Progress poller
+	// (apps.native.installFlathub is a single best-effort mutation — flatpak
+	// install streams to the host; there is no per-app v37Progress channel).
+	//
+	// CRITICAL appId discipline: every iframe reply (progress/status/installed)
+	// echoes the STORE catalog appId (the row's id), but the MUTATION input keys
+	// on the reverse-DNS flatpakAppId (e.g. org.gimp.GIMP). Never mix the two —
+	// the store tracks installed-state by the catalog appId it sent.
+	const handleInstallFlathub = useCallback(
+		async ({
+			appId,
+			flatpakAppId,
+			name,
+			iconUrl,
+		}: {
+			appId: string
+			flatpakAppId: string
+			name?: string
+			iconUrl?: string
+		}) => {
+			sendToIframe({type: 'progress', appId, progress: 0})
+			sendToIframe({type: 'status', apps: [{id: appId, status: 'installing', progress: 0}]})
+			try {
+				const r = await trpcClient.apps.native.installFlathub.mutate({
+					appId: flatpakAppId,
+					name,
+					iconUrl,
+				})
+				if (r.ok) {
+					sendToIframe({type: 'progress', appId, progress: 100})
+					sendToIframe({type: 'installed', appId, success: true})
+					reportEvent(appId, 'install')
+				} else {
+					// installFlathub throws a TRPCError on failure (caught below), so this
+					// branch is defensive — surface in the HOST console like handleInstallV37.
+					console.error('[app-store] flathub install failed for', appId, `(flatpak: ${flatpakAppId})`, r.message)
+					sendToIframe({type: 'installed', appId, success: false, error: r.message})
+				}
+			} catch (err) {
+				const message = err instanceof Error ? err.message : 'flathub install failed'
+				console.error('[app-store] flathub install failed for', appId, `(flatpak: ${flatpakAppId})`, message, err)
+				sendToIframe({type: 'installed', appId, success: false, error: message})
+			} finally {
+				await sendStatusToIframe()
+				utilsRef.current.apps.native.list.invalidate()
+			}
+		},
+		[reportEvent, sendStatusToIframe, sendToIframe],
+	)
+
 	const handleInstall = useCallback(
 		async (appId: string) => {
 			// Phase 43.7: resolve env overrides for this app and prompt the user
@@ -663,14 +715,31 @@ export function useAppStoreBridge(
 							manifest: data.manifest,
 						})
 					} else {
-						handleInstallV37({
-							appId: data.appId,
-							section,
-							name: data.name,
-							category: data.category,
-							manifest: data.manifest,
-							iconUrl: data.iconUrl,
-						})
+						// v44.59 — Flathub apps installed FROM the platform/web store.
+						// The catalog row carries a manifest marker {installMethod:'flathub',
+						// flatpakAppId:'org.gimp.GIMP'} so the box installs via the dedicated
+						// apps.native.installFlathub mutation (no apt manifest-guard, no
+						// v37Progress poller). All other native (apt/curated) / ai / plugin
+						// rows fall through to handleInstallV37 verbatim. manifest is opaque
+						// (unknown) — read the marker via a cast.
+						const m = (data.manifest ?? {}) as {installMethod?: string; flatpakAppId?: string}
+						if (section === 'native' && m.installMethod === 'flathub' && m.flatpakAppId) {
+							handleInstallFlathub({
+								appId: data.appId,
+								flatpakAppId: m.flatpakAppId,
+								name: data.name,
+								iconUrl: data.iconUrl,
+							})
+						} else {
+							handleInstallV37({
+								appId: data.appId,
+								section,
+								name: data.name,
+								category: data.category,
+								manifest: data.manifest,
+								iconUrl: data.iconUrl,
+							})
+						}
 					}
 					break
 				}
@@ -695,6 +764,7 @@ export function useAppStoreBridge(
 		sendStatusToIframe,
 		handleInstall,
 		handleInstallV37,
+		handleInstallFlathub,
 		handleInstallWebappFromCatalog,
 		handleInstallCustomWebapp,
 		handleUninstall,
