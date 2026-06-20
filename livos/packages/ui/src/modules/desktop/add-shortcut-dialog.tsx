@@ -881,6 +881,15 @@ function NativeTab({active}: {active: boolean}) {
 	const [installingId, setInstallingId] = useState<string | null>(null)
 	const [installPct, setInstallPct] = useState(0)
 	const [flathubResult, setFlathubResult] = useState<string | null>(null)
+	// Holds the live progress-poll interval so it's cleared on unmount (the dialog
+	// can close mid-install — React does NOT auto-clear setInterval).
+	const installPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+	useEffect(
+		() => () => {
+			if (installPollRef.current) clearInterval(installPollRef.current)
+		},
+		[],
+	)
 
 	// v44.61 (REQ1) — install with a moving progress bar. The box records progress
 	// under progressId (== the flatpak appId here) into apps.v37Progress; we poll it
@@ -891,10 +900,17 @@ function NativeTab({active}: {active: boolean}) {
 		setFlathubResult(null)
 		let done = false
 		const startedAt = Date.now()
+		// Hard deadline so the poll self-terminates even if the mutation never settles
+		// (mirrors use-app-store-bridge.ts) — bounds any leak instead of polling forever.
+		const POLL_DEADLINE_MS = 10 * 60_000
 		const creepFor = (ms: number) => Math.round(90 * (1 - Math.exp(-ms / 30_000)))
+		const stop = () => {
+			if (installPollRef.current) clearInterval(installPollRef.current)
+			installPollRef.current = null
+		}
 		const poll = setInterval(async () => {
-			if (done) {
-				clearInterval(poll)
+			if (done || Date.now() - startedAt > POLL_DEADLINE_MS) {
+				stop()
 				return
 			}
 			let serverPct = 0
@@ -906,6 +922,7 @@ function NativeTab({active}: {active: boolean}) {
 			}
 			setInstallPct(Math.min(99, Math.max(serverPct, creepFor(Date.now() - startedAt))))
 		}, 1500)
+		installPollRef.current = poll
 		try {
 			const r = await installFlathubMut.mutateAsync({
 				appId: app.appId,
@@ -921,7 +938,7 @@ function NativeTab({active}: {active: boolean}) {
 			setFlathubResult(`Failed: ${e instanceof Error ? e.message : 'install failed'}`)
 		} finally {
 			done = true
-			clearInterval(poll)
+			stop()
 			setInstallingId(null)
 			setInstallPct(0)
 		}
