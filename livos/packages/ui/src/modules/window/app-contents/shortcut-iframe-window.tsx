@@ -58,9 +58,17 @@ export interface ShortcutIframeWindowProps {
 
 export default function ShortcutIframeWindow({shortcutId, route, windowId, title}: ShortcutIframeWindowProps) {
 	const decoded = decodeShortcutRoute(route)
-	// Runtime mode can be switched iframe→browser-stream by the auto-downgrade
-	// watchdog or the always-available manual affordance; it never downgrades.
-	const [mode, setMode] = useState<ShortcutWindowMode>(decoded.mode)
+	// Phase 290 R5 — web shortcuts open as the browser-stream X11 surface ONLY
+	// (XFO/CSP-immune, never a blocked iframe). The earlier iframe fast-path made
+	// frame-deny sites (Notion etc.) render the browser's "This content is blocked"
+	// page, so ANY 'iframe' route — including already-stored rows created before
+	// this change — is forced to the stream at render time. Operator decision:
+	// stream-only for web shortcuts (reliability over the lighter iframe path).
+	// `setMode` is retained for the (now-unreached) iframe escape-hatch code below;
+	// nothing ever sets the mode back to 'iframe'.
+	const [mode, setMode] = useState<ShortcutWindowMode>(
+		decoded.mode === 'iframe' ? 'browser-stream' : decoded.mode,
+	)
 	const [loaded, setLoaded] = useState(false)
 	// INV-1 (FIX B) — after a short settle, ALWAYS surface the "Open as stream"
 	// escape hatch, even when `loaded` is true (an XFO/CSP block still fires
