@@ -7,6 +7,7 @@ import { CategorySection } from './components/category-section';
 import { AppCard } from './components/app-card';
 import { SectionPlaceholder } from './components/section-placeholder';
 import { CustomUrlForm } from './components/custom-url-form';
+import { NativeAppStore } from './components/native-app-store';
 import { CATEGORIES } from './types';
 
 export default function StorePage() {
@@ -67,6 +68,19 @@ export default function StorePage() {
     }
     return grouped;
   }, [sectionApps]);
+
+  // Native section — render the generic desktop-app store (categories +
+  // pagination + search, flatpak installs via the bridge) INSTEAD of the
+  // curated apt/deb Supabase rows. Filtering is implicit: the curated
+  // section==='native' rows (in `apps`/`sectionApps`) are simply never
+  // rendered here — they remain in the data for status round-trips / other
+  // code, they're just not shown in the native view (operator rule #1: all
+  // native apps install via the generic flatpak catalog). This early return
+  // also bypasses the curated loading/search/category branches below, which
+  // are catalog-specific and don't apply to the self-contained store.
+  if (selectedSection === 'native') {
+    return <NativeAppStore />;
+  }
 
   // Loading
   if (loading) {

@@ -733,6 +733,87 @@ button, input { font: inherit; color: inherit; }
 .install-group { display: flex; gap: 6px; }
 .install-group .install { padding: 8px 14px; }
 
+/* =========================================================
+   NATIVE STORE — generic desktop-app store (search + chips +
+   "Load more"). Reuses .card / .grid / .install for the cards;
+   these rules cover only the search box, the category chips, and
+   the load-more row.
+   ========================================================= */
+.nstore-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  height: 44px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  color: var(--fg-mute);
+  margin-bottom: 18px;
+  max-width: 520px;
+  transition: border-color .2s;
+}
+.nstore-search:focus-within { border-color: var(--line-strong); }
+.nstore-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 14px;
+  color: var(--fg);
+}
+.nstore-search input::placeholder { color: var(--fg-faint); }
+.nstore-search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  padding: 2px;
+  color: var(--fg-mute);
+  cursor: pointer;
+  border-radius: var(--r-full);
+}
+.nstore-search-clear:hover { color: var(--fg); }
+
+.nstore-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.nstore-chip {
+  padding: 6px 13px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg-mute);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.nstore-chip:hover { border-color: var(--line-strong); color: var(--fg); }
+.nstore-chip.is-active {
+  background: var(--fg);
+  border-color: var(--fg);
+  color: var(--bg);
+}
+
+.nstore-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 28px;
+}
+.nstore-more .install[disabled] {
+  opacity: 0.6;
+  cursor: progress;
+  pointer-events: none;
+}
+
 /* App icon — for the card; the same shape as iOS app icons */
 .app-icon {
   width: 100%;
