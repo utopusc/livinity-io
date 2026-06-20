@@ -27,11 +27,19 @@ import {
 	updateShortcutInput,
 	deleteShortcutInput,
 	probeFrameableInput,
+	createUserTemplateInput,
+	deleteUserTemplateInput,
 	computeDedupKey,
 	type ShortcutKind,
 	type ShortcutOpenMode,
 	type ShortcutPayload,
 } from './shortcut-schema.js'
+import {
+	listUserTemplates,
+	upsertUserTemplate,
+	deleteUserTemplate,
+	type UserTerminalTemplateRow,
+} from './user-templates-repository.js'
 import {
 	createShortcut,
 	listShortcuts,
@@ -55,6 +63,28 @@ export type Shortcut = {
 	position: number
 	source: string
 	createdAt: Date
+}
+
+// Phase 290 R2 — user terminal template wire shape (camelCase, ISO-ish dates
+// serialize fine over tRPC; the UI reads label/command/hint/iconUrl/cwd).
+export type UserTemplate = {
+	id: string
+	label: string
+	command: string
+	hint: string | null
+	iconUrl: string | null
+	cwd: string | null
+}
+
+function rowToUserTemplate(row: UserTerminalTemplateRow): UserTemplate {
+	return {
+		id: row.id,
+		label: row.label,
+		command: row.command,
+		hint: row.hint,
+		iconUrl: row.iconUrl,
+		cwd: row.cwd,
+	}
 }
 
 function rowToShortcut(row: ShortcutRow): Shortcut {
@@ -102,6 +132,47 @@ const shortcutRouter = router({
 		return TERMINAL_TEMPLATES
 	}),
 
+	// Phase 290 R2 — user-authored, persisted Terminal templates.
+	userTemplates: router({
+		list: privateProcedure.query(async ({ctx}): Promise<UserTemplate[]> => {
+			const userId = ctx.currentUser?.id
+			if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+			const pool = requirePool()
+			const rows = await listUserTemplates(pool, userId)
+			return rows.map(rowToUserTemplate)
+		}),
+
+		create: privateProcedure
+			.input(createUserTemplateInput)
+			.mutation(async ({ctx, input}): Promise<UserTemplate> => {
+				const userId = ctx.currentUser?.id
+				if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+				const pool = requirePool()
+				const row = await upsertUserTemplate(pool, {
+					userId,
+					label: input.label,
+					command: input.command,
+					hint: input.hint ?? null,
+					iconUrl: input.iconUrl ?? null,
+					cwd: input.cwd ?? null,
+				})
+				ctx.logger?.log?.(`shortcut.userTemplates.create user=${userId} id=${row.id}`)
+				return rowToUserTemplate(row)
+			}),
+
+		delete: privateProcedure
+			.input(deleteUserTemplateInput)
+			.mutation(async ({ctx, input}): Promise<{ok: true}> => {
+				const userId = ctx.currentUser?.id
+				if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+				const pool = requirePool()
+				const ok = await deleteUserTemplate(pool, userId, input.id)
+				if (!ok) throw new TRPCError({code: 'NOT_FOUND'})
+				ctx.logger?.log?.(`shortcut.userTemplates.delete user=${userId} id=${input.id}`)
+				return {ok: true}
+			}),
+	}),
+
 	create: privateProcedure
 		.input(createShortcutInput)
 		.mutation(async ({ctx, input}): Promise<Shortcut> => {
@@ -134,11 +205,18 @@ const shortcutRouter = router({
 				const probe = await runProbeFrameable({url: normalizedUrl, isAdmin})
 				openMode = openModeForWeb(probe)
 			} else if (input.kind === 'terminal') {
-				payload = {command: input.payload.command, templateId: input.payload.templateId}
+				// Phase 290 R2 — persist the optional per-shortcut cwd in the JSONB
+				// payload (no schema.sql change); include it in the dedup tuple (L1).
+				payload = {
+					command: input.payload.command,
+					templateId: input.payload.templateId,
+					...(input.payload.cwd ? {cwd: input.payload.cwd} : {}),
+				}
 				dedupKey = computeDedupKey({
 					kind: 'terminal',
 					command: input.payload.command,
 					title: input.title,
+					cwd: input.payload.cwd,
 				})
 				openMode = 'terminal'
 			} else {

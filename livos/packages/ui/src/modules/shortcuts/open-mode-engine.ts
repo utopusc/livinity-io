@@ -40,8 +40,8 @@ export type OpenShortcutDeps = {
 		| undefined
 	/** Opens (or focuses) the Terminal window. */
 	openTerminalWindow?: () => void
-	/** Queues a command to run in a fresh terminal tab. */
-	runInNewTerminalTab?: (command: string) => void
+	/** Queues a command to run in a fresh terminal tab (Phase 290 R2 — optional cwd). */
+	runInNewTerminalTab?: (command: string, cwd?: string) => void
 }
 
 function payloadUrl(payload: unknown): string | null {
@@ -58,6 +58,15 @@ function payloadCommand(payload: unknown): string | null {
 		if (typeof c === 'string' && c.length > 0) return c
 	}
 	return null
+}
+
+/** Phase 290 R2 — extract the optional per-shortcut working directory. */
+function payloadCwd(payload: unknown): string | undefined {
+	if (payload && typeof payload === 'object' && 'cwd' in payload) {
+		const c = (payload as {cwd?: unknown}).cwd
+		if (typeof c === 'string' && c.length > 0) return c
+	}
+	return undefined
 }
 
 /**
@@ -96,7 +105,9 @@ export function openShortcut(shortcut: OpenableShortcut, deps: OpenShortcutDeps)
 			// window manager + terminal-command-queue and gates on the v43 flag (L6).
 			deps.openTerminalWindow?.()
 			if (deps.runInNewTerminalTab) {
-				deps.runInNewTerminalTab(command)
+				// Phase 290 R2 — pass the optional cwd; the queue prefixes
+				// `cd <cwd> && <command>` and delivers into a fresh tab.
+				deps.runInNewTerminalTab(command, payloadCwd(shortcut.payload))
 				return true
 			}
 			console.warn(`[open-mode-engine] terminal shortcut ${shortcut.id}: no terminal queue dep`)

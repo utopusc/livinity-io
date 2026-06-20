@@ -188,6 +188,10 @@ async function fullscreenNativeWindow(
 }
 
 import {router, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
+import {getPool} from '../database/index.js'
+import {scanHostApps as scanHostAppsImpl, type ScannedNativeApp} from './native-scanner.js'
+import {validateAptPackages, APT_PACKAGE_RE} from './native-installer.js'
+import {getDispatcher, buildInstallContext} from './v37-install-service.js'
 import {
 	nativeAppConfigSchema,
 	type NativeAppConfigStore,
@@ -375,6 +379,94 @@ export const nativeAppsRouter = router({
 			const store = requireStore(ctx)
 			const deleted = await store.delete(input.id)
 			return {deleted}
+		}),
+
+	// ─── Phase 290 R2 (R7) — host native-app scan + apt install ──────────────
+	//
+	// scanHostApps: read-only list of installed host apps parsed from .desktop
+	// files (B1 — realpath'd, allow-listed binaryPath). Clicking a result in the
+	// Native tab calls apps.native.create with this binaryPath (passes
+	// nativeAppConfigSchema). The whole Native tab is admin-gated in the UI (M4)
+	// because create/installFromHost are admin mutations.
+	scanHostApps: privateProcedure.query(async (): Promise<ScannedNativeApp[]> => {
+		return scanHostAppsImpl()
+	}),
+
+	// installFromHost: install a host app from a single apt package. H1 — synthesize
+	// a minimal native manifest and hand it to the SAME InstallDispatcher /
+	// NativeInstaller.install() the store uses (which runs #aptInstall + writes the
+	// .desktop + upserts the config). We do NOT also configStore.upsert separately
+	// (no double-create — install()'s tail does it). Admin-gated (privileged sudo apt).
+	installFromHost: adminProcedure
+		.input(
+			z.object({
+				pkg: z.string().min(1).max(128),
+				name: z.string().min(1).max(128),
+				binaryPath: z
+					.string()
+					.regex(/^\/[a-zA-Z0-9_\-./]+$/, 'binaryPath must be an absolute path')
+					.optional(),
+				iconUrl: z.string().max(2048).optional(),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			// Validate the package name BEFORE any spawn (LIVOS-044 charset — no
+			// `-o` hook injection through the apt NOPASSWD wildcard).
+			const pkgErr = validateAptPackages([input.pkg])
+			if (pkgErr) {
+				throw new TRPCError({code: 'BAD_REQUEST', message: pkgErr})
+			}
+			const d = getDispatcher()
+			if (!d) {
+				throw new TRPCError({code: 'SERVICE_UNAVAILABLE', message: 'install dispatcher not initialised'})
+			}
+			const pool = getPool()
+			if (!pool) {
+				throw new TRPCError({code: 'SERVICE_UNAVAILABLE', message: 'PostgreSQL pool unavailable'})
+			}
+			// Default the launch binary to /usr/bin/<pkg> (apt installs land there);
+			// the caller may override with a known absolute path (APT_PACKAGE_RE
+			// already guarantees pkg is safe for a path segment).
+			const binaryPath =
+				input.binaryPath ?? (APT_PACKAGE_RE.test(input.pkg) ? `/usr/bin/${input.pkg}` : '')
+			if (!binaryPath) {
+				throw new TRPCError({code: 'BAD_REQUEST', message: 'could not derive a binary path'})
+			}
+			// H1 — synthesized native manifest (NativeInstaller.parseManifest shape).
+			const manifest = {
+				install: {primary: 'apt' as const, aptPackages: [input.pkg]},
+				launch: {binaryPath},
+				desktopEntry: {name: input.name, icon: input.iconUrl},
+			}
+			const redis = ctx.livinityd?.ai?.redis
+			if (!redis) {
+				throw new TRPCError({code: 'SERVICE_UNAVAILABLE', message: 'redis unavailable'})
+			}
+			const userId = ctx.currentUser?.id ?? 'admin'
+			const installCtx = buildInstallContext({
+				userId,
+				redis,
+				pg: pool,
+				logger: {
+					info: (m: string) => ctx.logger?.log?.(m),
+					warn: (m: string) => ctx.logger?.error?.(m),
+					error: (m: string, extra?: unknown) =>
+						ctx.logger?.error?.(m, extra as Error | undefined),
+				},
+			})
+			const outcome = await d.install(
+				{
+					id: input.pkg,
+					name: input.name,
+					section: 'native',
+					category: 'native',
+					manifest,
+					iconUrl: input.iconUrl,
+				},
+				installCtx,
+				() => {},
+			)
+			return outcome
 		}),
 
 	/**

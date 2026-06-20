@@ -28,7 +28,7 @@ import {createPortal} from 'react-dom'
 import {uuidv7} from 'uuidv7'
 
 import {TerminalTabBar, type TerminalTab} from './TerminalTabBar'
-import {setActiveTerminalSender, setNewTabOpener} from './terminal-command-queue'
+import {registerActiveSenderForTab, setActiveTerminalSender, setNewTabOpener} from './terminal-command-queue'
 import {
 	readAllTabSessions,
 	removeTabSession,
@@ -177,7 +177,12 @@ export default function PersistentTerminalPanel() {
 		setActiveTabKey(tabKey)
 	}, [])
 
-	const onCreate = useCallback(() => {
+	// Phase 290 R2 — onCreate RETURNS the minted tabKey so the terminal-command
+	// queue can address the freshly-created tab specifically (keyed delivery,
+	// never a busy tab). TerminalTabBar's onCreate prop is `() => void` (M3) — a
+	// `() => string` is assignable to it (return-type widening), so the bar usage
+	// below is unchanged; the bar just ignores the returned key.
+	const onCreate = useCallback((): string => {
 		const tabKey = uuidv7()
 		setTabs((prev) => [
 			...prev,
@@ -191,11 +196,14 @@ export default function PersistentTerminalPanel() {
 			},
 		])
 		setActiveTabKey(tabKey)
+		return tabKey
 	}, [])
 
-	// GC-A/GC-B — let the Liv AI CLI-auth/install bridge open a clean new tab
-	// (via requestTerminalCommandInNewTab) so a `<cli> auth login` / install
-	// command never lands in a tab that already has a CLI running.
+	// GC-A/GC-B / Phase 290 R2 — let the Liv AI CLI-auth/install bridge AND the
+	// Add-Shortcut launcher open a clean new tab (via requestTerminalCommandInNewTab)
+	// so a `<cli> auth login` / a launcher command never lands in a tab that
+	// already has a CLI running. The opener returns the minted tabKey (B3: on
+	// register, a command stashed before mount gets a fresh tab immediately).
 	useEffect(() => {
 		setNewTabOpener(onCreate)
 		return () => setNewTabOpener(null)
@@ -635,10 +643,16 @@ function TerminalTabPane({
 	// window finished opening (the freshly opened tab claims it on `ready`).
 	useEffect(() => {
 		if (!isActive || !isLive) return
-		setActiveTerminalSender((command: string) => {
+		const sender = (command: string) => {
 			if (isClosedRef.current) return
 			sendRef.current?.({type: 'data', data: command + '\n'})
-		})
+		}
+		setActiveTerminalSender(sender)
+		// Phase 290 R2 — keyed delivery: if a command was queued for THIS specific
+		// tab (minted by onCreate via requestTerminalCommandInNewTab), deliver it
+		// now and only now. This is what guarantees a launcher/auth command lands
+		// in its own brand-new tab and never in a tab already running a CLI.
+		registerActiveSenderForTab(tabKey, sender)
 		// GC-G — claim xterm DOM focus when this pane becomes the active, live
 		// tab so paste (Ctrl+V / native paste event) works immediately without
 		// the operator having to click inside the terminal first. Also makes a
@@ -661,8 +675,11 @@ function TerminalTabPane({
 				cancelAnimationFrame(raf)
 			}
 			setActiveTerminalSender(null)
+			// Phase 290 R2 — keyed deregister (no-op delivery for a null sender;
+			// the keyed command, if any, was already consumed on register).
+			registerActiveSenderForTab(tabKey, null)
 		}
-	}, [isActive, isLive])
+	}, [isActive, isLive, tabKey])
 
 	return (
 		<>

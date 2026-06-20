@@ -490,6 +490,12 @@ export const httpOnlyPaths = [
 	'shortcut.delete',
 	'shortcut.probeFrameable',
 	'shortcut.terminalTemplates',
+	// Phase 290 R2 — user-authored Terminal templates (same WS-reconnect-survival
+	// rationale as the shortcut.* CRUD cluster: list is a dialog-render
+	// dependency, create/delete are autosave-adjacent mutations).
+	'shortcut.userTemplates.list',
+	'shortcut.userTemplates.create',
+	'shortcut.userTemplates.delete',
 	// v33 Phase 95 — per-WebApp agent session state (webapp_agent_sessions
 	// table). Two procedures:
 	//   - webapp.agent.session.get   — fetched on WebApp window mount; gates

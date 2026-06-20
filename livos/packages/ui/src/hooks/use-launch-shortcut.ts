@@ -35,7 +35,8 @@ export function useLaunchShortcut(): (shortcut: OpenableShortcut) => () => void 
 					systemAppsKeyed['LIVINITY_terminal'].icon,
 				)
 			},
-			runInNewTerminalTab: (command: string) => requestTerminalCommandInNewTab(command),
+			runInNewTerminalTab: (command: string, cwd?: string) =>
+				requestTerminalCommandInNewTab(command, cwd),
 		})
 	}
 }

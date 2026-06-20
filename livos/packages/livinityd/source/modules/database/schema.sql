@@ -758,3 +758,32 @@ CREATE TABLE IF NOT EXISTS shortcuts (
 
 CREATE INDEX IF NOT EXISTS shortcuts_user_position_idx
   ON shortcuts(user_id, position);
+
+-- =========================================================================
+-- Phase 290 R2 — user_terminal_templates table.
+--
+-- Operator-saved Terminal-tab templates (the "Save as template" affordance in
+-- the custom-shell builder). Same B1 rationale as the shortcuts table above:
+-- there is NO migration runner — this DDL is applied at boot by initDatabase()
+-- via the idempotent CREATE TABLE/INDEX IF NOT EXISTS pass.
+--
+-- 100% ADDITIVE. Mirrors the shortcuts/webapps user-scoped shape. The built-in
+-- TERMINAL_TEMPLATES (terminal-templates.ts) stay code-only; these are the
+-- USER-authored ones merged into the same dialog grid. UNIQUE(user_id, label)
+-- makes "Save as template" idempotent via ON CONFLICT DO UPDATE.
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS user_terminal_templates (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  label      TEXT NOT NULL,
+  command    TEXT NOT NULL,
+  hint       TEXT,
+  icon_url   TEXT,
+  cwd        TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, label)
+);
+
+CREATE INDEX IF NOT EXISTS user_terminal_templates_user_updated_idx
+  ON user_terminal_templates(user_id, updated_at DESC);

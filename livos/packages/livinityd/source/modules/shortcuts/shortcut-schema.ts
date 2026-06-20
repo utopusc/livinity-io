@@ -39,9 +39,20 @@ export const webPayloadSchema = z.object({
 })
 export type WebPayload = z.infer<typeof webPayloadSchema>
 
+// H4 — `cwd` is advisory (it runs in the user's own PTY, no escalation) but
+// must be length-bounded AND reject control chars (\n / \r / \0) that could
+// inject extra shell lines when the launcher prefixes `cd <cwd> && <command>`.
+const cwdField = z
+	.string()
+	.max(2048)
+	.refine((v) => !/[\n\r\0]/.test(v), {message: 'cwd must not contain newlines or NUL'})
+
 export const terminalPayloadSchema = z.object({
 	command: z.string().min(1).max(2000),
 	templateId: z.string().max(64).optional(),
+	// Phase 290 R2 — optional per-shortcut working directory. Stored in the JSONB
+	// payload (no schema.sql change); the launcher runs `cd <cwd> && <command>`.
+	cwd: cwdField.optional(),
 })
 export type TerminalPayload = z.infer<typeof terminalPayloadSchema>
 
@@ -63,7 +74,11 @@ export type ShortcutPayload = WebPayload | TerminalPayload | LocalPayload
 // server-side (web → probeFrameable; terminal → 'terminal'; local → 'local-port').
 
 const titleField = z.string().min(1).max(256)
-const iconUrlField = z.string().min(1).max(2048)
+// Phase 290 R3 — iconUrl may be an http(s) URL OR a `data:` URL (custom icon
+// upload). A 256 KB image base64-encodes to ~350 KB; cap at 512000 chars so a
+// data-URL icon fits while still bounding the column (H2/H3). `.min(1)` keeps
+// the icon mandatory (#3 — no blank tiles).
+const iconUrlField = z.string().min(1).max(512000)
 
 export const createShortcutInput = z.discriminatedUnion('kind', [
 	z.object({
@@ -100,6 +115,21 @@ export const deleteShortcutInput = z.object({id: z.string().uuid()})
 
 export const probeFrameableInput = z.object({url: z.string().url().max(2048)})
 
+// ── User terminal templates (Phase 290 R2) ───────────────────────────────
+//
+// H2 — bounds mirror terminalPayloadSchema: label ≤256, command ≤2000, cwd
+// ≤2048 + control-char reject (cwdField), iconUrl bounded (≤512000, optional).
+export const createUserTemplateInput = z.object({
+	label: z.string().min(1).max(256),
+	command: z.string().min(1).max(2000),
+	hint: z.string().max(512).optional(),
+	iconUrl: z.string().max(512000).optional(),
+	cwd: cwdField.optional(),
+})
+export type CreateUserTemplateInput = z.infer<typeof createUserTemplateInput>
+
+export const deleteUserTemplateInput = z.object({id: z.string().uuid()})
+
 // ── dedup_key derivation (M2) ────────────────────────────────────────────
 
 function sha256(input: string): string {
@@ -113,14 +143,16 @@ function sha256(input: string): string {
  */
 export function computeDedupKey(args:
 	| {kind: 'web'; normalizedUrl: string}
-	| {kind: 'terminal'; command: string; title: string}
+	| {kind: 'terminal'; command: string; title: string; cwd?: string}
 	| {kind: 'local'; appId: string; path: string; title: string},
 ): string {
 	switch (args.kind) {
 		case 'web':
 			return sha256(`web|${args.normalizedUrl}`)
 		case 'terminal':
-			return sha256(`terminal|${args.command}|${args.title}`)
+			// L1 — include cwd in the tuple so the same command in two different
+			// working directories is two distinct shortcuts (not deduped away).
+			return sha256(`terminal|${args.command}|${args.title}|${args.cwd ?? ''}`)
 		case 'local':
 			return sha256(`local|${args.appId}|${args.path}|${args.title}`)
 	}

@@ -135,6 +135,14 @@ function isNoCorsFaviconSrc(src: string): boolean {
 }
 
 function analyzeIcon(src: string): Promise<IconAnalysisState> {
+	// Phase 290 R2 (H3) — custom-icon `data:` URLs (up to the 256 KB upload cap)
+	// must NOT be analyzed or cached: canvas analysis is pointless for a data URL
+	// and keying analysisCache by the entire (huge) data-URL string would grow the
+	// module-level Map unbounded as the user adds custom-icon shortcuts. Treat
+	// them as 'blocked' (→ logo mode, the 80%-on-frost treatment) WITHOUT caching.
+	if (src.startsWith('data:')) {
+		return Promise.resolve<IconAnalysisState>({status: 'blocked'})
+	}
 	const cached = analysisCache.get(src)
 	if (cached) return cached
 	// Phase 271-C — skip canvas analysis for known no-ACAO favicon hosts: the
