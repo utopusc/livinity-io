@@ -70,6 +70,8 @@ import {
 import {syncRepo, copyComposeToStackDir} from '../docker/git-deploy.js'
 
 import fileApi from '../files/api.js'
+// Phase 290 R3 (REQ3b) — gated freedesktop icon proxy for the Native tab.
+import nativeIconApi from '../apps/native-icon-api.js'
 import {mountUsageCaptureMiddleware} from '../usage-tracking/index.js'
 import {mountBearerAuthMiddleware} from '../api-keys/bearer-auth.js'
 // Phase 169-05 — Vault Graph routes mount. Reuses livinityd.server.verifyToken
@@ -1973,6 +1975,9 @@ class Server {
 			return api
 		}
 		this.app.use('/api/files', createApi(fileApi))
+		// Phase 290 R3 (REQ3b) — gated freedesktop icon proxy (Native tab real
+		// icons). Reuses the privateApi LIVINITY_PROXY_TOKEN gate above.
+		this.app.use('/api/native', createApi(nativeIconApi))
 
 		// ── Usage Capture Middleware (Phase 44 — wraps /u/:userId/v1/* OUTSIDE broker) ──
 		// Per Phase 44 D-44-04..06: capture lives in usage-tracking/, NOT in livinity-broker.

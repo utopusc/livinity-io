@@ -2432,6 +2432,29 @@ if command -v redis-cli >/dev/null 2>&1; then
     fi
 fi
 
+# ── v43 terminal panel: enable the new (v43) PTY backend (Phase 290 R3 B2) ──
+# The desktop UI now renders the v43 terminal panel UNCONDITIONALLY (the legacy
+# terminal can no longer mount). But the v43 PTY WebSocket backend
+# (/livos/terminal/ws) is gated server-side by the Redis flag
+# livos:v43:terminal_panel — and when it is unset/false the server refuses the
+# socket, so the panel renders but the shell is BLANK. Seed the flag to true
+# here, every update, so the new terminal has a live shell after Update.
+# Idempotent (GET then SET only when needed) and fully fail-tolerant: every
+# redis-cli is `|| true` so this can NEVER abort the Update.
+if command -v redis-cli >/dev/null 2>&1; then
+    _V43_RURL=$(grep -E '^REDIS_URL=' /opt/livos/.env 2>/dev/null | cut -d= -f2- || true)
+    if [[ -n "${_V43_RURL:-}" ]]; then
+        _V43_RPW=$(echo "$_V43_RURL" | sed -E 's|redis://[^:]*:([^@]+)@.*|\1|')
+        _V43_CUR=$(redis-cli -a "$_V43_RPW" --no-auth-warning GET livos:v43:terminal_panel 2>/dev/null || true)
+        if [[ "$_V43_CUR" != "true" ]]; then
+            redis-cli -a "$_V43_RPW" --no-auth-warning SET livos:v43:terminal_panel true >/dev/null 2>&1 || true
+            ok "Enabled livos:v43:terminal_panel (new terminal PTY backend live)"
+        else
+            info "livos:v43:terminal_panel already enabled"
+        fi
+    fi
+fi
+
 info "Restarting liv-core..."
 systemctl restart liv-core.service
 sleep 1

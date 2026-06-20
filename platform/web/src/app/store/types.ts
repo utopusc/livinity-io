@@ -3,7 +3,12 @@ export type Section = 'app' | 'webapp' | 'native' | 'ai' | 'plugin';
 
 export const SECTIONS: { key: Section; label: string; tagline: string }[] = [
   { key: 'app', label: 'Apps', tagline: 'Self-hosted Docker apps' },
-  { key: 'webapp', label: 'Web Apps', tagline: 'Hosted services as desktop windows' },
+  // Phase 290 R3 REQ8 — the `webapp` ("Web Apps") tab was removed from the
+  // store strip: the unified "Add Shortcut" launcher on the LivOS desktop now
+  // covers hosted web apps. `'webapp'` is intentionally KEPT in the `Section`
+  // union (above) + server-side VALID_SECTIONS so already-installed webapp rows
+  // still round-trip status without a tsc cascade or 500. store-provider.tsx
+  // also guards `?section=webapp` deep-links → falls back to 'app'.
   { key: 'native', label: 'Native', tagline: 'Linux desktop apps' },
   // Phase 289 WS-C — the `ai` tab (MCP + AI) was removed from the store strip
   // per operator requirements #4 + #6. `'ai'` is intentionally KEPT in the

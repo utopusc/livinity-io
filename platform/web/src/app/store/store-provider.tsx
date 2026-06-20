@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { AppSummary, Section, StoreContextValue, StoreSort } from './types';
+import { SECTIONS } from './types';
 import { usePostMessage } from './hooks/use-post-message';
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -41,9 +42,17 @@ function StoreProviderInner({
   // detail page back to /store. Only read once at mount; subsequent
   // changes happen through setSelectedSection.
   const sectionHint = searchParams.get('section');
-  const initialSection: Section = VALID_SECTIONS.includes(sectionHint as Section)
-    ? (sectionHint as Section)
-    : 'app';
+  // Phase 290 R3 REQ8 / M3 — deep-link guard. The hint must be BOTH a valid
+  // `Section` (server still round-trips it) AND a section that currently has a
+  // visible tab in SECTIONS. A removed-but-still-valid section like 'webapp'
+  // (?section=webapp, an orphaned link from before the tab was removed) would
+  // otherwise render an empty strip / placeholder, so fall back to 'app'.
+  const VISIBLE_SECTIONS = SECTIONS.map((s) => s.key);
+  const initialSection: Section =
+    VALID_SECTIONS.includes(sectionHint as Section) &&
+    VISIBLE_SECTIONS.includes(sectionHint as Section)
+      ? (sectionHint as Section)
+      : 'app';
 
   // Phase 289 WS-B — seed from the RSC server-prefetch so the real catalog
   // paints on first render. When seeded, start with loading=false so a seeded

@@ -33,10 +33,36 @@ export type ScannedNativeApp = {
 	binaryPath: string
 	/** Raw .desktop Icon= value (bare name OR path OR url) — UI resolves it. */
 	icon?: string
+	/**
+	 * Phase 290 R3 (REQ3c) — a ready-to-render icon URL derived from the raw
+	 * `Icon=` value:
+	 *   - http(s) URL          → passed through unchanged
+	 *   - absolute path        → `/api/native/icon-file?path=<enc>` (gated proxy)
+	 *   - bare freedesktop name → `/api/native/icon/<enc(name)>`     (gated proxy)
+	 * The proxy routes (server/index.ts) realpath-gate the served file. Absent
+	 * when the entry has no `Icon=`.
+	 */
+	iconUrl?: string
 	/** Optional StartupWMClass hint. */
 	wmClassHint?: string
 	/** Source .desktop path (diagnostics). */
 	desktopPath: string
+}
+
+/**
+ * Phase 290 R3 (REQ3c) — map a raw `.desktop` `Icon=` value to a ready-to-render
+ * icon URL. Pure; exported for unit tests.
+ *   - http(s) URL          → unchanged
+ *   - absolute path        → `/api/native/icon-file?path=<enc>`
+ *   - bare freedesktop name → `/api/native/icon/<enc(name)>`
+ */
+export function iconValueToUrl(icon: string | undefined): string | undefined {
+	if (!icon) return undefined
+	const raw = icon.trim()
+	if (!raw) return undefined
+	if (/^https?:\/\//i.test(raw)) return raw
+	if (raw.startsWith('/')) return `/api/native/icon-file?path=${encodeURIComponent(raw)}`
+	return `/api/native/icon/${encodeURIComponent(raw)}`
 }
 
 // ── .desktop parsing (pure; exported for unit tests) ─────────────────────────
@@ -238,7 +264,11 @@ export function buildScannedApp(
 		binaryPath,
 		desktopPath,
 	}
-	if (fields.icon) out.icon = fields.icon.slice(0, 512)
+	if (fields.icon) {
+		out.icon = fields.icon.slice(0, 512)
+		const iconUrl = iconValueToUrl(out.icon)
+		if (iconUrl) out.iconUrl = iconUrl
+	}
 	if (fields.startupWmClass && /^[\w-]{1,64}$/.test(fields.startupWmClass)) {
 		out.wmClassHint = fields.startupWmClass
 	}

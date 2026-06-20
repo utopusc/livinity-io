@@ -10,6 +10,7 @@ import {
 	extractExecBinary,
 	resolveBinaryPath,
 	buildScannedApp,
+	iconValueToUrl,
 } from './native-scanner.js'
 
 const HOME = '/home/tester'
@@ -155,5 +156,46 @@ describe('buildScannedApp (full B1 gate)', () => {
 
 	it('drops an entry with no Name', () => {
 		expect(buildScannedApp({type: 'Application', exec: 'gimp'}, 'a', deps)).toBeNull()
+	})
+
+	it('populates iconUrl from a bare Icon= (REQ3c — gated proxy)', () => {
+		const app = buildScannedApp(
+			{type: 'Application', name: 'GIMP', exec: 'gimp %U', icon: 'gimp'},
+			'/usr/share/applications/gimp.desktop',
+			deps,
+		)
+		expect(app!.iconUrl).toBe('/api/native/icon/gimp')
+	})
+
+	it('omits iconUrl when there is no Icon= key', () => {
+		const app = buildScannedApp(
+			{type: 'Application', name: 'GIMP', exec: 'gimp %U'},
+			'/usr/share/applications/gimp.desktop',
+			deps,
+		)
+		expect(app!.iconUrl).toBeUndefined()
+	})
+})
+
+describe('iconValueToUrl (REQ3c — Icon= → render URL)', () => {
+	it('maps a bare freedesktop name to the gated icon route', () => {
+		expect(iconValueToUrl('gimp')).toBe('/api/native/icon/gimp')
+	})
+
+	it('maps an absolute path to the gated icon-file route', () => {
+		expect(iconValueToUrl('/opt/foo/icon.png')).toBe(
+			'/api/native/icon-file?path=' + encodeURIComponent('/opt/foo/icon.png'),
+		)
+	})
+
+	it('passes http(s) URLs through unchanged', () => {
+		expect(iconValueToUrl('https://cdn.example.com/x.svg')).toBe('https://cdn.example.com/x.svg')
+		expect(iconValueToUrl('http://example.com/y.png')).toBe('http://example.com/y.png')
+	})
+
+	it('returns undefined for empty / absent', () => {
+		expect(iconValueToUrl(undefined)).toBeUndefined()
+		expect(iconValueToUrl('')).toBeUndefined()
+		expect(iconValueToUrl('   ')).toBeUndefined()
 	})
 })

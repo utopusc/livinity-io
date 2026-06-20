@@ -1,7 +1,6 @@
 import React, {Suspense} from 'react'
 
 import {Loading} from '@/components/ui/loading'
-import {useTerminalPanelEnabled} from '@/hooks/use-terminal-panel-enabled'
 import {SHORTCUT_APP_ID_PREFIX, isShortcutKind} from '@/modules/shortcuts/shortcut-window-route'
 import {tw} from '@/utils/tw'
 
@@ -11,12 +10,12 @@ const FilesWindowContent = React.lazy(() => import('./app-contents/files-content
 const SettingsWindowContent = React.lazy(() => import('./app-contents/settings-content'))
 const DockerWindowContent = React.lazy(() => import('./app-contents/docker-content'))
 const ServerControlWindowContent = React.lazy(() => import('./app-contents/server-control-content'))
-// Phase 243-03 — terminal route swap. The legacy `terminal-content.tsx`
-// surface (LivOS/App tabs, XTermTerminal reading from /terminal?token= WS)
-// stays as the OFF-state fallback (D-243-FLAG-ROLLBACK). The new
-// `PersistentTerminalPanel` (xterm.js + /livos/terminal/ws cookie auth)
-// replaces it when the `livos:v43:terminal_panel` flag is `'true'`.
-const LegacyTerminalWindowContent = React.lazy(() => import('./app-contents/terminal-content'))
+// Phase 243-03 / Phase 290 REQ5 — terminal route. The new
+// `PersistentTerminalPanel` (xterm.js + /livos/terminal/ws cookie auth) is now
+// the ONLY terminal surface. The legacy `terminal-content.tsx` surface
+// (LivOS/App tabs, XTermTerminal reading from /terminal?token= WS) is no longer
+// imported/rendered here so it can never mount — the prior flag-gated fallback
+// flashed legacy on cold open while `useTerminalPanelEnabled` defaulted false.
 const PersistentTerminalPanel = React.lazy(
 	() => import('@/features/v43-terminal/PersistentTerminalPanel'),
 )
@@ -105,28 +104,22 @@ type WindowContentProps = {
 const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', LIV_ASSISTANT_APP_ID])
 
 /**
- * Phase 243-03 — Terminal route shell. Swaps between the new persistent
- * xterm.js panel and the legacy LivOS/App-tabs terminal based on the
- * `livos:v43:terminal_panel` Redis flag (read via the tRPC query that
- * backs `useTerminalPanelEnabled`).
+ * Phase 243-03 / Phase 290 REQ5 — Terminal route shell. Mounts the persistent
+ * xterm.js panel (v43) UNCONDITIONALLY. The legacy LivOS/App-tabs terminal is
+ * no longer reachable here: the prior `useTerminalPanelEnabled()` flag branch
+ * defaulted `false` while the backing tRPC query loaded, so legacy flashed on
+ * cold open before flipping to v43. Dropping the branch (and the legacy import)
+ * means only the v43 panel can ever mount. The lazy child stays wrapped in its
+ * own Suspense boundary so the outer WindowContent Suspense doesn't double-fire.
  *
- * Both branches use lazy-loaded children wrapped in their own Suspense
- * boundary so the outer WindowContent Suspense (which gates the parent
- * import resolution) doesn't double-fire on flag toggle.
- *
- * Legacy fallback is intentional — flipping the flag back to `'false'`
- * (or removing it) restores the pre-Phase-243 surface live without code
- * revert (D-243-FLAG-ROLLBACK).
+ * NOTE: the server PTY backend (`/livos/terminal/ws`) is still gated by the
+ * `livos:v43:terminal_panel` Redis flag — update.sh (REQ5) sets it `true` so
+ * the WS path is live on Update.
  */
 function TerminalRouteShell() {
-	const enabled = useTerminalPanelEnabled()
-	return enabled ? (
+	return (
 		<Suspense fallback={<Loading />}>
 			<PersistentTerminalPanel />
-		</Suspense>
-	) : (
-		<Suspense fallback={<Loading />}>
-			<LegacyTerminalWindowContent />
 		</Suspense>
 	)
 }

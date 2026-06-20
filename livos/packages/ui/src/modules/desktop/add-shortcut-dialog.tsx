@@ -17,14 +17,21 @@ import {useDebounce} from 'react-use'
 
 import {MiniBrowser} from '@/features/files/components/mini-browser'
 import {useCurrentUser} from '@/hooks/use-current-user'
-import {useTerminalPanelEnabled} from '@/hooks/use-terminal-panel-enabled'
 import {Button} from '@/shadcn-components/ui/button'
 import {Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle} from '@/shadcn-components/ui/dialog'
 import {Input} from '@/shadcn-components/ui/input'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/shadcn-components/ui/tabs'
 import {trpcReact} from '@/trpc/trpc'
 
+import {normalizeAptInput} from './apt-input'
 import {IconPicker} from './icon-picker'
+import {
+	TERMINAL_TEMPLATE_CATEGORIES,
+	TERMINAL_TEMPLATE_LIBRARY,
+	terminalTemplateIconUrl,
+	type TerminalTemplateCategory,
+	type TerminalTemplateLibraryEntry,
+} from './terminal-template-library'
 import {WEB_APP_CATALOG, WEB_APP_CATEGORIES, webAppIconUrl, type WebAppCategory} from './web-app-catalog'
 
 const TERMINAL_ICON = '/figma-exports/dock-terminal.svg'
@@ -46,6 +53,22 @@ function normalizeUrlInput(raw: string): string | null {
 		return u.toString()
 	} catch {
 		return null
+	}
+}
+
+// Mirror of the server `nativeAppConfigSchema` iconUrl gate (native-app-config.ts):
+// a full http(s) URL OR a root-relative path with NO query string. The native
+// `/api/native/icon-file?path=…` proxy URL is renderable as an <img> but does
+// NOT match this, so it's omitted from `apps.native.create` (REQ3d) to avoid a
+// schema rejection.
+const NATIVE_ROOT_RELATIVE_RE = /^\/[A-Za-z0-9_\-./]*$/
+function isSchemaValidNativeIconUrl(v: string): boolean {
+	if (v.startsWith('/')) return NATIVE_ROOT_RELATIVE_RE.test(v)
+	try {
+		new URL(v)
+		return true
+	} catch {
+		return false
 	}
 }
 
@@ -353,18 +376,17 @@ function CustomUrlForm({onClose}: {onClose: () => void}) {
 // ── Terminal tab ────────────────────────────────────────────────────────────
 
 function TerminalTab({onClose, active}: {onClose: () => void; active: boolean}) {
-	const terminalEnabled = useTerminalPanelEnabled()
 	const utils = trpcReact.useUtils()
 	const createMut = trpcReact.shortcut.create.useMutation()
 	const saveTplMut = trpcReact.shortcut.userTemplates.create.useMutation()
 	const deleteTplMut = trpcReact.shortcut.userTemplates.delete.useMutation()
 
 	const templatesQ = trpcReact.shortcut.terminalTemplates.useQuery(undefined, {
-		enabled: active && terminalEnabled,
+		enabled: active,
 		staleTime: 5 * 60 * 1000,
 	})
 	const userTemplatesQ = trpcReact.shortcut.userTemplates.list.useQuery(undefined, {
-		enabled: active && terminalEnabled,
+		enabled: active,
 		staleTime: 30 * 1000,
 	})
 
@@ -375,6 +397,8 @@ function TerminalTab({onClose, active}: {onClose: () => void; active: boolean}) 
 	const [templateId, setTemplateId] = useState<string | undefined>(undefined)
 	const [selectedFlags, setSelectedFlags] = useState<{flag: string; description: string}[] | null>(null)
 	const [pickerOpen, setPickerOpen] = useState(false)
+	// REQ4 — the professional 80+ template library, toggled by the '+'/More tile.
+	const [showLibrary, setShowLibrary] = useState(false)
 
 	const builtins = templatesQ.data ?? []
 	const selectedBuiltin = builtins.find((t) => t.id === templateId)
@@ -389,6 +413,7 @@ function TerminalTab({onClose, active}: {onClose: () => void; active: boolean}) 
 		setIcon(TERMINAL_ICON)
 		setTemplateId(undefined)
 		setSelectedFlags(null)
+		setShowLibrary(false)
 		createMut.reset()
 	}
 
@@ -407,6 +432,16 @@ function TerminalTab({onClose, active}: {onClose: () => void; active: boolean}) 
 		if (tpl.cwd) setCwd(tpl.cwd)
 		setSelectedFlags(null)
 		setTemplateId(undefined)
+	}
+
+	// REQ4 — library entries are NOT server builtins; pre-fill + CLEAR templateId.
+	const applyLibraryEntry = (entry: TerminalTemplateLibraryEntry) => {
+		setCommand(entry.command)
+		setTitle(entry.name)
+		setIcon(terminalTemplateIconUrl(entry))
+		setSelectedFlags(null)
+		setTemplateId(undefined)
+		setShowLibrary(false)
 	}
 
 	const handleSubmit = async () => {
@@ -446,18 +481,6 @@ function TerminalTab({onClose, active}: {onClose: () => void; active: boolean}) 
 		}
 	}
 
-	if (!terminalEnabled) {
-		return (
-			<div className='flex flex-col gap-2 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600'>
-				<p className='font-medium text-gray-900'>Enable the new terminal first</p>
-				<p className='text-xs'>
-					Terminal shortcuts run a command in the persistent terminal, which is currently off on
-					this device. Once it&apos;s enabled, this tab lets you save one-click command tiles.
-				</p>
-			</div>
-		)
-	}
-
 	return (
 		<div className='flex flex-col gap-4 pt-2 sm:flex-row sm:gap-6'>
 			{/* Left — form. */}
@@ -491,8 +514,27 @@ function TerminalTab({onClose, active}: {onClose: () => void; active: boolean}) 
 								<span className='w-full truncate text-[11px] text-gray-700'>{tpl.label}</span>
 							</button>
 						))}
+						{/* REQ4 — '+'/More tile opens the 80+ professional template library. */}
+						<button
+							type='button'
+							className={`flex flex-col items-center gap-1.5 rounded-lg border border-dashed p-2 text-center transition-colors ${
+								showLibrary
+									? 'border-gray-400 bg-gray-100'
+									: 'border-gray-300 bg-white hover:bg-gray-50'
+							}`}
+							title='Browse more templates'
+							onClick={() => setShowLibrary((v) => !v)}
+						>
+							<span className='flex h-8 w-8 items-center justify-center rounded-md bg-gray-100 text-lg leading-none text-gray-500'>
+								+
+							</span>
+							<span className='w-full truncate text-[11px] text-gray-700'>More</span>
+						</button>
 					</div>
 				</div>
+
+				{/* REQ4 — searchable, category-filtered, A-Z template library. */}
+				{showLibrary ? <TemplateLibraryPanel onPick={applyLibraryEntry} /> : null}
 
 				{/* R6 — user-saved templates. */}
 				{(userTemplatesQ.data?.length ?? 0) > 0 ? (
@@ -632,6 +674,100 @@ function TerminalTab({onClose, active}: {onClose: () => void; active: boolean}) 
 	)
 }
 
+// ── Terminal template library panel (REQ4) ─────────────────────────────────
+//
+// Searchable, category-filtered, A-Z list of the 80+ professional templates.
+// Each row = dashboard-icons logo (jsDelivr CDN, M4) + name + muted command +
+// description. Clicking a row pre-fills the editor via `onPick` (which clears
+// the server templateId — these are NOT builtins).
+
+function TemplateLibraryPanel({onPick}: {onPick: (entry: TerminalTemplateLibraryEntry) => void}) {
+	const [search, setSearch] = useState('')
+	const [category, setCategory] = useState<TerminalTemplateCategory | 'All'>('All')
+
+	const rows = useMemo(() => {
+		const q = search.trim().toLowerCase()
+		return TERMINAL_TEMPLATE_LIBRARY.filter((e) => {
+			if (category !== 'All' && e.category !== category) return false
+			if (!q) return true
+			return (
+				e.name.toLowerCase().includes(q) ||
+				e.command.toLowerCase().includes(q) ||
+				e.description.toLowerCase().includes(q)
+			)
+		}).sort((a, b) => a.name.localeCompare(b.name))
+	}, [search, category])
+
+	return (
+		<div className='flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3'>
+			<Input placeholder='Search templates…' value={search} onValueChange={setSearch} />
+
+			<div className='flex flex-wrap gap-1.5'>
+				<button
+					type='button'
+					className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+						category === 'All'
+							? 'border-gray-400 bg-gray-200 text-gray-900'
+							: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+					}`}
+					onClick={() => setCategory('All')}
+				>
+					All
+				</button>
+				{TERMINAL_TEMPLATE_CATEGORIES.map((cat) => (
+					<button
+						key={cat}
+						type='button'
+						className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+							category === cat
+								? 'border-gray-400 bg-gray-200 text-gray-900'
+								: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+						}`}
+						onClick={() => setCategory(cat)}
+					>
+						{cat}
+					</button>
+				))}
+			</div>
+
+			<div className='flex max-h-[300px] flex-col gap-1 overflow-y-auto'>
+				{rows.length === 0 ? (
+					<p className='py-4 text-center text-sm text-gray-500'>No matching templates.</p>
+				) : (
+					rows.map((entry) => (
+						<button
+							key={entry.name}
+							type='button'
+							className='flex items-center gap-3 rounded-md border border-transparent bg-white p-2 text-left transition-colors hover:border-gray-200 hover:bg-gray-100'
+							onClick={() => onPick(entry)}
+							title={`Use: ${entry.command}`}
+						>
+							<span className='flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50'>
+								{/* eslint-disable-next-line jsx-a11y/alt-text */}
+								<img
+									src={terminalTemplateIconUrl(entry)}
+									loading='lazy'
+									className='h-6 w-6 object-contain'
+									onError={(e) => {
+										;(e.currentTarget as HTMLImageElement).src = TERMINAL_ICON
+									}}
+								/>
+							</span>
+							<span className='min-w-0 flex-1'>
+								<span className='flex items-baseline gap-2'>
+									<span className='truncate text-sm font-medium text-gray-900'>{entry.name}</span>
+									<code className='truncate text-[11px] text-gray-500'>{entry.command}</code>
+								</span>
+								<span className='block truncate text-[11px] text-gray-500'>{entry.description}</span>
+							</span>
+						</button>
+					))
+				)}
+			</div>
+		</div>
+	)
+}
+
 // ── Native tab (admin-only, M4) ─────────────────────────────────────────────
 
 function NativeTab({active}: {active: boolean}) {
@@ -664,12 +800,12 @@ function NativeTab({active}: {active: boolean}) {
 			await createMut.mutateAsync({
 				id: crypto.randomUUID(),
 				name: app.name.slice(0, 64),
-				// Native icons are http/root-relative or a bare freedesktop name (B1 —
-				// never a data-URL). Only forward a schema-valid icon; else omit so the
-				// tile shows a placeholder rather than failing nativeAppConfigSchema.
-				...(app.icon && (app.icon.startsWith('/') || /^https?:\/\//.test(app.icon))
-					? {iconUrl: app.icon}
-					: {}),
+				// REQ3d — forward the scanner-resolved `iconUrl` (the gated proxy URL or
+				// http(s) URL), never a data-URL (B1). Only forward when it would satisfy
+				// nativeAppConfigSchema; the `/api/native/icon-file?path=…` query-string
+				// form is still rendered as an <img> below but is omitted from create so
+				// it can't 400 the mutation.
+				...(app.iconUrl && isSchemaValidNativeIconUrl(app.iconUrl) ? {iconUrl: app.iconUrl} : {}),
 				binaryPath: app.binaryPath,
 				...(app.wmClassHint ? {wmClassHint: app.wmClassHint} : {}),
 			})
@@ -683,7 +819,9 @@ function NativeTab({active}: {active: boolean}) {
 	}
 
 	const handleInstall = async () => {
-		const p = pkg.trim()
+		// REQ2 — accept a bare pkg OR a pasted full command; reduce to the first
+		// package token ON SUBMIT (the server validates a single token, no spaces).
+		const p = normalizeAptInput(pkg)
 		if (!p) return
 		setInstallResult(null)
 		try {
@@ -725,20 +863,21 @@ function NativeTab({active}: {active: boolean}) {
 								className='flex flex-col items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 p-2 text-center transition-colors hover:bg-gray-100 disabled:opacity-50'
 								title={app.binaryPath}
 							>
-								<span className='flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-white'>
-									{app.icon && (app.icon.startsWith('/') || /^https?:\/\//.test(app.icon)) ? (
+								<span className='relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-white'>
+									<span className='absolute text-[9px] text-gray-400'>app</span>
+									{app.iconUrl ? (
+										// REQ3d — render the scanner-resolved iconUrl; onError hides the
+										// <img> so the placeholder behind it shows through.
 										// eslint-disable-next-line jsx-a11y/alt-text
 										<img
-											src={app.icon}
+											src={app.iconUrl}
 											loading='lazy'
-											className='h-6 w-6 object-contain'
+											className='relative h-6 w-6 object-contain'
 											onError={(e) => {
-												;(e.currentTarget as HTMLImageElement).style.visibility = 'hidden'
+												;(e.currentTarget as HTMLImageElement).style.display = 'none'
 											}}
 										/>
-									) : (
-										<span className='text-[9px] text-gray-400'>app</span>
-									)}
+									) : null}
 								</span>
 								<span className='w-full truncate text-[11px] text-gray-700'>
 									{addedId === app.id ? 'Adding…' : app.name}
@@ -756,7 +895,11 @@ function NativeTab({active}: {active: boolean}) {
 			<div className='flex flex-col gap-2 border-t border-gray-200 pt-4'>
 				<p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Install via apt</p>
 				<div className='flex items-center gap-2'>
-					<Input placeholder='package name, e.g. gimp' value={pkg} onValueChange={setPkg} />
+					<Input
+						placeholder='gimp  (or paste: sudo apt install gimp)'
+						value={pkg}
+						onValueChange={setPkg}
+					/>
 					<Button
 						type='button'
 						size='dialog'
@@ -768,7 +911,8 @@ function NativeTab({active}: {active: boolean}) {
 					</Button>
 				</div>
 				<p className='text-[11px] text-gray-500'>
-					Installs the package with apt (needs sudo). Catalog/apt only — no arbitrary scripts.
+					One package name, or paste a "sudo apt install &lt;pkg&gt;" command — we&apos;ll clean it up.
+					apt only, no scripts.
 				</p>
 				{installResult ? (
 					<p className={`text-xs ${installResult.startsWith('Failed') || installResult.includes('failed') ? 'text-red-600' : 'text-emerald-700'}`}>

@@ -21,6 +21,7 @@ import {TRPCError} from '@trpc/server'
 import {privateProcedure, router} from '../server/trpc/trpc.js'
 import {getPool} from '../database/index.js'
 import {validateUrl} from '../webapps/url-validator.js'
+import {fileUserContext, type FileUserInfo} from '../files/files.js'
 
 import {
 	createShortcutInput,
@@ -106,6 +107,73 @@ function requirePool() {
 	const pool = getPool()
 	if (!pool) throw new TRPCError({code: 'SERVICE_UNAVAILABLE', message: 'database not initialised'})
 	return pool
+}
+
+// Phase 290 R3 (REQ1 / B1 / M1 / L1) — convert the optional per-shortcut cwd
+// from a LivOS-virtual path (`/Home/projects`) to the REAL filesystem path the
+// shell can `cd` into (`${dataDir}/home/projects`, per-user via the Files
+// module). The folder picker yields a virtual path, but the field is ALSO
+// free-text, so a user may type a real absolute path (`/usr/local/projects`).
+//
+// Rules:
+//   - undefined/empty cwd → undefined (no cwd persisted).
+//   - cwd that is already a REAL absolute path that exists on disk OR does NOT
+//     start with a known virtual base (`/Home`, `/Apps`, …) → pass through
+//     UNCHANGED (M1 — never mangle a real path into `[invalid-base]`).
+//   - otherwise convert via Files.virtualToSystemPath inside the per-user
+//     fileUserContext (B1 — the conversion is single-arg, identity comes from
+//     AsyncLocalStorage). On throw / `[invalid-base]` → drop cwd + log (L1).
+//
+// `virtualToSystemPath` is SINGLE-ARG; we wrap it in fileUserContext.run so a
+// non-admin's cwd resolves under their own users/<username>/home subtree (the
+// same withFileUser pattern as files/routes.ts:7).
+const VIRTUAL_BASES = ['/Home', '/Trash', '/Apps', '/External', '/Backups', '/Network'] as const
+
+function startsWithVirtualBase(p: string): boolean {
+	return VIRTUAL_BASES.some((base) => p === base || p.startsWith(`${base}/`))
+}
+
+async function resolveTerminalCwd(args: {
+	cwd: string | undefined
+	currentUser?: {username: string; role: string}
+	virtualToSystemPath: (p: string) => Promise<string>
+	logger?: {log?: (message?: string) => void}
+}): Promise<string | undefined> {
+	const {cwd, currentUser, virtualToSystemPath, logger} = args
+	if (!cwd || cwd.trim().length === 0) return undefined
+	const trimmed = cwd.trim()
+
+	// M1 — a real absolute path that is NOT under a known virtual base is passed
+	// through unchanged (never fed to virtualToSystemPath, which would reject it
+	// with [invalid-base]). A virtual base like /Home is converted below.
+	if (trimmed.startsWith('/') && !startsWithVirtualBase(trimmed)) {
+		return trimmed
+	}
+
+	// Anything not starting with '/' is neither a virtual nor a real absolute
+	// path — drop it rather than guess.
+	if (!trimmed.startsWith('/')) {
+		logger?.log?.(`shortcut.create: dropping non-absolute cwd '${trimmed}'`)
+		return undefined
+	}
+
+	const userInfo: FileUserInfo | undefined = currentUser
+		? {username: currentUser.username, role: currentUser.role as FileUserInfo['role']}
+		: undefined
+
+	try {
+		const real = await fileUserContext.run(userInfo, () => virtualToSystemPath(trimmed))
+		if (!real || real.includes('[invalid-base]')) {
+			logger?.log?.(`shortcut.create: dropping cwd '${trimmed}' (invalid base)`)
+			return undefined
+		}
+		return real
+	} catch (err) {
+		logger?.log?.(
+			`shortcut.create: dropping cwd '${trimmed}' (virtualToSystemPath threw: ${err instanceof Error ? err.message : String(err)})`,
+		)
+		return undefined
+	}
 }
 
 const shortcutRouter = router({
@@ -207,16 +275,30 @@ const shortcutRouter = router({
 			} else if (input.kind === 'terminal') {
 				// Phase 290 R2 — persist the optional per-shortcut cwd in the JSONB
 				// payload (no schema.sql change); include it in the dedup tuple (L1).
+				//
+				// Phase 290 R3 (REQ1) — the folder picker yields a LivOS-virtual path
+				// (`/Home/projects`). Convert it to the REAL fs path BEFORE persisting
+				// AND before using it in the dedup tuple — the SAME converted value for
+				// both, so re-adding the same shortcut stays idempotent.
+				const files = ctx.livinityd?.files
+				const realCwd = files
+					? await resolveTerminalCwd({
+							cwd: input.payload.cwd,
+							currentUser: ctx.currentUser,
+							virtualToSystemPath: (p) => files.virtualToSystemPath(p),
+							logger: ctx.logger,
+						})
+					: undefined
 				payload = {
 					command: input.payload.command,
 					templateId: input.payload.templateId,
-					...(input.payload.cwd ? {cwd: input.payload.cwd} : {}),
+					...(realCwd ? {cwd: realCwd} : {}),
 				}
 				dedupKey = computeDedupKey({
 					kind: 'terminal',
 					command: input.payload.command,
 					title: input.title,
-					cwd: input.payload.cwd,
+					cwd: realCwd,
 				})
 				openMode = 'terminal'
 			} else {
