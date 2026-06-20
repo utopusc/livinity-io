@@ -12,6 +12,13 @@ export type WebAppCatalogEntry = {
 	category: WebAppCategory
 	/** dashboard-icons slug (→ https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/<slug>.svg). */
 	slug: string
+	/**
+	 * v44.52 — explicit icon URL override. Used for apps whose dashboard-icons
+	 * `/svg/<slug>.svg` does NOT exist (probed 403 → would 404 to a blank
+	 * placeholder). These fall back to a reliable favicon service so every
+	 * catalog tile shows a REAL icon. When unset, the dashboard-icons SVG is used.
+	 */
+	iconUrl?: string
 }
 
 export type WebAppCategory =
@@ -27,8 +34,11 @@ export type WebAppCategory =
 
 const CDN = 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg'
 
-export function webAppIconUrl(slug: string): string {
-	return `${CDN}/${slug}.svg`
+/** Reliable favicon fallback for catalog entries whose dashboard-icons SVG is absent. */
+const faviconUrl = (host: string) => `https://icons.duckduckgo.com/ip3/${host}.ico`
+
+export function webAppIconUrl(entry: {slug: string; iconUrl?: string}): string {
+	return entry.iconUrl ?? `${CDN}/${entry.slug}.svg`
 }
 
 // ~55 entries. Slugs verified against the dashboard-icons naming convention
@@ -40,7 +50,7 @@ export const WEB_APP_CATALOG: ReadonlyArray<WebAppCatalogEntry> = [
 	{name: 'Google Docs', url: 'https://docs.google.com', category: 'Productivity', slug: 'google-docs'},
 	{name: 'Google Sheets', url: 'https://sheets.google.com', category: 'Productivity', slug: 'google-sheets'},
 	{name: 'Google Calendar', url: 'https://calendar.google.com', category: 'Productivity', slug: 'google-calendar'},
-	{name: 'Trello', url: 'https://trello.com', category: 'Productivity', slug: 'trello'},
+	{name: 'Trello', url: 'https://trello.com', category: 'Productivity', slug: 'trello', iconUrl: faviconUrl('trello.com')},
 	{name: 'Asana', url: 'https://asana.com', category: 'Productivity', slug: 'asana'},
 	{name: 'Todoist', url: 'https://todoist.com', category: 'Productivity', slug: 'todoist'},
 	{name: 'Obsidian', url: 'https://obsidian.md', category: 'Productivity', slug: 'obsidian'},
@@ -50,7 +60,7 @@ export const WEB_APP_CATALOG: ReadonlyArray<WebAppCatalogEntry> = [
 	// ── Developer ───────────────────────────────────────────────────────────────
 	{name: 'GitHub', url: 'https://github.com', category: 'Developer', slug: 'github'},
 	{name: 'GitLab', url: 'https://gitlab.com', category: 'Developer', slug: 'gitlab'},
-	{name: 'Stack Overflow', url: 'https://stackoverflow.com', category: 'Developer', slug: 'stackoverflow'},
+	{name: 'Stack Overflow', url: 'https://stackoverflow.com', category: 'Developer', slug: 'stackoverflow', iconUrl: faviconUrl('stackoverflow.com')},
 	{name: 'Vercel', url: 'https://vercel.com', category: 'Developer', slug: 'vercel'},
 	{name: 'Netlify', url: 'https://netlify.com', category: 'Developer', slug: 'netlify'},
 	{name: 'Cloudflare', url: 'https://dash.cloudflare.com', category: 'Developer', slug: 'cloudflare'},
@@ -92,18 +102,18 @@ export const WEB_APP_CATALOG: ReadonlyArray<WebAppCatalogEntry> = [
 	{name: 'Gemini', url: 'https://gemini.google.com', category: 'AI', slug: 'google-gemini'},
 	{name: 'Perplexity', url: 'https://perplexity.ai', category: 'AI', slug: 'perplexity'},
 	{name: 'Hugging Face', url: 'https://huggingface.co', category: 'AI', slug: 'hugging-face'},
-	{name: 'Midjourney', url: 'https://midjourney.com', category: 'AI', slug: 'midjourney'},
+	{name: 'Midjourney', url: 'https://midjourney.com', category: 'AI', slug: 'midjourney', iconUrl: faviconUrl('midjourney.com')},
 
 	// ── Design ───────────────────────────────────────────────────────────────────
 	{name: 'Figma', url: 'https://figma.com', category: 'Design', slug: 'figma'},
-	{name: 'Canva', url: 'https://canva.com', category: 'Design', slug: 'canva'},
+	{name: 'Canva', url: 'https://canva.com', category: 'Design', slug: 'canva', iconUrl: faviconUrl('canva.com')},
 	{name: 'Excalidraw', url: 'https://excalidraw.com', category: 'Design', slug: 'excalidraw'},
-	{name: 'Dribbble', url: 'https://dribbble.com', category: 'Design', slug: 'dribbble'},
+	{name: 'Dribbble', url: 'https://dribbble.com', category: 'Design', slug: 'dribbble', iconUrl: faviconUrl('dribbble.com')},
 
 	// ── Finance ──────────────────────────────────────────────────────────────────
 	{name: 'PayPal', url: 'https://paypal.com', category: 'Finance', slug: 'paypal'},
 	{name: 'Stripe', url: 'https://dashboard.stripe.com', category: 'Finance', slug: 'stripe'},
-	{name: 'Wise', url: 'https://wise.com', category: 'Finance', slug: 'wise'},
+	{name: 'Wise', url: 'https://wise.com', category: 'Finance', slug: 'wise', iconUrl: faviconUrl('wise.com')},
 
 	// ── Storage ──────────────────────────────────────────────────────────────────
 	{name: 'Google Drive', url: 'https://drive.google.com', category: 'Storage', slug: 'google-drive'},

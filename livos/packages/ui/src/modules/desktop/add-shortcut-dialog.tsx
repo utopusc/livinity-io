@@ -148,7 +148,7 @@ function WebTab({onClose, active}: {onClose: () => void; active: boolean}) {
 			await createMut.mutateAsync({
 				kind: 'web',
 				title: entry.name,
-				iconUrl: webAppIconUrl(entry.slug),
+				iconUrl: webAppIconUrl(entry),
 				payload: {url: entry.url},
 			})
 			await utils.shortcut.list.invalidate()
@@ -187,7 +187,7 @@ function WebTab({onClose, active}: {onClose: () => void; active: boolean}) {
 									<span className='flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-white'>
 										{/* eslint-disable-next-line jsx-a11y/alt-text */}
 										<img
-											src={webAppIconUrl(entry.slug)}
+											src={webAppIconUrl(entry)}
 											loading='lazy'
 											className='h-6 w-6 object-contain'
 											onError={(e) => {

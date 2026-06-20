@@ -194,7 +194,7 @@ import {validateAptPackages, APT_PACKAGE_RE} from './native-installer.js'
 import {getDispatcher, buildInstallContext} from './v37-install-service.js'
 import {
 	nativeAppConfigSchema,
-	type NativeAppConfigStore,
+	NativeAppConfigStore,
 } from './native-app-config.js'
 import {spawnNativeApp} from './native-app-spawner.js'
 import {bind, closeNativeApp, inferWmClass, type StreamStartFn} from './native-app-binder.js'
@@ -307,15 +307,27 @@ export function _clearActiveNativeForTest(): void {
 
 // Helpers
 
-function requireStore(ctx: {livinityd?: {nativeAppConfigStore?: NativeAppConfigStore | null}}): NativeAppConfigStore {
+function requireStore(ctx: {
+	livinityd?: {nativeAppConfigStore?: NativeAppConfigStore | null; ai?: {redis?: unknown}}
+}): NativeAppConfigStore {
 	const store = ctx.livinityd?.nativeAppConfigStore
-	if (!store) {
-		throw new TRPCError({
-			code: 'INTERNAL_SERVER_ERROR',
-			message: 'Native app store not initialized (Redis unavailable?)',
-		})
+	if (store) return store
+	// v44.52 resilience — the eager wiring in index.ts (this.nativeAppConfigStore,
+	// set right after the boot Promise.all) can be ABSENT at request time if boot
+	// degraded after :8080 was already bound (the documented post-await boot race
+	// where a later init line throws but the Express listener is up, leaving fields
+	// unset). At REQUEST time Redis has long since connected (ioredis auto-reconnect;
+	// Docker apps prove it's live), so build the store on demand from the live redis.
+	// NativeAppConfigStore is a thin stateless wrapper over the redis ref, so
+	// constructing one per call is cheap and correct.
+	const redis = ctx.livinityd?.ai?.redis
+	if (redis) {
+		return new NativeAppConfigStore(redis as ConstructorParameters<typeof NativeAppConfigStore>[0])
 	}
-	return store
+	throw new TRPCError({
+		code: 'INTERNAL_SERVER_ERROR',
+		message: 'Native app store not initialized (Redis unavailable?)',
+	})
 }
 
 function requireStreamManager(ctx: {livinityd?: {streamManager?: StreamManager | null}}): StreamManager {
