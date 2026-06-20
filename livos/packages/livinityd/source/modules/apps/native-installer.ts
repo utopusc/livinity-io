@@ -128,6 +128,17 @@ const APT_CONFOLD: readonly string[] = ['-o', 'Dpkg::Options::=--force-confold']
 // `bruce` NOPASSWD on exactly this path so the installer never needs broad root.
 const LIVOS_ADD_APT_REPO = '/usr/local/lib/livos/livos-add-apt-repo.sh'
 
+// Phase 290-r4 (INV-4) — apt prints "E: Unable to locate package <x>" (and exits
+// 100) when a name isn't an apt package at all (e.g. `discord`, which ships as a
+// .deb/Flatpak/Snap). Detect *only* that case from stderr — exit 100 ALSO covers
+// dpkg-lock / broken-deps / repo-fetch failures, so we never blanket-map the code.
+const APT_PKG_NOT_FOUND_RE =
+	/Unable to locate package|Couldn't find any package|has no installation candidate|Package .* is not available/i
+// Human, actionable message for the not-found case. Keep the literal pkg out of
+// it (stderr still carries it in the InstallError cause arg for diagnostics).
+const APT_PKG_NOT_FOUND_MESSAGE =
+	'This package is not available via apt — it likely ships as a .deb, Flatpak, or Snap (not supported here yet). Try the "Installed on this device" picker, or add it as a Web or Terminal shortcut.'
+
 // Redis key holding the platform API key (mirrors apps.ts REDIS_PLATFORM_API_KEY).
 const REDIS_PLATFORM_API_KEY = 'livos:platform:api_key'
 
@@ -532,11 +543,16 @@ export class NativeInstaller implements InstallHandler<'native'> {
 			const {code, stderr} = await this.#aptInstall(pkgs, ctx.logger)
 			if (code !== 0) {
 				const sudoDenied = stderr.includes('sudo:') || stderr.includes('password is required')
+				const message = sudoDenied
+					? `apt-get install -y ${pkgs.join(' ')} exited ${code}`
+					: APT_PKG_NOT_FOUND_RE.test(stderr)
+						? APT_PKG_NOT_FOUND_MESSAGE
+						: `apt-get install -y ${pkgs.join(' ')} exited ${code}`
 				return fail(
 					app.id,
 					'native',
 					sudoDenied ? 'sudo_denied' : 'apt_failed',
-					`apt-get install -y ${pkgs.join(' ')} exited ${code}`,
+					message,
 					stderr,
 				)
 			}
@@ -581,7 +597,11 @@ export class NativeInstaller implements InstallHandler<'native'> {
 			await fs.unlink(tmpDeb).catch(() => {})
 			if (code !== 0) {
 				const sudoDenied = stderr.includes('sudo:') || stderr.includes('password is required')
-				return fail(app.id, 'native', sudoDenied ? 'sudo_denied' : 'apt_failed', `apt-get install -y <deb> exited ${code}`, stderr)
+				const message =
+					!sudoDenied && APT_PKG_NOT_FOUND_RE.test(stderr)
+						? APT_PKG_NOT_FOUND_MESSAGE
+						: `apt-get install -y <deb> exited ${code}`
+				return fail(app.id, 'native', sudoDenied ? 'sudo_denied' : 'apt_failed', message, stderr)
 			}
 		} else if (manifest.install.primary === 'apt-repo') {
 			// Apps distributed via a 3rd-party APT repo (Brave, Signal, Spotify, …).
@@ -708,11 +728,15 @@ export class NativeInstaller implements InstallHandler<'native'> {
 			if (code !== 0) {
 				const sudoDenied =
 					stderr.includes('sudo:') || stderr.includes('password is required')
+				const message =
+					!sudoDenied && APT_PKG_NOT_FOUND_RE.test(stderr)
+						? APT_PKG_NOT_FOUND_MESSAGE
+						: `apt-get install -y ${aptPackages.join(' ')} exited ${code}`
 				return fail(
 					app.id,
 					'native',
 					sudoDenied ? 'sudo_denied' : 'apt_failed',
-					`apt-get install -y ${aptPackages.join(' ')} exited ${code}`,
+					message,
 					stderr,
 				)
 			}

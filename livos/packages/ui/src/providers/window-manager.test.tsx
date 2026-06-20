@@ -148,8 +148,64 @@ describe('window-manager — Phase 254-03 openWindow suggested size', () => {
 
     it('DISPLAY_ windows preserve aspect (isDisplay branch threaded into getResponsiveSize)', () => {
         // appId.startsWith('DISPLAY_') must drive a preserve-aspect getResponsiveSize call.
+        // The preserveAspect arg accreted more kinds over time (isNative added
+        // post-254, isShortcut added in Phase 290 / INV-2). Assert isWebApp,
+        // isDisplay and `suggested != null` all participate without pinning the
+        // exact term order (which earlier broke when isNative was inserted).
         expect(SRC).toMatch(/appId\.startsWith\('DISPLAY_'\)/)
-        expect(SRC).toMatch(/getResponsiveSize\([^)]*isWebApp \|\| isDisplay \|\| suggested != null\)/)
+        expect(SRC).toMatch(/getResponsiveSize\([^)]*isWebApp[^)]*isDisplay[^)]*suggested != null\)/)
+    })
+})
+
+// Phase 290 (INV-2) — a SHORTCUT_<id> window must open at the SAME 1280x720
+// 16:9 aspect-preserved size as a normal WebApp window, in BOTH iframe and
+// browser-stream modes. Pre-INV-2 the openWindow size chain had no shortcut
+// branch, so a SHORTCUT_ appId fell through to DEFAULT_WINDOW_SIZES.default
+// ({900,600}) with preserveAspect=false — opening too small and letterboxing
+// the browser-stream. (The window-content fullHeight chain already used
+// isShortcutKind; this locks the SIZE chain too.)
+//
+// Source-text invariants (the established harness for this provider — full
+// jsdom render needs trpc+router wiring). Each would FAIL against pre-INV-2
+// code (no isShortcut local, default fallthrough, no isShortcut in the clamp).
+describe('window-manager — Phase 290 INV-2 shortcut window size', () => {
+    it('imports the shortcut-kind helper from the shared route module', () => {
+        // Prefer the shared SHORTCUT_APP_ID_PREFIX-backed helper over a
+        // hardcoded 'SHORTCUT_' literal so the prefix stays single-sourced.
+        expect(SRC).toMatch(/import \{isShortcutKind\} from '@\/modules\/shortcuts\/shortcut-window-route'/)
+    })
+
+    it('derives isShortcut via isShortcutKind(appId)', () => {
+        expect(SRC).toMatch(/const isShortcut = isShortcutKind\(appId\)/)
+    })
+
+    it('gives a shortcut the SAME 1280x720 base as a webapp (isWebApp || isShortcut arm)', () => {
+        // The 1280x720 baseSize arm must fire for shortcuts too, not just
+        // webapps — otherwise a shortcut falls through to the default lookup.
+        expect(SRC).toMatch(/\(isWebApp \|\| isShortcut\)\s*\n\s*\? \{width: 1280, height: 720\}/)
+    })
+
+    it('preserves aspect for shortcuts (isShortcut threaded into getResponsiveSize)', () => {
+        // The preserveAspect argument (4th param of getResponsiveSize) must
+        // include isShortcut so the 1280x720 base is clamped 16:9, matching a
+        // webapp and fixing the browser-stream letterboxing.
+        expect(SRC).toMatch(/getResponsiveSize\([^)]*isShortcut[^)]*suggested != null\)/)
+    })
+
+    it('does NOT let a shortcut fall through to the default {900,600} window size (regression-lock)', () => {
+        // Lock the divergence from the generic default. The baseSize ternary's
+        // default arm (DEFAULT_WINDOW_SIZES[appId] || DEFAULT_WINDOW_SIZES.default)
+        // must be reached ONLY after the webapp/shortcut arm — i.e. isShortcut
+        // appears textually before the DEFAULT_WINDOW_SIZES.default fallback in
+        // the baseSize selection.
+        const baseSizeBlock = SRC.match(/const baseSize = suggested \?\?[\s\S]*?DEFAULT_WINDOW_SIZES\.default\)\)/)
+        expect(baseSizeBlock).not.toBeNull()
+        const body = baseSizeBlock![0]
+        const shortcutIdx = body.indexOf('isShortcut')
+        const defaultIdx = body.indexOf('DEFAULT_WINDOW_SIZES.default')
+        expect(shortcutIdx).toBeGreaterThan(-1)
+        expect(defaultIdx).toBeGreaterThan(-1)
+        expect(shortcutIdx).toBeLessThan(defaultIdx)
     })
 })
 

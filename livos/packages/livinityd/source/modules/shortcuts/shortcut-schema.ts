@@ -107,6 +107,10 @@ export const updateShortcutInput = z.object({
 	patch: z.object({
 		title: titleField.optional(),
 		iconUrl: iconUrlField.optional(),
+		// INV-1 (FIX B) — let the UI PERSIST a runtime iframe→browser-stream
+		// downgrade so an XFO-blocked Web shortcut sticks as a stream on next open.
+		// Validated to the same ShortcutOpenMode enum the create path uses.
+		openMode: z.enum(SHORTCUT_OPEN_MODES).optional(),
 	}),
 })
 export type UpdateShortcutInput = z.infer<typeof updateShortcutInput>

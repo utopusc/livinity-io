@@ -337,7 +337,38 @@ const shortcutRouter = router({
 			const patch: {title?: string; iconUrl?: string} = {}
 			if ('title' in input.patch && input.patch.title !== undefined) patch.title = input.patch.title
 			if ('iconUrl' in input.patch && input.patch.iconUrl !== undefined) patch.iconUrl = input.patch.iconUrl
-			const updated = await updateShortcut(pool, userId, input.id, patch)
+			let updated = await updateShortcut(pool, userId, input.id, patch)
+
+			// INV-1 (FIX B persist) — the repository patch only knows title/iconUrl;
+			// persist an open_mode downgrade (iframe→browser-stream from the runtime
+			// "Open as stream" affordance) with a scoped, user-bound UPDATE here so a
+			// frame-deny Web shortcut sticks as a stream on next open. Additive — the
+			// column already exists (created at create time).
+			if ('openMode' in input.patch && input.patch.openMode !== undefined) {
+				const {rows} = await pool.query(
+					`UPDATE shortcuts SET open_mode = $1
+					 WHERE id = $2 AND user_id = $3
+					 RETURNING id, user_id, kind, title, icon_url, open_mode, payload, position, source, created_at`,
+					[input.patch.openMode, input.id, userId],
+				)
+				if (rows.length > 0) {
+					const r = rows[0]
+					updated = {
+						id: r.id,
+						userId: r.user_id,
+						kind: r.kind,
+						title: r.title,
+						iconUrl: r.icon_url,
+						openMode: r.open_mode,
+						payload: r.payload,
+						dedupKey: '', // not selected; not part of the wire shape
+						position: r.position,
+						source: r.source,
+						createdAt: r.created_at instanceof Date ? r.created_at : new Date(r.created_at),
+					}
+				}
+			}
+
 			if (!updated) {
 				const exists = await findShortcutById(pool, userId, input.id)
 				if (!exists) throw new TRPCError({code: 'NOT_FOUND'})

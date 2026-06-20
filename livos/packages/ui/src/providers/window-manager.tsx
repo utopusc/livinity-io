@@ -1,5 +1,6 @@
 import React, {createContext, useCallback, useContext, useEffect, useReducer, useRef} from 'react'
 
+import {isShortcutKind} from '@/modules/shortcuts/shortcut-window-route'
 import {trpcReact} from '@/trpc/trpc'
 
 // Types
@@ -427,6 +428,12 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		const isWebApp = appId.startsWith('WEBAPP_')
 		const isNative = appId.startsWith('NATIVE_')
 		const isDisplay = appId.startsWith('DISPLAY_')
+		// Phase 290 (INV-2) — a SHORTCUT_<id> window (iframe OR browser-stream
+		// mode) takes the SAME 1280x720 16:9 base + aspect-preserved clamp as a
+		// normal WebApp window. Without this it fell through to the generic
+		// DEFAULT_WINDOW_SIZES.default {900,600} with no aspect preservation,
+		// which letterboxed the browser-stream and opened too small.
+		const isShortcut = isShortcutKind(appId)
 		// Native windows are sized a touch larger (+2px each axis) so that the
 		// CONTENT area, once the 1px window border is subtracted on each side, is
 		// exactly the 1280x720 16:9 stream — otherwise the noVNC canvas letterboxes
@@ -434,10 +441,10 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		// inner resolution, "bir tık büyük"). WebApp keeps its exact 1280x720.
 		const baseSize = suggested ?? (isNative
 			? {width: 1282, height: 722}
-			: isWebApp
+			: (isWebApp || isShortcut)
 				? {width: 1280, height: 720}
 				: (DEFAULT_WINDOW_SIZES[appId] || DEFAULT_WINDOW_SIZES.default))
-		const size = getResponsiveSize(baseSize.width, baseSize.height, isWebApp || isNative || isDisplay || suggested != null)
+		const size = getResponsiveSize(baseSize.width, baseSize.height, isWebApp || isNative || isDisplay || isShortcut || suggested != null)
 		// Use current state.windows.length at call time, not as dependency
 		const windowCount = state.windows.length
 
