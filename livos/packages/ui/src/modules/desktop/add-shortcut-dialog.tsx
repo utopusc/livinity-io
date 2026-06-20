@@ -855,16 +855,33 @@ function NativeTab({active}: {active: boolean}) {
 		if (debInputRef.current) debInputRef.current.value = ''
 	}
 
-	// Upload + install a local .deb. RAW octet-stream body (NOT FormData / base64 /
-	// tRPC), mirroring the Files upload XHR. The LIVINITY_PROXY_TOKEN cookie is sent
-	// automatically — no auth header. The server validates magic bytes + admin and
-	// returns {ok, name?, message?}.
+	// Upload + install a local app package. RAW octet-stream body (NOT FormData /
+	// base64 / tRPC), mirroring the Files upload XHR. The LIVINITY_PROXY_TOKEN cookie
+	// is sent automatically — no auth header. The format is detected from the file
+	// extension client-side and posted to the generalized
+	// /api/native/upload-app?format=<deb|appimage|flatpak|snap> route. The server
+	// validates magic bytes + admin and returns {ok, name?, message?}.
 	const handleDebUpload = () => {
 		if (!debFile || debProgress !== null) return
 		setDebResult(null)
 		const file = debFile
+		// Detect the package format from the file extension (case-insensitive).
+		const lower = file.name.toLowerCase()
+		const format = lower.endsWith('.deb')
+			? 'deb'
+			: lower.endsWith('.appimage')
+				? 'appimage'
+				: lower.endsWith('.flatpak')
+					? 'flatpak'
+					: lower.endsWith('.snap')
+						? 'snap'
+						: null
+		if (!format) {
+			setDebResult('Failed: unsupported file type (use .deb/.AppImage/.flatpak/.snap)')
+			return
+		}
 		const xhr = new XMLHttpRequest()
-		xhr.open('POST', `/api/native/upload-deb?name=${encodeURIComponent(file.name)}`)
+		xhr.open('POST', `/api/native/upload-app?name=${encodeURIComponent(file.name)}&format=${format}`)
 		xhr.setRequestHeader('Content-Type', 'application/octet-stream')
 
 		xhr.upload.onprogress = (e) => {
@@ -991,14 +1008,14 @@ function NativeTab({active}: {active: boolean}) {
 				) : null}
 			</div>
 
-			{/* Upload a local .deb (Discord, Chrome, … — apps not in apt). */}
+			{/* Upload a local app package (Discord, Chrome, … — apps not in apt). */}
 			<div className='flex flex-col gap-2 border-t border-gray-200 pt-4'>
-				<p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Upload a .deb file</p>
+				<p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Upload an app file</p>
 				<div className='flex flex-wrap items-center gap-2'>
 					<input
 						ref={debInputRef}
 						type='file'
-						accept='.deb,application/vnd.debian.binary-package'
+						accept='.deb,.AppImage,.flatpak,.snap,application/vnd.debian.binary-package'
 						className='hidden'
 						id='native-deb-file'
 						onChange={(e) => {
@@ -1011,7 +1028,7 @@ function NativeTab({active}: {active: boolean}) {
 						htmlFor='native-deb-file'
 						className='inline-flex cursor-pointer items-center rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100'
 					>
-						Choose .deb file…
+						Choose app file…
 					</label>
 					<Button
 						type='button'
@@ -1046,8 +1063,8 @@ function NativeTab({active}: {active: boolean}) {
 				) : null}
 
 				<p className='text-[11px] text-gray-500'>
-					Installs a local .deb (Discord, Chrome, …). apt resolves dependencies; .deb scripts run as root — only
-					upload packages you trust.
+					Install a .deb, .AppImage, .flatpak, or .snap. Runs as root for .deb/.snap — only upload packages you
+					trust.
 				</p>
 				{debResult ? (
 					<p className={`text-xs ${debResult.startsWith('Failed') || debResult.includes('failed') ? 'text-red-600' : 'text-emerald-700'}`}>

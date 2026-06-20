@@ -180,6 +180,7 @@ const ALLOWED_PREFIXES = (home: string): string[] => [
 	'/usr/local/bin/',
 	'/usr/sbin/',
 	'/opt/',
+	'/snap/bin/', // Snap wrapper binaries (a /snap/bin/<name> binaryPath validates)
 	path.posix.join(home, '.local/bin') + '/',
 	path.posix.join(home, '.local', 'share', 'applications') + '/', // unlikely binaries but harmless
 ]

@@ -2348,6 +2348,53 @@ else
     info "livos-add-apt-repo.sh source not found — skipping (apt-repo apps unavailable)"
 fi
 
+# --- (c) v44.57 — admin local-bundle runtimes (AppImage / Flatpak / Snap) -------------------
+# v44.56 added admin .deb upload; v44.57 extends it to AppImage/Flatpak/Snap. Each format
+# needs a host RUNTIME present before installLocalDeb's sibling code-paths can succeed.
+# Mirrors the :947-968 apt pattern: command -v guard (re-run = no-op) + DEBIAN_FRONTEND
+# noninteractive + warn-not-fail (a missing runtime NEVER aborts the Update; the upload
+# route returns a clean {ok:false,"runtime not installed"} at install time instead).
+# The snap sudoers grant ships above in (a); these runtimes are the day-2 dependency layer.
+if [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
+    # (c.1) AppImage — needs libfuse2 at RUN time (the AppImage self-mounts via FUSE).
+    #       `fusermount` is provided by libfuse2; install only if absent.
+    if ! command -v fusermount >/dev/null 2>&1; then
+        info "v44.57: installing libfuse2 for AppImage runtime support…"
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libfuse2 \
+            2>&1 | tail -3 || warn "libfuse2 install failed (non-fatal; AppImage uploads will report runtime not installed)"
+    else
+        info "v44.57: libfuse2 (fusermount) already present — skipping"
+    fi
+
+    # (c.2) Flatpak — install the `flatpak` runtime, then add the flathub remote in the
+    #       desktop user's --user scope (idempotent via --if-not-exists). All warn-not-fail.
+    if ! command -v flatpak >/dev/null 2>&1; then
+        info "v44.57: installing flatpak runtime…"
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq flatpak \
+            2>&1 | tail -3 || warn "flatpak install failed (non-fatal; Flatpak uploads will report runtime not installed)"
+    else
+        info "v44.57: flatpak runtime already present — skipping"
+    fi
+    if command -v flatpak >/dev/null 2>&1 && id "$_DESKTOP_USER" >/dev/null 2>&1; then
+        sudo -u "$_DESKTOP_USER" flatpak remote-add --if-not-exists --user \
+            flathub https://dl.flathub.org/repo/flathub.flatpakrepo \
+            >/dev/null 2>&1 || warn "flathub --user remote-add failed for ${_DESKTOP_USER} (non-fatal)"
+    fi
+
+    # (c.3) Snap — install snapd. Headless/VPS hosts (no seeded snap, container/cgroup
+    #       quirks) frequently fail to bring snapd up; this MUST stay warn-not-fail so the
+    #       Update never aborts. The `snap install --dangerous *` sudoers grant ships in (a).
+    if ! command -v snap >/dev/null 2>&1; then
+        info "v44.57: installing snapd for Snap runtime support…"
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq snapd \
+            2>&1 | tail -3 || warn "snapd install failed (non-fatal; common on headless VPS — Snap uploads will report snapd not available)"
+    else
+        info "v44.57: snapd already present — skipping"
+    fi
+else
+    info "v44.57: apt-get unavailable — skipping AppImage/Flatpak/Snap runtime provisioning"
+fi
+
 # ── Phase 202-10: desktop-user ownership hook (recurring P198/P199/P200/P201 patch) ──
 # When update.sh runs as root, rsync + pnpm install + builds end up root-owned.
 # livos.service runs as the LivOS desktop user, and pnpm-store / .next / dist

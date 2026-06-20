@@ -36,6 +36,10 @@ const STATIC_ALLOWED_ROOTS = [
 	'/usr/local/share',
 	'/usr/share/pixmaps',
 	'/opt',
+	// Flatpak (system installs) + Snap tile icons live under these roots.
+	'/var/lib/flatpak',
+	'/var/lib/snapd',
+	'/snap',
 ] as const
 
 function defaultAllowedRoots(home: string): string[] {

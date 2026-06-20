@@ -1169,3 +1169,415 @@ export async function installLocalDeb(
 
 	return {ok: true, name: displayName, nativeConfigId: config.id}
 }
+
+// ─── Phase 290-r? (v44.56+) — install LOCAL AppImage / Flatpak / Snap uploads ──
+//
+// The admin .deb upload route (native-deb-upload-api.ts) is generalized to
+// POST /api/native/upload-app?format=<deb|appimage|flatpak|snap>. The route
+// streams + magic/extension validates the bytes, then dispatches to one of the
+// installers below. Each mirrors installLocalDeb: build a NativeAppConfig,
+// nativeAppConfigSchema.parse it, write/derive the tile, configStore.upsert,
+// and write the liv:apps:native-catalog:<slug> redis mapping.
+//
+// SECURITY: every format runs arbitrary code. The route enforces the SAME admin
+// gate (currentUser.role === 'admin') BEFORE calling any of these. AppImage +
+// Flatpak run as the UNPRIVILEGED daemon (desktop) user (NO sudo); Snap installs
+// root via the SAME sudoers-scoped `sudo -n /usr/bin/snap install` grant.
+
+// Shared result shape (identical to InstallLocalDebResult — re-export alias for
+// the route's typing convenience).
+export type InstallLocalAppResult = InstallLocalDebResult
+
+/**
+ * Injectable seams shared by the AppImage / Flatpak / Snap installers so the
+ * unit tests can drive them without a real flatpak / snap / filesystem.
+ * Production passes nothing → the real execCmd + real fs are used.
+ */
+export interface InstallLocalAppDeps {
+	exec?: typeof execCmd
+	home?: string
+	/** existsSync override (snap binaryPath probe). */
+	exists?: (p: string) => boolean
+	/** fs override (AppImage copy/chmod, flatpak/snap icon glob). */
+	fsImpl?: {
+		mkdir: typeof fs.mkdir
+		copyFile: typeof fs.copyFile
+		chmod: typeof fs.chmod
+		readdir: typeof fs.readdir
+		readFile: typeof fs.readFile
+	}
+}
+
+/**
+ * Phase 290-r? — install an uploaded `.AppImage`. NO sudo: an AppImage is a
+ * self-contained executable that runs as the desktop user. We copy it to
+ * `<home>/.local/bin/<slug>`, `chmod 0755`, synthesize a .desktop (Exec=target),
+ * persist a NativeAppConfig, and write the redis catalog mapping. We deliberately
+ * DO NOT `--appimage-extract` (running untrusted code / requiring FUSE).
+ */
+export async function installLocalAppImage(
+	uploadedPath: string,
+	ctx: InstallContext,
+	configStore: NativeAppConfigStore,
+	opts: {name?: string; iconUrl?: string} = {},
+	deps: InstallLocalAppDeps = {},
+): Promise<InstallLocalAppResult> {
+	const fsImpl = deps.fsImpl ?? fs
+	const homeDir = deps.home ?? userHome(ctx.userId)
+
+	const slug = slugifyDebName(opts.name || path.basename(uploadedPath))
+	const binDir = path.join(homeDir, '.local/bin')
+	const target = path.join(binDir, slug)
+
+	try {
+		await fsImpl.mkdir(binDir, {recursive: true})
+		// copyFile (not rename): the uploaded tmp lives in /tmp which may be a
+		// different filesystem than $HOME (rename → EXDEV). The route unlinks the tmp.
+		await fsImpl.copyFile(uploadedPath, target)
+		await fsImpl.chmod(target, 0o755)
+	} catch (err) {
+		return {
+			ok: false,
+			name: opts.name ?? slug,
+			message: `Installing the AppImage failed: ${err instanceof Error ? err.message : String(err)}`,
+		}
+	}
+
+	const displayName = (opts.name?.trim() || slug).slice(0, 64)
+	const iconUrl = opts.iconUrl && isSchemaValidIconUrl(opts.iconUrl) ? opts.iconUrl : undefined
+
+	const config: NativeAppConfig = {
+		id: randomUUID(),
+		name: displayName,
+		iconUrl,
+		binaryPath: target, // under ~/.local/bin → passes ABSOLUTE_PATH_RE + scanner allow-list
+	}
+	try {
+		nativeAppConfigSchema.parse(config)
+	} catch (err) {
+		return {
+			ok: false,
+			name: displayName,
+			message: `AppImage config failed validation: ${err instanceof Error ? err.message : String(err)}`,
+		}
+	}
+
+	// Synthesize a .desktop (Exec=target) via the existing writeDesktopFile path.
+	try {
+		await writeDesktopFile(homeDir, slug, {
+			install: {primary: 'appimage', appimageUrl: '', appimageSha256: ''},
+			launch: {binaryPath: target},
+			desktopEntry: {name: displayName, ...(iconUrl ? {icon: iconUrl} : {})},
+		} as NativeManifest)
+	} catch (err) {
+		ctx.logger.warn(
+			`installLocalAppImage: writing .desktop failed for ${displayName}: ${err instanceof Error ? err.message : String(err)}`,
+		)
+	}
+
+	await configStore.upsert(config)
+	await ctx.redis
+		.set(`liv:apps:native-catalog:${slug}`, config.id)
+		.catch((err) =>
+			ctx.logger.error(`installLocalAppImage: failed to write catalog mapping for ${slug}`, err),
+		)
+
+	return {ok: true, name: displayName, nativeConfigId: config.id}
+}
+
+/**
+ * Phase 290-r? — install an uploaded Flatpak bundle (`.flatpak`). NO sudo: runs
+ * as the daemon (desktop) user via `flatpak install --user`. Capability check
+ * FIRST (flatpak on PATH), then snapshot the installed app-id set, install, diff
+ * to find the new app-id, and build a NativeAppConfig that launches it via
+ * `/usr/bin/flatpak run <appId>`.
+ */
+export async function installLocalFlatpak(
+	bundlePath: string,
+	ctx: InstallContext,
+	configStore: NativeAppConfigStore,
+	opts: {name?: string; iconUrl?: string} = {},
+	deps: InstallLocalAppDeps = {},
+): Promise<InstallLocalAppResult> {
+	const exec = deps.exec ?? execCmd
+	const fsImpl = deps.fsImpl ?? fs
+	const homeDir = deps.home ?? userHome(ctx.userId)
+
+	// (1) Capability check — flatpak runtime present?
+	try {
+		const {code} = await exec('flatpak', ['--version'], ctx.logger)
+		if (code !== 0) {
+			return {
+				ok: false,
+				name: opts.name ?? 'flatpak app',
+				message: 'Flatpak runtime is not installed yet — click Update on the box, then retry.',
+			}
+		}
+	} catch {
+		return {
+			ok: false,
+			name: opts.name ?? 'flatpak app',
+			message: 'Flatpak runtime is not installed yet — click Update on the box, then retry.',
+		}
+	}
+
+	// (2) Snapshot the installed app-id set BEFORE.
+	const listAppIds = async (): Promise<Set<string>> => {
+		try {
+			const {code, stdout} = await exec(
+				'flatpak',
+				['list', '--app', '--columns=application'],
+				ctx.logger,
+			)
+			if (code !== 0) return new Set()
+			return new Set(
+				stdout
+					.split('\n')
+					.map((l) => l.trim())
+					.filter(Boolean),
+			)
+		} catch {
+			return new Set()
+		}
+	}
+	const before = await listAppIds()
+
+	// (3) Install the bundle (--user, non-interactive).
+	const {code, stderr} = await exec(
+		'flatpak',
+		['install', '--user', '--noninteractive', '--assumeyes', bundlePath],
+		ctx.logger,
+	)
+	if (code !== 0) {
+		return {
+			ok: false,
+			name: opts.name ?? 'flatpak app',
+			message: `Installing the Flatpak bundle failed (flatpak exit ${code}):\n${stderr.trim().slice(0, 800)}`,
+		}
+	}
+
+	// (4) Diff the app-id set → the new app-id.
+	const after = await listAppIds()
+	const newIds = [...after].filter((id) => !before.has(id))
+	const appId = newIds[0]
+	if (!appId) {
+		// Install succeeded but we couldn't identify the new app-id (e.g. it was
+		// already installed / list unavailable). Report ok without a tile.
+		return {ok: true, name: opts.name ?? 'flatpak app'}
+	}
+
+	const displayName = (opts.name?.trim() || appId).slice(0, 64)
+
+	// (5) Resolve an icon: glob the exported hicolor theme for <appId>.{png,svg}.
+	let iconUrl: string | undefined =
+		opts.iconUrl && isSchemaValidIconUrl(opts.iconUrl) ? opts.iconUrl : undefined
+	if (!iconUrl) {
+		const iconsRoot = path.join(homeDir, '.local/share/flatpak/exports/share/icons/hicolor')
+		try {
+			const sizeDirs = await fsImpl.readdir(iconsRoot)
+			for (const size of sizeDirs) {
+				const appsDir = path.join(iconsRoot, size, 'apps')
+				let files: string[]
+				try {
+					files = await fsImpl.readdir(appsDir)
+				} catch {
+					continue
+				}
+				const match = files.find((f) => f === `${appId}.png` || f === `${appId}.svg`)
+				if (match) {
+					const full = path.join(appsDir, match)
+					// That path is under ~/.local/share → served by the icon-file proxy.
+					iconUrl = `/api/native/icon-file?path=${encodeURIComponent(full)}`
+					break
+				}
+			}
+		} catch {
+			/* no exported icons — leave undefined */
+		}
+	}
+
+	const config: NativeAppConfig = {
+		id: randomUUID(),
+		name: displayName,
+		iconUrl: iconUrl && isSchemaValidIconUrl(iconUrl) ? iconUrl : undefined,
+		binaryPath: '/usr/bin/flatpak',
+		args: ['run', appId],
+		// OMIT wmClassHint — flatpak app-ids contain dots (org.foo.Bar) → fail the
+		// wmClass regex /^[\w-]{1,64}$/.
+	}
+	try {
+		nativeAppConfigSchema.parse(config)
+	} catch (err) {
+		ctx.logger.warn(
+			`installLocalFlatpak: derived config failed schema for ${displayName}: ${err instanceof Error ? err.message : String(err)}`,
+		)
+		return {ok: true, name: displayName}
+	}
+
+	await configStore.upsert(config)
+	const slug = slugifyDebName(appId)
+	await ctx.redis
+		.set(`liv:apps:native-catalog:${slug}`, config.id)
+		.catch((err) =>
+			ctx.logger.error(`installLocalFlatpak: failed to write catalog mapping for ${slug}`, err),
+		)
+
+	return {ok: true, name: displayName, nativeConfigId: config.id}
+}
+
+/**
+ * Phase 290-r? — install an uploaded Snap package (`.snap`). Root via the SAME
+ * sudoers-scoped `sudo -n /usr/bin/snap install` grant. Capability check FIRST
+ * (`snap version`) so it never hangs on a headless box where snapd doesn't run.
+ * Installs with `--dangerous` (unsigned local snap), retries once with `--classic`
+ * on the well-known stderr, diffs `snap list` to find the new snap name, and
+ * builds a NativeAppConfig launching `/snap/bin/<name>` (or `snap run <name>`).
+ */
+export async function installLocalSnap(
+	snapPath: string,
+	ctx: InstallContext,
+	configStore: NativeAppConfigStore,
+	opts: {name?: string; iconUrl?: string} = {},
+	deps: InstallLocalAppDeps = {},
+): Promise<InstallLocalAppResult> {
+	const exec = deps.exec ?? execCmd
+	const fsImpl = deps.fsImpl ?? fs
+	const existsFn = deps.exists ?? existsSync
+
+	// (1) Capability check — snapd present/functional? `snap version` is cheap and
+	// returns non-zero (or errors) when snapd isn't running (common on headless
+	// servers), so we never hang on the install.
+	try {
+		const {code} = await exec('snap', ['version'], ctx.logger)
+		if (code !== 0) {
+			return {
+				ok: false,
+				name: opts.name ?? 'snap app',
+				message:
+					'Snap (snapd) is not available/functional on this box — snapd often does not run on headless servers.',
+			}
+		}
+	} catch {
+		return {
+			ok: false,
+			name: opts.name ?? 'snap app',
+			message:
+				'Snap (snapd) is not available/functional on this box — snapd often does not run on headless servers.',
+		}
+	}
+
+	// (2) Snapshot `snap list` names BEFORE.
+	const listSnapNames = async (): Promise<Set<string>> => {
+		try {
+			const {code, stdout} = await exec('snap', ['list'], ctx.logger)
+			if (code !== 0) return new Set()
+			// `snap list` output: a header row ("Name Version Rev …") then rows whose
+			// first column is the snap name. Skip the header.
+			const names = stdout
+				.split('\n')
+				.slice(1)
+				.map((l) => l.trim().split(/\s+/)[0])
+				.filter((n) => n && /^[a-z0-9][a-z0-9-]*$/.test(n))
+			return new Set(names)
+		} catch {
+			return new Set()
+		}
+	}
+	const before = await listSnapNames()
+
+	// (3) Install (root via sudo). Retry once with --classic on the known stderr.
+	let {code, stderr} = await exec(
+		'sudo',
+		['-n', '/usr/bin/snap', 'install', '--dangerous', snapPath],
+		ctx.logger,
+		APT_ENV,
+	)
+	if (code !== 0 && /requires .*--classic|classic confinement/i.test(stderr)) {
+		;({code, stderr} = await exec(
+			'sudo',
+			['-n', '/usr/bin/snap', 'install', '--dangerous', '--classic', snapPath],
+			ctx.logger,
+			APT_ENV,
+		))
+	}
+	if (code !== 0) {
+		const sudoDenied = stderr.includes('sudo:') || stderr.includes('password is required')
+		const message = sudoDenied
+			? `Installing the snap failed: the installer is not permitted to run snap (sudo denied). exit ${code}`
+			: `Installing the snap failed (snap exit ${code}):\n${stderr.trim().slice(0, 800)}`
+		return {ok: false, name: opts.name ?? 'snap app', message}
+	}
+
+	// (4) Diff `snap list` → the new snap name.
+	const after = await listSnapNames()
+	const newNames = [...after].filter((n) => !before.has(n))
+	const snapName = newNames[0]
+	if (!snapName) {
+		// Install succeeded but no new name surfaced (e.g. a refresh of an existing
+		// snap). Report ok without a tile.
+		return {ok: true, name: opts.name ?? 'snap app'}
+	}
+
+	const displayName = (opts.name?.trim() || snapName).slice(0, 64)
+
+	// (5) binaryPath: prefer /snap/bin/<name> (a wrapper the daemon user can spawn
+	// directly); else fall back to `/usr/bin/snap run <name>`.
+	let binaryPath = '/usr/bin/snap'
+	let args: string[] | undefined = ['run', snapName]
+	const snapBin = `/snap/bin/${snapName}`
+	if (existsFn(snapBin)) {
+		binaryPath = snapBin
+		args = undefined
+	}
+
+	// (6) Resolve an icon from the snap's exported .desktop Icon= (best-effort).
+	let iconUrl: string | undefined =
+		opts.iconUrl && isSchemaValidIconUrl(opts.iconUrl) ? opts.iconUrl : undefined
+	if (!iconUrl) {
+		const desktopDir = '/var/lib/snapd/desktop/applications'
+		try {
+			const files = await fsImpl.readdir(desktopDir)
+			const match = files.find((f) => f.startsWith(`${snapName}_`) && f.endsWith('.desktop'))
+			if (match) {
+				let content: string
+				try {
+					content = await fsImpl.readFile(path.join(desktopDir, match), 'utf8')
+					const icon = parseDesktopEntry(content).icon
+					const resolved = iconValueToUrl(icon)
+					if (resolved && isSchemaValidIconUrl(resolved)) iconUrl = resolved
+				} catch {
+					/* unreadable — leave undefined */
+				}
+			}
+		} catch {
+			/* no exported .desktop — leave undefined */
+		}
+	}
+
+	const config: NativeAppConfig = {
+		id: randomUUID(),
+		name: displayName,
+		iconUrl: iconUrl && isSchemaValidIconUrl(iconUrl) ? iconUrl : undefined,
+		binaryPath,
+		args,
+		...(/^[\w-]{1,64}$/.test(snapName) ? {wmClassHint: snapName} : {}),
+	}
+	try {
+		nativeAppConfigSchema.parse(config)
+	} catch (err) {
+		ctx.logger.warn(
+			`installLocalSnap: derived config failed schema for ${displayName}: ${err instanceof Error ? err.message : String(err)}`,
+		)
+		return {ok: true, name: displayName}
+	}
+
+	await configStore.upsert(config)
+	const slug = slugifyDebName(snapName)
+	await ctx.redis
+		.set(`liv:apps:native-catalog:${slug}`, config.id)
+		.catch((err) =>
+			ctx.logger.error(`installLocalSnap: failed to write catalog mapping for ${slug}`, err),
+		)
+
+	return {ok: true, name: displayName, nativeConfigId: config.id}
+}

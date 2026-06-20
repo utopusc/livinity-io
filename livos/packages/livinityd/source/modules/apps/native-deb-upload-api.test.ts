@@ -21,19 +21,42 @@ import {promises as fs} from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 
-import nativeDebUploadApi, {validateDebMagic} from './native-deb-upload-api.js'
+import nativeDebUploadApi, {
+	validateDebMagic,
+	validateSnapMagic,
+	validateAppImageMagic,
+} from './native-deb-upload-api.js'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let server: any = null
 let baseUrl = ''
 let tmpRoot = ''
-// Records the last installLocalDeb call so tests can assert it was (not) reached.
-let installCalls: Array<{debPath: string; name?: string}> = []
-// What the injected installLocalDeb returns.
+// Records the last installer call (per format) so tests can assert which fn ran.
+let installCalls: Array<{format: string; debPath: string; name?: string}> = []
+// What the injected installers return.
 let installResult: {ok: boolean; name: string; nativeConfigId?: string; message?: string} = {
 	ok: true,
 	name: 'Discord',
 	nativeConfigId: 'cfg-1',
+}
+
+// Build a minimal valid squashfs (snap) header: first 4 bytes "hsqs" + slack.
+function makeFakeSnap(): Buffer {
+	const buf = Buffer.alloc(64)
+	buf.write('hsqs', 0, 'ascii')
+	return buf
+}
+
+// Build a minimal valid ELF (AppImage) header: 0x7f 'E' 'L' 'F' + slack.
+function makeFakeAppImage(): Buffer {
+	const buf = Buffer.alloc(64)
+	buf[0] = 0x7f
+	buf.write('ELF', 1, 'ascii')
+	// Bonus type-2 AppImage signature at offset 8 (not required by the validator).
+	buf[8] = 0x41 // 'A'
+	buf[9] = 0x49 // 'I'
+	buf[10] = 0x02
+	return buf
 }
 
 // Build a minimal valid .deb header buffer: ar magic + a first member named
@@ -86,7 +109,34 @@ async function mountApp(opts: {maxBytes?: number} = {}): Promise<void> {
 				_store: unknown,
 				o?: {name?: string},
 			) => {
-				installCalls.push({debPath, name: o?.name})
+				installCalls.push({format: 'deb', debPath, name: o?.name})
+				return installResult
+			}) as never,
+			installLocalAppImage: (async (
+				p: string,
+				_ctx: unknown,
+				_store: unknown,
+				o?: {name?: string},
+			) => {
+				installCalls.push({format: 'appimage', debPath: p, name: o?.name})
+				return installResult
+			}) as never,
+			installLocalFlatpak: (async (
+				p: string,
+				_ctx: unknown,
+				_store: unknown,
+				o?: {name?: string},
+			) => {
+				installCalls.push({format: 'flatpak', debPath: p, name: o?.name})
+				return installResult
+			}) as never,
+			installLocalSnap: (async (
+				p: string,
+				_ctx: unknown,
+				_store: unknown,
+				o?: {name?: string},
+			) => {
+				installCalls.push({format: 'snap', debPath: p, name: o?.name})
 				return installResult
 			}) as never,
 		},
@@ -226,6 +276,103 @@ describe('POST /api/native/upload-deb — size cap', () => {
 	})
 })
 
+describe('POST /api/native/upload-app — format dispatch', () => {
+	test('400 for an unknown/missing format', async () => {
+		const res = await fetch(`${baseUrl}/api/native/upload-app?name=X&format=msi`, {
+			method: 'POST',
+			headers: {cookie: 'LIVINITY_PROXY_TOKEN=valid', 'x-test-role': 'admin'},
+			body: makeFakeDeb(),
+		})
+		expect(res.status).toBe(400)
+		const body = (await res.json()) as {ok: boolean; message: string}
+		expect(body.ok).toBe(false)
+		expect(body.message).toMatch(/unknown or missing format/)
+		expect(installCalls).toHaveLength(0)
+	})
+
+	test('403 for a non-admin (admin gate still enforced on the new route)', async () => {
+		const res = await fetch(`${baseUrl}/api/native/upload-app?name=X&format=snap`, {
+			method: 'POST',
+			headers: {cookie: 'LIVINITY_PROXY_TOKEN=valid', 'x-test-role': 'member'},
+			body: makeFakeSnap(),
+		})
+		expect(res.status).toBe(403)
+		expect(installCalls).toHaveLength(0)
+	})
+
+	test('snap: valid squashfs magic (hsqs) → reaches installLocalSnap', async () => {
+		const res = await fetch(`${baseUrl}/api/native/upload-app?name=Spotify&format=snap`, {
+			method: 'POST',
+			headers: {cookie: 'LIVINITY_PROXY_TOKEN=valid', 'x-test-role': 'admin'},
+			body: makeFakeSnap(),
+		})
+		expect(res.status).toBe(200)
+		expect(installCalls).toHaveLength(1)
+		expect(installCalls[0].format).toBe('snap')
+		expect(installCalls[0].name).toBe('Spotify')
+	})
+
+	test('snap: bad magic → 400 (installer NOT reached)', async () => {
+		const res = await fetch(`${baseUrl}/api/native/upload-app?name=X&format=snap`, {
+			method: 'POST',
+			headers: {cookie: 'LIVINITY_PROXY_TOKEN=valid', 'x-test-role': 'admin'},
+			body: Buffer.alloc(64), // zeros — not "hsqs"
+		})
+		expect(res.status).toBe(400)
+		const body = (await res.json()) as {ok: boolean; message: string}
+		expect(body.ok).toBe(false)
+		expect(body.message).toMatch(/squashfs/i)
+		expect(installCalls).toHaveLength(0)
+	})
+
+	test('appimage: valid ELF magic → reaches installLocalAppImage', async () => {
+		const res = await fetch(`${baseUrl}/api/native/upload-app?name=Cursor&format=appimage`, {
+			method: 'POST',
+			headers: {cookie: 'LIVINITY_PROXY_TOKEN=valid', 'x-test-role': 'admin'},
+			body: makeFakeAppImage(),
+		})
+		expect(res.status).toBe(200)
+		expect(installCalls).toHaveLength(1)
+		expect(installCalls[0].format).toBe('appimage')
+		expect(installCalls[0].name).toBe('Cursor')
+	})
+
+	test('appimage: bad magic (not ELF) → 400', async () => {
+		const res = await fetch(`${baseUrl}/api/native/upload-app?name=X&format=appimage`, {
+			method: 'POST',
+			headers: {cookie: 'LIVINITY_PROXY_TOKEN=valid', 'x-test-role': 'admin'},
+			body: Buffer.alloc(64),
+		})
+		expect(res.status).toBe(400)
+		const body = (await res.json()) as {ok: boolean; message: string}
+		expect(body.message).toMatch(/ELF/)
+		expect(installCalls).toHaveLength(0)
+	})
+
+	test('flatpak: no magic — any body reaches installLocalFlatpak', async () => {
+		const res = await fetch(`${baseUrl}/api/native/upload-app?name=Telegram&format=flatpak`, {
+			method: 'POST',
+			headers: {cookie: 'LIVINITY_PROXY_TOKEN=valid', 'x-test-role': 'admin'},
+			body: Buffer.alloc(200), // arbitrary — flatpak install validates
+		})
+		expect(res.status).toBe(200)
+		expect(installCalls).toHaveLength(1)
+		expect(installCalls[0].format).toBe('flatpak')
+		expect(installCalls[0].name).toBe('Telegram')
+	})
+
+	test('deb via /upload-app?format=deb → reaches installLocalDeb (alias parity)', async () => {
+		const res = await fetch(`${baseUrl}/api/native/upload-app?name=Discord&format=deb`, {
+			method: 'POST',
+			headers: {cookie: 'LIVINITY_PROXY_TOKEN=valid', 'x-test-role': 'admin'},
+			body: makeFakeDeb(),
+		})
+		expect(res.status).toBe(200)
+		expect(installCalls).toHaveLength(1)
+		expect(installCalls[0].format).toBe('deb')
+	})
+})
+
 describe('validateDebMagic (unit)', () => {
 	test('accepts a buffer with ar magic + debian-binary first member', async () => {
 		const file = path.join(tmpRoot, 'good.deb')
@@ -253,6 +400,44 @@ describe('validateDebMagic (unit)', () => {
 		const file = path.join(tmpRoot, 'wrong-member.deb')
 		await fs.writeFile(file, Buffer.concat([magic, header, Buffer.alloc(132)]))
 		expect(await validateDebMagic(file)).toMatch(/debian-binary/i)
+	})
+})
+
+describe('validateSnapMagic (unit)', () => {
+	test('accepts a squashfs (hsqs) header', async () => {
+		const file = path.join(tmpRoot, 'good.snap')
+		await fs.writeFile(file, makeFakeSnap())
+		expect(await validateSnapMagic(file)).toBeNull()
+	})
+
+	test('rejects a non-squashfs file', async () => {
+		const file = path.join(tmpRoot, 'bad.snap')
+		await fs.writeFile(file, Buffer.alloc(64))
+		expect(await validateSnapMagic(file)).toMatch(/squashfs/i)
+	})
+})
+
+describe('validateAppImageMagic (unit)', () => {
+	test('accepts an ELF header (with type-2 AI signature)', async () => {
+		const file = path.join(tmpRoot, 'good.AppImage')
+		await fs.writeFile(file, makeFakeAppImage())
+		expect(await validateAppImageMagic(file)).toBeNull()
+	})
+
+	test('accepts a type-1 ELF (no AI\\x02 signature)', async () => {
+		const buf = Buffer.alloc(64)
+		buf[0] = 0x7f
+		buf.write('ELF', 1, 'ascii')
+		// no AI signature at offset 8 — still valid (type-1)
+		const file = path.join(tmpRoot, 'type1.AppImage')
+		await fs.writeFile(file, buf)
+		expect(await validateAppImageMagic(file)).toBeNull()
+	})
+
+	test('rejects a non-ELF file', async () => {
+		const file = path.join(tmpRoot, 'bad.AppImage')
+		await fs.writeFile(file, Buffer.alloc(64))
+		expect(await validateAppImageMagic(file)).toMatch(/ELF/)
 	})
 })
 
