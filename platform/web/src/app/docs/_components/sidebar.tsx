@@ -51,9 +51,12 @@ export function DocsSidebar({
 
       {filtered.length === 0 && <p className="docs-side-empty">No matches.</p>}
 
-      {filtered.map((c) => (
+      {filtered.map((c, i) => (
         <div key={c.id}>
-          <div className="docs-cat-label">{c.name}</div>
+          {/* `is-first` suppresses the top divider/gap on the very first category.
+              Each category sits in its own <div>, so a CSS :first-of-type can't
+              single it out (every label is first-of-type within its own wrapper). */}
+          <div className={`docs-cat-label${i === 0 ? ' is-first' : ''}`}>{c.name}</div>
           {c.articles.map((a) => (
             <Link
               key={a.slug}

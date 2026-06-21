@@ -193,7 +193,7 @@
   padding-top: 16px;
   border-top: 1px solid var(--line);
 }
-.docs-cat-label:first-of-type {
+.docs-cat-label.is-first {
   margin-top: 0;
   padding-top: 0;
   border-top: none;
