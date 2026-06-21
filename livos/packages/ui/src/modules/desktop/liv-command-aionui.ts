@@ -22,8 +22,10 @@
  *      proxies /ws → :3020 with NO forward_auth, while /liv/ws would hit the
  *      forward_auth gate that hijacks the WS upgrade → 502). Frames are
  *      `{name|event, data|payload}`; `message.stream` carries assistant text
- *      deltas (type 'content'), `turn.completed` ends the turn,
- *      `confirmation.add` is a tool-approval prompt.
+ *      deltas (type 'text'|'content') and the per-turn terminal signal
+ *      (type 'finish'); `confirmation.add` is a tool-approval prompt. (The
+ *      top-level `turn.completed`/`error` cases are harmless backstops — upstream
+ *      signals completion/errors via message.stream, which is handled.)
  *
  * Everything is same-origin in prod (one Caddy serves the shell + proxies
  * /liv, /ws, /liv-login). In dev the paths are proxied in vite.config.ts, but
@@ -39,6 +41,21 @@
 export interface LivAgent {
 	id: string
 	name: string
+	/** Per-agent model list (from AionUi's /api/agents handshake.available_models). */
+	models: {id: string; label: string}[]
+	/** The agent's own default/current model id (null = let the agent use its built-in default). */
+	defaultModelId: string | null
+}
+
+export interface LivSkill {
+	name: string
+	description: string
+}
+
+export interface LivMcpServer {
+	id: string
+	name: string
+	enabled: boolean
 }
 
 /** Pull the conversation id out of AionUi's tolerant create response. */
@@ -110,20 +127,109 @@ export async function listLivAgents(): Promise<LivAgent[]> {
 			const r = a as Record<string, unknown>
 			const id = String(r?.id ?? r?.agent_id ?? r?.backend ?? '')
 			const name = String(r?.name ?? r?.title ?? r?.id ?? 'Agent')
-			return {id, name}
+			// AionUi advertises each agent's model list under handshake.available_models
+			// (AcpModelInfo: {available_models:[{id,label}], current_model_id}).
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const hs = (r?.handshake as any)?.available_models as any
+			const models = Array.isArray(hs?.available_models)
+				? hs.available_models
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						.map((m: any) => ({id: String(m?.id ?? ''), label: String(m?.label ?? m?.id ?? '')}))
+						.filter((m: {id: string}) => m.id.length > 0)
+				: []
+			const defaultModelId = typeof hs?.current_model_id === 'string' ? hs.current_model_id : null
+			return {id, name, models, defaultModelId}
 		})
 		.filter((a) => a.id.length > 0)
+}
+
+/** GET /liv/api/skills — the full skill catalog (its length is the "/24" total). */
+export async function listLivSkills(): Promise<LivSkill[]> {
+	const body = await fetchJson('/liv/api/skills')
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const raw = Array.isArray(body) ? body : Array.isArray((body as any)?.data) ? (body as any).data : []
+	return raw
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		.map((s: any) => ({name: String(s?.name ?? ''), description: String(s?.description ?? '')}))
+		.filter((s: LivSkill) => s.name.length > 0)
+}
+
+/** GET /liv/api/mcp/servers — configured MCP servers (the "/6"; enabled subset). */
+export async function getLivMcpServers(): Promise<LivMcpServer[]> {
+	const body = await fetchJson('/liv/api/mcp/servers')
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const raw = Array.isArray(body) ? body : Array.isArray((body as any)?.data) ? (body as any).data : []
+	return raw
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		.map((m: any) => ({id: String(m?.id ?? ''), name: String(m?.name ?? ''), enabled: m?.enabled === true}))
+		.filter((m: LivMcpServer) => m.id.length > 0)
+}
+
+/**
+ * POST /liv/api/fs/upload — upload one file (multipart, field `file`). Returns
+ * the absolute server-side path to pass in sendMessage `files:[...]`, or null on
+ * failure. Conversation-less upload uses temp storage (fine for a one-shot).
+ */
+export async function uploadLivFile(file: File): Promise<string | null> {
+	try {
+		const fd = new FormData()
+		fd.append('file', file)
+		const res = await fetch('/liv/api/fs/upload', {method: 'POST', credentials: 'include', body: fd})
+		if (!res.ok) return null
+		const json = (await res.json()) as {success?: boolean; data?: unknown}
+		return json?.success === true && typeof json.data === 'string' ? json.data : null
+	} catch {
+		return null
+	}
+}
+
+/**
+ * Best-effort: set the conversation's permission MODE (default | plan |
+ * acceptEdits | bypassPermissions) via AionUi's config-options. GET the options,
+ * find the one in the 'mode' category, PUT the value. Silent on any failure (the
+ * conversation then runs at its built-in default mode).
+ */
+export async function applyLivMode(conversationId: string, mode: string): Promise<void> {
+	if (!mode) return
+	try {
+		const body = await fetchJson(
+			`/liv/api/conversations/${encodeURIComponent(conversationId)}/config-options`,
+		)
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const b = body as any
+		const list = (b?.config_options ?? b?.data ?? b) as Array<Record<string, unknown>>
+		if (!Array.isArray(list)) return
+		const opt =
+			list.find((o) => String(o?.category ?? '').toLowerCase() === 'mode') ??
+			list.find((o) => o?.id === 'mode')
+		if (!opt) return
+		const optionId = String(opt.id ?? 'mode')
+		await fetchJson(
+			`/liv/api/conversations/${encodeURIComponent(conversationId)}/config-options/${encodeURIComponent(optionId)}`,
+			{
+				method: 'PUT',
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify({value: mode}),
+			},
+		)
+	} catch {
+		// best-effort — mode stays at the conversation default
+	}
 }
 
 /**
  * POST /liv/api/conversations — create an ephemeral ACP conversation.
  * Tries with the chosen agent first, then without (best-effort agent select).
  */
-export async function createLivConversation(agentId?: string): Promise<string> {
+export async function createLivConversation(agentId?: string, modelId?: string): Promise<string> {
 	const base: Record<string, unknown> = {type: 'acp', name: 'Liv command'}
-	const attempts: Record<string, unknown>[] = agentId
-		? [{...base, extra: {agent_id: agentId}}, base]
-		: [base]
+	// ACP agents carry agent + model in `extra` (NOT the top-level `model` field,
+	// which is aionrs-only). modelId omitted = "Default Model" (agent's own default).
+	const extra: Record<string, unknown> = {}
+	if (agentId) extra.agent_id = agentId
+	if (modelId) extra.current_model_id = modelId
+	const attempts: Record<string, unknown>[] =
+		Object.keys(extra).length > 0 ? [{...base, extra}, base] : [base]
 	let lastErr: unknown
 	for (const body of attempts) {
 		try {
@@ -142,14 +248,21 @@ export async function createLivConversation(agentId?: string): Promise<string> {
 	throw lastErr instanceof Error ? lastErr : new Error('create conversation failed')
 }
 
-/** POST /liv/api/conversations/{id}/messages — send the user prompt. */
-export async function sendLivMessage(conversationId: string, content: string): Promise<void> {
+/** POST /liv/api/conversations/{id}/messages — send the user prompt (+ optional files/skills). */
+export async function sendLivMessage(
+	conversationId: string,
+	content: string,
+	opts?: {files?: string[]; injectSkills?: string[]},
+): Promise<void> {
+	const body: Record<string, unknown> = {content}
+	if (opts?.files?.length) body.files = opts.files
+	if (opts?.injectSkills?.length) body.inject_skills = opts.injectSkills
 	await fetchJson(
 		`/liv/api/conversations/${encodeURIComponent(conversationId)}/messages`,
 		{
 			method: 'POST',
 			headers: {'Content-Type': 'application/json'},
-			body: JSON.stringify({content}),
+			body: JSON.stringify(body),
 		},
 	)
 }
@@ -364,12 +477,30 @@ export class LivCommandStream {
 export interface RunLivCommandOptions {
 	prompt: string
 	agentId?: string
+	/** ACP model id (extra.current_model_id); omit = the agent's "Default Model". */
+	modelId?: string
+	/** Permission mode: default | plan | acceptEdits | bypassPermissions. Applied to a NEW conversation. */
+	mode?: string
+	/** Uploaded file paths to attach (from uploadLivFile). */
+	files?: string[]
+	/** Skill names to inject for this turn. */
+	injectSkills?: string[]
+	/** True when the mode auto-approves tool calls (bypassPermissions). */
 	autoApprove: boolean
+	/**
+	 * Reuse an existing AionUi conversation for a same-session FOLLOW-UP. When
+	 * set, skip the create call so the new turn lands in the same thread (AionUi
+	 * Memory carries the context). When omitted, a fresh ACP conversation is
+	 * created and reported via onConversation.
+	 */
+	conversationId?: string
 }
 
 export interface RunLivCommandCallbacks {
 	/** Dispatch started — Liv is working. */
 	onWorking: () => void
+	/** A fresh conversation was created (only fired when no conversationId was reused). */
+	onConversation?: (conversationId: string) => void
 	/** Streamed assistant text so far. */
 	onText: (fullText: string) => void
 	/** Turn complete with the final text. */
@@ -420,7 +551,19 @@ export function runLivCommand(
 		try {
 			await primeLivSession()
 			if (aborted) return
-			const conversationId = await createLivConversation(opts.agentId)
+			const isNew = !opts.conversationId
+			let conversationId = opts.conversationId ?? ''
+			if (isNew) {
+				conversationId = await createLivConversation(opts.agentId, opts.modelId)
+				cb.onConversation?.(conversationId)
+			}
+			if (aborted) return
+			// Apply the permission mode (best-effort). A fresh conversation starts at
+			// 'default', so only push a non-default choice there; a follow-up always
+			// pushes so a mid-session mode change (incl. back to default) takes effect.
+			if (opts.mode && (!isNew || opts.mode !== 'default')) {
+				await applyLivMode(conversationId, opts.mode)
+			}
 			if (aborted) return
 			stream = new LivCommandStream(conversationId, {
 				onText: (full) => {
@@ -455,7 +598,10 @@ export function runLivCommand(
 			silenceTimer = setTimeout(() => {
 				if (!gotText) fail('Liv did not respond in time.')
 			}, NO_RESPONSE_TIMEOUT_MS)
-			await sendLivMessage(conversationId, opts.prompt)
+			await sendLivMessage(conversationId, opts.prompt, {
+				files: opts.files,
+				injectSkills: opts.injectSkills,
+			})
 		} catch (e) {
 			fail(e instanceof Error ? e.message : 'Could not reach Liv.')
 		}

@@ -1,10 +1,11 @@
 import {useEffect, useMemo, useRef, useState} from 'react'
 import {AnimatePresence, motion} from 'framer-motion'
-import {ArrowUp, ArrowUpRight, ChevronDown, Plus, Shield, Sparkles, X, Zap} from 'lucide-react'
+import {ArrowUp, ArrowUpRight, Blocks, ChevronDown, Map, Pencil, Plus, Shield, Sparkles, Upload, X, Zap} from 'lucide-react'
 
 import {cn} from '@/shadcn-lib/utils'
 
 import {useLivAgents} from './use-liv-agents'
+import {getLivMcpServers, listLivSkills, uploadLivFile, type LivMcpServer, type LivSkill} from './liv-command-aionui'
 
 /**
  * LivCommandInput — the in-navbar Liv AI command composer.
@@ -19,27 +20,28 @@ import {useLivAgents} from './use-liv-agents'
  *   center— the prompt textarea (grows to fit, capped)
  *   right — provider · model · permission-mode selectors + send
  *
- * Phase 291 — wired to AionUi (the live Liv). The Agent selector is fed from
- * /liv/api/agents (use-liv-agents.ts); the Permission selector is a client-side
- * toggle for tool-call approvals; dispatch streams the reply from AionUi's
- * chat WebSocket (see liv-command-aionui.ts + top-bar.tsx livSubmit).
+ * Phase 291 — wired to AionUi (the live Liv): the Agent + Model selectors come
+ * from /liv/api/agents (handshake.available_models); Permission is AionUi's real
+ * per-conversation mode; the "+" menu does file upload + skill injection. Dispatch
+ * streams the reply from AionUi's chat WebSocket (liv-command-aionui.ts).
  */
 
 export interface LivPermissionMode {
-	id: 'ask' | 'auto'
+	id: 'default' | 'plan' | 'acceptEdits' | 'bypassPermissions'
 	label: string
 	hint: string
 	icon: typeof Shield
 }
 
-// Phase 291 — the only LOCAL catalog. The model/agent list is fetched live from
-// /liv/api/agents; there is no provider switch (AionUi uses its configured
-// agent's provider). Permission is a CLIENT-SIDE choice for how tool-call
-// approvals are handled: "Ask first" hands approvals off to the Liv window,
-// "Auto-run" auto-approves them so simple commands finish in the bar.
+// Phase 291 — AionUi's REAL permission modes for the Claude Code backend (set
+// per-conversation via config-options, best-effort on a new session). The plan's
+// claim that "Plan does not exist" was about the deleted native path, not AionUi.
+// Confirmations that still fire route to the "Open in Liv" escape hatch.
 export const LIV_PERMISSION_MODES: LivPermissionMode[] = [
-	{id: 'ask', label: 'Ask first', hint: 'Approvals open Liv', icon: Shield},
-	{id: 'auto', label: 'Auto-run', hint: 'Approve actions automatically', icon: Zap},
+	{id: 'default', label: 'Default', hint: 'Ask before actions', icon: Shield},
+	{id: 'plan', label: 'Plan', hint: 'Read-only — propose a plan', icon: Map},
+	{id: 'acceptEdits', label: 'Accept edits', hint: 'Auto-approve edits, ask for commands', icon: Pencil},
+	{id: 'bypassPermissions', label: 'Auto-run', hint: 'Approve every action (YOLO)', icon: Zap},
 ]
 
 // ── Generic chip dropdown ────────────────────────────────────────────────────
@@ -145,6 +147,198 @@ function SelectorChip({
 	)
 }
 
+// ── "+" add-context menu (Upload from device · Skills · MCP) ──────────────────
+// Mirrors AionUi's composer "+" menu. File upload is real (POST /liv/api/fs/upload
+// → path → sendMessage files); Skills toggle real (inject_skills); MCP is an
+// informational count (display-only in AionUi too).
+
+function LivPlusMenu({
+	files,
+	onAddFiles,
+	onRemoveFile,
+	selectedSkills,
+	onToggleSkill,
+}: {
+	files: {name: string; path: string}[]
+	onAddFiles: (added: {name: string; path: string}[]) => void
+	onRemoveFile: (path: string) => void
+	selectedSkills: string[]
+	onToggleSkill: (name: string) => void
+}) {
+	const [open, setOpen] = useState(false)
+	const [skills, setSkills] = useState<LivSkill[]>([])
+	const [mcp, setMcp] = useState<LivMcpServer[]>([])
+	const [loaded, setLoaded] = useState(false)
+	const [uploading, setUploading] = useState(false)
+	const wrapRef = useRef<HTMLDivElement>(null)
+	const fileRef = useRef<HTMLInputElement>(null)
+
+	// Lazy-load skills + MCP the first time the menu opens (cheap; box-only).
+	useEffect(() => {
+		if (!open || loaded) return
+		setLoaded(true)
+		let cancelled = false
+		void listLivSkills()
+			.then((r) => !cancelled && setSkills(r))
+			.catch(() => !cancelled && setSkills([]))
+		void getLivMcpServers()
+			.then((r) => !cancelled && setMcp(r))
+			.catch(() => !cancelled && setMcp([]))
+		return () => {
+			cancelled = true
+		}
+	}, [open, loaded])
+
+	useEffect(() => {
+		if (!open) return
+		const onDown = (e: MouseEvent) => {
+			if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+		}
+		document.addEventListener('mousedown', onDown)
+		return () => document.removeEventListener('mousedown', onDown)
+	}, [open])
+
+	const onPick = async (list: FileList | null) => {
+		if (!list || list.length === 0) return
+		setUploading(true)
+		const added: {name: string; path: string}[] = []
+		for (const f of Array.from(list)) {
+			const path = await uploadLivFile(f)
+			if (path) added.push({name: f.name, path})
+		}
+		setUploading(false)
+		if (added.length) onAddFiles(added)
+	}
+
+	const mcpEnabled = mcp.filter((m) => m.enabled).length
+	const badge = files.length + selectedSkills.length
+
+	return (
+		<div ref={wrapRef} className='relative shrink-0'>
+			<input
+				ref={fileRef}
+				type='file'
+				multiple
+				className='hidden'
+				onChange={(e) => {
+					void onPick(e.target.files)
+					e.target.value = ''
+				}}
+			/>
+			<button
+				type='button'
+				onClick={() => setOpen((v) => !v)}
+				title='Add context'
+				aria-label='Add context'
+				aria-haspopup='menu'
+				aria-expanded={open}
+				className={cn(
+					'relative grid h-8 w-8 shrink-0 place-items-center rounded-full border border-line text-[color:var(--fg-dim)] transition-colors hover:border-line-strong hover:bg-[color:var(--bg-2)] hover:text-[color:var(--fg)]',
+					open && 'border-line-strong bg-[color:var(--bg-2)] text-[color:var(--fg)]',
+				)}
+			>
+				<Plus className='h-4 w-4' />
+				{badge > 0 && (
+					<span className='absolute -right-0.5 -top-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-[color:var(--accent,#6366f1)] px-1 text-[9px] font-semibold leading-none text-white'>
+						{badge}
+					</span>
+				)}
+			</button>
+
+			<AnimatePresence>
+				{open && (
+					<motion.div
+						initial={{opacity: 0, y: 6, scale: 0.97}}
+						animate={{opacity: 1, y: 0, scale: 1}}
+						exit={{opacity: 0, y: 6, scale: 0.97}}
+						transition={{duration: 0.12}}
+						className='absolute left-0 top-[calc(100%+8px)] z-50 w-64 overflow-hidden rounded-2xl border border-line bg-card-bg py-1.5 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.4)] backdrop-blur-2xl'
+						role='menu'
+					>
+						{/* Upload from device */}
+						<button
+							type='button'
+							role='menuitem'
+							onClick={() => fileRef.current?.click()}
+							className='flex w-full items-center gap-2.5 px-3 py-[7px] text-left text-[13px] text-[color:var(--fg-dim)] transition-colors hover:bg-[color:var(--bg-2)] hover:text-[color:var(--fg)]'
+						>
+							<Upload className='h-[15px] w-[15px] shrink-0 opacity-80' />
+							<span className='flex-1'>{uploading ? 'Uploading…' : 'Upload from device'}</span>
+						</button>
+
+						{files.length > 0 && (
+							<div className='px-3 py-1'>
+								{files.map((f) => (
+									<div key={f.path} className='flex items-center gap-2 py-0.5 text-[12px] text-[color:var(--fg-dim)]'>
+										<span className='min-w-0 flex-1 truncate'>{f.name}</span>
+										<button
+											type='button'
+											onClick={() => onRemoveFile(f.path)}
+											aria-label={`Remove ${f.name}`}
+											className='shrink-0 text-[color:var(--fg-faint)] hover:text-red-500'
+										>
+											<X className='h-3 w-3' />
+										</button>
+									</div>
+								))}
+							</div>
+						)}
+
+						<div className='my-1 h-px bg-line' />
+
+						{/* Skills (selected/total) — toggling injects them for the next turn. */}
+						<div className='px-3 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--fg-faint)]'>
+							Skills{skills.length > 0 ? ` (${selectedSkills.length}/${skills.length})` : ''}
+						</div>
+						{skills.length === 0 ? (
+							<div className='px-3 pb-1.5 text-[12px] text-[color:var(--fg-faint)]'>None available</div>
+						) : (
+							<div className='max-h-40 overflow-y-auto'>
+								{skills.map((s) => {
+									const on = selectedSkills.includes(s.name)
+									return (
+										<button
+											key={s.name}
+											type='button'
+											role='menuitemcheckbox'
+											aria-checked={on}
+											onClick={() => onToggleSkill(s.name)}
+											className='flex w-full items-center gap-2.5 px-3 py-[6px] text-left text-[13px] transition-colors hover:bg-[color:var(--bg-2)]'
+										>
+											<span
+												className={cn(
+													'grid h-3.5 w-3.5 shrink-0 place-items-center rounded border text-[9px] leading-none',
+													on
+														? 'border-[color:var(--accent,#6366f1)] bg-[color:var(--accent,#6366f1)] text-white'
+														: 'border-line',
+												)}
+											>
+												{on ? '✓' : ''}
+											</span>
+											<span className='min-w-0 flex-1 truncate text-[color:var(--fg-dim)]'>{s.name}</span>
+										</button>
+									)
+								})}
+							</div>
+						)}
+
+						<div className='my-1 h-px bg-line' />
+
+						{/* MCP — informational count (display-only in AionUi). */}
+						<div className='flex items-center gap-2.5 px-3 py-[7px] text-[13px] text-[color:var(--fg-faint)]'>
+							<Blocks className='h-[15px] w-[15px] shrink-0 opacity-80' />
+							<span className='flex-1'>MCP</span>
+							<span className='tabular-nums text-[12px]'>
+								{mcpEnabled}/{mcp.length}
+							</span>
+						</div>
+					</motion.div>
+				)}
+			</AnimatePresence>
+		</div>
+	)
+}
+
 // ── The composer ─────────────────────────────────────────────────────────────
 
 export function LivCommandInput({
@@ -153,8 +347,15 @@ export function LivCommandInput({
 	autoFocus = true,
 }: {
 	onClose: () => void
-	/** Fired on Enter / send-button with the prompt + chosen agent + permission. */
-	onSubmit?: (payload: {prompt: string; agentId: string | undefined; autoApprove: boolean}) => void
+	/** Fired on Enter / send with the prompt + agent + model + mode + files + skills. */
+	onSubmit?: (payload: {
+		prompt: string
+		agentId: string | undefined
+		modelId: string | undefined
+		mode: LivPermissionMode['id']
+		files: string[]
+		injectSkills: string[]
+	}) => void
 	autoFocus?: boolean
 }) {
 	const [prompt, setPrompt] = useState('')
@@ -166,11 +367,20 @@ export function LivCommandInput({
 	// uses AionUi's configured default agent.
 	const {agents} = useLivAgents(true)
 	const [agentId, setAgentId] = useState<string>('')
-	// Default to the first agent once the list resolves (no forced choice
-	// before agents load).
+	const [modelId, setModelId] = useState<string>('') // '' = the agent's Default Model
+	const agent = useMemo(() => agents.find((a) => a.id === agentId), [agents, agentId])
+	// Default to the first agent once the list resolves; reset the model whenever
+	// the agent changes (each agent has its own model list).
 	useEffect(() => {
 		if (!agentId && agents.length > 0) setAgentId(agents[0].id)
 	}, [agents, agentId])
+	useEffect(() => {
+		setModelId('')
+	}, [agentId])
+
+	// "+" menu — files uploaded + skills selected for the next message.
+	const [files, setFiles] = useState<{name: string; path: string}[]>([])
+	const [selectedSkills, setSelectedSkills] = useState<string[]>([])
 
 	useEffect(() => {
 		if (autoFocus) inputRef.current?.focus()
@@ -185,15 +395,31 @@ export function LivCommandInput({
 		return () => document.removeEventListener('keydown', onKey)
 	}, [onClose])
 
-	const agentLabel = useMemo(() => agents.find((a) => a.id === agentId)?.name ?? 'Liv', [agents, agentId])
+	const agentLabel = agent?.name ?? 'Liv'
+	const models = agent?.models ?? []
+	const modelLabel = useMemo(() => models.find((m) => m.id === modelId)?.label ?? 'Default', [models, modelId])
+	// A leading "Default" entry = the agent's own default model (omit the id).
+	const modelOptions = useMemo(
+		() => [{id: '', label: 'Default'}, ...models.map((m) => ({id: m.id, label: m.label}))],
+		[models],
+	)
 	const permission = LIV_PERMISSION_MODES.find((m) => m.id === permissionId) ?? LIV_PERMISSION_MODES[0]
 
 	const canSend = prompt.trim().length > 0
 
 	const submit = () => {
 		if (!canSend) return
-		onSubmit?.({prompt: prompt.trim(), agentId: agentId || undefined, autoApprove: permissionId === 'auto'})
+		onSubmit?.({
+			prompt: prompt.trim(),
+			agentId: agentId || undefined,
+			modelId: modelId || undefined,
+			mode: permissionId,
+			files: files.map((f) => f.path),
+			injectSkills: selectedSkills,
+		})
 		setPrompt('')
+		setFiles([])
+		setSelectedSkills([])
 	}
 
 	const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -205,15 +431,18 @@ export function LivCommandInput({
 
 	return (
 		<div className='flex h-full w-full items-center gap-2 pl-1 pr-1'>
-			{/* Left — add context / attach (stub). */}
-			<button
-				type='button'
-				title='Add context'
-				aria-label='Add context'
-				className='grid h-8 w-8 shrink-0 place-items-center rounded-full border border-line text-[color:var(--fg-dim)] transition-colors hover:border-line-strong hover:bg-[color:var(--bg-2)] hover:text-[color:var(--fg)]'
-			>
-				<Plus className='h-4 w-4' />
-			</button>
+			{/* Left — "+" add-context menu (upload · skills · MCP). */}
+			<LivPlusMenu
+				files={files}
+				onAddFiles={(added) =>
+					setFiles((f) => [...f, ...added.filter((a) => !f.some((x) => x.path === a.path))])
+				}
+				onRemoveFile={(path) => setFiles((f) => f.filter((x) => x.path !== path))}
+				selectedSkills={selectedSkills}
+				onToggleSkill={(name) =>
+					setSelectedSkills((s) => (s.includes(name) ? s.filter((x) => x !== name) : [...s, name]))
+				}
+			/>
 
 			{/* Liv mark — a small sparkle so the input reads as "talking to Liv". */}
 			<Sparkles className='h-4 w-4 shrink-0 text-[color:var(--fg-faint)]' aria-hidden />
@@ -230,9 +459,8 @@ export function LivCommandInput({
 				className='h-7 min-w-0 flex-1 resize-none self-center bg-transparent text-[14px] leading-7 text-[color:var(--fg)] placeholder:text-[color:var(--fg-faint)] focus:outline-none'
 			/>
 
-			{/* Right — agent (which Liv backend) · permission selectors.
-			    The Agent chip only renders when AionUi returned a list; otherwise
-			    dispatch falls back to AionUi's configured default. */}
+			{/* Right — agent · model · permission selectors. Agent + Model only render
+			    when AionUi returned data; otherwise dispatch uses the defaults. */}
 			{agents.length > 0 ? (
 				<SelectorChip
 					label='Agent'
@@ -240,6 +468,9 @@ export function LivCommandInput({
 					options={agents.map((a) => ({id: a.id, label: a.name}))}
 					onSelect={setAgentId}
 				/>
+			) : null}
+			{models.length > 0 ? (
+				<SelectorChip label='Model' value={modelLabel} options={modelOptions} onSelect={setModelId} />
 			) : null}
 			<SelectorChip
 				label='Permission'
@@ -304,36 +535,13 @@ export function LivBrandMarkInner({state, donutSize = 24}: {state: LivState; don
 	const done = state === 'done'
 	return (
 		<>
-			{/* Working halo — a rotating conic-gradient ring (masked to a thin band). */}
-			<AnimatePresence>
-				{working && (
-					<motion.span
-						key='halo'
-						initial={{opacity: 0, scale: 0.82}}
-						animate={{opacity: 1, scale: 1, rotate: 360}}
-						exit={{opacity: 0, scale: 0.82}}
-						transition={{
-							rotate: {repeat: Infinity, ease: 'linear', duration: 1.4},
-							opacity: {duration: 0.2},
-							scale: {duration: 0.2},
-						}}
-						className='pointer-events-none absolute inset-0 rounded-full'
-						style={{
-							background:
-								'conic-gradient(from 0deg, transparent 0deg, var(--accent, #6366f1) 280deg, transparent 360deg)',
-							WebkitMask:
-								'radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px))',
-							mask: 'radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px))',
-						}}
-					/>
-				)}
-			</AnimatePresence>
-
-			{/* The donut mark — gently breathes while working. */}
+			{/* The donut mark IS the working indicator — it pulses (breathes) while
+			    Liv works. The old rotating conic-gradient halo was removed per
+			    operator: "sadece logo oynasa daha iyi olur". */}
 			<motion.span
 				aria-hidden='true'
-				animate={working ? {scale: [1, 0.84, 1]} : {scale: 1}}
-				transition={working ? {repeat: Infinity, duration: 1.4, ease: 'easeInOut'} : {duration: 0.2}}
+				animate={working ? {scale: [1, 0.8, 1], opacity: [1, 0.65, 1]} : {scale: 1, opacity: 1}}
+				transition={working ? {repeat: Infinity, duration: 1.2, ease: 'easeInOut'} : {duration: 0.2}}
 				className='relative inline-block rounded-full bg-[color:var(--fg)]'
 				style={{height: donutSize, width: donutSize}}
 			>
@@ -464,27 +672,42 @@ export function LivAnswerView({
  * the answer reads "in the same place". Theme-adaptive (bg-card-bg + tokens).
  */
 export function LivAnswerPanel({
-	prompt,
-	answer,
+	turns,
+	working,
 	onOpenInLiv,
 }: {
-	prompt: string
-	answer: string
+	/** The session transcript — every Q&A turn so far (answer lives ONLY here). */
+	turns: Array<{prompt: string; answer: string}>
+	/** The last turn is still streaming. */
+	working?: boolean
 	/** Open the full Liv (AionUi) window to continue the conversation / approve tools. */
 	onOpenInLiv?: () => void
 }) {
 	return (
 		<div className='w-[min(720px,calc(100vw-48px))] overflow-hidden rounded-3xl border border-line bg-card-bg/95 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.5)] backdrop-blur-2xl'>
-			<div className='flex items-center gap-2 border-b border-line px-5 py-3'>
-				<Sparkles className='h-3.5 w-3.5 text-[color:var(--accent,#6366f1)]' aria-hidden />
-				<span className='truncate text-[12px] text-[color:var(--fg-mute)]'>{prompt}</span>
-			</div>
-			<div className='max-h-[46vh] overflow-y-auto px-5 py-4 text-[14px] leading-relaxed text-[color:var(--fg)]'>
-				{answer.split('\n').map((line, i) => (
-					<p key={i} className={line.trim() ? 'mb-2' : 'mb-2 h-2'}>
-						{line}
-					</p>
-				))}
+			<div className='max-h-[52vh] overflow-y-auto px-5 py-4'>
+				{turns.map((turn, ti) => {
+					const isLast = ti === turns.length - 1
+					return (
+						<div key={ti} className={ti > 0 ? 'mt-4 border-t border-line pt-4' : ''}>
+							<div className='mb-1.5 flex items-center gap-2'>
+								<Sparkles className='h-3.5 w-3.5 shrink-0 text-[color:var(--accent,#6366f1)]' aria-hidden />
+								<span className='truncate text-[12px] text-[color:var(--fg-mute)]'>{turn.prompt}</span>
+							</div>
+							<div className='text-[14px] leading-relaxed text-[color:var(--fg)]'>
+								{turn.answer ? (
+									turn.answer.split('\n').map((line, i) => (
+										<p key={i} className={line.trim() ? 'mb-2' : 'mb-2 h-2'}>
+											{line}
+										</p>
+									))
+								) : working && isLast ? (
+									<p className='animate-pulse text-[color:var(--fg-faint)]'>Liv is thinking…</p>
+								) : null}
+							</div>
+						</div>
+					)
+				})}
 			</div>
 			{onOpenInLiv ? (
 				<div className='flex justify-end border-t border-line px-5 py-2.5'>

@@ -17,7 +17,7 @@ import {systemAppsKeyed} from '@/providers/apps'
 import {useTheme} from '@/hooks/use-theme'
 import {openCommandPalette} from '@/components/cmdk'
 import {DisplaysSurfaceLive} from './displays-surface'
-import {LivCommandInput, LivAnswerView, LivAnswerPanel, LivBrandMarkInner, type LivState} from './liv-command-input'
+import {LivCommandInput, LivAnswerPanel, LivBrandMarkInner, type LivState} from './liv-command-input'
 import {runLivCommand, type LivCommandRun} from './liv-command-aionui'
 import {FeedbackDialog} from './feedback-dialog'
 import {greeting, wmoGlyph} from './clock-helpers'
@@ -167,26 +167,40 @@ function TopBarDesktop() {
 	const [isHoverExpanded, setIsHoverExpanded] = useState(false)
 	// ── Liv command bar → AionUi (the live Liv) ───────────────────────────────
 	const [livState, setLivState] = useState<LivState>('idle')
-	const [livPrompt, setLivPrompt] = useState('')
-	const [livAnswer, setLivAnswer] = useState<string | null>(null)
+	const [livPrompt, setLivPrompt] = useState('')           // in-flight prompt
+	const [livAnswer, setLivAnswer] = useState<string | null>(null) // in-flight streaming text
+	// Completed Q&A turns for THIS session. The answer panel renders this
+	// transcript; answers never appear in the pill (operator: "answer iki yerde
+	// de yazmasın sadece aşağıdaki kutuda yazsın").
+	const [livTurns, setLivTurns] = useState<Array<{prompt: string; answer: string}>>([])
+	// Persistent conversation id for the session — reused for FOLLOW-UP questions
+	// so AionUi keeps the context (operator: "aynı session'da bir tane daha soru
+	// soracağım"). Cleared on close.
+	const livConvIdRef = useRef<string>('')
+	// True once the operator clicked the done-logo to reveal the panel — keeps the
+	// transcript visible through subsequent working/done turns in the session.
+	const [livRevealed, setLivRevealed] = useState(false)
 	// Show the "Open in Liv ↗" escape hatch when a turn needs the full window
 	// (tool approval pending) or dispatch fell back (backend unreachable / a
 	// protocol assumption missed on this box).
 	const [livNeedsWindow, setLivNeedsWindow] = useState(false)
 	const livRunRef = useRef<LivCommandRun | null>(null)
 	const answerPanelRef = useRef<HTMLDivElement>(null)
-	// The bar shows the Liv UI (composer / answer) instead of the navbar in these
-	// two states. working/done keep the navbar, with the logo animating.
+	// The pill shows the Liv composer (instead of the navbar) in compose + answer.
+	// working/done keep the navbar so the center logo is visible + animating.
 	const isLivOverlay = livState === 'compose' || livState === 'answer'
 	const enterCompose = () => {
 		setIsHoverExpanded(false)
 		setSurfaceClicked(false)
 		setLivState('compose')
 	}
-	// Logo click: idle → compose · done → answer (read in place) · working → busy.
+	// Logo click: idle → compose · done → answer (reveal transcript + follow-up).
 	const onLogoClick = () => {
 		if (livState === 'idle') enterCompose()
-		else if (livState === 'done') setLivState('answer')
+		else if (livState === 'done') {
+			setLivRevealed(true)
+			setLivState('answer')
+		}
 	}
 	// Open the full Liv (AionUi) window — escape hatch for tool/approval flows
 	// the tiny bar can't render, and the fallback when direct dispatch can't
@@ -200,41 +214,70 @@ function TopBarDesktop() {
 		}
 		livClose()
 	}
-	// Dispatch the command to AionUi and drive the state machine from the live
-	// stream: working (logo spins) → text accumulates → done (notification dot)
-	// → click → answer in place. Errors/approvals surface the Open-in-Liv hatch.
-	const livSubmit = (payload: {prompt: string; agentId: string | undefined; autoApprove: boolean}) => {
+	// Dispatch a command (or same-session follow-up) to AionUi and drive the state
+	// machine from the live stream: working (logo pulses) → text streams into the
+	// panel → done (dot) / answer. Follow-ups reuse livConvIdRef so the thread
+	// keeps context. Errors/approvals surface the Open-in-Liv hatch.
+	const livSubmit = (payload: {
+		prompt: string
+		agentId: string | undefined
+		modelId: string | undefined
+		mode: string
+		files: string[]
+		injectSkills: string[]
+	}) => {
 		livRunRef.current?.abort()
 		setLivPrompt(payload.prompt)
 		setLivAnswer(null)
 		setLivNeedsWindow(false)
-		livRunRef.current = runLivCommand(payload, {
-			onWorking: () => setLivState('working'),
-			onText: (full) => setLivAnswer(full),
-			onDone: (full) => {
-				setLivAnswer(full)
-				setLivState('done')
+		// A revealed session keeps the composer open after each turn (answer);
+		// the very first turn rests at done so the operator clicks to reveal.
+		const restState: LivState = livRevealed ? 'answer' : 'done'
+		const finish = (answer: string, needsWindow: boolean) => {
+			setLivTurns((t) => [...t, {prompt: payload.prompt, answer}])
+			setLivAnswer(null)
+			setLivNeedsWindow(needsWindow)
+			setLivState(restState)
+		}
+		livRunRef.current = runLivCommand(
+			{
+				...payload,
+				// YOLO mode auto-approves tool calls; other modes route any
+				// confirmation to the Open-in-Liv escape hatch.
+				autoApprove: payload.mode === 'bypassPermissions',
+				conversationId: livConvIdRef.current || undefined,
 			},
-			onError: (message, {fallback}) => {
-				setLivAnswer(message)
-				setLivNeedsWindow(fallback)
-				setLivState('done')
+			{
+				onWorking: () => setLivState('working'),
+				onConversation: (id) => {
+					livConvIdRef.current = id
+				},
+				onText: (full) => setLivAnswer(full),
+				onDone: (full) => finish(full, false),
+				onError: (message, {fallback}) => finish(message, fallback),
+				onApprovalNeeded: () =>
+					finish('Liv needs to run an action that needs your approval. Open Liv to review and continue.', true),
 			},
-			onApprovalNeeded: () => {
-				setLivAnswer('Liv needs to run an action that needs your approval. Open Liv to review and continue.')
-				setLivNeedsWindow(true)
-				setLivState('done')
-			},
-		})
+		)
 	}
 	const livClose = () => {
 		livRunRef.current?.abort()
 		livRunRef.current = null
+		livConvIdRef.current = ''
 		setLivState('idle')
 		setLivAnswer(null)
 		setLivPrompt('')
+		setLivTurns([])
+		setLivRevealed(false)
 		setLivNeedsWindow(false)
 	}
+	// Transcript the panel shows: completed turns + the in-flight turn while
+	// working (so a follow-up streams live once the panel is revealed).
+	const livDisplayTurns =
+		livState === 'working' ? [...livTurns, {prompt: livPrompt, answer: livAnswer ?? ''}] : livTurns
+	// Panel reveals on the done-click (answer), then stays through the session.
+	const livPanelVisible =
+		livState === 'answer' || (livRevealed && (livState === 'working' || livState === 'done'))
 	const profileWrapRef = useRef<HTMLDivElement>(null)
 	// Phase 260.2 — nav element ref for the hover-collapse safety net (bug fix).
 	const navRef = useRef<HTMLElement>(null)
@@ -786,17 +829,9 @@ function TopBarDesktop() {
 								transition={{type: 'spring', stiffness: 460, damping: 34}}
 								className='absolute inset-0 flex items-center px-3.5'
 							>
-								{livState === 'compose' ? (
-									<LivCommandInput onClose={livClose} onSubmit={livSubmit} />
-								) : (
-									<LivAnswerView
-										prompt={livPrompt}
-										answer={livAnswer}
-										onAskAgain={enterCompose}
-										onClose={livClose}
-										onOpenInLiv={livNeedsWindow ? openLivWindow : undefined}
-									/>
-								)}
+								{/* compose (first question) AND answer (follow-up) both show the
+								    composer — the answer itself lives only in the panel below. */}
+								<LivCommandInput onClose={livClose} onSubmit={livSubmit} />
 							</motion.div>
 						)}
 					</AnimatePresence>
@@ -805,7 +840,7 @@ function TopBarDesktop() {
 				{/* Liv answer panel — the full reply, dropped just below the bar. */}
 				<div className='pointer-events-none absolute inset-x-0 top-[92px] flex justify-center'>
 					<AnimatePresence>
-						{livState === 'answer' && livAnswer && (
+						{livPanelVisible && livDisplayTurns.length > 0 && (
 							<motion.div
 								ref={answerPanelRef}
 								initial={{opacity: 0, y: -10, scale: 0.98}}
@@ -814,7 +849,11 @@ function TopBarDesktop() {
 								transition={{type: 'spring', stiffness: 420, damping: 32}}
 								className='pointer-events-auto'
 							>
-								<LivAnswerPanel prompt={livPrompt} answer={livAnswer} onOpenInLiv={livNeedsWindow ? openLivWindow : undefined} />
+								<LivAnswerPanel
+									turns={livDisplayTurns}
+									working={livState === 'working'}
+									onOpenInLiv={livNeedsWindow ? openLivWindow : undefined}
+								/>
 							</motion.div>
 						)}
 					</AnimatePresence>

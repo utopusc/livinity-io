@@ -8,9 +8,13 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 
 import {
 	LivCommandStream,
+	applyLivMode,
 	createLivConversation,
+	getLivMcpServers,
 	listLivAgents,
+	listLivSkills,
 	runLivCommand,
+	sendLivMessage,
 	type LivStreamHandlers,
 } from './liv-command-aionui'
 
@@ -66,19 +70,111 @@ afterEach(() => {
 })
 
 describe('listLivAgents', () => {
-	it('parses the {success,data:[...]} envelope (vendored AionUi shape)', async () => {
-		mockFetchOnce(() => ({body: {success: true, data: [{id: '2d23ff1c', name: 'Claude Code'}, {id: 'g1', name: 'Gemini'}]}}))
-		const agents = await listLivAgents()
-		expect(agents).toEqual([
-			{id: '2d23ff1c', name: 'Claude Code'},
-			{id: 'g1', name: 'Gemini'},
+	it('parses the {success,data:[...]} envelope + handshake models (vendored AionUi shape)', async () => {
+		mockFetchOnce(() => ({
+			body: {
+				success: true,
+				data: [
+					{
+						id: '2d23ff1c',
+						name: 'Claude Code',
+						handshake: {
+							available_models: {
+								current_model_id: 'sonnet',
+								available_models: [
+									{id: 'sonnet', label: 'Sonnet'},
+									{id: 'haiku', label: 'Haiku'},
+								],
+							},
+						},
+					},
+					{id: 'g1', name: 'Gemini'},
+				],
+			},
+		}))
+		expect(await listLivAgents()).toEqual([
+			{
+				id: '2d23ff1c',
+				name: 'Claude Code',
+				models: [
+					{id: 'sonnet', label: 'Sonnet'},
+					{id: 'haiku', label: 'Haiku'},
+				],
+				defaultModelId: 'sonnet',
+			},
+			{id: 'g1', name: 'Gemini', models: [], defaultModelId: null},
 		])
 	})
 	it('parses a bare array and an {agents:[...]} wrapper, dropping id-less rows', async () => {
 		mockFetchOnce(() => ({body: [{id: 'a', name: 'A'}, {name: 'no-id'}]}))
-		expect(await listLivAgents()).toEqual([{id: 'a', name: 'A'}])
+		expect(await listLivAgents()).toEqual([{id: 'a', name: 'A', models: [], defaultModelId: null}])
 		mockFetchOnce(() => ({body: {agents: [{id: 'b'}]}}))
-		expect(await listLivAgents()).toEqual([{id: 'b', name: 'b'}])
+		expect(await listLivAgents()).toEqual([{id: 'b', name: 'b', models: [], defaultModelId: null}])
+	})
+})
+
+describe('listLivSkills / getLivMcpServers', () => {
+	it('parses the skills + mcp envelopes, dropping malformed rows', async () => {
+		mockFetchOnce(() => ({body: {success: true, data: [{name: 'commit', description: 'git commit'}, {name: ''}]}}))
+		expect(await listLivSkills()).toEqual([{name: 'commit', description: 'git commit'}])
+		mockFetchOnce(() => ({body: {data: [{id: 's1', name: 'liv-docker', enabled: true}, {id: 's2', name: 'x', enabled: false}, {name: 'no-id'}]}}))
+		expect(await getLivMcpServers()).toEqual([
+			{id: 's1', name: 'liv-docker', enabled: true},
+			{id: 's2', name: 'x', enabled: false},
+		])
+	})
+})
+
+describe('applyLivMode', () => {
+	it('finds the mode option by category and PUTs the value', async () => {
+		const calls: {url: string; init?: RequestInit}[] = []
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string, init?: RequestInit) => {
+				calls.push({url, init})
+				if (init?.method === 'PUT') return {ok: true, status: 200, text: async () => '{}'} as Response
+				return {
+					ok: true,
+					status: 200,
+					text: async () =>
+						JSON.stringify({config_options: [{id: 'agent', category: 'agent'}, {id: 'mode-1', category: 'mode', options: [{value: 'plan'}]}]}),
+				} as Response
+			}),
+		)
+		await applyLivMode('c1', 'plan')
+		const put = calls.find((c) => c.init?.method === 'PUT')!
+		expect(put.url).toContain('/conversations/c1/config-options/mode-1')
+		expect(JSON.parse(put.init!.body as string)).toEqual({value: 'plan'})
+	})
+	it('no-ops for an empty mode (no network)', async () => {
+		const f = vi.fn()
+		vi.stubGlobal('fetch', f)
+		await applyLivMode('c1', '')
+		expect(f).not.toHaveBeenCalled()
+	})
+})
+
+describe('createLivConversation model + sendLivMessage files/skills', () => {
+	it('puts the chosen model in extra.current_model_id', async () => {
+		const fetchMock = vi.fn(
+			async () => ({ok: true, status: 200, text: async () => JSON.stringify({data: {id: 'c1'}})}) as Response,
+		)
+		vi.stubGlobal('fetch', fetchMock)
+		expect(await createLivConversation('claude', 'sonnet')).toBe('c1')
+		const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)
+		expect(body.extra).toEqual({agent_id: 'claude', current_model_id: 'sonnet'})
+	})
+	it('sends files + inject_skills only when provided', async () => {
+		const fetchMock = vi.fn(async () => ({ok: true, status: 200, text: async () => '{}'}) as Response)
+		vi.stubGlobal('fetch', fetchMock)
+		await sendLivMessage('c1', 'hi', {files: ['/tmp/a.png'], injectSkills: ['commit']})
+		expect(JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)).toEqual({
+			content: 'hi',
+			files: ['/tmp/a.png'],
+			inject_skills: ['commit'],
+		})
+		await sendLivMessage('c1', 'plain')
+		expect(JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string)).toEqual({content: 'plain'})
 	})
 })
 
