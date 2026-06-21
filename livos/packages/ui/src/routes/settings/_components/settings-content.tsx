@@ -182,7 +182,12 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'date-time',        group: 'system', icon: TbClock,           label: 'Date & Time',       description: 'Time zone & language',                    adminOnly: true},
 	{id: 'storage',          group: 'system', icon: TbDeviceSdCard,    label: 'Storage',           description: 'USB drives, network shares & sharing',    adminOnly: true},
 	{id: 'security-sessions', group: 'system', icon: TbShieldLock,     label: 'Security & Sessions', description: 'Banned IPs, access & sign-out',         adminOnly: true},
-	{id: 'backups',          group: 'system', icon: TbDatabase,        label: 'Backups',           description: 'Backup, restore & migration',             adminOnly: true},
+	// HIDDEN 2026-06-21 (operator: "ayarlardaki backup çalışmıyor, gizle") — the
+	// Backups settings tab is hidden until the feature works. The BackupsSection
+	// component + `case 'backups'` below are kept intact, so re-listing it later is
+	// just un-commenting this one line. (NOTE: on desktop this tab also hosted the
+	// Migration sub-tab; mobile keeps Migration as its own separate row.)
+	// {id: 'backups',          group: 'system', icon: TbDatabase,        label: 'Backups',           description: 'Backup, restore & migration',             adminOnly: true},
 	{id: 'software-update',  group: 'system', icon: TbDownload,        label: 'Software Update',   description: 'Apply updates & view deploy history',     adminOnly: true},
 	// ── FOOTER ────────────────────────────────────────────────────────
 	{id: 'troubleshoot',     group: 'system', icon: TbTool,            label: 'Troubleshoot',      description: 'Logs & diagnostics',                      adminOnly: true, footer: true},
