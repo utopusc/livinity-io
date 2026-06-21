@@ -180,15 +180,23 @@
 }
 .docs-cat-label {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--fg-faint);
-  font-weight: 500;
-  margin: 20px 0 8px;
+  /* More prominent than before (was --fg-faint / weight 500) so each section
+     header reads as a distinct group, clearly set apart from the item above. */
+  color: var(--fg-mute);
+  font-weight: 600;
+  /* Generous top gap + a hairline divider visually separates each category from
+     the previous category's last item (operator: headers were too close above). */
+  margin: 26px 0 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
 }
 .docs-cat-label:first-of-type {
   margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 .docs-side-link {
   display: block;
