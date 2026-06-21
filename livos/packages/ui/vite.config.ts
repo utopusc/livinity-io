@@ -172,6 +172,30 @@ export default defineConfig({
 				secure: true,
 				ws: true,
 			},
+			// Phase 291 — proxy the AionUi (live Liv) surfaces so the topbar
+			// command bar can reach them in dev against a real box
+			// (VITE_BACKEND_URL=<box>). /liv-login mints the aionui-session
+			// cookie, /liv/api/* is AionUi's REST, /ws is its chat WebSocket.
+			// The `^/liv/` regex key matches ONLY paths under /liv/ so it can't
+			// swallow the SPA routes /liv-assistant or /live-usage. Full auth
+			// still needs a valid LIVINITY_SESSION cookie → box-only verify.
+			'/liv-login': {
+				target: process.env.VITE_BACKEND_URL || 'https://livinity.cloud',
+				changeOrigin: true,
+				secure: true,
+			},
+			'^/liv/': {
+				target: process.env.VITE_BACKEND_URL || 'https://livinity.cloud',
+				changeOrigin: true,
+				secure: true,
+				ws: true,
+			},
+			'/ws': {
+				target: process.env.VITE_BACKEND_URL || 'https://livinity.cloud',
+				changeOrigin: true,
+				secure: true,
+				ws: true,
+			},
 		},
 	},
 	resolve: {

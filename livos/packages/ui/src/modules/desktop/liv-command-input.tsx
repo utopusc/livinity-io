@@ -1,8 +1,10 @@
 import {useEffect, useMemo, useRef, useState} from 'react'
 import {AnimatePresence, motion} from 'framer-motion'
-import {ArrowUp, ChevronDown, Map, Plus, Shield, Sparkles, X, Zap} from 'lucide-react'
+import {ArrowUp, ArrowUpRight, ChevronDown, Plus, Shield, Sparkles, X, Zap} from 'lucide-react'
 
 import {cn} from '@/shadcn-lib/utils'
+
+import {useLivAgents} from './use-liv-agents'
 
 /**
  * LivCommandInput — the in-navbar Liv AI command composer.
@@ -17,54 +19,27 @@ import {cn} from '@/shadcn-lib/utils'
  *   center— the prompt textarea (grows to fit, capped)
  *   right — provider · model · permission-mode selectors + send
  *
- * UI-FIRST: every selector + the send/attach actions are presentational stubs
- * (local state + onSubmit callback). Wiring to the real Liv runtime (provider
- * registry, model list, permission engine, message dispatch) comes in a follow
- * -up — the operator asked to land the look + interaction first.
+ * Phase 291 — wired to AionUi (the live Liv). The Agent selector is fed from
+ * /liv/api/agents (use-liv-agents.ts); the Permission selector is a client-side
+ * toggle for tool-call approvals; dispatch streams the reply from AionUi's
+ * chat WebSocket (see liv-command-aionui.ts + top-bar.tsx livSubmit).
  */
 
-export interface LivProvider {
-	id: string
-	label: string
-}
-export interface LivModel {
-	id: string
-	label: string
-}
 export interface LivPermissionMode {
-	id: string
+	id: 'ask' | 'auto'
 	label: string
 	hint: string
 	icon: typeof Shield
 }
 
-// Placeholder catalogs (UI-first). Replace with the live provider/model registry
-// + the permission engine's modes when wiring the functionality.
-export const LIV_PROVIDERS: LivProvider[] = [
-	{id: 'anthropic', label: 'Anthropic'},
-	{id: 'openai', label: 'OpenAI'},
-	{id: 'google', label: 'Google'},
-	{id: 'local', label: 'Local'},
-]
-
-export const LIV_MODELS: Record<string, LivModel[]> = {
-	anthropic: [
-		{id: 'opus-4-8', label: 'Opus 4.8'},
-		{id: 'sonnet-4-6', label: 'Sonnet 4.6'},
-		{id: 'haiku-4-5', label: 'Haiku 4.5'},
-	],
-	openai: [
-		{id: 'gpt-5', label: 'GPT-5'},
-		{id: 'gpt-5-mini', label: 'GPT-5 mini'},
-	],
-	google: [{id: 'gemini-2', label: 'Gemini 2'}],
-	local: [{id: 'llama-3', label: 'Llama 3'}],
-}
-
+// Phase 291 — the only LOCAL catalog. The model/agent list is fetched live from
+// /liv/api/agents; there is no provider switch (AionUi uses its configured
+// agent's provider). Permission is a CLIENT-SIDE choice for how tool-call
+// approvals are handled: "Ask first" hands approvals off to the Liv window,
+// "Auto-run" auto-approves them so simple commands finish in the bar.
 export const LIV_PERMISSION_MODES: LivPermissionMode[] = [
-	{id: 'ask', label: 'Ask first', hint: 'Confirm each action', icon: Shield},
-	{id: 'auto', label: 'Auto-accept', hint: 'Run edits without asking', icon: Zap},
-	{id: 'plan', label: 'Plan only', hint: 'Propose a plan, no changes', icon: Map},
+	{id: 'ask', label: 'Ask first', hint: 'Approvals open Liv', icon: Shield},
+	{id: 'auto', label: 'Auto-run', hint: 'Approve actions automatically', icon: Zap},
 ]
 
 // ── Generic chip dropdown ────────────────────────────────────────────────────
@@ -178,24 +153,24 @@ export function LivCommandInput({
 	autoFocus = true,
 }: {
 	onClose: () => void
-	/** Stubbed for now — fired on Enter / send-button with the prompt + settings. */
-	onSubmit?: (payload: {prompt: string; provider: string; model: string; permission: string}) => void
+	/** Fired on Enter / send-button with the prompt + chosen agent + permission. */
+	onSubmit?: (payload: {prompt: string; agentId: string | undefined; autoApprove: boolean}) => void
 	autoFocus?: boolean
 }) {
 	const [prompt, setPrompt] = useState('')
-	const [providerId, setProviderId] = useState(LIV_PROVIDERS[0].id)
-	const [permissionId, setPermissionId] = useState(LIV_PERMISSION_MODES[0].id)
+	const [permissionId, setPermissionId] = useState<LivPermissionMode['id']>(LIV_PERMISSION_MODES[0].id)
 	const inputRef = useRef<HTMLTextAreaElement>(null)
 
-	const models = LIV_MODELS[providerId] ?? []
-	const [modelId, setModelId] = useState(models[0]?.id ?? '')
-
-	// Keep the model valid when the provider changes.
+	// Live agent list from AionUi (the real "which AI" selector). Empty when the
+	// backend isn't reachable (dev / cold box) → the chip is hidden and dispatch
+	// uses AionUi's configured default agent.
+	const {agents} = useLivAgents(true)
+	const [agentId, setAgentId] = useState<string>('')
+	// Default to the first agent once the list resolves (no forced choice
+	// before agents load).
 	useEffect(() => {
-		const next = LIV_MODELS[providerId] ?? []
-		if (!next.some((m) => m.id === modelId)) setModelId(next[0]?.id ?? '')
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [providerId])
+		if (!agentId && agents.length > 0) setAgentId(agents[0].id)
+	}, [agents, agentId])
 
 	useEffect(() => {
 		if (autoFocus) inputRef.current?.focus()
@@ -210,18 +185,14 @@ export function LivCommandInput({
 		return () => document.removeEventListener('keydown', onKey)
 	}, [onClose])
 
-	const providerLabel = useMemo(
-		() => LIV_PROVIDERS.find((p) => p.id === providerId)?.label ?? providerId,
-		[providerId],
-	)
-	const modelLabel = useMemo(() => models.find((m) => m.id === modelId)?.label ?? '—', [models, modelId])
+	const agentLabel = useMemo(() => agents.find((a) => a.id === agentId)?.name ?? 'Liv', [agents, agentId])
 	const permission = LIV_PERMISSION_MODES.find((m) => m.id === permissionId) ?? LIV_PERMISSION_MODES[0]
 
 	const canSend = prompt.trim().length > 0
 
 	const submit = () => {
 		if (!canSend) return
-		onSubmit?.({prompt: prompt.trim(), provider: providerId, model: modelId, permission: permissionId})
+		onSubmit?.({prompt: prompt.trim(), agentId: agentId || undefined, autoApprove: permissionId === 'auto'})
 		setPrompt('')
 	}
 
@@ -259,25 +230,23 @@ export function LivCommandInput({
 				className='h-7 min-w-0 flex-1 resize-none self-center bg-transparent text-[14px] leading-7 text-[color:var(--fg)] placeholder:text-[color:var(--fg-faint)] focus:outline-none'
 			/>
 
-			{/* Right — provider · model · permission selectors. */}
-			<SelectorChip
-				label='Provider'
-				value={providerLabel}
-				options={LIV_PROVIDERS}
-				onSelect={setProviderId}
-			/>
-			<SelectorChip
-				label='Model'
-				value={modelLabel}
-				options={models}
-				onSelect={setModelId}
-			/>
+			{/* Right — agent (which Liv backend) · permission selectors.
+			    The Agent chip only renders when AionUi returned a list; otherwise
+			    dispatch falls back to AionUi's configured default. */}
+			{agents.length > 0 ? (
+				<SelectorChip
+					label='Agent'
+					value={agentLabel}
+					options={agents.map((a) => ({id: a.id, label: a.name}))}
+					onSelect={setAgentId}
+				/>
+			) : null}
 			<SelectorChip
 				label='Permission'
 				value={permission.label}
 				icon={<permission.icon className='h-3.5 w-3.5 opacity-80' />}
 				options={LIV_PERMISSION_MODES}
-				onSelect={setPermissionId}
+				onSelect={(id) => setPermissionId(id as LivPermissionMode['id'])}
 			/>
 
 			{/* Send. */}
@@ -433,11 +402,14 @@ export function LivAnswerView({
 	answer,
 	onAskAgain,
 	onClose,
+	onOpenInLiv,
 }: {
 	prompt: string
 	answer: string | null
 	onAskAgain: () => void
 	onClose: () => void
+	/** Open the full Liv (AionUi) window — escape hatch for tool/approval flows. */
+	onOpenInLiv?: () => void
 }) {
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent) => {
@@ -456,6 +428,17 @@ export function LivAnswerView({
 					{answer ?? '—'}
 				</div>
 			</div>
+			{onOpenInLiv ? (
+				<button
+					type='button'
+					onClick={onOpenInLiv}
+					title='Open the full Liv window'
+					className='inline-flex shrink-0 items-center gap-1 rounded-full border border-line px-3 py-1 text-[12px] font-medium text-[color:var(--fg-dim)] transition-colors hover:border-line-strong hover:bg-[color:var(--bg-2)] hover:text-[color:var(--fg)]'
+				>
+					Open in Liv
+					<ArrowUpRight className='h-3.5 w-3.5' />
+				</button>
+			) : null}
 			<button
 				type='button'
 				onClick={onAskAgain}
@@ -480,7 +463,16 @@ export function LivAnswerView({
  * LivAnswerPanel — the full reply, dropped in a card directly BELOW the bar so
  * the answer reads "in the same place". Theme-adaptive (bg-card-bg + tokens).
  */
-export function LivAnswerPanel({prompt, answer}: {prompt: string; answer: string}) {
+export function LivAnswerPanel({
+	prompt,
+	answer,
+	onOpenInLiv,
+}: {
+	prompt: string
+	answer: string
+	/** Open the full Liv (AionUi) window to continue the conversation / approve tools. */
+	onOpenInLiv?: () => void
+}) {
 	return (
 		<div className='w-[min(720px,calc(100vw-48px))] overflow-hidden rounded-3xl border border-line bg-card-bg/95 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.5)] backdrop-blur-2xl'>
 			<div className='flex items-center gap-2 border-b border-line px-5 py-3'>
@@ -494,6 +486,18 @@ export function LivAnswerPanel({prompt, answer}: {prompt: string; answer: string
 					</p>
 				))}
 			</div>
+			{onOpenInLiv ? (
+				<div className='flex justify-end border-t border-line px-5 py-2.5'>
+					<button
+						type='button'
+						onClick={onOpenInLiv}
+						className='inline-flex items-center gap-1 rounded-full border border-line px-3 py-1 text-[12px] font-medium text-[color:var(--fg-dim)] transition-colors hover:border-line-strong hover:bg-[color:var(--bg-2)] hover:text-[color:var(--fg)]'
+					>
+						Open in Liv
+						<ArrowUpRight className='h-3.5 w-3.5' />
+					</button>
+				</div>
+			) : null}
 		</div>
 	)
 }

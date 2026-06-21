@@ -18,6 +18,7 @@ import {useTheme} from '@/hooks/use-theme'
 import {openCommandPalette} from '@/components/cmdk'
 import {DisplaysSurfaceLive} from './displays-surface'
 import {LivCommandInput, LivAnswerView, LivAnswerPanel, LivBrandMarkInner, type LivState} from './liv-command-input'
+import {runLivCommand, type LivCommandRun} from './liv-command-aionui'
 import {FeedbackDialog} from './feedback-dialog'
 import {greeting, wmoGlyph} from './clock-helpers'
 import {cn} from '@/shadcn-lib/utils'
@@ -164,11 +165,15 @@ function TopBarDesktop() {
 	// quick-controls cluster).
 	const [showFeedback, setShowFeedback] = useState(false)
 	const [isHoverExpanded, setIsHoverExpanded] = useState(false)
-	// ── Liv command bar (UI-first; dispatch stubbed) ──────────────────────────
+	// ── Liv command bar → AionUi (the live Liv) ───────────────────────────────
 	const [livState, setLivState] = useState<LivState>('idle')
 	const [livPrompt, setLivPrompt] = useState('')
 	const [livAnswer, setLivAnswer] = useState<string | null>(null)
-	const livTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+	// Show the "Open in Liv ↗" escape hatch when a turn needs the full window
+	// (tool approval pending) or dispatch fell back (backend unreachable / a
+	// protocol assumption missed on this box).
+	const [livNeedsWindow, setLivNeedsWindow] = useState(false)
+	const livRunRef = useRef<LivCommandRun | null>(null)
 	const answerPanelRef = useRef<HTMLDivElement>(null)
 	// The bar shows the Liv UI (composer / answer) instead of the navbar in these
 	// two states. working/done keep the navbar, with the logo animating.
@@ -183,25 +188,52 @@ function TopBarDesktop() {
 		if (livState === 'idle') enterCompose()
 		else if (livState === 'done') setLivState('answer')
 	}
-	// UI-FIRST stub: send → working (logo spins) → 2.6s → done (notification) with
-	// a canned reply. Wiring the real Liv runtime is the next step.
-	const livSubmit = (payload: {prompt: string; provider: string; model: string; permission: string}) => {
+	// Open the full Liv (AionUi) window — escape hatch for tool/approval flows
+	// the tiny bar can't render, and the fallback when direct dispatch can't
+	// reach the backend.
+	const openLivWindow = () => {
+		const app = systemAppsKeyed['LIVINITY_liv-assistant']
+		if (windowManager && app) {
+			windowManager.openWindow('LIVINITY_liv-assistant', app.systemAppTo, app.name, app.icon)
+		} else if (app) {
+			navigate(app.systemAppTo)
+		}
+		livClose()
+	}
+	// Dispatch the command to AionUi and drive the state machine from the live
+	// stream: working (logo spins) → text accumulates → done (notification dot)
+	// → click → answer in place. Errors/approvals surface the Open-in-Liv hatch.
+	const livSubmit = (payload: {prompt: string; agentId: string | undefined; autoApprove: boolean}) => {
+		livRunRef.current?.abort()
 		setLivPrompt(payload.prompt)
 		setLivAnswer(null)
-		setLivState('working')
-		if (livTimerRef.current) clearTimeout(livTimerRef.current)
-		livTimerRef.current = setTimeout(() => {
-			setLivAnswer(
-				`(preview) Liv would handle this command with ${payload.provider} · ${payload.model} in “${payload.permission}” mode. The command-bar UI is done — wiring the real Liv runtime is the next step.`,
-			)
-			setLivState('done')
-		}, 2600)
+		setLivNeedsWindow(false)
+		livRunRef.current = runLivCommand(payload, {
+			onWorking: () => setLivState('working'),
+			onText: (full) => setLivAnswer(full),
+			onDone: (full) => {
+				setLivAnswer(full)
+				setLivState('done')
+			},
+			onError: (message, {fallback}) => {
+				setLivAnswer(message)
+				setLivNeedsWindow(fallback)
+				setLivState('done')
+			},
+			onApprovalNeeded: () => {
+				setLivAnswer('Liv needs to run an action that needs your approval. Open Liv to review and continue.')
+				setLivNeedsWindow(true)
+				setLivState('done')
+			},
+		})
 	}
 	const livClose = () => {
-		if (livTimerRef.current) clearTimeout(livTimerRef.current)
+		livRunRef.current?.abort()
+		livRunRef.current = null
 		setLivState('idle')
 		setLivAnswer(null)
 		setLivPrompt('')
+		setLivNeedsWindow(false)
 	}
 	const profileWrapRef = useRef<HTMLDivElement>(null)
 	// Phase 260.2 — nav element ref for the hover-collapse safety net (bug fix).
@@ -359,10 +391,10 @@ function TopBarDesktop() {
 		return () => document.removeEventListener('mousedown', handler)
 	}, [menuOpen])
 
-	// Liv command bar — clear the stub timer on unmount.
+	// Liv command bar — abort any in-flight dispatch on unmount.
 	useEffect(
 		() => () => {
-			if (livTimerRef.current) clearTimeout(livTimerRef.current)
+			livRunRef.current?.abort()
 		},
 		[],
 	)
@@ -762,6 +794,7 @@ function TopBarDesktop() {
 										answer={livAnswer}
 										onAskAgain={enterCompose}
 										onClose={livClose}
+										onOpenInLiv={livNeedsWindow ? openLivWindow : undefined}
 									/>
 								)}
 							</motion.div>
@@ -781,7 +814,7 @@ function TopBarDesktop() {
 								transition={{type: 'spring', stiffness: 420, damping: 32}}
 								className='pointer-events-auto'
 							>
-								<LivAnswerPanel prompt={livPrompt} answer={livAnswer} />
+								<LivAnswerPanel prompt={livPrompt} answer={livAnswer} onOpenInLiv={livNeedsWindow ? openLivWindow : undefined} />
 							</motion.div>
 						)}
 					</AnimatePresence>
