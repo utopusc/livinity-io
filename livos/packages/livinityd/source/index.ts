@@ -709,7 +709,7 @@ export default class Livinityd {
 		}
 
 		// Phase 241 — seed AionUi's MCP config with Liv's 5 system MCPs.
-		// Boot-time, single-shot per version sentinel (livos:v43:mcp_seeded:v1).
+		// Boot-time, single-shot per version sentinel (livos:v43:mcp_seeded:v2).
 		// Reads from Redis hash liv:mcp:config (D-202-12 source of truth), pushes
 		// missing entries to AionUi via http://127.0.0.1:3020 HTTP API, then
 		// distributes to all 8 agent CLIs via /api/mcp/sync-to-agents.

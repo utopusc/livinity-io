@@ -3,6 +3,7 @@ import React, {forwardRef, useCallback, useEffect, useRef, useState} from 'react
 
 import {OriginRect, Position, Size, useWindowManager, WindowId} from '@/providers/window-manager'
 import {emitWindowDragDrop, getDisplaysButtonRect, setWindowDragState} from '@/providers/window-drag-state'
+import {isShortcutKind} from '@/modules/shortcuts/shortcut-window-route'
 import {tw} from '@/utils/tw'
 
 import {WindowChrome} from './window-chrome'
@@ -42,7 +43,12 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 	// webapp/native) get the − minimize (dock keep-alive) + an X that closes the
 	// PORT. Plain system windows (Settings/Files/dialogs) get neither.
 	const isDisplayWindow = !!appId?.startsWith('DISPLAY_')
-	const isStreamWindow = isDisplayWindow || !!webappId || !!nativeAppId
+	// Phase 291 R3 — a SHORTCUT_<id> window (browser-stream shortcut: Notion etc.)
+	// carries neither webappId nor nativeAppId (windows-container only derives those
+	// from WEBAPP_/NATIVE_ prefixes), so without this it fell through with NO −
+	// minimize button. handleMinimize → pinWindowToTopBar is appId-agnostic, so the
+	// morph-to-Displays works the moment the chrome offers onMinimize.
+	const isStreamWindow = isDisplayWindow || !!webappId || !!nativeAppId || (appId ? isShortcutKind(appId) : false)
 	// Phase 159 — mutual exclusion. webappId and nativeAppId must never
 	// both be set for the same window. Dev console-warn so accidental
 	// double-threading is caught quickly without throwing in prod.

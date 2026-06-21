@@ -8,7 +8,10 @@
 // Strategy.
 //
 // Locked decisions: see .planning/phases/241-mcp-auto-add-liv-tools/241-CONTEXT.md
-//   D-241-02: sentinel key `livos:v43:mcp_seeded:v1` (bump suffix to re-trigger)
+//   D-241-02: sentinel key `livos:v43:mcp_seeded:v2` (bump suffix to re-trigger).
+//             Phase 291 R3: bumped :v1→:v2 so existing boxes that seeded once
+//             against a stale/empty AionUi (0 MCP) re-seed the 6 system MCPs on
+//             the next boot — the old sentinel had wedged them at 0/0.
 //   D-241-04: strict GET-and-skip name match — DESTRUCTIVE upsert otherwise
 //   D-241-06: AionUi readiness via ready-poll.ts (60s budget; leave sentinel
 //             unset on timeout so next boot retries)
@@ -29,7 +32,7 @@ import {waitForAionUiReady, type ReadyPollOptions} from './ready-poll.js'
 import {transformRedisToAionUi} from './transform.js'
 import type {SeedLogger, SeedResult} from './types.js'
 
-export const MCP_SEED_SENTINEL_KEY = 'livos:v43:mcp_seeded:v1'
+export const MCP_SEED_SENTINEL_KEY = 'livos:v43:mcp_seeded:v2'
 
 /**
  * Minimal Redis surface needed by the orchestrator — three methods.

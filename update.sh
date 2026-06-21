@@ -1341,24 +1341,38 @@ else
     info "scripts/install/install-openclaw-cli.sh not in TEMP_DIR — skipping (pre-Phase 208-03 deploy)"
 fi
 
-# ── Step 4.6: Phase 225 — liv-assistant install (Phase 223 vendored AionUi v2.1.4) ────
+# ── Step 4.6: Phase 225 — liv-assistant install (Phase 223 vendored AionUi) ────
 # Re-runs the idempotent installer on every update so the on-box vendored binary +
 # systemd unit are guaranteed-fresh. Installer is content-addressed (pinned SHA),
 # so on unchanged source this is a sub-second no-op (UPSTREAM.md timestamp preserved,
-# tarball cache hit, symlink unchanged). Phase 223-01 contract.
-step "Phase 225: liv-assistant install (vendored AionUi v2.1.14)"
+# tarball cache hit, symlink unchanged). Phase 223-01 contract. Phase 291 R3 adds a
+# post-install symlink-on-pin self-heal (the installer is fail-soft → boxes drifted).
+step "Phase 225: liv-assistant install (vendored AionUi, self-healed to pin)"
 _LIV_ASSISTANT_INSTALLER_SRC="$TEMP_DIR/scripts/install-liv-assistant.sh"
 # Fallback to on-disk copy (for the rare case TEMP_DIR was pruned mid-run)
 if [[ ! -f "$_LIV_ASSISTANT_INSTALLER_SRC" ]]; then
     _LIV_ASSISTANT_INSTALLER_SRC="$LIVOS_DIR/scripts/install-liv-assistant.sh"
 fi
 if [[ -f "$_LIV_ASSISTANT_INSTALLER_SRC" ]]; then
+    # Phase 291 R3 — read the pinned AionUi version FROM the installer that is about
+    # to run, so the self-heal check below never drifts from the pin (no second
+    # hardcoded version to keep in sync). Empty string if the grep ever misses.
+    _AIONUI_PIN="$(grep -oE 'AIONUI_VERSION="[^"]+"' "$_LIV_ASSISTANT_INSTALLER_SRC" | head -1 | cut -d'"' -f2)"
+    # True iff /opt/liv-assistant/current points at the pinned aionui-web-<pin> tree
+    # (the symlink TEXT is …/aionui-web-<pin>/aionui-web — we check the link target,
+    # not whether it resolves, so a half-extracted tree still reads as "off pin").
+    _liv_symlink_on_pin() {
+        local _t
+        _t="$(readlink /opt/liv-assistant/current 2>/dev/null || true)"
+        [[ -n "$_AIONUI_PIN" && "$_t" == *"aionui-web-${_AIONUI_PIN}/"* ]]
+    }
+
     # 2026-06-15: wrap in `timeout` — this step (AionUi/claude-agent setup) has hung
     # indefinitely on a `claude doctor` child with no timeout, stranding the whole
     # update (observed on the `everything` box). It is OPTIONAL polish, so a timeout
     # that warns + continues is strictly better than an infinite hang.
     if timeout 420 bash "$_LIV_ASSISTANT_INSTALLER_SRC" 2>&1 | tail -10; then
-        ok "liv-assistant install ensured (vendored AionUi v2.1.14 at /opt/liv-assistant/current)"
+        ok "liv-assistant install ensured (vendored AionUi v${_AIONUI_PIN:-?} at /opt/liv-assistant/current)"
     else
         # 2026-06-13: was a hard `fail` (abort). But liv-assistant (AionUi) is the
         # OPTIONAL Liv AI subsystem — exactly the "OPTIONAL polish, NOT core" class
@@ -1367,6 +1381,27 @@ if [[ -f "$_LIV_ASSISTANT_INSTALLER_SRC" ]]; then
         # (UI + livinityd + liv core) and leave the box stuck on the old version.
         # Warn + continue; the core build/restart + SHA recording still happen.
         warn "install-liv-assistant.sh failed (SHA mismatch / network / disk?) — Liv AI may be degraded, but NOT aborting the core LivOS update. Re-run later or check the output above."
+    fi
+
+    # Phase 291 R3 — durable self-heal. The installer above is FAIL-SOFT, so a
+    # SHA/download/timeout/disk hiccup can leave `current` pointing at an OLD AionUi
+    # while the core update still reports success. That is exactly why boxes sat on
+    # a stale AionUi across many "successful" Updates → the R2 Liv composer features
+    # (Skills / MCP / file upload / permission Mode via v0.1.30 config-options) 404'd.
+    # Verify the symlink actually advanced to the pin; if not, retry the installer
+    # ONCE, then surface a LOUD, specific warning instead of silently swallowing it.
+    if [[ -n "$_AIONUI_PIN" ]]; then
+        if _liv_symlink_on_pin; then
+            ok "liv-assistant on pin: /opt/liv-assistant/current -> aionui-web-${_AIONUI_PIN}"
+        else
+            warn "liv-assistant NOT on pin (current -> $(readlink /opt/liv-assistant/current 2>/dev/null || echo '??'); expected aionui-web-${_AIONUI_PIN}) — retrying the installer ONCE"
+            timeout 420 bash "$_LIV_ASSISTANT_INSTALLER_SRC" 2>&1 | tail -10 || true
+            if _liv_symlink_on_pin; then
+                ok "liv-assistant self-healed to pin aionui-web-${_AIONUI_PIN} on retry"
+            else
+                warn "LIV AI STALE: /opt/liv-assistant/current is STILL NOT aionui-web-${_AIONUI_PIN} after a retry — the Liv command bar's Skills/MCP/upload + permission Modes will keep 404ing until this resolves. Diagnose the cause: 'sudo bash $_LIV_ASSISTANT_INSTALLER_SRC' (watch for SHA mismatch / GitHub-blocked curl / 420s timeout / disk-full), then re-run the update."
+            fi
+        fi
     fi
 else
     info "scripts/install-liv-assistant.sh not in TEMP_DIR or LIVOS_DIR — skipping (pre-Phase 223-01 deploy)"

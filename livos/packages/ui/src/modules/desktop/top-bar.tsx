@@ -524,7 +524,13 @@ function TopBarDesktop() {
 						// (center, auto-sized) stays pinned to the bar centre and NEVER
 						// shifts when the right cluster reveals the utility buttons or the
 						// bar expands (both 1fr sides grow equally around the centre).
-						'pointer-events-auto relative grid h-16 w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 rounded-full border bg-card-bg/78 px-3.5 backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/55',
+						// Phase 291 R3 — z-50 on the nav itself. The nav's framer transform
+						// (y/opacity animate) creates a stacking context that TRAPPED the
+						// +menu / chip dropdowns (z-50) inside it, while the answer-panel
+						// sibling div below (z-auto, later in DOM) painted on top. Promoting
+						// the nav to z-50 lifts its whole subtree above the panel so the
+						// dropdowns render in front. (No portal needed.)
+						'pointer-events-auto relative z-50 grid h-16 w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 rounded-full border bg-card-bg/78 px-3.5 backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/55',
 						// Compact 580 ➜ expand wide enough for 3 left features + 4 right
 						// utilities. CRITICAL: minmax(0,1fr) — NOT plain 1fr (= minmax(auto,
 						// 1fr)) — so BOTH side columns are forced exactly equal regardless of

@@ -170,6 +170,7 @@ function LivPlusMenu({
 	const [mcp, setMcp] = useState<LivMcpServer[]>([])
 	const [loaded, setLoaded] = useState(false)
 	const [uploading, setUploading] = useState(false)
+	const [uploadError, setUploadError] = useState(false)
 	const wrapRef = useRef<HTMLDivElement>(null)
 	const fileRef = useRef<HTMLInputElement>(null)
 
@@ -201,6 +202,7 @@ function LivPlusMenu({
 	const onPick = async (list: FileList | null) => {
 		if (!list || list.length === 0) return
 		setUploading(true)
+		setUploadError(false)
 		const added: {name: string; path: string}[] = []
 		for (const f of Array.from(list)) {
 			const path = await uploadLivFile(f)
@@ -208,6 +210,10 @@ function LivPlusMenu({
 		}
 		setUploading(false)
 		if (added.length) onAddFiles(added)
+		// Stale/partial box → /api/fs/upload 404s and uploadLivFile returns null for
+		// every file. Surface ONE quiet inline notice instead of a silently dead
+		// click (and instead of AionUi logging a raw console 404).
+		else setUploadError(true)
 	}
 
 	const mcpEnabled = mcp.filter((m) => m.enabled).length
@@ -266,6 +272,10 @@ function LivPlusMenu({
 							<span className='flex-1'>{uploading ? 'Uploading…' : 'Upload from device'}</span>
 						</button>
 
+						{uploadError && (
+							<div className='px-3 pb-1 text-[12px] text-[color:var(--fg-faint)]'>Upload unavailable</div>
+						)}
+
 						{files.length > 0 && (
 							<div className='px-3 py-1'>
 								{files.map((f) => (
@@ -284,54 +294,61 @@ function LivPlusMenu({
 							</div>
 						)}
 
-						<div className='my-1 h-px bg-line' />
-
-						{/* Skills (selected/total) — toggling injects them for the next turn. */}
-						<div className='px-3 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--fg-faint)]'>
-							Skills{skills.length > 0 ? ` (${selectedSkills.length}/${skills.length})` : ''}
-						</div>
-						{skills.length === 0 ? (
-							<div className='px-3 pb-1.5 text-[12px] text-[color:var(--fg-faint)]'>None available</div>
-						) : (
-							<div className='max-h-40 overflow-y-auto'>
-								{skills.map((s) => {
-									const on = selectedSkills.includes(s.name)
-									return (
-										<button
-											key={s.name}
-											type='button'
-											role='menuitemcheckbox'
-											aria-checked={on}
-											onClick={() => onToggleSkill(s.name)}
-											className='flex w-full items-center gap-2.5 px-3 py-[6px] text-left text-[13px] transition-colors hover:bg-[color:var(--bg-2)]'
-										>
-											<span
-												className={cn(
-													'grid h-3.5 w-3.5 shrink-0 place-items-center rounded border text-[9px] leading-none',
-													on
-														? 'border-[color:var(--accent,#6366f1)] bg-[color:var(--accent,#6366f1)] text-white'
-														: 'border-line',
-												)}
+						{/* Skills (selected/total) — toggling injects them for the next turn.
+						    Phase 291 R3: hide the WHOLE block when the box advertises no
+						    skills (a stale/partial box returns none; "None available" read
+						    as broken). Each block carries its OWN leading divider so a hidden
+						    block never leaves a dangling separator. */}
+						{skills.length > 0 && (
+							<>
+								<div className='my-1 h-px bg-line' />
+								<div className='px-3 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--fg-faint)]'>
+									Skills ({selectedSkills.length}/{skills.length})
+								</div>
+								<div className='max-h-40 overflow-y-auto'>
+									{skills.map((s) => {
+										const on = selectedSkills.includes(s.name)
+										return (
+											<button
+												key={s.name}
+												type='button'
+												role='menuitemcheckbox'
+												aria-checked={on}
+												onClick={() => onToggleSkill(s.name)}
+												className='flex w-full items-center gap-2.5 px-3 py-[6px] text-left text-[13px] transition-colors hover:bg-[color:var(--bg-2)]'
 											>
-												{on ? '✓' : ''}
-											</span>
-											<span className='min-w-0 flex-1 truncate text-[color:var(--fg-dim)]'>{s.name}</span>
-										</button>
-									)
-								})}
-							</div>
+												<span
+													className={cn(
+														'grid h-3.5 w-3.5 shrink-0 place-items-center rounded border text-[9px] leading-none',
+														on
+															? 'border-[color:var(--accent,#6366f1)] bg-[color:var(--accent,#6366f1)] text-white'
+															: 'border-line',
+													)}
+												>
+													{on ? '✓' : ''}
+												</span>
+												<span className='min-w-0 flex-1 truncate text-[color:var(--fg-dim)]'>{s.name}</span>
+											</button>
+										)
+									})}
+								</div>
+							</>
 						)}
 
-						<div className='my-1 h-px bg-line' />
-
-						{/* MCP — informational count (display-only in AionUi). */}
-						<div className='flex items-center gap-2.5 px-3 py-[7px] text-[13px] text-[color:var(--fg-faint)]'>
-							<Blocks className='h-[15px] w-[15px] shrink-0 opacity-80' />
-							<span className='flex-1'>MCP</span>
-							<span className='tabular-nums text-[12px]'>
-								{mcpEnabled}/{mcp.length}
-							</span>
-						</div>
+						{/* MCP — informational count (display-only in AionUi). Phase 291 R3:
+						    hidden entirely when none are configured (no "0/0"). */}
+						{mcp.length > 0 && (
+							<>
+								<div className='my-1 h-px bg-line' />
+								<div className='flex items-center gap-2.5 px-3 py-[7px] text-[13px] text-[color:var(--fg-faint)]'>
+									<Blocks className='h-[15px] w-[15px] shrink-0 opacity-80' />
+									<span className='flex-1'>MCP</span>
+									<span className='tabular-nums text-[12px]'>
+										{mcpEnabled}/{mcp.length}
+									</span>
+								</div>
+							</>
+						)}
 					</motion.div>
 				)}
 			</AnimatePresence>
