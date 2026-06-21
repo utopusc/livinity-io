@@ -17,6 +17,7 @@ import {systemAppsKeyed} from '@/providers/apps'
 import {useTheme} from '@/hooks/use-theme'
 import {openCommandPalette} from '@/components/cmdk'
 import {DisplaysSurfaceLive} from './displays-surface'
+import {LivCommandInput, LivAnswerView, LivAnswerPanel, LivBrandMarkInner, type LivState} from './liv-command-input'
 import {FeedbackDialog} from './feedback-dialog'
 import {greeting, wmoGlyph} from './clock-helpers'
 import {cn} from '@/shadcn-lib/utils'
@@ -163,6 +164,45 @@ function TopBarDesktop() {
 	// quick-controls cluster).
 	const [showFeedback, setShowFeedback] = useState(false)
 	const [isHoverExpanded, setIsHoverExpanded] = useState(false)
+	// ── Liv command bar (UI-first; dispatch stubbed) ──────────────────────────
+	const [livState, setLivState] = useState<LivState>('idle')
+	const [livPrompt, setLivPrompt] = useState('')
+	const [livAnswer, setLivAnswer] = useState<string | null>(null)
+	const livTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const answerPanelRef = useRef<HTMLDivElement>(null)
+	// The bar shows the Liv UI (composer / answer) instead of the navbar in these
+	// two states. working/done keep the navbar, with the logo animating.
+	const isLivOverlay = livState === 'compose' || livState === 'answer'
+	const enterCompose = () => {
+		setIsHoverExpanded(false)
+		setSurfaceClicked(false)
+		setLivState('compose')
+	}
+	// Logo click: idle → compose · done → answer (read in place) · working → busy.
+	const onLogoClick = () => {
+		if (livState === 'idle') enterCompose()
+		else if (livState === 'done') setLivState('answer')
+	}
+	// UI-FIRST stub: send → working (logo spins) → 2.6s → done (notification) with
+	// a canned reply. Wiring the real Liv runtime is the next step.
+	const livSubmit = (payload: {prompt: string; provider: string; model: string; permission: string}) => {
+		setLivPrompt(payload.prompt)
+		setLivAnswer(null)
+		setLivState('working')
+		if (livTimerRef.current) clearTimeout(livTimerRef.current)
+		livTimerRef.current = setTimeout(() => {
+			setLivAnswer(
+				`(preview) Liv would handle this command with ${payload.provider} · ${payload.model} in “${payload.permission}” mode. The command-bar UI is done — wiring the real Liv runtime is the next step.`,
+			)
+			setLivState('done')
+		}, 2600)
+	}
+	const livClose = () => {
+		if (livTimerRef.current) clearTimeout(livTimerRef.current)
+		setLivState('idle')
+		setLivAnswer(null)
+		setLivPrompt('')
+	}
 	const profileWrapRef = useRef<HTMLDivElement>(null)
 	// Phase 260.2 — nav element ref for the hover-collapse safety net (bug fix).
 	const navRef = useRef<HTMLElement>(null)
@@ -244,7 +284,7 @@ function TopBarDesktop() {
 	// Pinned windows are surfaced by the {n} badge (260-04 / SC5) + the
 	// Displays popover list (260-04 / SC3), not a center chip shelf.
 	const dragState = useWindowDragState()
-	const isExpanded = dragState.isDragging || isHoverExpanded
+	const isExpanded = dragState.isDragging || isHoverExpanded || isLivOverlay
 	const [isDragOverShelf, setIsDragOverShelf] = useState(false)
 
 	// Hit-test cursor against the drop-zone rect while a drag is active.
@@ -319,6 +359,28 @@ function TopBarDesktop() {
 		return () => document.removeEventListener('mousedown', handler)
 	}, [menuOpen])
 
+	// Liv command bar — clear the stub timer on unmount.
+	useEffect(
+		() => () => {
+			if (livTimerRef.current) clearTimeout(livTimerRef.current)
+		},
+		[],
+	)
+	// Close the Liv overlay on a click outside the bar AND the answer panel
+	// (Escape is handled inside the Liv components). Selector dropdowns render
+	// inside navRef, so using them never dismisses the overlay.
+	useEffect(() => {
+		if (!isLivOverlay) return
+		const onDown = (e: MouseEvent) => {
+			const target = e.target as Node
+			if (navRef.current?.contains(target)) return
+			if (answerPanelRef.current?.contains(target)) return
+			livClose()
+		}
+		document.addEventListener('mousedown', onDown)
+		return () => document.removeEventListener('mousedown', onDown)
+	}, [isLivOverlay])
+
 	// Phase 260.2 (bug fix 2026-06-08) — robust hover-collapse. The lone
 	// <nav onMouseLeave> misses cases where the bar goes pointer-events:none
 	// (displays surface opens) or a click opens a dialog/window OVER the bar →
@@ -387,7 +449,7 @@ function TopBarDesktop() {
 						// (center, auto-sized) stays pinned to the bar centre and NEVER
 						// shifts when the right cluster reveals the utility buttons or the
 						// bar expands (both 1fr sides grow equally around the centre).
-						'pointer-events-auto grid h-16 w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 rounded-full border bg-card-bg/78 px-3.5 backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/55',
+						'pointer-events-auto relative grid h-16 w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 rounded-full border bg-card-bg/78 px-3.5 backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/55',
 						// Compact 580 ➜ expand wide enough for 3 left features + 4 right
 						// utilities. CRITICAL: minmax(0,1fr) — NOT plain 1fr (= minmax(auto,
 						// 1fr)) — so BOTH side columns are forced exactly equal regardless of
@@ -401,7 +463,7 @@ function TopBarDesktop() {
 					aria-label='Top bar'
 				>
 					{/* LEFT — profile + feature buttons (revealed on hover/drag). */}
-					<div className='flex min-w-0 items-center justify-start gap-1.5'>
+					<div className={cn('flex min-w-0 items-center justify-start gap-1.5 transition-opacity duration-200', isLivOverlay && 'pointer-events-none opacity-0')}>
 						<div ref={profileWrapRef} className='relative min-w-0'>
 							<button
 								type='button'
@@ -548,26 +610,18 @@ function TopBarDesktop() {
 					    button on the RIGHT (see dropZoneRef below). While dragging the
 					    bar still expands (isExpanded) so the gesture reads, but the
 					    center now only ever shows the brand donut. */}
-					<div className='flex min-w-0 items-center justify-center'>
+					<div className={cn('flex min-w-0 items-center justify-center transition-opacity duration-200', isLivOverlay && 'pointer-events-none opacity-0')}>
 						<button
 							type='button'
 							onMouseEnter={() => setIsHoverExpanded(true)}
-							onClick={() => undefined}
+							onClick={onLogoClick}
 							// Logo grows clearly on hover (operator request 2026-06-08
 							// "Logonun üzerine geldiğimde büyüsün"). scale-125 reads as a
 							// deliberate grow, not the old barely-there scale-[1.04].
-							className='grid h-10 w-10 cursor-pointer place-items-center rounded-full transition-[transform,background] duration-200 ease-out hover:scale-125 hover:bg-[color:var(--bg-2)]'
+							className='relative grid h-10 w-10 cursor-pointer place-items-center rounded-full transition-[transform,background] duration-200 ease-out hover:scale-110 hover:bg-[color:var(--bg-2)]'
 							aria-label='LivOS'
 						>
-							<span
-								aria-hidden='true'
-								className='relative inline-block h-6 w-6 rounded-full bg-[color:var(--fg)]'
-							>
-								<span
-									className='absolute rounded-full bg-[color:var(--bg)]'
-									style={{inset: 7}}
-								/>
-							</span>
+							<LivBrandMarkInner state={livState} donutSize={24} />
 						</button>
 					</div>
 
@@ -578,7 +632,7 @@ function TopBarDesktop() {
 					    is also gone (deleted in 255-04 Task 4) — this is now the SINGLE
 					    navbar display/windows surface. Existing pinned-window shelf in
 					    the Center drop-zone stays untouched. */}
-					<div className='flex min-w-0 items-center justify-end gap-1.5 pr-1.5'>
+					<div className={cn('flex min-w-0 items-center justify-end gap-1.5 pr-1.5 transition-opacity duration-200', isLivOverlay && 'pointer-events-none opacity-0')}>
 						{/* Phase 260.2 — utility buttons (Live Usage + Displays) live in the
 						    EXPANDED navbar ONLY (revealed on LivOS-logo hover / during a
 						    window drag, since isExpanded = isHoverExpanded || isDragging).
@@ -688,8 +742,50 @@ function TopBarDesktop() {
 						</AnimatePresence>
 						<ClockWithLocation />
 					</div>
+					{/* Liv overlay — the composer / answer morph, animated in over the faded
+					    navbar columns. Same pill; AnimatePresence crossfades compose↔answer. */}
+					<AnimatePresence>
+						{isLivOverlay && (
+							<motion.div
+								key={livState}
+								initial={{opacity: 0, y: 6, scale: 0.985}}
+								animate={{opacity: 1, y: 0, scale: 1}}
+								exit={{opacity: 0, y: 6, scale: 0.985}}
+								transition={{type: 'spring', stiffness: 460, damping: 34}}
+								className='absolute inset-0 flex items-center px-3.5'
+							>
+								{livState === 'compose' ? (
+									<LivCommandInput onClose={livClose} onSubmit={livSubmit} />
+								) : (
+									<LivAnswerView
+										prompt={livPrompt}
+										answer={livAnswer}
+										onAskAgain={enterCompose}
+										onClose={livClose}
+									/>
+								)}
+							</motion.div>
+						)}
+					</AnimatePresence>
 				</motion.nav>
 
+				{/* Liv answer panel — the full reply, dropped just below the bar. */}
+				<div className='pointer-events-none absolute inset-x-0 top-[92px] flex justify-center'>
+					<AnimatePresence>
+						{livState === 'answer' && livAnswer && (
+							<motion.div
+								ref={answerPanelRef}
+								initial={{opacity: 0, y: -10, scale: 0.98}}
+								animate={{opacity: 1, y: 0, scale: 1}}
+								exit={{opacity: 0, y: -10, scale: 0.98}}
+								transition={{type: 'spring', stiffness: 420, damping: 32}}
+								className='pointer-events-auto'
+							>
+								<LivAnswerPanel prompt={livPrompt} answer={livAnswer} />
+							</motion.div>
+						)}
+					</AnimatePresence>
+				</div>
 				{/* Phase 260.2 — displays strip layer. Slides DOWN into the navbar's
 				    place (and the pill slides up) when showDisplays. The OUTER div
 				    handles centering (flex) so the INNER motion layer's transform is
