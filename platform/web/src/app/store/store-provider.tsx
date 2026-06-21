@@ -48,11 +48,13 @@ function StoreProviderInner({
   // (?section=webapp, an orphaned link from before the tab was removed) would
   // otherwise render an empty strip / placeholder, so fall back to 'app'.
   const VISIBLE_SECTIONS = SECTIONS.map((s) => s.key);
+  // Default to the promoted 1st section (now 'native', the generic desktop-app
+  // store). A removed-but-still-valid hint like ?section=webapp falls back here.
   const initialSection: Section =
     VALID_SECTIONS.includes(sectionHint as Section) &&
     VISIBLE_SECTIONS.includes(sectionHint as Section)
       ? (sectionHint as Section)
-      : 'app';
+      : 'native';
 
   // Phase 289 WS-B — seed from the RSC server-prefetch so the real catalog
   // paints on first render. When seeded, start with loading=false so a seeded

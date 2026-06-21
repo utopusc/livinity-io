@@ -62,13 +62,14 @@ export function SectionTabs() {
           >
             <Icon name={SECTION_ICONS[s.key]} size={14} />
             <span>{s.label}</span>
-            {/* Phase 289 WS-B — "Soon" is NOT a loading state. Only show it once
-                the catalog has loaded and the section is genuinely empty; during
-                the load show a neutral dot skeleton so we never flash "Soon" on
-                a section that is actually fully populated in Supabase. */}
-            {count > 0 ? (
+            {/* The Native section is the self-contained generic store (a live,
+                paginated catalog of thousands of apps) — the curated-row count is
+                meaningless and misleading there, so show NO badge for it. */}
+            {s.key === 'native' ? null : count > 0 ? (
               <span className="count">{count}</span>
             ) : !loading && count === 0 ? (
+              /* Phase 289 WS-B — "Soon" is NOT a loading state; only once the
+                 catalog has loaded and the section is genuinely empty. */
               <span className="soon">Soon</span>
             ) : (
               <span className="count" aria-hidden="true" style={{ opacity: 0.4 }}>

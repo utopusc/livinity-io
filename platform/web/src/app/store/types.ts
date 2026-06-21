@@ -2,14 +2,18 @@
 export type Section = 'app' | 'webapp' | 'native' | 'ai' | 'plugin';
 
 export const SECTIONS: { key: Section; label: string; tagline: string }[] = [
-  { key: 'app', label: 'Apps', tagline: 'Self-hosted Docker apps' },
+  // Native is the promoted 1st section: the generic desktop-app store (operator
+  // ordering). It renders the self-contained Flathub catalog (its own category
+  // chips + search), NOT the curated Supabase rows.
+  { key: 'native', label: 'Native', tagline: 'Linux desktop apps' },
+  // Apps (Docker) is BETA while the self-host install path matures.
+  { key: 'app', label: 'Apps (BETA)', tagline: 'Self-hosted Docker apps' },
   // Phase 290 R3 REQ8 — the `webapp` ("Web Apps") tab was removed from the
   // store strip: the unified "Add Shortcut" launcher on the LivOS desktop now
   // covers hosted web apps. `'webapp'` is intentionally KEPT in the `Section`
   // union (above) + server-side VALID_SECTIONS so already-installed webapp rows
   // still round-trip status without a tsc cascade or 500. store-provider.tsx
-  // also guards `?section=webapp` deep-links → falls back to 'app'.
-  { key: 'native', label: 'Native', tagline: 'Linux desktop apps' },
+  // also guards `?section=webapp` deep-links → falls back to the default.
   // Phase 289 WS-C — the `ai` tab (MCP + AI) was removed from the store strip
   // per operator requirements #4 + #6. `'ai'` is intentionally KEPT in the
   // `Section` union (above) + server-side VALID_SECTIONS so already-installed
