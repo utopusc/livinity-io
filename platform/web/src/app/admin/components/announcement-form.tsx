@@ -11,8 +11,9 @@ import {
   updateAnnouncement,
   uploadAnnouncementImage,
 } from '../lib/announcements-api';
-import { ANNOUNCEMENT_TEMPLATES, getTemplate } from '../lib/announcement-templates';
+import { getTemplate } from '../lib/announcement-templates';
 import { AnnouncementPreview } from './announcement-preview';
+import { TemplateGallery } from './template-gallery';
 import { Toast } from './toast';
 
 type Mode = 'builder' | 'html';
@@ -140,6 +141,7 @@ export function AnnouncementForm({ initial }: { initial?: Announcement }) {
   );
   const [slugTouched, setSlugTouched] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
+  const [showGallery, setShowGallery] = useState(false);
   const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -297,24 +299,31 @@ export function AnnouncementForm({ initial }: { initial?: Announcement }) {
         </div>
         <div>
           <label className="form-label">Start from a template</label>
-          <select
-            className="form-select"
-            value=""
-            onChange={(e) => {
-              if (e.target.value) loadTemplate(e.target.value);
-              e.target.value = '';
-            }}
+          <button
+            type="button"
+            className={`btn ${showGallery ? 'primary' : 'ghost'}`}
+            style={{ width: '100%' }}
+            onClick={() => setShowGallery((v) => !v)}
+            aria-expanded={showGallery}
           >
-            <option value="">— pick a template —</option>
-            {ANNOUNCEMENT_TEMPLATES.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-          <div className="form-help">Loads preset blocks you can then edit.</div>
+            {showGallery ? 'Hide template gallery' : '🗂️ Browse templates'}
+          </button>
+          <div className="form-help">Pick a preset to load editable blocks.</div>
         </div>
       </div>
+
+      {/* Template gallery (Wave 1) — expandable visual picker */}
+      {showGallery && (
+        <div className="form-row">
+          <TemplateGallery
+            onPick={(key) => {
+              loadTemplate(key);
+              setShowGallery(false);
+            }}
+            onClose={() => setShowGallery(false)}
+          />
+        </div>
+      )}
 
       {/* Mode toggle */}
       <div className="form-row">
