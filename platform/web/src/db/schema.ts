@@ -1,4 +1,5 @@
-import { pgTable, uuid, text, boolean, timestamp, jsonb, pgEnum, integer } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, boolean, timestamp, jsonb, pgEnum, integer, primaryKey } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // Phase 148 — section enum (see SPEC.md §1).
 export const sectionEnum = pgEnum('section_enum', [
@@ -121,4 +122,58 @@ export const docsArticles = pgTable('docs_articles', {
   sort_order: integer('sort_order').notNull().default(100),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// =========================================================================
+// Phase 292 — Admin-authored fleet-wide announcements / pop-ups.
+// Authored in /admin/announcements (requireAdmin), polled by every box via
+// /api/me/announcements/poll, shown EXACTLY ONCE per user. user_id columns
+// store the CLOUD users.id (cross-instance identity, resolved server-side from
+// the API key) — NO Drizzle .references() because users lives in
+// platform/relay/src/schema.sql (same convention as devices/installHistory).
+// SQL source of truth: migrations/0025_phase_292_announcements.sql
+// =========================================================================
+export const announcements = pgTable('announcements', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  slug: text('slug').unique(),
+  title: text('title').notNull(),
+  kind: text('kind').notNull().default('announcement'),  // announcement|campaign|promo|feature|feedback
+  blocks: jsonb('blocks').$type<unknown[]>().notNull().default([]),
+  raw_html_sanitized: text('raw_html_sanitized'),
+  raw_html_source: text('raw_html_source'),  // never served to a box
+  frequency: text('frequency').notNull().default('once_ever'),  // once_ever|once_per_day|n_times
+  frequency_n: integer('frequency_n'),
+  priority: integer('priority').notNull().default(100),  // lower = higher priority
+  dismissible: boolean('dismissible').notNull().default(true),
+  start_at: timestamp('start_at', { withTimezone: true }),
+  end_at: timestamp('end_at', { withTimezone: true }),
+  target_kind: text('target_kind').notNull().default('all'),  // all|user_ids|plan_tier
+  target_user_ids: uuid('target_user_ids').array().notNull().default(sql`'{}'::uuid[]`),
+  target_plan_tier: text('target_plan_tier'),
+  status: text('status').notNull().default('draft'),  // draft|published|archived
+  published_at: timestamp('published_at', { withTimezone: true }),
+  created_by: uuid('created_by'),  // CLOUD users.id (admin author)
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const announcementSeen = pgTable('announcement_seen', {
+  announcement_id: uuid('announcement_id').notNull(),  // FK -> announcements(id) ON DELETE CASCADE (SQL only)
+  user_id: uuid('user_id').notNull(),  // CLOUD users.id — no Drizzle FK (see header)
+  seen_count: integer('seen_count').notNull().default(0),
+  first_seen_at: timestamp('first_seen_at', { withTimezone: true }).defaultNow().notNull(),
+  last_seen_at: timestamp('last_seen_at', { withTimezone: true }).defaultNow().notNull(),
+  dismissed_at: timestamp('dismissed_at', { withTimezone: true }),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.announcement_id, t.user_id] }),
+}));
+
+export const announcementFeedback = pgTable('announcement_feedback', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  announcement_id: uuid('announcement_id').notNull(),  // FK -> announcements(id) ON DELETE CASCADE (SQL only)
+  user_id: uuid('user_id').notNull(),  // CLOUD users.id — no Drizzle FK (see header)
+  block_id: text('block_id'),  // which poll/feedback block (null = announcement-level)
+  vote_option: text('vote_option'),
+  free_text: text('free_text'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
