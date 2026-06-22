@@ -62,15 +62,33 @@ function dayGateKey(id: string): string {
 	return `livos:ann:lastShown:${id}`
 }
 
-// once_per_day: the central cap is permissive (Plan 04); the box enforces the
-// 24h boundary via a per-announcement localStorage timestamp.
-function isDayGated(a: ActiveAnnouncement): boolean {
-	if (a.frequency !== 'once_per_day') return false
+// Phase 294 — client-side "already shown" gate. The central poll is correct but
+// lags: the box poller caches the active set in Redis (120s TTL / 60s refresh),
+// so for ~60-120s after the first markSeen the now-excluded announcement keeps
+// coming back from the cache and the host re-shows it on every render/refresh.
+// once_per_day already had a 24h localStorage gate; once_ever had NO client gate
+// (it relied entirely on the central poll) → it flickered during that window.
+//
+// This gate permanently suppresses once_ever once its localStorage flag is set
+// (the same flag the seen-firing effect already writes), and keeps the existing
+// 24h boundary for once_per_day. n_times still relies on the central cap.
+//
+// CRITICAL: exempt anything in `shownThisSession` (the seenFiredRef). The flag is
+// written in the useEffect right after the announcement first becomes current; on
+// the very next render this gate would otherwise exclude it → the dialog would
+// flash open then immediately close. The exemption keeps the current show visible
+// until dismiss/cache-expiry; the flag only gates FUTURE renders/sessions.
+function isAlreadyShown(a: ActiveAnnouncement, shownThisSession: Set<string>): boolean {
+	if (shownThisSession.has(a.id)) return false
 	try {
 		const ts = localStorage.getItem(dayGateKey(a.id))
 		if (!ts) return false
-		const last = Number(ts)
-		return Number.isFinite(last) && Date.now() - last < DAY_MS
+		if (a.frequency === 'once_ever') return true
+		if (a.frequency === 'once_per_day') {
+			const last = Number(ts)
+			return Number.isFinite(last) && Date.now() - last < DAY_MS
+		}
+		return false
 	} catch {
 		return false
 	}
@@ -105,11 +123,13 @@ const CALLOUT_TONE: Record<'info' | 'warning' | 'success', {icon: string; accent
 	success: {icon: '✅', accent: 'border-l-success'},
 }
 
-// The host mounts at the desktop root (init.tsx) as a SIBLING of the app — i.e.
-// OUTSIDE the app's <ThemeProvider>. Calling useTheme() there THROWS ("must be
-// used within a ThemeProvider") and crashes the whole desktop (the bug that
-// bricked v44.66). Read the theme SAFELY: the context if present, else derive
-// from the body class the provider sets (applyTheme → body.dark / .iridescent).
+// Read the theme defensively. As of v44.68 the host mounts in main.tsx INSIDE
+// <ThemeProvider> (so the context IS present), but an earlier placement mounted
+// it OUTSIDE the providers where useTheme() THREW ("must be used within a
+// ThemeProvider") and bricked the whole desktop (v44.66). This non-throwing read
+// — context if present, else derive from the body class the provider sets
+// (applyTheme → body.dark / .iridescent) — keeps that failure mode impossible
+// regardless of where the host is mounted.
 function useSafeResolvedTheme(): ResolvedTheme {
 	const ctx = useContext(ThemeProviderContext)
 	if (ctx) return ctx.resolvedTheme
@@ -135,9 +155,10 @@ export function AnnouncementHost() {
 
 	const list = (activeQ.data ?? []) as ActiveAnnouncement[]
 	// The poll route returns priority-ordered (priority ASC). `queue` = everything
-	// eligible to show now (not day-gated); `remaining` = still-unseen this session.
-	// current = highest-priority remaining → stacking is "next after dismiss".
-	const queue = list.filter((a) => a && !isDayGated(a))
+	// eligible to show now (not already-shown per the client gate); `remaining` =
+	// still-unseen this session. current = highest-priority remaining → stacking is
+	// "next after dismiss".
+	const queue = list.filter((a) => a && !isAlreadyShown(a, seenFiredRef.current))
 	const remaining = queue.filter((a) => !dismissed.has(a.id))
 	const current = remaining[0] ?? null
 	const total = queue.length
