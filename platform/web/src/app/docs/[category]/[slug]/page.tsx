@@ -1,10 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { getArticle, getDocsNav } from '../../_lib/docs-data';
+import { getArticle } from '../../_lib/docs-data';
 import { extractToc } from '../../_lib/toc';
 import { isAdminViewer } from '../../_lib/preview-auth';
-import { DocsSidebar } from '../../_components/sidebar';
 import { DocsToc } from '../../_components/toc';
 import { DocsMarkdown } from '../../_components/markdown';
 
@@ -31,19 +30,14 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 export default async function ArticlePage({ params }: Params) {
   const { category, slug } = await params;
   const admin = await isAdminViewer();
-  const [data, nav] = await Promise.all([
-    getArticle(category, slug, { includeUnpublished: admin }),
-    getDocsNav(),
-  ]);
+  const data = await getArticle(category, slug, { includeUnpublished: admin });
   if (!data) notFound();
 
   const { article, category: cat, published } = data;
   const toc = extractToc(article.content);
 
   return (
-    <div className="docs-shell">
-      <DocsSidebar nav={nav} activeSlug={article.slug} />
-
+    <>
       <main className="docs-content">
         <article className="docs-article">
           {!published && (
@@ -88,6 +82,6 @@ export default async function ArticlePage({ params }: Params) {
       </main>
 
       <DocsToc items={toc} />
-    </div>
+    </>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import type { NavCategory } from '../_lib/docs-data';
 
 export function DocsSidebar({
@@ -12,6 +13,11 @@ export function DocsSidebar({
   activeSlug?: string;
 }) {
   const [q, setQ] = useState('');
+  // The sidebar now lives in the persistent [category] layout, so it isn't handed
+  // an activeSlug per render — derive the active article from the URL instead
+  // (/docs/<category>/<slug>). The optional prop is still honored if passed.
+  const pathname = usePathname();
+  const currentSlug = activeSlug ?? pathname?.split('/').filter(Boolean).pop();
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -61,7 +67,7 @@ export function DocsSidebar({
             <Link
               key={a.slug}
               href={`/docs/${c.slug}/${a.slug}`}
-              className={`docs-side-link${a.slug === activeSlug ? ' is-active' : ''}`}
+              className={`docs-side-link${a.slug === currentSlug ? ' is-active' : ''}`}
             >
               {a.title}
             </Link>
