@@ -39,6 +39,7 @@ const NAV_CATALOG: NavItem[] = [
 
 const NAV_CONTENT: NavItem[] = [
   { href: '/admin/docs', label: 'Docs' },
+  { href: '/admin/announcements', label: 'Announcements' },
 ];
 
 const NAV_OPERATIONS: NavItem[] = [
