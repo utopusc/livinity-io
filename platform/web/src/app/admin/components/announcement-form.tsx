@@ -279,7 +279,6 @@ export function AnnouncementForm({ initial }: { initial?: Announcement }) {
               set('slug', e.target.value);
             }}
             placeholder="whats-new"
-            pattern="[a-z0-9-]*"
             title="lowercase letters, digits and hyphens"
           />
         </div>
