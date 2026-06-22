@@ -282,12 +282,24 @@ export class StreamManager extends EventEmitter {
 					)
 					return
 				}
+				// ANY unrequested exit means this stream is dead → flip it off 'alive'
+				// so it stops counting toward the concurrent-stream cap. Previously the
+				// status flip lived INSIDE the `code !== 0 && code !== null` branch, so an
+				// x11vnc that exited 0 (clean) or was signal-killed (code === null) — e.g.
+				// when its Xvfb display / Chrome was torn down by "reset chrome profile" —
+				// stayed 'alive' in the map forever and leaked a cap slot. Five such
+				// ghost-alive sessions → "stream cap exceeded (limit 5)" on the next
+				// webapp.window.spawn / chromeMaster.startLogin (the reported 500s).
+				vncSession.status = 'crashed'
 				if (code !== 0 && code !== null) {
 					this.logger?.error?.(
 						`stream ${streamId}: x11vnc crashed (code=${code} signal=${signal} ${targetLabel})`,
 					)
-					vncSession.status = 'crashed'
 					this.emit('crash', {streamId, code, signal})
+				} else {
+					this.logger?.warn?.(
+						`stream ${streamId}: x11vnc exited without a stop request (code=${code} signal=${signal} ${targetLabel}) — freeing its cap slot`,
+					)
 				}
 			})
 			this.logger?.info?.(
@@ -369,6 +381,16 @@ export class StreamManager extends EventEmitter {
 				this.logger?.info?.(`stream ${streamId}: encoder exited cleanly (stop requested)`)
 				return
 			}
+			// ANY unrequested exit = dead stream → flip off 'alive' + close the fanout
+			// so the cap slot is freed. Previously this only ran for a non-zero crash
+			// code, so a code===0 / signal-kill (code===null) exit left the session
+			// 'alive' and leaked a cap slot (same ghost-alive bug as the vnc branch).
+			session.status = 'crashed'
+			try {
+				fanout.close('encoder-exited')
+			} catch (err) {
+				this.logger?.warn?.(`stream ${streamId}: fanout.close after exit threw`, err)
+			}
 			if (code !== 0 && code !== null) {
 				const tailMsg =
 					stderrTail.length > 0
@@ -377,13 +399,11 @@ export class StreamManager extends EventEmitter {
 				this.logger?.error?.(
 					`stream ${streamId}: encoder crashed (code=${code} signal=${signal} argv=${JSON.stringify(argv)})${tailMsg}`,
 				)
-				session.status = 'crashed'
-				try {
-					fanout.close('encoder-crashed')
-				} catch (err) {
-					this.logger?.warn?.(`stream ${streamId}: fanout.close after crash threw`, err)
-				}
 				this.emit('crash', {streamId, code, signal})
+			} else {
+				this.logger?.warn?.(
+					`stream ${streamId}: encoder exited without a stop request (code=${code} signal=${signal}) — freeing its cap slot`,
+				)
 			}
 		})
 

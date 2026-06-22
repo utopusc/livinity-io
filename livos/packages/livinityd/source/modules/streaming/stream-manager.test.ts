@@ -366,6 +366,36 @@ describe('StreamManager — vnc-window mode (Phase 99-03)', () => {
 		expect(records[0].subscriberCount).toBe(0)
 		mgr._clearForTests()
 	})
+
+	it('Test 16: an x11vnc that exits WITHOUT a stop request (code 0 or signal/null) frees its cap slot (ghost-alive leak fix)', async () => {
+		const {mgr, spawned} = makeVncManager() // cap = 5 (NO_VAAPI)
+		// Fill the cap with 5 live vnc-window streams (distinct displays so none dedupe).
+		for (let i = 0; i < 5; i++) {
+			mgr.startStream({userId: 'admin', mode: 'vnc-window' as any, target: {display: `:${10 + i}`} as any})
+		}
+		// Cap is full → a 6th throws.
+		expect(() =>
+			mgr.startStream({userId: 'admin', mode: 'vnc-window' as any, target: {display: ':90'} as any}),
+		).toThrow(StreamCapExceededError)
+
+		// x11vnc #0 exits cleanly (code 0) with NO stopStream — e.g. its Xvfb display
+		// was torn down by "reset chrome profile". Pre-fix this stayed 'alive' and leaked
+		// the slot; now the slot frees so a new stream starts.
+		spawned[0].child.emit('exit', 0, null)
+		await Promise.resolve()
+		expect(() =>
+			mgr.startStream({userId: 'admin', mode: 'vnc-window' as any, target: {display: ':90'} as any}),
+		).not.toThrow()
+
+		// x11vnc #1 is signal-killed (code === null) with NO stopStream — same leak class.
+		spawned[1].child.emit('exit', null, 'SIGKILL')
+		await Promise.resolve()
+		expect(() =>
+			mgr.startStream({userId: 'admin', mode: 'vnc-window' as any, target: {display: ':91'} as any}),
+		).not.toThrow()
+
+		mgr._clearForTests()
+	})
 })
 
 // ============================================================================
