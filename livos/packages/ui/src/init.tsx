@@ -7,6 +7,7 @@ import React, {Suspense} from 'react'
 import ReactDOM from 'react-dom/client'
 import {ErrorBoundary} from 'react-error-boundary'
 
+import {AnnouncementHost} from '@/components/announcement-host'
 import {IframeChecker} from '@/components/iframe-checker'
 import {LivosVersionBanner} from '@/components/livos-version-banner'
 import {BareCoverMessage, CoverMessageTarget} from '@/components/ui/cover-message'
@@ -39,6 +40,8 @@ export function init(element: React.ReactNode) {
 								<Toaster />
 								{/* Phase 218 T7 — refresh banner on UI bundle mismatch. */}
 								<LivosVersionBanner />
+								{/* Phase 292 — fleet announcement pop-up host (desktop-level modal). */}
+								<AnnouncementHost />
 								{/* Put `CoverMessageTarget` after `Toaster` because we don't want toasts to show up on these pages */}
 								<CoverMessageTarget />
 							</TooltipProvider>
