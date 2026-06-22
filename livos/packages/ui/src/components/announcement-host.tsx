@@ -9,10 +9,10 @@
  */
 import useEmblaCarousel from 'embla-carousel-react'
 import {AnimatePresence, motion, useReducedMotion} from 'framer-motion'
-import {useEffect, useRef, useState} from 'react'
+import {useContext, useEffect, useRef, useState} from 'react'
 
 import AnnouncementIframe from '@/components/announcement-iframe'
-import {useTheme} from '@/hooks/use-theme'
+import {ThemeProviderContext, type ResolvedTheme} from '@/providers/theme-provider'
 import {Button} from '@/shadcn-components/ui/button'
 import {
 	Dialog,
@@ -105,8 +105,24 @@ const CALLOUT_TONE: Record<'info' | 'warning' | 'success', {icon: string; accent
 	success: {icon: '✅', accent: 'border-l-success'},
 }
 
+// The host mounts at the desktop root (init.tsx) as a SIBLING of the app — i.e.
+// OUTSIDE the app's <ThemeProvider>. Calling useTheme() there THROWS ("must be
+// used within a ThemeProvider") and crashes the whole desktop (the bug that
+// bricked v44.66). Read the theme SAFELY: the context if present, else derive
+// from the body class the provider sets (applyTheme → body.dark / .iridescent).
+function useSafeResolvedTheme(): ResolvedTheme {
+	const ctx = useContext(ThemeProviderContext)
+	if (ctx) return ctx.resolvedTheme
+	if (typeof document !== 'undefined') {
+		const cl = document.body.classList
+		if (cl.contains('iridescent')) return 'iridescent'
+		if (cl.contains('dark')) return 'dark'
+	}
+	return 'light'
+}
+
 export function AnnouncementHost() {
-	const {resolvedTheme} = useTheme()
+	const resolvedTheme = useSafeResolvedTheme()
 	const reduce = useReducedMotion()
 	const activeQ = trpcReact.announcements.listActive.useQuery(undefined, {
 		refetchInterval: 60_000,

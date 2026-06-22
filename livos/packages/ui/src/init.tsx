@@ -40,8 +40,13 @@ export function init(element: React.ReactNode) {
 								<Toaster />
 								{/* Phase 218 T7 — refresh banner on UI bundle mismatch. */}
 								<LivosVersionBanner />
-								{/* Phase 292 — fleet announcement pop-up host (desktop-level modal). */}
-								<AnnouncementHost />
+								{/* Phase 292 — fleet announcement pop-up host (desktop-level modal).
+								    Wrapped in its OWN ErrorBoundary (fallback=null) so an
+								    announcement render error can NEVER brick the desktop — the
+								    host mounts here as a sibling, OUTSIDE the app's ThemeProvider. */}
+								<ErrorBoundary fallback={null}>
+									<AnnouncementHost />
+								</ErrorBoundary>
 								{/* Put `CoverMessageTarget` after `Toaster` because we don't want toasts to show up on these pages */}
 								<CoverMessageTarget />
 							</TooltipProvider>
