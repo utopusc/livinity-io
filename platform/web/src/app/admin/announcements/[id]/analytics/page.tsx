@@ -96,7 +96,14 @@ function Inner() {
   // CSV export — votes + free-text feedback to a client-side blob download.
   function exportCsv() {
     if (!data) return;
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    // RFC-4180 quoting + spreadsheet formula-injection guard: free_text is
+    // end-user authored, so neutralize cells that would be evaluated as a
+    // formula (leading = + - @, or tab/CR) by prefixing a single quote.
+    const esc = (v: unknown) => {
+      let s = String(v ?? '');
+      if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+      return `"${s.replace(/"/g, '""')}"`;
+    };
     const lines: string[] = ['type,block,option_or_text,count_or_date'];
     for (const v of data.votes) {
       const label = v.block_id && v.block_id !== ROOT_BLOCK ? blockLabel.get(v.block_id) ?? v.block_id : 'overall';

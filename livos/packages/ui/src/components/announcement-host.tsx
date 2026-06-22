@@ -486,12 +486,15 @@ function CountdownBlock({block}: {block: Extract<AnnouncementBlock, {type: 'coun
 // Image carousel (Wave 4). embla-carousel-react for native swipe/drag + a gentle
 // 4s auto-advance (no extra autoplay plugin needed). Only http(s) URLs render.
 function CarouselBlock({block}: {block: Extract<AnnouncementBlock, {type: 'image-carousel'}>}) {
+	const reduce = useReducedMotion()
 	const [emblaRef, emblaApi] = useEmblaCarousel({loop: true})
 	useEffect(() => {
-		if (!emblaApi) return
+		// WCAG 2.2.2 — skip the auto-advance when the user prefers reduced motion
+		// (manual swipe/drag still works).
+		if (!emblaApi || reduce) return
 		const t = setInterval(() => emblaApi.scrollNext(), 4000)
 		return () => clearInterval(t)
-	}, [emblaApi])
+	}, [emblaApi, reduce])
 
 	const urls = (block.urls ?? []).map((u) => safeUrl(u)).filter((u): u is string => !!u)
 	if (urls.length === 0) return null
