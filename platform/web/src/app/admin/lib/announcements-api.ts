@@ -24,9 +24,9 @@ export type AnnouncementBlock =
   | { id: string; type: 'heading'; text: string }
   | { id: string; type: 'text'; text: string }
   | { id: string; type: 'image'; url: string; alt?: string }
-  | { id: string; type: 'video'; url: string }
+  | { id: string; type: 'video'; url: string; poster?: string }
   | { id: string; type: 'step'; title: string; body: string }
-  | { id: string; type: 'button'; label: string; href: string }
+  | { id: string; type: 'button'; label: string; href: string; variant?: 'primary' | 'secondary' }
   | { id: string; type: 'poll'; question: string; options: string[] }
   | { id: string; type: 'feedback'; prompt: string };
 

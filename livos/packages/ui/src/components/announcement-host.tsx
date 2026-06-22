@@ -27,9 +27,9 @@ type AnnouncementBlock =
 	| {id: string; type: 'heading'; text: string}
 	| {id: string; type: 'text'; text: string}
 	| {id: string; type: 'image'; url: string; alt?: string}
-	| {id: string; type: 'video'; url: string}
+	| {id: string; type: 'video'; url: string; poster?: string}
 	| {id: string; type: 'step'; title: string; body: string}
-	| {id: string; type: 'button'; label: string; href: string}
+	| {id: string; type: 'button'; label: string; href: string; variant?: 'primary' | 'secondary'}
 	| {id: string; type: 'poll'; question: string; options: string[]}
 	| {id: string; type: 'feedback'; prompt: string}
 
@@ -168,7 +168,8 @@ function BlockView({announcementId, block}: {announcementId: string; block: Anno
 		case 'video': {
 			const src = safeUrl(block.url)
 			if (!src) return null
-			return <video src={src} controls className="w-full rounded-8" />
+			const poster = block.poster ? safeUrl(block.poster) : undefined
+			return <video src={src} poster={poster} controls className="w-full rounded-8" />
 		}
 		case 'step':
 			return (
@@ -180,9 +181,10 @@ function BlockView({announcementId, block}: {announcementId: string; block: Anno
 		case 'button': {
 			const href = safeUrl(block.href)
 			if (!href) return null
+			const variant = block.variant === 'secondary' ? 'secondary' : 'primary'
 			return (
 				<a href={href} target="_blank" rel="noopener noreferrer" className="self-start">
-					<Button type="button" variant="primary">
+					<Button type="button" variant={variant}>
 						{block.label}
 					</Button>
 				</a>

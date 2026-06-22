@@ -102,6 +102,13 @@ function defaultForm(): FormState {
   };
 }
 
+// Only show a thumbnail for http(s) URLs (defense-in-depth; matches the box's
+// native-media URL gate). Avoids rendering data: / blob: / javascript: in admin.
+function safeImg(url: string): string | undefined {
+  const lower = (url || '').trim().toLowerCase();
+  return lower.startsWith('http://') || lower.startsWith('https://') ? url : undefined;
+}
+
 function slugify(input: string): string {
   return input
     .toLowerCase()
@@ -129,6 +136,50 @@ function blankBlock(type: AnnouncementBlockType): AnnouncementBlock {
 const BLOCK_TYPES: AnnouncementBlockType[] = [
   'heading', 'text', 'image', 'video', 'step', 'button', 'poll', 'feedback',
 ];
+
+const BLOCK_ICON: Record<AnnouncementBlockType, string> = {
+  heading: 'H',
+  text: '¶',
+  image: '🖼',
+  video: '▶',
+  step: '①',
+  button: '🔘',
+  poll: '📊',
+  feedback: '💬',
+};
+
+// Collapsible form section (Wave 2) — groups fields under a labelled, foldable
+// header. Uses native <details> so React keeps the inputs mounted (state safe).
+function FormSection({
+  title,
+  hint,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details
+      open={defaultOpen}
+      style={{
+        border: '1px solid var(--line)',
+        borderRadius: 'var(--r)',
+        padding: '10px 12px',
+        marginBottom: 12,
+        background: 'var(--bg)',
+      }}
+    >
+      <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600, userSelect: 'none' }}>
+        {title}
+        {hint ? <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--fg-mute)', fontWeight: 400 }}>{hint}</span> : null}
+      </summary>
+      <div style={{ marginTop: 12 }}>{children}</div>
+    </details>
+  );
+}
 
 export function AnnouncementForm({ initial }: { initial?: Announcement }) {
   const router = useRouter();
@@ -164,6 +215,16 @@ export function AnnouncementForm({ initial }: { initial?: Announcement }) {
   }
   function removeBlock(id: string) {
     setState((s) => ({ ...s, blocks: s.blocks.filter((b) => b.id !== id) }));
+  }
+  function duplicateBlock(id: string) {
+    setState((s) => {
+      const i = s.blocks.findIndex((b) => b.id === id);
+      if (i < 0) return s;
+      const copy = { ...s.blocks[i], id: newId() } as AnnouncementBlock;
+      const next = [...s.blocks];
+      next.splice(i + 1, 0, copy);
+      return { ...s, blocks: next };
+    });
   }
   function moveBlock(id: string, dir: -1 | 1) {
     setState((s) => {
@@ -257,259 +318,279 @@ export function AnnouncementForm({ initial }: { initial?: Announcement }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
       <form className="form" style={{ flex: '1 1 460px', minWidth: 0 }} onSubmit={handleSubmit}>
-      {/* Title + slug + kind */}
-      <div className="form-row two-col">
-        <div>
-          <label className="form-label">Title</label>
-          <input
-            type="text"
-            className="form-input"
-            value={state.title}
-            onChange={(e) => handleTitleChange(e.target.value)}
-            required
-            placeholder="What's new in LivOS"
-          />
-        </div>
-        <div>
-          <label className="form-label">Slug (optional)</label>
-          <input
-            type="text"
-            className="form-input"
-            value={state.slug}
-            onChange={(e) => {
-              setSlugTouched(true);
-              set('slug', e.target.value);
-            }}
-            placeholder="whats-new"
-            title="lowercase letters, digits and hyphens"
-          />
-        </div>
-      </div>
-
-      <div className="form-row two-col">
-        <div>
-          <label className="form-label">Kind</label>
-          <select className="form-select" value={state.kind} onChange={(e) => set('kind', e.target.value as Announcement['kind'])}>
-            <option value="announcement">Announcement</option>
-            <option value="campaign">Campaign / discount</option>
-            <option value="promo">Product promo</option>
-            <option value="feature">Feature reveal</option>
-            <option value="feedback">Feedback request</option>
-          </select>
-        </div>
-        <div>
-          <label className="form-label">Start from a template</label>
-          <button
-            type="button"
-            className={`btn ${showGallery ? 'primary' : 'ghost'}`}
-            style={{ width: '100%' }}
-            onClick={() => setShowGallery((v) => !v)}
-            aria-expanded={showGallery}
-          >
-            {showGallery ? 'Hide template gallery' : '🗂️ Browse templates'}
-          </button>
-          <div className="form-help">Pick a preset to load editable blocks.</div>
-        </div>
-      </div>
-
-      {/* Template gallery (Wave 1) — expandable visual picker */}
-      {showGallery && (
-        <div className="form-row">
-          <TemplateGallery
-            onPick={(key) => {
-              loadTemplate(key);
-              setShowGallery(false);
-            }}
-            onClose={() => setShowGallery(false)}
-          />
-        </div>
-      )}
-
-      {/* Mode toggle */}
+      {/* Title — always visible (required) */}
       <div className="form-row">
-        <label className="form-label">Content mode</label>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            type="button"
-            className={`btn ${state.mode === 'builder' ? 'primary' : 'ghost'} sm`}
-            onClick={() => set('mode', 'builder')}
-          >
-            Visual builder
-          </button>
-          <button
-            type="button"
-            className={`btn ${state.mode === 'html' ? 'primary' : 'ghost'} sm`}
-            onClick={() => set('mode', 'html')}
-          >
-            Raw HTML
-          </button>
-        </div>
+        <label className="form-label">Title</label>
+        <input
+          type="text"
+          className="form-input"
+          value={state.title}
+          onChange={(e) => handleTitleChange(e.target.value)}
+          required
+          placeholder="What's new in LivOS"
+        />
       </div>
 
-      {/* Hidden file input shared by image blocks */}
-      <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
-        style={{ display: 'none' }}
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) handleImageFile(f);
-          e.target.value = '';
-        }}
-      />
+      {/* ── Content ─────────────────────────────────────────────── */}
+      <FormSection title="Content" hint="kind · template · blocks">
+        <div className="form-row two-col">
+          <div>
+            <label className="form-label">Kind</label>
+            <select className="form-select" value={state.kind} onChange={(e) => set('kind', e.target.value as Announcement['kind'])}>
+              <option value="announcement">Announcement</option>
+              <option value="campaign">Campaign / discount</option>
+              <option value="promo">Product promo</option>
+              <option value="feature">Feature reveal</option>
+              <option value="feedback">Feedback request</option>
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Start from a template</label>
+            <button
+              type="button"
+              className={`btn ${showGallery ? 'primary' : 'ghost'}`}
+              style={{ width: '100%' }}
+              onClick={() => setShowGallery((v) => !v)}
+              aria-expanded={showGallery}
+            >
+              {showGallery ? 'Hide template gallery' : '🗂️ Browse templates'}
+            </button>
+            <div className="form-help">Pick a preset to load editable blocks.</div>
+          </div>
+        </div>
 
-      {/* Builder mode */}
-      {state.mode === 'builder' && (
+        {/* Template gallery (Wave 1) — expandable visual picker */}
+        {showGallery && (
+          <div className="form-row">
+            <TemplateGallery
+              onPick={(key) => {
+                loadTemplate(key);
+                setShowGallery(false);
+              }}
+              onClose={() => setShowGallery(false)}
+            />
+          </div>
+        )}
+
+        {/* Mode toggle */}
         <div className="form-row">
-          <label className="form-label">Content blocks</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {state.blocks.map((b, idx) => (
-              <div
-                key={b.id}
-                style={{
-                  border: '1px solid var(--line)',
-                  borderRadius: 'var(--r)',
-                  padding: 12,
-                  background: 'var(--bg)',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <span className="section-chip">{b.type}</span>
-                  <span style={{ display: 'inline-flex', gap: 4 }}>
-                    <button type="button" className="btn ghost sm" onClick={() => moveBlock(b.id, -1)} disabled={idx === 0}>↑</button>
-                    <button type="button" className="btn ghost sm" onClick={() => moveBlock(b.id, 1)} disabled={idx === state.blocks.length - 1}>↓</button>
-                    <button type="button" className="btn danger sm" onClick={() => removeBlock(b.id)}>Remove</button>
-                  </span>
-                </div>
-                <BlockEditor
-                  block={b}
-                  onPatch={(patch) => patchBlock(b.id, patch)}
-                  onPickImage={() => {
-                    uploadTargetRef.current = b.id;
-                    imageInputRef.current?.click();
+          <label className="form-label">Content mode</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className={`btn ${state.mode === 'builder' ? 'primary' : 'ghost'} sm`}
+              onClick={() => set('mode', 'builder')}
+            >
+              Visual builder
+            </button>
+            <button
+              type="button"
+              className={`btn ${state.mode === 'html' ? 'primary' : 'ghost'} sm`}
+              onClick={() => set('mode', 'html')}
+            >
+              Raw HTML
+            </button>
+          </div>
+        </div>
+
+        {/* Hidden file input shared by image blocks */}
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) handleImageFile(f);
+            e.target.value = '';
+          }}
+        />
+
+        {/* Builder mode */}
+        {state.mode === 'builder' && (
+          <div className="form-row">
+            <label className="form-label">Content blocks</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {state.blocks.length === 0 && (
+                <p style={{ fontSize: 12, color: 'var(--fg-mute)', margin: '2px 0' }}>
+                  No blocks yet — add one below, or load a template above.
+                </p>
+              )}
+              {state.blocks.map((b, idx) => (
+                <div
+                  key={b.id}
+                  style={{
+                    border: '1px solid var(--line)',
+                    borderRadius: 'var(--r)',
+                    padding: 12,
+                    background: 'var(--bg)',
                   }}
-                />
-              </div>
-            ))}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ cursor: 'grab', opacity: 0.35, fontSize: 14, lineHeight: 1 }} title="Use ↑ ↓ to reorder" aria-hidden="true">⠿</span>
+                      <span aria-hidden="true">{BLOCK_ICON[b.type]}</span>
+                      <span className="section-chip">{b.type}</span>
+                    </span>
+                    <span style={{ display: 'inline-flex', gap: 4 }}>
+                      <button type="button" className="btn ghost sm" onClick={() => moveBlock(b.id, -1)} disabled={idx === 0} title="Move up">↑</button>
+                      <button type="button" className="btn ghost sm" onClick={() => moveBlock(b.id, 1)} disabled={idx === state.blocks.length - 1} title="Move down">↓</button>
+                      <button type="button" className="btn ghost sm" onClick={() => duplicateBlock(b.id)} title="Duplicate block">⎘</button>
+                      <button type="button" className="btn danger sm" onClick={() => removeBlock(b.id)}>Remove</button>
+                    </span>
+                  </div>
+                  <BlockEditor
+                    block={b}
+                    onPatch={(patch) => patchBlock(b.id, patch)}
+                    onPickImage={() => {
+                      uploadTargetRef.current = b.id;
+                      imageInputRef.current?.click();
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+              {BLOCK_TYPES.map((t) => (
+                <button key={t} type="button" className="btn ghost sm" onClick={() => addBlock(t)} title={`Add a ${t} block`}>
+                  ＋ <span aria-hidden="true">{BLOCK_ICON[t]}</span> {t}
+                </button>
+              ))}
+            </div>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-            {BLOCK_TYPES.map((t) => (
-              <button key={t} type="button" className="btn ghost sm" onClick={() => addBlock(t)}>
-                ＋ {t}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+        )}
 
-      {/* Raw HTML mode */}
-      {state.mode === 'html' && (
-        <div className="form-row">
-          <label className="form-label">Raw HTML</label>
-          <textarea
-            className="form-textarea tall"
-            style={{ minHeight: 280, fontFamily: 'var(--mono)', fontSize: 13 }}
-            value={state.raw_html}
-            onChange={(e) => set('raw_html', e.target.value)}
-            spellCheck={false}
-            placeholder="<h2>Big news</h2><p>Paste rich HTML here…</p>"
-          />
-          <div className="form-help">
-            HTML is sanitized at publish and rendered inside a sandboxed iframe on every desktop —
-            scripts never run. A live sandboxed preview is shown on the box.
+        {/* Raw HTML mode */}
+        {state.mode === 'html' && (
+          <div className="form-row">
+            <label className="form-label">Raw HTML</label>
+            <textarea
+              className="form-textarea tall"
+              style={{ minHeight: 280, fontFamily: 'var(--mono)', fontSize: 13 }}
+              value={state.raw_html}
+              onChange={(e) => set('raw_html', e.target.value)}
+              spellCheck={false}
+              placeholder="<h2>Big news</h2><p>Paste rich HTML here…</p>"
+            />
+            <div className="form-help">
+              HTML is sanitized at publish and rendered inside a sandboxed iframe on every desktop —
+              scripts never run. A live sandboxed preview is shown on the box.
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </FormSection>
 
-      {/* Display settings */}
-      <div className="form-row two-col">
-        <div>
-          <label className="form-label">Frequency</label>
-          <select className="form-select" value={state.frequency} onChange={(e) => set('frequency', e.target.value as Announcement['frequency'])}>
-            <option value="once_ever">Once ever</option>
-            <option value="once_per_day">Once per day</option>
-            <option value="n_times">N times</option>
-          </select>
-          {state.frequency === 'n_times' && (
+      {/* ── Display ─────────────────────────────────────────────── */}
+      <FormSection title="Display" hint="frequency · schedule · dismiss">
+        <div className="form-row two-col">
+          <div>
+            <label className="form-label">Frequency</label>
+            <select className="form-select" value={state.frequency} onChange={(e) => set('frequency', e.target.value as Announcement['frequency'])}>
+              <option value="once_ever">Once ever</option>
+              <option value="once_per_day">Once per day</option>
+              <option value="n_times">N times</option>
+            </select>
+            {state.frequency === 'n_times' && (
+              <input
+                type="number"
+                className="form-input"
+                style={{ marginTop: 6 }}
+                min={1}
+                value={state.frequency_n}
+                onChange={(e) => set('frequency_n', Number(e.target.value))}
+                placeholder="3"
+              />
+            )}
+          </div>
+          <div>
+            <label className="form-label">Priority</label>
             <input
               type="number"
               className="form-input"
+              value={state.priority}
+              onChange={(e) => set('priority', Number(e.target.value))}
+              placeholder="100"
+            />
+            <div className="form-help">Lower number = higher priority (shown first when several stack).</div>
+          </div>
+        </div>
+
+        <div className="form-row two-col">
+          <div>
+            <label className="form-label">Start at (optional)</label>
+            <input type="datetime-local" className="form-input" value={state.start_at} onChange={(e) => set('start_at', e.target.value)} />
+          </div>
+          <div>
+            <label className="form-label">End at (optional)</label>
+            <input type="datetime-local" className="form-input" value={state.end_at} onChange={(e) => set('end_at', e.target.value)} />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <label className="form-check">
+            <input type="checkbox" checked={state.dismissible} onChange={(e) => set('dismissible', e.target.checked)} />
+            Dismissible (user can close it)
+          </label>
+        </div>
+      </FormSection>
+
+      {/* ── Targeting (MVP per DEC-08) ──────────────────────────── */}
+      <FormSection title="Targeting" hint="who sees it">
+        <div className="form-row">
+          <select className="form-select" value={state.target_kind} onChange={(e) => set('target_kind', e.target.value as Announcement['target_kind'])}>
+            <option value="all">Everyone</option>
+            <option value="user_ids">Specific users (by ID)</option>
+            <option value="plan_tier">By plan tier</option>
+          </select>
+          {state.target_kind === 'user_ids' && (
+            <textarea
+              className="form-textarea"
+              style={{ marginTop: 6, minHeight: 90, fontFamily: 'var(--mono)', fontSize: 12 }}
+              value={state.target_user_ids}
+              onChange={(e) => set('target_user_ids', e.target.value)}
+              placeholder="One cloud user UUID per line"
+            />
+          )}
+          {state.target_kind === 'plan_tier' && (
+            <input
+              type="text"
+              className="form-input"
               style={{ marginTop: 6 }}
-              min={1}
-              value={state.frequency_n}
-              onChange={(e) => set('frequency_n', Number(e.target.value))}
-              placeholder="3"
+              value={state.target_plan_tier}
+              onChange={(e) => set('target_plan_tier', e.target.value)}
+              placeholder="e.g. free / trialing / active / past_due / comp"
             />
           )}
         </div>
-        <div>
-          <label className="form-label">Priority</label>
-          <input
-            type="number"
-            className="form-input"
-            value={state.priority}
-            onChange={(e) => set('priority', Number(e.target.value))}
-            placeholder="100"
-          />
-          <div className="form-help">Lower number = higher priority (shown first when several stack).</div>
-        </div>
-      </div>
+      </FormSection>
 
-      <div className="form-row two-col">
-        <div>
-          <label className="form-label">Start at (optional)</label>
-          <input type="datetime-local" className="form-input" value={state.start_at} onChange={(e) => set('start_at', e.target.value)} />
+      {/* ── Publish ─────────────────────────────────────────────── */}
+      <FormSection title="Publish" hint="slug · status">
+        <div className="form-row two-col">
+          <div>
+            <label className="form-label">Slug (optional)</label>
+            <input
+              type="text"
+              className="form-input"
+              value={state.slug}
+              onChange={(e) => {
+                setSlugTouched(true);
+                set('slug', e.target.value);
+              }}
+              placeholder="whats-new"
+              title="lowercase letters, digits and hyphens"
+            />
+          </div>
+          <div>
+            <label className="form-label">Status</label>
+            <select className="form-select" value={state.status} onChange={(e) => set('status', e.target.value as Announcement['status'])}>
+              <option value="draft">Draft</option>
+              <option value="published">Published (live to the fleet)</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
         </div>
-        <div>
-          <label className="form-label">End at (optional)</label>
-          <input type="datetime-local" className="form-input" value={state.end_at} onChange={(e) => set('end_at', e.target.value)} />
-        </div>
-      </div>
-
-      <div className="form-row two-col">
-        <label className="form-check">
-          <input type="checkbox" checked={state.dismissible} onChange={(e) => set('dismissible', e.target.checked)} />
-          Dismissible (user can close it)
-        </label>
-        <div>
-          <label className="form-label">Status</label>
-          <select className="form-select" value={state.status} onChange={(e) => set('status', e.target.value as Announcement['status'])}>
-            <option value="draft">Draft</option>
-            <option value="published">Published (live to the fleet)</option>
-            <option value="archived">Archived</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Targeting (MVP per DEC-08) */}
-      <div className="form-row">
-        <label className="form-label">Targeting</label>
-        <select className="form-select" value={state.target_kind} onChange={(e) => set('target_kind', e.target.value as Announcement['target_kind'])}>
-          <option value="all">Everyone</option>
-          <option value="user_ids">Specific users (by ID)</option>
-          <option value="plan_tier">By plan tier</option>
-        </select>
-        {state.target_kind === 'user_ids' && (
-          <textarea
-            className="form-textarea"
-            style={{ marginTop: 6, minHeight: 90, fontFamily: 'var(--mono)', fontSize: 12 }}
-            value={state.target_user_ids}
-            onChange={(e) => set('target_user_ids', e.target.value)}
-            placeholder="One cloud user UUID per line"
-          />
-        )}
-        {state.target_kind === 'plan_tier' && (
-          <input
-            type="text"
-            className="form-input"
-            style={{ marginTop: 6 }}
-            value={state.target_plan_tier}
-            onChange={(e) => set('target_plan_tier', e.target.value)}
-            placeholder="e.g. free / trialing / active / past_due / comp"
-          />
-        )}
-      </div>
+      </FormSection>
 
       <div className="form-actions">
         <div className="left" />
@@ -567,7 +648,8 @@ function BlockEditor({
           placeholder="Paragraph text"
         />
       );
-    case 'image':
+    case 'image': {
+      const thumb = safeImg(block.url);
       return (
         <div>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -590,18 +672,47 @@ function BlockEditor({
             onChange={(e) => onPatch({ alt: e.target.value } as Partial<AnnouncementBlock>)}
             placeholder="Alt text"
           />
+          {thumb && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={thumb}
+              alt={block.alt ?? 'preview'}
+              style={{ marginTop: 8, maxHeight: 96, maxWidth: '100%', borderRadius: 8, border: '1px solid var(--line)' }}
+            />
+          )}
         </div>
       );
-    case 'video':
+    }
+    case 'video': {
+      const posterThumb = block.poster ? safeImg(block.poster) : undefined;
       return (
-        <input
-          type="text"
-          className="form-input"
-          value={block.url}
-          onChange={(e) => onPatch({ url: e.target.value } as Partial<AnnouncementBlock>)}
-          placeholder="https://… video (mp4/webm) URL"
-        />
+        <div>
+          <input
+            type="text"
+            className="form-input"
+            value={block.url}
+            onChange={(e) => onPatch({ url: e.target.value } as Partial<AnnouncementBlock>)}
+            placeholder="https://… video (mp4/webm) URL"
+          />
+          <input
+            type="text"
+            className="form-input"
+            style={{ marginTop: 6 }}
+            value={block.poster ?? ''}
+            onChange={(e) => onPatch({ poster: e.target.value } as Partial<AnnouncementBlock>)}
+            placeholder="https://… poster image URL (optional)"
+          />
+          {posterThumb && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={posterThumb}
+              alt="poster preview"
+              style={{ marginTop: 8, maxHeight: 96, maxWidth: '100%', borderRadius: 8, border: '1px solid var(--line)' }}
+            />
+          )}
+        </div>
       );
+    }
     case 'step':
       return (
         <div>
@@ -623,21 +734,33 @@ function BlockEditor({
       );
     case 'button':
       return (
-        <div style={{ display: 'flex', gap: 6 }}>
-          <input
-            type="text"
-            className="form-input"
-            value={block.label}
-            onChange={(e) => onPatch({ label: e.target.value } as Partial<AnnouncementBlock>)}
-            placeholder="Button label"
-          />
-          <input
-            type="text"
-            className="form-input"
-            value={block.href}
-            onChange={(e) => onPatch({ href: e.target.value } as Partial<AnnouncementBlock>)}
-            placeholder="https://… link"
-          />
+        <div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              type="text"
+              className="form-input"
+              value={block.label}
+              onChange={(e) => onPatch({ label: e.target.value } as Partial<AnnouncementBlock>)}
+              placeholder="Button label"
+            />
+            <input
+              type="text"
+              className="form-input"
+              value={block.href}
+              onChange={(e) => onPatch({ href: e.target.value } as Partial<AnnouncementBlock>)}
+              placeholder="https://… link"
+            />
+          </div>
+          <select
+            className="form-select"
+            style={{ marginTop: 6, maxWidth: 200 }}
+            value={block.variant ?? 'primary'}
+            onChange={(e) => onPatch({ variant: e.target.value as 'primary' | 'secondary' } as Partial<AnnouncementBlock>)}
+            title="Button style"
+          >
+            <option value="primary">Primary (filled)</option>
+            <option value="secondary">Secondary (outline)</option>
+          </select>
         </div>
       );
     case 'poll':
