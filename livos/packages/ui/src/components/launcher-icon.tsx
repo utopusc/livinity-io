@@ -115,15 +115,24 @@ function computeAnalysis(data: Uint8ClampedArray): IconAnalysis {
 // One analysis per URL no matter how many surfaces render the same icon.
 const analysisCache = new Map<string, Promise<IconAnalysisState>>()
 
-// Phase 271-C — hosts that serve favicons WITHOUT `Access-Control-Allow-Origin`.
+// Phase 271-C — hosts that serve icons/favicons WITHOUT `Access-Control-Allow-Origin`.
 // Loading them crossOrigin='anonymous' then calling getImageData() taints the
-// canvas and makes the browser log a cross-origin `favicon.ico` CORS error
-// (the Liv AI console-noise item). The analysis result for these is ALWAYS
-// 'blocked' (→ logo mode) anyway — so we short-circuit to 'blocked' WITHOUT
-// touching the canvas, killing the console error while keeping identical
-// rendering. Matched on hostname suffix so subdomains (e.g.
-// antigravity.google, www.google.com) are covered.
-const NO_CORS_FAVICON_HOSTS = ['google.com', 'antigravity.google', 'gstatic.com']
+// canvas and makes the browser log a cross-origin CORS error (console noise). The
+// analysis result for these is ALWAYS 'blocked' (→ logo mode) anyway — the
+// crossOrigin load just FAILS — so we short-circuit to 'blocked' WITHOUT touching
+// the canvas, killing the console error while keeping IDENTICAL rendering (the
+// visible <img> below never sets crossOrigin, so the icon still displays). Matched
+// on hostname suffix so subdomains are covered.
+//   2026-06-21: + flathub.org (dl.flathub.org app-store icons — one error per app
+//   tile) and ycombinator.com (news.ycombinator.com/y18.svg webapp favicon), the
+//   CORS console errors the operator reported on everything.livinity.io.
+const NO_CORS_FAVICON_HOSTS = [
+	'google.com',
+	'antigravity.google',
+	'gstatic.com',
+	'flathub.org',
+	'ycombinator.com',
+]
 
 function isNoCorsFaviconSrc(src: string): boolean {
 	try {
