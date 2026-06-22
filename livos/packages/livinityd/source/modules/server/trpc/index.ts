@@ -22,6 +22,11 @@ import domain from '../../domain/routes.js'
 // The browser never holds the key. The single procedure path is added to
 // httpOnlyPaths in ./common.ts (mutation must not hang on a disconnected WS).
 import feedback from '../../feedback/routes.js'
+// Phase 292 — `announcements.*` namespace. listActive (reads the box-local Redis
+// cache the announcement-poller maintains) + markSeen/submitVote/submitFeedback
+// (key-injecting proxies to central; browser never holds the key). The three
+// mutation paths are added to httpOnlyPaths in ./common.ts.
+import announcements from '../../announcements/routes.js'
 // Phase 104 plan 104-03 — local-lan mode tRPC routes (local.{getStatus,activate,getCaCert}).
 // All 3 paths route via HTTP per common.ts httpOnlyPaths — local.activate does
 // systemctl reload + file I/O (1-5s) that must survive `systemctl restart livos`.
@@ -313,6 +318,9 @@ export function createAppRouter(opts: {
 		// key added server-side (see feedback/routes.ts). Path is in
 		// httpOnlyPaths (./common.ts) so the mutation survives a WS reconnect.
 		feedback,
+		// Phase 292 — announcements.* (listActive cache read + key-injecting
+		// markSeen/submitVote/submitFeedback). Mutation paths in httpOnlyPaths.
+		announcements,
 		// Phase 104 plan 104-03 — local-lan mode namespace.
 		local: localDns,
 		docker,

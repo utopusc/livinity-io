@@ -823,4 +823,11 @@ export const httpOnlyPaths = [
 	// rationale as webapp.extractMetadata + cliInstaller.install). HTTP delivery
 	// also surfaces upstream status/text to the toast handler immediately.
 	'feedback.submit',
+	// Phase 292 — announcement write-back proxies. Each does an outbound HTTP POST
+	// to central (key injected server-side, 10s AbortController) and must not hang
+	// on a half-broken WS after `systemctl restart livos` (same rationale as
+	// feedback.submit). listActive is a Redis-cache query → not httpOnly.
+	'announcements.markSeen',
+	'announcements.submitVote',
+	'announcements.submitFeedback',
 ] as const
