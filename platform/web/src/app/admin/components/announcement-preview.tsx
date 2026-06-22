@@ -38,6 +38,15 @@ function safeUrl(url: string): string | undefined {
   return lower.startsWith('http://') || lower.startsWith('https://') ? url : undefined;
 }
 
+// Callout tone → admin token color + icon (Wave 4). Tokens only (no hex). The
+// preview's theme override only swaps --fg/--bg/--line/--card, so these tone
+// vars stay at their saturated values and read fine in both light + dark.
+const PREVIEW_CALLOUT_TONE: Record<'info' | 'warning' | 'success', { c: string; icon: string }> = {
+  info: { c: 'var(--fg-mute)', icon: 'ℹ️' },
+  warning: { c: 'var(--amber)', icon: '⚠️' },
+  success: { c: 'var(--green)', icon: '✅' },
+};
+
 function PreviewBlock({ block }: { block: AnnouncementBlock }) {
   switch (block.type) {
     case 'heading':
@@ -95,6 +104,48 @@ function PreviewBlock({ block }: { block: AnnouncementBlock }) {
           <textarea disabled placeholder="Your feedback…" rows={2} style={{ width: '100%', marginTop: 4, borderRadius: 6, border: '1px solid var(--line)', background: 'transparent', color: 'var(--fg)', fontSize: 12, padding: 6 }} />
         </div>
       );
+    case 'divider':
+      return <hr style={{ border: 'none', borderTop: '1px solid var(--line)', margin: '6px 0' }} />;
+    case 'callout': {
+      const tone = PREVIEW_CALLOUT_TONE[block.tone] ?? PREVIEW_CALLOUT_TONE.info;
+      return (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', borderLeft: `3px solid ${tone.c}`, borderRadius: 8, padding: 10, background: 'var(--bg)' }}>
+          <span aria-hidden="true">{tone.icon}</span>
+          <div style={{ fontSize: 13, color: 'var(--fg)' }}>{block.text}</div>
+        </div>
+      );
+    }
+    case 'columns':
+      return (
+        <div style={{ display: 'flex', gap: 12 }}>
+          <p style={{ flex: 1, fontSize: 13, opacity: 0.85, color: 'var(--fg)', margin: 0 }}>{block.left}</p>
+          <p style={{ flex: 1, fontSize: 13, opacity: 0.85, color: 'var(--fg)', margin: 0 }}>{block.right}</p>
+        </div>
+      );
+    case 'countdown': {
+      const d = block.until ? new Date(block.until) : null;
+      const valid = d && !Number.isNaN(d.getTime());
+      return (
+        <div style={{ border: '1px solid var(--line)', borderRadius: 8, padding: 10, textAlign: 'center' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>{block.label}</div>
+          <div style={{ fontSize: 13, opacity: 0.75, color: 'var(--fg)', marginTop: 2 }}>
+            {valid ? `Ends ${d!.toLocaleString()}` : 'Set an end date/time'}
+          </div>
+        </div>
+      );
+    }
+    case 'image-carousel': {
+      const urls = (block.urls ?? []).map((u) => safeUrl(u)).filter((u): u is string => !!u);
+      if (urls.length === 0) return <div style={{ fontSize: 12, opacity: 0.5 }}>[carousel — add image URLs]</div>;
+      return (
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+          {urls.map((u, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={i} src={u} alt="" style={{ height: 90, borderRadius: 8, flex: '0 0 auto' }} />
+          ))}
+        </div>
+      );
+    }
   }
 }
 

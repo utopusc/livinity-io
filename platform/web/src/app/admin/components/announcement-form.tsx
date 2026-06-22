@@ -130,11 +130,17 @@ function blankBlock(type: AnnouncementBlockType): AnnouncementBlock {
     case 'button': return { id, type, label: 'Learn more', href: 'https://' };
     case 'poll': return { id, type, question: 'Your question?', options: ['Option 1', 'Option 2'] };
     case 'feedback': return { id, type, prompt: 'Tell us more…' };
+    case 'divider': return { id, type };
+    case 'callout': return { id, type, tone: 'info', text: 'Heads up — something to note.' };
+    case 'columns': return { id, type, left: 'Left column', right: 'Right column' };
+    case 'countdown': return { id, type, label: 'Launching in', until: '' };
+    case 'image-carousel': return { id, type, urls: [] };
   }
 }
 
 const BLOCK_TYPES: AnnouncementBlockType[] = [
   'heading', 'text', 'image', 'video', 'step', 'button', 'poll', 'feedback',
+  'divider', 'callout', 'columns', 'countdown', 'image-carousel',
 ];
 
 const BLOCK_ICON: Record<AnnouncementBlockType, string> = {
@@ -146,6 +152,11 @@ const BLOCK_ICON: Record<AnnouncementBlockType, string> = {
   button: '🔘',
   poll: '📊',
   feedback: '💬',
+  divider: '―',
+  callout: '⚑',
+  columns: '▥',
+  countdown: '⏳',
+  'image-carousel': '🎠',
 };
 
 // Collapsible form section (Wave 2) — groups fields under a labelled, foldable
@@ -816,6 +827,108 @@ function BlockEditor({
           onChange={(e) => onPatch({ prompt: e.target.value } as Partial<AnnouncementBlock>)}
           placeholder="Free-text prompt (e.g. Anything else?)"
         />
+      );
+    case 'divider':
+      return <div style={{ fontSize: 12, color: 'var(--fg-mute)' }}>A horizontal rule — no options.</div>;
+    case 'callout':
+      return (
+        <div>
+          <select
+            className="form-select"
+            style={{ maxWidth: 200 }}
+            value={block.tone}
+            onChange={(e) => onPatch({ tone: e.target.value as 'info' | 'warning' | 'success' } as Partial<AnnouncementBlock>)}
+            title="Callout tone"
+          >
+            <option value="info">Info</option>
+            <option value="warning">Warning</option>
+            <option value="success">Success</option>
+          </select>
+          <textarea
+            className="form-textarea"
+            style={{ marginTop: 6, minHeight: 64 }}
+            value={block.text}
+            onChange={(e) => onPatch({ text: e.target.value } as Partial<AnnouncementBlock>)}
+            placeholder="Callout text"
+          />
+        </div>
+      );
+    case 'columns':
+      return (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <textarea
+            className="form-textarea"
+            style={{ flex: 1, minHeight: 64 }}
+            value={block.left}
+            onChange={(e) => onPatch({ left: e.target.value } as Partial<AnnouncementBlock>)}
+            placeholder="Left column"
+          />
+          <textarea
+            className="form-textarea"
+            style={{ flex: 1, minHeight: 64 }}
+            value={block.right}
+            onChange={(e) => onPatch({ right: e.target.value } as Partial<AnnouncementBlock>)}
+            placeholder="Right column"
+          />
+        </div>
+      );
+    case 'countdown':
+      return (
+        <div>
+          <input
+            type="text"
+            className="form-input"
+            value={block.label}
+            onChange={(e) => onPatch({ label: e.target.value } as Partial<AnnouncementBlock>)}
+            placeholder="Countdown label (e.g. Launching in)"
+          />
+          <input
+            type="datetime-local"
+            className="form-input"
+            style={{ marginTop: 6 }}
+            value={toLocalInput(block.until || null)}
+            onChange={(e) => onPatch({ until: fromLocalInput(e.target.value) ?? '' } as Partial<AnnouncementBlock>)}
+            title="Counts down to this date/time on the box"
+          />
+        </div>
+      );
+    case 'image-carousel':
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {block.urls.length === 0 && (
+            <div style={{ fontSize: 12, color: 'var(--fg-mute)' }}>Add image URLs to build the carousel.</div>
+          )}
+          {block.urls.map((u, i) => (
+            <div key={i} style={{ display: 'flex', gap: 6 }}>
+              <input
+                type="text"
+                className="form-input"
+                value={u}
+                onChange={(e) => {
+                  const next = [...block.urls];
+                  next[i] = e.target.value;
+                  onPatch({ urls: next } as Partial<AnnouncementBlock>);
+                }}
+                placeholder={`https://… image ${i + 1}`}
+              />
+              <button
+                type="button"
+                className="btn danger sm"
+                onClick={() => onPatch({ urls: block.urls.filter((_, j) => j !== i) } as Partial<AnnouncementBlock>)}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="btn ghost sm"
+            style={{ alignSelf: 'flex-start' }}
+            onClick={() => onPatch({ urls: [...block.urls, ''] } as Partial<AnnouncementBlock>)}
+          >
+            ＋ image URL
+          </button>
+        </div>
       );
   }
 }

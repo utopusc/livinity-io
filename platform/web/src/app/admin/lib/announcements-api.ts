@@ -28,7 +28,14 @@ export type AnnouncementBlock =
   | { id: string; type: 'step'; title: string; body: string }
   | { id: string; type: 'button'; label: string; href: string; variant?: 'primary' | 'secondary' }
   | { id: string; type: 'poll'; question: string; options: string[] }
-  | { id: string; type: 'feedback'; prompt: string };
+  | { id: string; type: 'feedback'; prompt: string }
+  // Phase 293 (Wave 4) — richer layout blocks. Added in ALL FOUR vocab places
+  // (this union, the builder, the preview, the box host) and rendered natively.
+  | { id: string; type: 'divider' }
+  | { id: string; type: 'callout'; tone: 'info' | 'warning' | 'success'; text: string }
+  | { id: string; type: 'columns'; left: string; right: string }
+  | { id: string; type: 'countdown'; label: string; until: string }
+  | { id: string; type: 'image-carousel'; urls: string[] };
 
 export type AnnouncementBlockType = AnnouncementBlock['type'];
 

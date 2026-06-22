@@ -7,6 +7,7 @@
  * escape hatch through the sandboxed <AnnouncementIframe> (never inline), and
  * wires dismiss/vote/feedback through the Plan-06 key-injecting tRPC mutations.
  */
+import useEmblaCarousel from 'embla-carousel-react'
 import {AnimatePresence, motion, useReducedMotion} from 'framer-motion'
 import {useEffect, useRef, useState} from 'react'
 
@@ -33,6 +34,12 @@ type AnnouncementBlock =
 	| {id: string; type: 'button'; label: string; href: string; variant?: 'primary' | 'secondary'}
 	| {id: string; type: 'poll'; question: string; options: string[]}
 	| {id: string; type: 'feedback'; prompt: string}
+	// Phase 293 (Wave 4) — mirror the platform/web union (richer layout blocks).
+	| {id: string; type: 'divider'}
+	| {id: string; type: 'callout'; tone: 'info' | 'warning' | 'success'; text: string}
+	| {id: string; type: 'columns'; left: string; right: string}
+	| {id: string; type: 'countdown'; label: string; until: string}
+	| {id: string; type: 'image-carousel'; urls: string[]}
 
 type ActiveAnnouncement = {
 	id: string
@@ -88,6 +95,14 @@ const KIND_META: Record<string, {icon: string; label: string}> = {
 
 function kindMeta(kind: string): {icon: string; label: string} {
 	return KIND_META[kind] ?? {icon: '📣', label: 'Announcement'}
+}
+
+// Callout tone → icon + left-accent token class (Wave 4). Literal class strings
+// so Tailwind's JIT detects them; colors come from theme tokens (no hex).
+const CALLOUT_TONE: Record<'info' | 'warning' | 'success', {icon: string; accent: string}> = {
+	info: {icon: 'ℹ️', accent: 'border-l-brand'},
+	warning: {icon: '⚠️', accent: 'border-l-warning'},
+	success: {icon: '✅', accent: 'border-l-success'},
 }
 
 export function AnnouncementHost() {
@@ -305,6 +320,28 @@ function BlockView({
 			return <PollBlock announcementId={announcementId} block={block} />
 		case 'feedback':
 			return <FeedbackBlock announcementId={announcementId} block={block} />
+		case 'divider':
+			return <hr className="border-0 border-t border-border-default" />
+		case 'callout': {
+			const tone = CALLOUT_TONE[block.tone] ?? CALLOUT_TONE.info
+			return (
+				<div className={`flex gap-2 rounded-8 border-l-4 ${tone.accent} bg-surface-1 p-3`}>
+					<span aria-hidden="true">{tone.icon}</span>
+					<div className="text-13 text-text-primary">{block.text}</div>
+				</div>
+			)
+		}
+		case 'columns':
+			return (
+				<div className="flex flex-col gap-3 sm:flex-row">
+					<p className="flex-1 text-13 leading-relaxed text-text-secondary">{block.left}</p>
+					<p className="flex-1 text-13 leading-relaxed text-text-secondary">{block.right}</p>
+				</div>
+			)
+		case 'countdown':
+			return <CountdownBlock block={block} />
+		case 'image-carousel':
+			return <CarouselBlock block={block} />
 	}
 }
 
@@ -397,6 +434,77 @@ function FeedbackBlock({
 				>
 					{done ? 'Sent ✓' : 'Send'}
 				</Button>
+			</div>
+		</div>
+	)
+}
+
+// Live countdown (Wave 4). Ticks once a second on the box; shows a friendly
+// "It's here" state once the target passes. Tokens only (no hex).
+function CountdownBlock({block}: {block: Extract<AnnouncementBlock, {type: 'countdown'}>}) {
+	const [now, setNow] = useState(() => Date.now())
+	useEffect(() => {
+		const t = setInterval(() => setNow(Date.now()), 1000)
+		return () => clearInterval(t)
+	}, [])
+
+	const target = new Date(block.until).getTime()
+	const valid = Number.isFinite(target)
+	const diff = valid ? Math.max(0, target - now) : 0
+	const ended = valid && diff === 0
+	const s = Math.floor(diff / 1000)
+	const parts = [
+		{label: 'days', value: Math.floor(s / 86400)},
+		{label: 'hrs', value: Math.floor((s % 86400) / 3600)},
+		{label: 'min', value: Math.floor((s % 3600) / 60)},
+		{label: 'sec', value: s % 60},
+	]
+
+	return (
+		<div className="rounded-8 border border-border-default p-3 text-center">
+			<div className="text-13 font-semibold text-text-primary">{block.label}</div>
+			{!valid ? (
+				<div className="mt-1 text-13 text-text-secondary">—</div>
+			) : ended ? (
+				<div className="mt-1 text-15 font-semibold text-text-primary">It&rsquo;s here 🎉</div>
+			) : (
+				<div className="mt-2 flex items-center justify-center gap-3">
+					{parts.map((p) => (
+						<div key={p.label} className="flex flex-col items-center">
+							<span className="text-15 font-semibold tabular-nums text-text-primary">
+								{String(p.value).padStart(2, '0')}
+							</span>
+							<span className="text-12 uppercase text-text-secondary">{p.label}</span>
+						</div>
+					))}
+				</div>
+			)}
+		</div>
+	)
+}
+
+// Image carousel (Wave 4). embla-carousel-react for native swipe/drag + a gentle
+// 4s auto-advance (no extra autoplay plugin needed). Only http(s) URLs render.
+function CarouselBlock({block}: {block: Extract<AnnouncementBlock, {type: 'image-carousel'}>}) {
+	const [emblaRef, emblaApi] = useEmblaCarousel({loop: true})
+	useEffect(() => {
+		if (!emblaApi) return
+		const t = setInterval(() => emblaApi.scrollNext(), 4000)
+		return () => clearInterval(t)
+	}, [emblaApi])
+
+	const urls = (block.urls ?? []).map((u) => safeUrl(u)).filter((u): u is string => !!u)
+	if (urls.length === 0) return null
+
+	return (
+		<div className="overflow-hidden rounded-8" ref={emblaRef}>
+			<div className="flex">
+				{urls.map((u, i) => (
+					<div className="min-w-0 flex-[0_0_100%]" key={i}>
+						{/* eslint-disable-next-line @next/next/no-img-element */}
+						<img src={u} alt="" className="w-full rounded-8" />
+					</div>
+				))}
 			</div>
 		</div>
 	)

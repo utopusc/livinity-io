@@ -298,6 +298,40 @@ export const ANNOUNCEMENT_TEMPLATES: AnnouncementTemplate[] = [
       { id: 'sn-cta', type: 'button', label: 'See the offer', href: 'https://livinity.io' },
     ],
   },
+  {
+    key: 'product-launch',
+    label: 'Product launch (countdown)',
+    kind: 'feature',
+    title: 'Something big is coming',
+    description: 'Build hype with a callout, a two-column pitch, and a live countdown.',
+    icon: '🛫',
+    blocks: [
+      { id: 'pl-h', type: 'heading', text: 'Something big is coming' },
+      { id: 'pl-callout', type: 'callout', tone: 'info', text: 'Early access opens to everyone the moment the timer hits zero.' },
+      { id: 'pl-cols', type: 'columns', left: 'Faster, smoother, and built on everything you told us.', right: 'No migration, no downtime — it just shows up on your desktop.' },
+      { id: 'pl-divider', type: 'divider' },
+      { id: 'pl-countdown', type: 'countdown', label: 'Launching in', until: '' },
+      { id: 'pl-cta', type: 'button', label: 'Notify me', href: 'https://livinity.io', variant: 'primary' },
+    ],
+  },
+  {
+    key: 'gallery',
+    label: 'Image gallery',
+    kind: 'promo',
+    title: 'Take a look',
+    description: 'A swipeable image carousel to show off screenshots or photos.',
+    icon: '🎠',
+    blocks: [
+      { id: 'gl-h', type: 'heading', text: 'Take a look' },
+      {
+        id: 'gl-carousel',
+        type: 'image-carousel',
+        urls: ['https://livinity.io/og.png', 'https://livinity.io/og.png'],
+      },
+      { id: 'gl-b', type: 'text', text: 'Swipe through to see what’s new. There’s a lot to explore.' },
+      { id: 'gl-cta', type: 'button', label: 'Explore', href: 'https://livinity.io', variant: 'secondary' },
+    ],
+  },
 ];
 
 export function getTemplate(key: string): AnnouncementTemplate | undefined {
