@@ -142,3 +142,19 @@ export async function uploadAnnouncementImage(id: string, file: File): Promise<s
   const data = (await res.json()) as { url: string };
   return data.url;
 }
+
+// ---- analytics (Plan 08) --------------------------------------------------
+
+export type AnnouncementAnalytics = {
+  seen: { users_seen: number; impressions: number; dismissed: number };
+  votes: { block_id: string | null; vote_option: string; votes: number }[];
+  feedback: { block_id: string | null; free_text: string; created_at: string }[];
+};
+
+export async function getAnnouncementAnalytics(id: string): Promise<AnnouncementAnalytics> {
+  const res = await fetch(`/api/admin/announcements/${encodeURIComponent(id)}/analytics`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) await asError(res, 'getAnnouncementAnalytics');
+  return res.json();
+}
