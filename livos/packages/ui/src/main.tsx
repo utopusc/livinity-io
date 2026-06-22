@@ -2,8 +2,10 @@
 import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
 
+import {ErrorBoundary} from 'react-error-boundary'
 import {RouterProvider} from 'react-router-dom'
 
+import {AnnouncementHost} from '@/components/announcement-host'
 import {init} from '@/init'
 import {initTokenRenewal} from '@/modules/auth/shared'
 import {ConfirmationProvider} from '@/providers/confirmation'
@@ -39,6 +41,14 @@ init(
 			</ConfirmationProvider>
 		</WallpaperProviderConnected>
 		<Prefetcher />
+		{/* Phase 292 fleet announcement pop-up host — MUST live INSIDE TrpcProvider
+		    (it calls trpcReact…useQuery) and ThemeProvider. Mounting it as an
+		    init.tsx sibling (outside the providers) crashed it ("Unable to find
+		    tRPC Context" / "useTheme must be used within a ThemeProvider").
+		    Its own ErrorBoundary keeps any announcement error from bricking the desktop. */}
+		<ErrorBoundary fallback={null}>
+			<AnnouncementHost />
+		</ErrorBoundary>
 	</TrpcProvider>
 	</KeyboardShortcutsProvider>
 	</ThemeProvider>,

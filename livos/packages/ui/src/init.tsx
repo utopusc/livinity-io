@@ -7,7 +7,6 @@ import React, {Suspense} from 'react'
 import ReactDOM from 'react-dom/client'
 import {ErrorBoundary} from 'react-error-boundary'
 
-import {AnnouncementHost} from '@/components/announcement-host'
 import {IframeChecker} from '@/components/iframe-checker'
 import {LivosVersionBanner} from '@/components/livos-version-banner'
 import {BareCoverMessage, CoverMessageTarget} from '@/components/ui/cover-message'
@@ -40,13 +39,10 @@ export function init(element: React.ReactNode) {
 								<Toaster />
 								{/* Phase 218 T7 — refresh banner on UI bundle mismatch. */}
 								<LivosVersionBanner />
-								{/* Phase 292 — fleet announcement pop-up host (desktop-level modal).
-								    Wrapped in its OWN ErrorBoundary (fallback=null) so an
-								    announcement render error can NEVER brick the desktop — the
-								    host mounts here as a sibling, OUTSIDE the app's ThemeProvider. */}
-								<ErrorBoundary fallback={null}>
-									<AnnouncementHost />
-								</ErrorBoundary>
+								{/* Phase 292 announcement host moved to main.tsx INSIDE TrpcProvider +
+								    ThemeProvider — it calls trpcReact…useQuery and useTheme, which
+								    throw without their providers (here it was a sibling of {element},
+								    outside every provider → bricked v44.66/67). */}
 								{/* Put `CoverMessageTarget` after `Toaster` because we don't want toasts to show up on these pages */}
 								<CoverMessageTarget />
 							</TooltipProvider>
