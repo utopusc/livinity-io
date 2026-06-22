@@ -156,6 +156,7 @@ export type AnnouncementAnalytics = {
   seen: { users_seen: number; impressions: number; dismissed: number };
   votes: { block_id: string | null; vote_option: string; votes: number }[];
   feedback: { block_id: string | null; free_text: string; created_at: string }[];
+  series: { day: string; users: number }[];
 };
 
 export async function getAnnouncementAnalytics(id: string): Promise<AnnouncementAnalytics> {

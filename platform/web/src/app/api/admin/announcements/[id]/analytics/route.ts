@@ -16,6 +16,7 @@ const EMPTY = {
   seen: { users_seen: 0, impressions: 0, dismissed: 0 },
   votes: [] as { block_id: string | null; vote_option: string; votes: number }[],
   feedback: [] as { block_id: string | null; free_text: string; created_at: string }[],
+  series: [] as { day: string; users: number }[],
 };
 
 export async function GET(req: NextRequest, { params }: RouteParams) {
@@ -48,10 +49,23 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         LIMIT 500`,
       [id],
     );
+    // Seen-over-time: one announcement_seen row per (announcement, user), so this
+    // is "users whose last view landed on day D" — a lightweight engagement trend.
+    const seriesQ = await pool.query<{ day: string; users: number }>(
+      `SELECT to_char(date_trunc('day', last_seen_at), 'YYYY-MM-DD') AS day,
+              count(*)::int AS users
+         FROM announcement_seen
+        WHERE announcement_id = $1
+        GROUP BY 1
+        ORDER BY 1
+        LIMIT 180`,
+      [id],
+    );
     return NextResponse.json({
       seen: seenQ.rows[0] ?? EMPTY.seen,
       votes: votesQ.rows,
       feedback: feedbackQ.rows,
+      series: seriesQ.rows,
     });
   } catch (err) {
     // Pre-migration (tables absent) → clean empty dashboard, not a 500.

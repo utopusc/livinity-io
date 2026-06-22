@@ -11,7 +11,7 @@ import {
   getAnnouncement,
   getAnnouncementAnalytics,
 } from '../../../lib/announcements-api';
-import { KpiCard, BarList, Section, type BarListRow } from '../../../components/charts';
+import { KpiCard, BarList, AreaChart, Section, type BarListRow } from '../../../components/charts';
 
 export default function AnnouncementAnalyticsPage() {
   return (
@@ -53,17 +53,67 @@ function Inner() {
     return m;
   }, [announcement]);
 
-  // Group votes by block_id into BarList groups.
+  // Group votes by block_id, with per-option % + a "leading" marker on the top
+  // option(s). The route already orders options by votes DESC within a block.
   const voteGroups = useMemo(() => {
-    const groups = new Map<string, BarListRow[]>();
+    const raw = new Map<string, { opt: string; votes: number }[]>();
     for (const v of data?.votes ?? []) {
       const key = v.block_id ?? ROOT_BLOCK;
-      const rows = groups.get(key) ?? [];
-      rows.push({ label: v.vote_option, value: v.votes, display: String(v.votes) });
-      groups.set(key, rows);
+      const arr = raw.get(key) ?? [];
+      arr.push({ opt: v.vote_option, votes: v.votes });
+      raw.set(key, arr);
+    }
+    const groups = new Map<string, BarListRow[]>();
+    for (const [key, arr] of raw) {
+      const total = arr.reduce((s, r) => s + r.votes, 0);
+      const max = arr.reduce((m, r) => Math.max(m, r.votes), 0);
+      groups.set(
+        key,
+        arr.map((r) => {
+          const pct = total > 0 ? Math.round((r.votes / total) * 100) : 0;
+          return {
+            label: r.opt,
+            value: r.votes,
+            display: `${r.votes} · ${pct}%`,
+            sublabel: r.votes === max && max > 0 ? '🏆 Leading' : undefined,
+          };
+        }),
+      );
     }
     return Array.from(groups.entries());
   }, [data]);
+
+  // Engagement funnel — Seen → Voted → Dismissed (relative bars read as a funnel).
+  const totalVotes = (data?.votes ?? []).reduce((s, v) => s + v.votes, 0);
+  const funnelRows: BarListRow[] = data
+    ? [
+        { label: 'Seen (users)', value: data.seen.users_seen, display: String(data.seen.users_seen) },
+        { label: 'Voted', value: totalVotes, display: String(totalVotes) },
+        { label: 'Dismissed', value: data.seen.dismissed, display: String(data.seen.dismissed) },
+      ]
+    : [];
+
+  // CSV export — votes + free-text feedback to a client-side blob download.
+  function exportCsv() {
+    if (!data) return;
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines: string[] = ['type,block,option_or_text,count_or_date'];
+    for (const v of data.votes) {
+      const label = v.block_id && v.block_id !== ROOT_BLOCK ? blockLabel.get(v.block_id) ?? v.block_id : 'overall';
+      lines.push([esc('vote'), esc(label), esc(v.vote_option), esc(v.votes)].join(','));
+    }
+    for (const f of data.feedback) {
+      const label = f.block_id && f.block_id !== ROOT_BLOCK ? blockLabel.get(f.block_id) ?? f.block_id : 'general';
+      lines.push([esc('feedback'), esc(label), esc(f.free_text), esc(f.created_at)].join(','));
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `announcement-${id ?? 'export'}-analytics.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <>
@@ -79,6 +129,9 @@ function Inner() {
           <Link href="/admin/announcements" className="btn ghost">
             ← Back
           </Link>
+          <button type="button" className="btn ghost" onClick={exportCsv} disabled={!data}>
+            ⬇ Export CSV
+          </button>
           {id && (
             <Link href={`/admin/announcements/${id}`} className="btn ghost">
               Edit
@@ -103,6 +156,16 @@ function Inner() {
             <KpiCard label="Dismissed" value={data.seen.dismissed} tone="amber" />
             <KpiCard label="Feedback" value={data.feedback.length} tone="green" />
           </div>
+
+          <Section title="Engagement funnel" meta="Seen → Voted → Dismissed">
+            <BarList rows={funnelRows} emptyMessage="No engagement yet." />
+          </Section>
+
+          {data.series.length > 0 && (
+            <Section title="Users seen over time" meta={`${data.series.length} day${data.series.length === 1 ? '' : 's'}`}>
+              <AreaChart data={data.series.map((s) => ({ label: s.day.slice(5), value: s.users }))} tone="blue" />
+            </Section>
+          )}
 
           <Section title="Votes" meta={`${data.votes.reduce((s, v) => s + v.votes, 0)} total`}>
             {voteGroups.length === 0 ? (
