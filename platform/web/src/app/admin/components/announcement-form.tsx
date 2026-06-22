@@ -12,6 +12,7 @@ import {
   uploadAnnouncementImage,
 } from '../lib/announcements-api';
 import { ANNOUNCEMENT_TEMPLATES, getTemplate } from '../lib/announcement-templates';
+import { AnnouncementPreview } from './announcement-preview';
 import { Toast } from './toast';
 
 type Mode = 'builder' | 'html';
@@ -252,7 +253,8 @@ export function AnnouncementForm({ initial }: { initial?: Announcement }) {
   }
 
   return (
-    <form className="form" onSubmit={handleSubmit}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
+      <form className="form" style={{ flex: '1 1 460px', minWidth: 0 }} onSubmit={handleSubmit}>
       {/* Title + slug + kind */}
       <div className="form-row two-col">
         <div>
@@ -511,8 +513,17 @@ export function AnnouncementForm({ initial }: { initial?: Announcement }) {
         </button>
       </div>
 
+      </form>
+      <div style={{ flex: '1 1 320px', minWidth: 0, position: 'sticky', top: 16 }}>
+        <AnnouncementPreview
+          mode={state.mode}
+          title={state.title}
+          blocks={state.blocks}
+          rawHtml={state.raw_html}
+        />
+      </div>
       {toast && <Toast msg={toast.msg} error={toast.error} onClose={() => setToast(null)} />}
-    </form>
+    </div>
   );
 }
 

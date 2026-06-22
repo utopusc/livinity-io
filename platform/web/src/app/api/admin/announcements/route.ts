@@ -14,6 +14,13 @@ export const dynamic = 'force-dynamic';
 
 const UNDEFINED_TABLE = '42P01';
 
+// Drizzle/pg can surface the Postgres error code on the error itself OR on its
+// `.cause`. Check both so the defensive 42P01 path always fires.
+function pgCode(err: unknown): string | undefined {
+  const e = err as { code?: string; cause?: { code?: string } };
+  return e?.code ?? e?.cause?.code;
+}
+
 export async function GET(req: NextRequest) {
   const ctx = await requireAdmin(req);
   if (ctx instanceof NextResponse) return ctx;
@@ -25,11 +32,11 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(announcements.created_at));
     return NextResponse.json({ announcements: rows });
   } catch (err) {
-    if ((err as { code?: string })?.code === UNDEFINED_TABLE) {
-      return NextResponse.json({ announcements: [] });
-    }
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    // The list must NEVER hard-500: a missing table (pre-migration) or any
+    // transient DB hiccup degrades to an empty list so the admin page renders
+    // and the admin can still create. Logged for diagnosis.
+    console.error('[admin/announcements GET] list failed, returning empty:', err);
+    return NextResponse.json({ announcements: [] });
   }
 }
 
@@ -103,7 +110,8 @@ export async function POST(req: NextRequest) {
       .returning();
     return NextResponse.json(inserted, { status: 201 });
   } catch (err: unknown) {
-    if ((err as { code?: string })?.code === UNDEFINED_TABLE) {
+    console.error('[admin/announcements POST] create failed:', err);
+    if (pgCode(err) === UNDEFINED_TABLE) {
       return NextResponse.json(
         { error: 'announcements table not provisioned', code: 'ANNOUNCEMENTS_TABLE_MISSING' },
         { status: 503 },
