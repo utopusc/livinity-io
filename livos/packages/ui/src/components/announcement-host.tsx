@@ -7,6 +7,7 @@
  * escape hatch through the sandboxed <AnnouncementIframe> (never inline), and
  * wires dismiss/vote/feedback through the Plan-06 key-injecting tRPC mutations.
  */
+import {AnimatePresence, motion, useReducedMotion} from 'framer-motion'
 import {useEffect, useRef, useState} from 'react'
 
 import AnnouncementIframe from '@/components/announcement-iframe'
@@ -75,20 +76,42 @@ function safeUrl(url: string): string | undefined {
 	return lower.startsWith('http://') || lower.startsWith('https://') ? url : undefined
 }
 
+// Phase 293 (Wave 3) — kind-aware accent. Icon + label only; all color comes
+// from design tokens (no hex) so it themes light/dark/iridescent automatically.
+const KIND_META: Record<string, {icon: string; label: string}> = {
+	announcement: {icon: '📣', label: 'Announcement'},
+	campaign: {icon: '🎟️', label: 'Campaign'},
+	promo: {icon: '🛍️', label: 'Promo'},
+	feature: {icon: '✨', label: 'Feature'},
+	feedback: {icon: '💬', label: 'Feedback'},
+}
+
+function kindMeta(kind: string): {icon: string; label: string} {
+	return KIND_META[kind] ?? {icon: '📣', label: 'Announcement'}
+}
+
 export function AnnouncementHost() {
 	const {resolvedTheme} = useTheme()
+	const reduce = useReducedMotion()
 	const activeQ = trpcReact.announcements.listActive.useQuery(undefined, {
 		refetchInterval: 60_000,
 	})
 	const markSeen = trpcReact.announcements.markSeen.useMutation()
 
 	const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
+	const [zoomSrc, setZoomSrc] = useState<string | null>(null)
 	const seenFiredRef = useRef<Set<string>>(new Set())
 
 	const list = (activeQ.data ?? []) as ActiveAnnouncement[]
-	// The poll route already returns priority-ordered (priority ASC). Show the
-	// first not-locally-dismissed, not-day-gated one — stacking = next-after-dismiss.
-	const current = list.find((a) => a && !dismissed.has(a.id) && !isDayGated(a)) ?? null
+	// The poll route returns priority-ordered (priority ASC). `queue` = everything
+	// eligible to show now (not day-gated); `remaining` = still-unseen this session.
+	// current = highest-priority remaining → stacking is "next after dismiss".
+	const queue = list.filter((a) => a && !isDayGated(a))
+	const remaining = queue.filter((a) => !dismissed.has(a.id))
+	const current = remaining[0] ?? null
+	const total = queue.length
+	const position = current ? queue.findIndex((a) => a.id === current.id) + 1 : 0
+	const moreRemain = remaining.length > 1
 
 	// Increment the central seen_count once per announcement per session when it
 	// first becomes current (drives the frequency cap). Guarded by a ref so it
@@ -110,50 +133,128 @@ export function AnnouncementHost() {
 
 	const handleDismiss = () => {
 		markSeen.mutate({announcement_id: current.id, dismissed: true})
+		setZoomSrc(null)
 		setDismissed((prev) => new Set(prev).add(current.id))
 	}
 
+	// Entrance/exit transition for the inner content (per-announcement swap).
+	// Reduced-motion → fade only, no transform.
+	const enter = reduce
+		? {initial: {opacity: 0}, animate: {opacity: 1}, exit: {opacity: 0}, transition: {duration: 0.15}}
+		: {
+				initial: {opacity: 0, y: 12, scale: 0.98},
+				animate: {opacity: 1, y: 0, scale: 1},
+				exit: {opacity: 0, y: -8, scale: 0.98},
+				transition: {duration: 0.22, ease: 'easeOut'},
+			}
+
+	const meta = kindMeta(current.kind)
+
 	return (
-		<Dialog
-			open
-			onOpenChange={(open) => {
-				if (!open && current.dismissible) handleDismiss()
-			}}
-		>
-			<DialogContent className="flex max-h-[80vh] flex-col">
-				<DialogHeader>
-					<DialogTitle>{current.title}</DialogTitle>
-				</DialogHeader>
+		<>
+			<Dialog
+				open
+				onOpenChange={(open) => {
+					if (!open && current.dismissible) handleDismiss()
+				}}
+			>
+				<DialogContent className="flex max-h-[80vh] flex-col">
+					<AnimatePresence mode="wait" initial={false}>
+						<motion.div
+							key={current.id}
+							className="flex min-h-0 flex-1 flex-col"
+							initial={enter.initial}
+							animate={enter.animate}
+							exit={enter.exit}
+							transition={enter.transition}
+						>
+							<DialogHeader>
+								<div className="flex items-center justify-between gap-2">
+									<span className="inline-flex items-center gap-1.5 rounded-full border border-border-default px-2 py-0.5 text-12 text-text-secondary">
+										<span aria-hidden="true">{meta.icon}</span>
+										{meta.label}
+									</span>
+									{total > 1 && (
+										<span
+											className="text-12 text-text-secondary"
+											aria-label={`Announcement ${position} of ${total}`}
+										>
+											{position} of {total}
+										</span>
+									)}
+								</div>
+								<DialogTitle>{current.title}</DialogTitle>
+							</DialogHeader>
 
-				<div className="min-h-0 flex-1 overflow-y-auto py-2">
-					{current.raw_html_sanitized ? (
-						<div className="h-[50vh] min-h-[240px] w-full">
-							<AnnouncementIframe html={current.raw_html_sanitized} theme={resolvedTheme} />
-						</div>
-					) : (
-						<div className="flex flex-col gap-3">
-							{(current.blocks ?? []).map((block) => (
-								<BlockView key={block.id} announcementId={current.id} block={block} />
-							))}
-						</div>
-					)}
+							<div className="min-h-0 flex-1 overflow-y-auto py-2">
+								{current.raw_html_sanitized ? (
+									<div className="h-[50vh] min-h-[240px] w-full">
+										<AnnouncementIframe html={current.raw_html_sanitized} theme={resolvedTheme} />
+									</div>
+								) : (
+									<div className="flex flex-col gap-3">
+										{(current.blocks ?? []).map((block) => (
+											<BlockView
+												key={block.id}
+												announcementId={current.id}
+												block={block}
+												onZoom={setZoomSrc}
+											/>
+										))}
+									</div>
+								)}
+							</div>
+
+							<DialogFooter>
+								{current.dismissible && (
+									<Button type="button" variant="default" onClick={handleDismiss}>
+										{moreRemain ? 'Next →' : 'Dismiss'}
+									</Button>
+								)}
+							</DialogFooter>
+						</motion.div>
+					</AnimatePresence>
+				</DialogContent>
+			</Dialog>
+
+			{/* Image lightbox (Wave 3) — sits above the dialog (zIndex 99999). Colors
+			    are rgba/tokens only (no hex). Click anywhere to close. */}
+			{zoomSrc && (
+				<div
+					role="dialog"
+					aria-label="Image preview"
+					onClick={() => setZoomSrc(null)}
+					style={{
+						position: 'fixed',
+						inset: 0,
+						zIndex: 100000,
+						background: 'rgba(0,0,0,0.85)',
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						padding: 24,
+						cursor: 'zoom-out',
+					}}
+				>
+					{/* eslint-disable-next-line @next/next/no-img-element */}
+					<img src={zoomSrc} alt="" style={{maxWidth: '100%', maxHeight: '100%', borderRadius: 8}} />
 				</div>
-
-				<DialogFooter>
-					{current.dismissible && (
-						<Button type="button" variant="default" onClick={handleDismiss}>
-							Dismiss
-						</Button>
-					)}
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
+			)}
+		</>
 	)
 }
 
 // ---- native (trusted) block renderer --------------------------------------
 
-function BlockView({announcementId, block}: {announcementId: string; block: AnnouncementBlock}) {
+function BlockView({
+	announcementId,
+	block,
+	onZoom,
+}: {
+	announcementId: string
+	block: AnnouncementBlock
+	onZoom?: (src: string) => void
+}) {
 	switch (block.type) {
 		case 'heading':
 			return <h2 className="text-15 font-semibold text-text-primary">{block.text}</h2>
@@ -162,8 +263,18 @@ function BlockView({announcementId, block}: {announcementId: string; block: Anno
 		case 'image': {
 			const src = safeUrl(block.url)
 			if (!src) return null
-			// eslint-disable-next-line @next/next/no-img-element
-			return <img src={src} alt={block.alt ?? ''} className="w-full rounded-8" />
+			return (
+				<button
+					type="button"
+					onClick={() => onZoom?.(src)}
+					className="block w-full border-0 bg-transparent p-0 text-left"
+					style={{cursor: 'zoom-in'}}
+					aria-label={block.alt || 'Enlarge image'}
+				>
+					{/* eslint-disable-next-line @next/next/no-img-element */}
+					<img src={src} alt={block.alt ?? ''} className="w-full rounded-8" />
+				</button>
+			)
 		}
 		case 'video': {
 			const src = safeUrl(block.url)
