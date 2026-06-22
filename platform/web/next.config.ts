@@ -38,6 +38,7 @@ const nextConfig: NextConfig = {
         { source: '/profile', destination: '/profile.html' },
         { source: '/verify', destination: '/verify.html' },
         { source: '/forgot-password', destination: '/forgot-password.html' },
+        { source: '/reset-password', destination: '/reset-password.html' },
         { source: '/download', destination: '/download.html' },
         { source: '/customize', destination: '/customize.html' },
       ],
