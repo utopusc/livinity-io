@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { DocsNav } from './_components/docs-nav';
-import { getSearchIndex } from './_lib/docs-data';
+import { DocsShell } from './_components/docs-shell';
+import { getSearchIndex, getDocsNav } from './_lib/docs-data';
 import './docs.css';
 
 // Read the search index fresh per request so an admin publish shows up in ⌘K
@@ -16,12 +17,12 @@ export const metadata: Metadata = {
 };
 
 export default async function DocsLayout({ children }: { children: ReactNode }) {
-  const searchIndex = await getSearchIndex();
+  const [searchIndex, nav] = await Promise.all([getSearchIndex(), getDocsNav()]);
 
   return (
     <div className="docs-root">
       <DocsNav searchIndex={searchIndex} />
-      {children}
+      <DocsShell nav={nav}>{children}</DocsShell>
       <footer className="docs-footer">
         <div className="docs-footer-inner">
           <span>© Livinity</span>
