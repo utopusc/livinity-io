@@ -1844,13 +1844,20 @@ fi
 # ── Step 6: Update gallery cache ──────────────────────────
 step "Updating gallery cache"
 
-GALLERY_CACHE_DIR=$(find "$LIVOS_DIR/data/app-stores/" -maxdepth 1 -name '*livinity-apps*' -type d 2>/dev/null | head -1)
+# Phase 294 hardening: every scan/network op here is wrapped in `timeout` so a
+# stale mount under data/app-stores/ (find) or an unreachable gallery remote (git
+# fetch) can NEVER hang the deploy. This step runs BEFORE the restart + the
+# .deployed-sha/.deployed-release record, so a hang here strands the whole update
+# with the version never advancing (a real operator update stopped dead at this
+# exact step). All failures stay non-fatal (|| true / warn) — the gallery cache is
+# recreated on first App Store access anyway.
+GALLERY_CACHE_DIR=$(timeout 20 find "$LIVOS_DIR/data/app-stores/" -maxdepth 1 -name '*livinity-apps*' -type d 2>/dev/null | head -1 || true)
 if [[ -n "$GALLERY_CACHE_DIR" ]] && [[ -d "$GALLERY_CACHE_DIR/.git" ]]; then
     info "Updating gallery cache at $GALLERY_CACHE_DIR..."
     cd "$GALLERY_CACHE_DIR"
     git config --global --add safe.directory "$GALLERY_CACHE_DIR" 2>/dev/null || true
-    git fetch origin 2>/dev/null || true
-    git reset --hard origin/main 2>/dev/null || git reset --hard origin/master 2>/dev/null || warn "Gallery cache update failed"
+    timeout 30 git fetch origin 2>/dev/null || true
+    timeout 20 git reset --hard origin/main 2>/dev/null || timeout 20 git reset --hard origin/master 2>/dev/null || warn "Gallery cache update failed"
     cd "$LIVOS_DIR"
     ok "Gallery cache updated"
 else
