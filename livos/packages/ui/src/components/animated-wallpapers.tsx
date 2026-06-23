@@ -24,6 +24,7 @@
 
 import type React from 'react'
 
+import {AuroraWallpaper} from './wallpapers/aurora'
 import {ConstellationWallpaper} from './wallpapers/constellation'
 import {DriftWallpaper} from './wallpapers/drift'
 import {FluidParticlesWallpaper} from './wallpapers/fluid-particles'
@@ -41,7 +42,7 @@ export type AnimatedWallpaperProps = {
 
 export type WallpaperTheme = 'light' | 'dark' | 'auto'
 
-export type AnimatedWallpaperId = 'fluid' | 'waves' | 'drift' | 'constellation' | 'mist' | 'rain'
+export type AnimatedWallpaperId = 'fluid' | 'aurora' | 'waves' | 'drift' | 'constellation' | 'mist' | 'rain'
 
 export interface AnimatedWallpaperEntry {
 	component: React.ComponentType<AnimatedWallpaperProps>
@@ -59,6 +60,14 @@ export const animatedWallpapers: Record<AnimatedWallpaperId, AnimatedWallpaperEn
 		component: FluidParticlesWallpaper,
 		name: 'Fluid',
 		brandColorHsl: '0 0% 50%',
+		theme: 'auto',
+	},
+	// Aceternity "Aurora Background" (MIT), pure-CSS — colourful northern-lights
+	// glow, GPU-composited (very low RAM). The first of the "hero" wallpapers.
+	aurora: {
+		component: AuroraWallpaper,
+		name: 'Aurora',
+		brandColorHsl: '217 91% 60%',
 		theme: 'auto',
 	},
 	// Phase 294 — additional lightweight 2D-canvas wallpapers in the SAME family
