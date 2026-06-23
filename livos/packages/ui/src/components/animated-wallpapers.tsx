@@ -25,11 +25,16 @@
 import type React from 'react'
 
 import {AuroraWallpaper} from './wallpapers/aurora'
+import {AuroraClockWallpaper} from './wallpapers/aurora-clock'
 import {ConstellationWallpaper} from './wallpapers/constellation'
+import {DreamWallpaper} from './wallpapers/dream'
 import {DriftWallpaper} from './wallpapers/drift'
 import {FluidParticlesWallpaper} from './wallpapers/fluid-particles'
+import {MeshWallpaper} from './wallpapers/mesh'
 import {MistWallpaper} from './wallpapers/mist'
+import {NebulaWallpaper} from './wallpapers/nebula'
 import {RainWallpaper} from './wallpapers/rain'
+import {StarsWallpaper} from './wallpapers/stars'
 import {WavesWallpaper} from './wallpapers/waves'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -42,7 +47,19 @@ export type AnimatedWallpaperProps = {
 
 export type WallpaperTheme = 'light' | 'dark' | 'auto'
 
-export type AnimatedWallpaperId = 'fluid' | 'aurora' | 'waves' | 'drift' | 'constellation' | 'mist' | 'rain'
+export type AnimatedWallpaperId =
+	| 'fluid'
+	| 'aurora'
+	| 'aurora-clock'
+	| 'dream'
+	| 'mesh'
+	| 'nebula'
+	| 'stars'
+	| 'waves'
+	| 'drift'
+	| 'constellation'
+	| 'mist'
+	| 'rain'
 
 export interface AnimatedWallpaperEntry {
 	component: React.ComponentType<AnimatedWallpaperProps>
@@ -68,6 +85,44 @@ export const animatedWallpapers: Record<AnimatedWallpaperId, AnimatedWallpaperEn
 		component: AuroraWallpaper,
 		name: 'Aurora',
 		brandColorHsl: '217 91% 60%',
+		theme: 'auto',
+	},
+	// Aurora background + a large centred live clock.
+	'aurora-clock': {
+		component: AuroraClockWallpaper,
+		name: 'Aurora Clock',
+		brandColorHsl: '217 91% 60%',
+		theme: 'auto',
+	},
+	// "Aurora Dream Corner Whispers" (MIT) — STATIC pastel corner glows, the
+	// lightest possible wallpaper (no animation). Theme-aware.
+	dream: {
+		component: DreamWallpaper,
+		name: 'Dream',
+		brandColorHsl: '280 70% 65%',
+		theme: 'auto',
+	},
+	// Stripe-style WebGL mesh gradient (MIT). A WebGL wallpaper — richer but
+	// heavier; theme-aware (light/dark colour sets).
+	mesh: {
+		component: MeshWallpaper,
+		name: 'Mesh',
+		brandColorHsl: '224 76% 48%',
+		theme: 'auto',
+	},
+	// Flowing aurora WebGL shader (the "AnoAI" one), raw-WebGL2 (no Three.js).
+	// Heaviest shader — rendered at 0.6x. Theme-aware via a `dark` uniform.
+	nebula: {
+		component: NebulaWallpaper,
+		name: 'Nebula',
+		brandColorHsl: '280 65% 60%',
+		theme: 'auto',
+	},
+	// Glowing star points (cloud background removed), WebGL2 shader. Theme-aware.
+	stars: {
+		component: StarsWallpaper,
+		name: 'Stars',
+		brandColorHsl: '230 60% 60%',
 		theme: 'auto',
 	},
 	// Phase 294 — additional lightweight 2D-canvas wallpapers in the SAME family
