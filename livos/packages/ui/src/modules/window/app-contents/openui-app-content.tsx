@@ -45,6 +45,11 @@ export default function OpenUiAppContent({slug, name}: OpenUiAppContentProps) {
 			src={`/liv-ai-app/openclawos/apps/${encodeURIComponent(slug)}`}
 			title={name}
 			className='h-full w-full border-0 bg-background'
+			// Phase 295 — render the embedded OpenUI app LIGHT even under the OS
+			// dark theme (belt-and-suspenders alongside the `.livos-app-light`
+			// wrapper; some Chromium versions need color-scheme on the iframe
+			// element itself to resolve the child's prefers-color-scheme:light).
+			style={{colorScheme: 'light'}}
 			allow='clipboard-read; clipboard-write'
 		/>
 	)

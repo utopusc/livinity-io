@@ -150,6 +150,10 @@ export default function ShortcutIframeWindow({shortcutId, route, windowId, title
 				src={decoded.url}
 				title={title ?? 'Shortcut'}
 				className='h-full w-full border-0 bg-background'
+				// Phase 295 — a web shortcut rendered as a real iframe (the rare
+				// non-stream path) should render LIGHT even under the OS dark
+				// theme, so the embedded site resolves prefers-color-scheme:light.
+				style={{colorScheme: 'light'}}
 				allow='clipboard-read; clipboard-write; fullscreen'
 				onLoad={() => setLoaded(true)}
 			/>

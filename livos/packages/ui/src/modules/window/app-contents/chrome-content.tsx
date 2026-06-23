@@ -56,6 +56,9 @@ export default function ChromeWindowContent({url}: ChromeWindowProps) {
 		<iframe
 			src='/desktop-viewer'
 			className='h-full w-full border-0'
+			// Phase 295 — render the embedded viewer LIGHT even under the OS dark
+			// theme (belt-and-suspenders; mirrors the other web-app iframes).
+			style={{colorScheme: 'light'}}
 			allow='clipboard-read; clipboard-write; fullscreen'
 		/>
 	)

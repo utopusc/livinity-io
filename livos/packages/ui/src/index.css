@@ -22,6 +22,62 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Phase 295 — app windows render LIGHT even when the LivOS OS theme is dark.
+ *
+ * The OS dark theme toggles `.dark` on <html>+<body> (theme-provider.tsx),
+ * which both (a) flips the `body.dark` design-token CSS-vars and (b) activates
+ * every Tailwind `dark:` variant in the tree. Opened app windows that are not
+ * designed for the OS dark theme then render dark/broken — most visibly Docker
+ * (it hardcodes `bg-white` but ships a full `dark:` Tailwind theme that the
+ * global `html.dark` re-activates, painting dark widgets on its white canvas).
+ *
+ * `.livos-app-light` is applied by window-content.tsx to the CONTENT wrapper of
+ * those app windows (NOT the OS chrome / title bar — that's a separate sibling
+ * subtree, see window.tsx). It does two things:
+ *   1. `color-scheme: light` — an INHERITED property, so it reaches embedded
+ *      <iframe> elements too; the browser then resolves `prefers-color-scheme`
+ *      to light inside the iframe (App Store / OpenUI web content render light)
+ *      AND native form controls / scrollbars in the subtree render light.
+ *   2. opts the subtree out of Tailwind `dark:` variants (see the
+ *      `darkMode` selector in tailwind.config.ts) — this is what reverts
+ *      Docker's `dark:`-themed widgets back to their light appearance.
+ *
+ * Phase 295 T2 — re-declare the `body.dark`-flipped LEGACY semantic tokens
+ * back to their `:root` light values for the force-light app subtree. This is
+ * REQUIRED for Docker: routes/docker uses these as BASE (non-`dark:`) utility
+ * classes pervasively (`bg-card-bg`, `bg-surface-*`, `text-text-*`,
+ * `border-border-*`, `border-dash-line`). Those resolve through
+ * `var(--card-bg)` etc., which `body.dark` (an ancestor of the window content)
+ * sets to DARK values. Neither `color-scheme: light` nor the Tailwind `dark:`
+ * opt-out touches a base utility that reads a CSS var — only re-declaring the
+ * vars on a closer ancestor (this wrapper) reverts them. Values mirror
+ * @livinity/design-tokens tokens.css `:root` (the LIGHT block). The `--liv-*`
+ * (v32-tokens) and v36 `--fg/--bg` families are NOT re-declared — grep confirms
+ * routes/docker references none of them. */
+.livos-app-light {
+	color-scheme: light;
+	/* Card + dialog surfaces. */
+	--card-bg: #ffffff;
+	--card-bg-2: #fafafa;
+	--card-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 24px 60px -34px rgba(0, 0, 0, 0.18);
+	--dialog-content: #ffffff;
+	/* Layered surface tints. */
+	--surface-base: rgba(0, 0, 0, 0.03);
+	--surface-1: rgba(0, 0, 0, 0.05);
+	--surface-2: #ebebed;
+	--surface-3: rgba(0, 0, 0, 0.12);
+	/* Borders + dashed lines. */
+	--border-subtle: rgba(0, 0, 0, 0.06);
+	--border-default: rgba(0, 0, 0, 0.12);
+	--border-emphasis: rgba(0, 0, 0, 0.20);
+	--dash-line: rgba(0, 0, 0, 0.07);
+	--dash-line-strong: rgba(0, 0, 0, 0.12);
+	/* Text family (paired with the surface re-declarations above). */
+	--text-primary: rgba(15, 23, 42, 0.92);
+	--text-secondary: rgba(15, 23, 42, 0.60);
+	--text-tertiary: rgba(15, 23, 42, 0.40);
+}
+
 ::view-transition-old(root),
 ::view-transition-new(root) {
 	animation-duration: 0.1s;

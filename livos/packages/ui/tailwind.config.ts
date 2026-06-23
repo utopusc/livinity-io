@@ -26,11 +26,23 @@ export default {
 	// extend below — Tailwind merges presets shallowly per key, so no conflict with
 	// the local theme.extend entries (none overlap by name).
 	presets: [livinityPreset],
-	// Phase 24-01 — class-based dark mode for the Docker app (`/routes/docker`).
-	// Adding `dark` class to the docker-app root (via useDockerTheme) turns on
-	// `dark:*` variants beneath. No other LivOS surface uses dark variants today,
-	// so existing components render unchanged.
-	darkMode: 'class',
+	// Phase 24-01 — class-based dark mode. Adding the `dark` class turns on
+	// `dark:*` variants beneath it.
+	//
+	// Phase 295 — class-based dark mode WITH a per-subtree OPT-OUT. The LivOS
+	// OS theme toggles `.dark` on <html>+<body> (theme-provider.tsx), so EVERY
+	// `dark:` utility in the tree fires — including inside opened app windows
+	// (Docker ships a full `dark:` theme that must stay LIGHT regardless of the
+	// OS theme; see window-content.tsx `.livos-app-light`). This selector keeps
+	// the stock class-strategy behaviour everywhere — a `dark:` utility matches
+	// when it descends from `.dark` — EXCEPT it is suppressed inside any
+	// `.livos-app-light` subtree. The `:where()` on the opt-out adds ZERO
+	// specificity and `:is(.dark *)` contributes one class, so the generated
+	// selector is specificity-equivalent (0,2,0) to the old `.dark &` output
+	// for every element OUTSIDE a `.livos-app-light` wrapper — i.e. OS chrome,
+	// the desktop, the taskbar and the window title bars render EXACTLY as
+	// before. Only app-content wrappers carry `.livos-app-light`.
+	darkMode: ['variant', '&:is(.dark *):not(:where(.livos-app-light, .livos-app-light *))'],
 	content: [
 		'./index.html',
 		'./src/**/*.{js,ts,jsx,tsx}',

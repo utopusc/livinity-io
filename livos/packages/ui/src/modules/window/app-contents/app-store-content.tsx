@@ -60,7 +60,12 @@ export default function AppStoreWindowContent() {
 			<iframe
 				ref={iframeRef}
 				src={storeUrl}
-				style={{width: '100%', height: '100%', border: 'none'}}
+				// Phase 295 — render the embedded store LIGHT even when the OS
+				// theme is dark. color-scheme is inherited from the
+				// `.livos-app-light` wrapper too, but Chromium needs it on the
+				// iframe element itself to propagate prefers-color-scheme:light
+				// into the embedded document on some versions (belt-and-suspenders).
+				style={{width: '100%', height: '100%', border: 'none', colorScheme: 'light'}}
 				allow='clipboard-write'
 				title='App Store'
 			/>
@@ -89,8 +94,12 @@ function NoApiKeyMessage() {
 	return (
 		<div className='flex h-full flex-col items-center justify-center gap-3 p-8 text-center'>
 			<div className='text-4xl'>🔗</div>
-			<h2 className='text-lg font-semibold text-white'>Connect to Livinity Platform</h2>
-			<p className='max-w-md text-sm text-white/60'>
+			{/* Phase 295 — the App Store window is force-lit (.livos-app-light),
+			    so the card surface is white; hardcoded text-white here was
+			    near-invisible. Use the semantic text tokens (light inside the
+			    force-light wrapper) so this no-API-key state stays legible. */}
+			<h2 className='text-lg font-semibold text-text-primary'>Connect to Livinity Platform</h2>
+			<p className='max-w-md text-sm text-text-secondary'>
 				To access the App Store, connect your LivOS instance to the Livinity platform. Go to Settings and enter
 				your API key to get started.
 			</p>

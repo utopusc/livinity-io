@@ -83,6 +83,35 @@ function isDisplayKind(appId: string): boolean {
 	return appId.startsWith(DISPLAY_APP_ID_PREFIX)
 }
 
+/**
+ * Phase 295 — apps whose CONTENT must render LIGHT even when the LivOS OS
+ * theme is dark ("Docker karanlık temada bile beyaz dursun, diğer
+ * uygulamalarda da aynı — sadece uygulamalarda"). The returned wrapper gets the
+ * `.livos-app-light` class, which sets `color-scheme: light` (light form
+ * controls + makes embedded iframes resolve `prefers-color-scheme: light`) and
+ * opts the subtree out of Tailwind `dark:` variants (tailwind.config darkMode).
+ *
+ * Scope = the apps that actually render dark/broken on a dark OS:
+ *   - Docker (native React app with its own `dark:` theme that html.dark
+ *     re-activates on top of its hardcoded white canvas)
+ *   - App Store + OpenUI (iframe web content that honours prefers-color-scheme)
+ *
+ * Deliberately EXCLUDED:
+ *   - Liv Assistant (LIV_ASSISTANT_APP_ID) — a separate SPA that manages its
+ *     own (dark-capable) theme; forcing it light would break it.
+ *   - VNC stream windows (isWebAppKind / isNativeAppKind / isDisplayKind, and
+ *     shortcut windows which now render as a browser-stream) — raw <canvas>
+ *     pixels are immune to CSS, and their floating chrome stays on the OS theme.
+ *   - The LivOS first-party token-apps (Settings / Files / Terminal /
+ *     Server Control / My Devices) — they theme coherently via the body.dark
+ *     CSS-var tokens, so they stay on the OS theme ("OS stays dark"). Forcing
+ *     them light additionally needs the body.dark tokens re-declared light — a
+ *     box-verified follow-up (Phase 295 T2), not shipped here.
+ */
+function isForceLightApp(appId: string): boolean {
+	return appId === 'LIVINITY_docker' || appId === 'LIVINITY_app-store' || isOpenUiAppKind(appId)
+}
+
 type WindowContentProps = {
 	route: string
 	appId: string
@@ -125,6 +154,12 @@ function TerminalRouteShell() {
 }
 
 export function WindowContent({route, appId, windowId}: WindowContentProps) {
+	// Phase 295 — force-light app content (Docker + iframe web apps) regardless
+	// of the OS dark theme. `.livos-app-light` carries `color-scheme: light` and
+	// the Tailwind `dark:` opt-out (see isForceLightApp + index.css + tailwind
+	// config). Applied only to the app-content wrapper, never the OS chrome.
+	const forceLight = isForceLightApp(appId)
+
 	if (
 		fullHeightApps.has(appId) ||
 		isWebAppKind(appId) ||
@@ -136,7 +171,7 @@ export function WindowContent({route, appId, windowId}: WindowContentProps) {
 		isShortcutKind(appId)
 	) {
 		return (
-			<div className='h-full overflow-hidden'>
+			<div className={forceLight ? 'livos-app-light h-full overflow-hidden' : 'h-full overflow-hidden'}>
 				<Suspense fallback={<Loading />}>
 					<WindowAppContent appId={appId} initialRoute={route} windowId={windowId} />
 				</Suspense>
@@ -145,7 +180,7 @@ export function WindowContent({route, appId, windowId}: WindowContentProps) {
 	}
 
 	return (
-		<div className={contentWrapperClass}>
+		<div className={forceLight ? `livos-app-light ${contentWrapperClass}` : contentWrapperClass}>
 			<div className={contentInnerClass}>
 				<Suspense fallback={<Loading />}>
 					<WindowAppContent appId={appId} initialRoute={route} windowId={windowId} />
