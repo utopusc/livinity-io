@@ -3,7 +3,7 @@ import process from 'node:process'
 import crypto from 'node:crypto'
 import {promisify} from 'node:util'
 import {fileURLToPath} from 'node:url'
-import {dirname, join} from 'node:path'
+import {dirname, join, resolve} from 'node:path'
 import {createGzip} from 'node:zlib'
 import {pipeline} from 'node:stream/promises'
 import {createConnection} from 'node:net'
@@ -1421,6 +1421,111 @@ class Server {
 				error: 'local-lan mode retired (Phase 142-01)',
 				hint: 'Use --mode portal (Phase 142-02) — Cloudflare-issued cert at the edge',
 			})
+		})
+
+		// Phase 299 — server-side directory browser for Liv AI (AionUi).
+		//
+		// AionUi's "Work in the project → Select Directory" picker GETs
+		// `/api/fs/browse?path=&showFiles=` to list directories on the SERVER (it
+		// sets the agent's working dir). AionUi's Rust aioncore serves this in
+		// standalone/Electron, but the VENDORED web build (`aionui-web`) has NO such
+		// backend, so the apex call 404'd ("Cannot GET /api/fs/browse") and the
+		// picker showed "Unknown error". The httpBridge web mode issues it
+		// same-origin at the ROOT (getBaseUrl()===''), so it lands here on
+		// livinityd. We answer with AionUi v2.1.19's EXACT response shape so the
+		// picker is byte-compatible:
+		//   { success, data: { currentPath, parentPath?, items:[{name,path,
+		//     isDirectory,isFile,size?,modified?}], canGoUp, truncated } }
+		// (the frontend reads only items / canGoUp / parentPath; an error body is
+		// read as `.error`). Empty path → the operator's home directory.
+		//
+		// Apex `/api/*` is forward_auth-gated by the catch-all, but we RE-CHECK the
+		// admin session inline (defense in depth — this lists real filesystem
+		// paths). Read-only; hidden dotfiles filtered; capped at 500 entries.
+		this.app.get('/api/fs/browse', async (request, response) => {
+			try {
+				const token = request.cookies?.LIVINITY_SESSION
+				const payload = token ? await this.verifySessionFull(token) : null
+				const isAdmin = !!payload && 'role' in payload && payload.role === 'admin'
+				if (!payload || !isAdmin) {
+					response.status(401).json({success: false, error: 'unauthorized'})
+					return
+				}
+
+				const {homedir} = await import('node:os')
+				const fsp = await import('node:fs/promises')
+				const home = homedir()
+
+				const rawPath = typeof request.query.path === 'string' ? request.query.path : ''
+				let target = rawPath.trim() === '' ? home : rawPath
+				if (target === '~' || target.startsWith('~/')) target = join(home, target.slice(1))
+				target = resolve(target)
+
+				// Canonicalize (resolves symlinks + ..). Must exist + be a directory.
+				const real = await fsp.realpath(target).catch(() => null)
+				if (!real) {
+					response.status(404).json({success: false, error: 'Directory not found'})
+					return
+				}
+				const dirStat = await fsp.stat(real)
+				if (!dirStat.isDirectory()) {
+					response.status(400).json({success: false, error: 'Not a directory'})
+					return
+				}
+
+				// AionUi sends camelCase `showFiles`; accept snake_case too. Default false.
+				const sf = request.query.showFiles ?? request.query.show_files
+				const showFiles = sf === 'true' || sf === '1'
+
+				const dirents = await fsp.readdir(real, {withFileTypes: true})
+				const MAX = 500
+				const items: Array<Record<string, unknown>> = []
+				let truncated = false
+				for (const d of dirents) {
+					if (d.name.startsWith('.')) continue // hidden filtered (matches AionUi)
+					const isDirectory = d.isDirectory()
+					const isFile = d.isFile()
+					if (!isDirectory && !showFiles) continue
+					if (!isDirectory && !isFile) continue // skip sockets/fifos/devices
+					if (items.length >= MAX) {
+						truncated = true
+						break
+					}
+					const full = join(real, d.name)
+					const item: Record<string, unknown> = {name: d.name, path: full, isDirectory, isFile}
+					if (isFile) {
+						try {
+							const st = await fsp.stat(full)
+							item.size = st.size
+							item.modified = Math.round(st.mtimeMs)
+						} catch {
+							// unreadable — omit size/modified
+						}
+					}
+					items.push(item)
+				}
+				// Directories first, then alphabetical (nicer picker UX).
+				items.sort((a, b) => {
+					if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
+					return String(a.name).localeCompare(String(b.name))
+				})
+
+				const parent = dirname(real)
+				const canGoUp = parent !== real // false only at the filesystem root
+				response.json({
+					success: true,
+					data: {
+						currentPath: real,
+						...(canGoUp ? {parentPath: parent} : {}),
+						items,
+						canGoUp,
+						truncated,
+					},
+				})
+			} catch (error) {
+				this.livinityd.logger.error('[fs/browse] failed', error)
+				response.status(500).json({success: false, error: 'Could not list directory'})
+			}
 		})
 
 		// Phase 269-03 (WS3) — auth-gated AionUi agent list overlay.
