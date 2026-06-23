@@ -94,20 +94,21 @@ export const animatedWallpapers: Record<AnimatedWallpaperId, AnimatedWallpaperEn
 		theme: 'auto',
 	},
 	// Flowing aurora WebGL shader (the "AnoAI" one), raw-WebGL2 (no Three.js).
-	// Dark theme good as-is; light theme is a soft pastel wash (v44.75 fix).
+	// DARK-ONLY (theme:'dark') — always renders the dark cosmic look; a light-theme
+	// variant always looked worse, so it isn't adapted.
 	nebula: {
 		component: NebulaWallpaper,
 		name: 'Nebula',
 		brandColorHsl: '280 65% 60%',
-		theme: 'auto',
+		theme: 'dark',
 	},
-	// Glowing star points (cloud background removed), WebGL2 shader. Dark good;
-	// light theme reworked to coloured points on a soft sky (v44.75 fix).
+	// Glowing star points (cloud background removed), WebGL2 shader. DARK-ONLY
+	// (theme:'dark') — always the dark cosmic look regardless of the UI theme.
 	stars: {
 		component: StarsWallpaper,
 		name: 'Stars',
 		brandColorHsl: '230 60% 60%',
-		theme: 'auto',
+		theme: 'dark',
 	},
 }
 

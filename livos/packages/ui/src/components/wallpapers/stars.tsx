@@ -37,17 +37,10 @@ void main(){
     float b=noise(i+p);
     col+=.002*b/length(max(p, vec2(b*p.x*.02, p.y)));
   }
-  // Dark theme (unchanged — looks good): glowing stars on black.
-  vec3 darkOut = col;
-  // Light theme: tone-map the additive glow to a real 0..1 colour (Reinhard keeps
-  // the hue), darken it so it reads on a soft sky, and paint it only where stars
-  // actually are — coloured/grey points on a light sky instead of muddy specks.
-  vec3 sky = vec3(0.90, 0.93, 0.99);
-  float s = clamp(length(col) * 1.4, 0.0, 1.0);
-  vec3 starCol = clamp(col / (1.0 + col), 0.0, 1.0);
-  vec3 lightOut = mix(sky, starCol * 0.5, s);
-  vec3 outc = mix(lightOut, darkOut, dark);
-  O=vec4(outc, 1.0);
+  // Dark-only by design: glowing stars on black. These read well no matter the UI
+  // theme, so we do NOT adapt to light (operator: keep Stars dark-only — a light
+  // variant always looked worse). The dark uniform is intentionally unused.
+  O = vec4(col, 1.0);
 }`
 
 export const StarsWallpaper = makeShaderWallpaper(STARS_FRAG, 0.85)

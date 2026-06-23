@@ -73,16 +73,10 @@ void main() {
   o = tanh(pow(o / 100.0, vec4(1.6)));
   vec3 c = o.rgb * 1.5;
 
-  // Dark theme (unchanged — looks good): aurora glow on black.
-  // Light theme: a soft PASTEL wash of the same aurora over a light sky. Tone-map
-  // c to 0..1 (keeps hue), pull it toward the light base so it never blows out on
-  // white, and fade it in by aurora presence → a watercolour aurora, not a clash.
-  vec3 lightBase = vec3(0.96, 0.97, 1.0);
-  vec3 cT = c / (1.0 + c);
-  float a = clamp(length(c) * 1.1, 0.0, 1.0);
-  vec3 pastel = mix(lightBase, mix(lightBase, cT, 0.7), a);
-  vec3 outc = mix(pastel, c, dark);
-  fragColor = vec4(outc, 1.0);
+  // Dark-only by design: aurora glow on black. Reads well regardless of the UI
+  // theme, so no light-theme variant (operator: keep Nebula dark-only). The dark
+  // uniform is intentionally unused.
+  fragColor = vec4(c, 1.0);
 }`
 
 export const NebulaWallpaper = makeShaderWallpaper(NEBULA_FRAG, 0.6)
