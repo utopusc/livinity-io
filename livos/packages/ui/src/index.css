@@ -140,9 +140,18 @@
  * Files renders a TRANSPARENT surface, so without this the dark shell bled through
  * and Files looked dark. Scoped to `body.dark` ONLY — in the light theme the shell
  * is already `bg-card-bg/95`, so Files keeps the same frosted translucency as every
- * other window. `var(--card-bg)` resolves to the #ffffff re-declared just above. */
+ * other window. `var(--card-bg)` resolves to the #ffffff re-declared just above.
+ *
+ * `color` is ALSO reset here: `body.dark` sets the page text to `--text-primary`
+ * (white in dark) and that color INHERITS into the wrapper; re-declaring the
+ * `--text-primary` VARIABLE above does not change already-inherited `color`, so
+ * Files text that sets no explicit color (file names, headers) stayed white and
+ * became invisible on the new white bg. Setting `color: var(--text-primary)` (now
+ * the LIGHT/dark-slate value) makes inherited text dark again. Explicit static
+ * neutrals (text-neutral-*) and the re-declared semantic tokens are unaffected. */
 body.dark .livos-app-light {
 	background-color: var(--card-bg);
+	color: var(--text-primary);
 }
 
 ::view-transition-old(root),
