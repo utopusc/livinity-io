@@ -1,5 +1,8 @@
 import {useState, useEffect} from 'react'
 
+import {useClockPrefs} from '@/hooks/use-clock-prefs'
+import {formatClockParts} from '@/lib/intl'
+
 import {WidgetContainer} from './widget-container'
 
 export function ClockWidget({config}: {config?: Record<string, unknown>}) {
@@ -16,16 +19,23 @@ export function ClockWidget({config}: {config?: Record<string, unknown>}) {
 }
 
 function DigitalClock({now}: {now: Date}) {
-	const hours = now.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})
+	// Phase 298 — honor the operator's Clock-format preference (AM/PM vs 24-hour)
+	// + timezone/locale (was hardcoded 'en-US' → always AM/PM), matching the
+	// navbar + Aurora-clock wallpaper.
+	const {hourCycle, locale, timezone} = useClockPrefs()
+	const {time, dayPeriod} = formatClockParts(now, {locale, timeZone: timezone, hourCycle})
 	const secs = String(now.getSeconds()).padStart(2, '0')
-	const dayName = now.toLocaleDateString('en-US', {weekday: 'long'})
-	const dayNum = now.getDate()
-	const month = now.toLocaleDateString('en-US', {month: 'long'})
+	const dayName = new Intl.DateTimeFormat(locale, {weekday: 'long', timeZone: timezone}).format(now)
+	const dayNum = new Intl.DateTimeFormat(locale, {day: 'numeric', timeZone: timezone}).format(now)
+	const month = new Intl.DateTimeFormat(locale, {month: 'long', timeZone: timezone}).format(now)
 
 	return (
 		<WidgetContainer>
 			<div className='flex flex-1 flex-col items-center justify-center gap-0.5'>
-				<span className='text-[38px] font-[200] leading-none tabular-nums tracking-tight text-gray-800'>{hours}</span>
+				<span className='inline-flex items-start text-[38px] font-[200] leading-none tabular-nums tracking-tight text-gray-800'>
+					{time}
+					{dayPeriod && <span className='ml-1 mt-1 text-[13px] font-medium'>{dayPeriod}</span>}
+				</span>
 				<span className='text-[11px] font-medium tabular-nums text-gray-800/30'>{secs}</span>
 				<div className='mt-1 flex items-center gap-1'>
 					<span className='text-[11px] font-medium capitalize text-gray-500'>{dayName},</span>
