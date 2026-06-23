@@ -300,7 +300,16 @@ describe('LivCommandStream frame handling', () => {
 			},
 		})
 		expect(calls.approval).toEqual([
-			{callId: 'call-1', msgId: 'm9', approveValue: 'allow_always', title: 'Run install_app?'},
+			{
+				callId: 'call-1',
+				msgId: 'm9',
+				approveValue: 'allow_always',
+				title: 'Run install_app?',
+				options: [
+					{label: 'No', value: 'reject', kind: 'reject'},
+					{label: 'Always allow', value: 'allow_always', kind: 'approve'},
+				],
+			},
 		])
 	})
 

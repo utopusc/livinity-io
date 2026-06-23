@@ -1,11 +1,11 @@
 import {useEffect, useMemo, useRef, useState} from 'react'
 import {AnimatePresence, motion} from 'framer-motion'
-import {ArrowUp, ArrowUpRight, Blocks, ChevronDown, Map, Pencil, Plus, Shield, Sparkles, Upload, X, Zap} from 'lucide-react'
+import {ArrowUp, ArrowUpRight, Blocks, Check, ChevronDown, Map, Pencil, Plus, Shield, Sparkles, Upload, X, Zap} from 'lucide-react'
 
 import {cn} from '@/shadcn-lib/utils'
 
 import {useLivAgents} from './use-liv-agents'
-import {getLivMcpServers, listLivSkills, uploadLivFile, type LivMcpServer, type LivSkill} from './liv-command-aionui'
+import {getLivMcpServers, listLivSkills, uploadLivFile, type LivApprovalOption, type LivMcpServer, type LivSkill} from './liv-command-aionui'
 
 /**
  * LivCommandInput — the in-navbar Liv AI command composer.
@@ -376,11 +376,12 @@ export function LivCommandInput({
 	autoFocus?: boolean
 }) {
 	const [prompt, setPrompt] = useState('')
-	// Phase 291 R4 — default to Auto-run so a command actually EXECUTES from the
-	// bar instead of pausing on the first tool and bailing to "Open in Liv"
-	// (operator: "ne yaparsam yapayım benden onay istiyor"). The other modes stay
-	// selectable for anyone who wants Liv to ask first.
-	const [permissionId, setPermissionId] = useState<LivPermissionMode['id']>('bypassPermissions')
+	// Phase 291 R4 — default to Accept-edits: routine edits run, but commands (and
+	// anything Liv wants to confirm) surface the INLINE approval prompt — question
+	// in the bar, option buttons below — instead of the old dead-end "Open in Liv"
+	// (operator wanted the approve/decline shown in the bar, "daha cezbedici").
+	// Auto-run (no prompts) and Default/Plan stay selectable.
+	const [permissionId, setPermissionId] = useState<LivPermissionMode['id']>('acceptEdits')
 	const inputRef = useRef<HTMLTextAreaElement>(null)
 
 	// Live agent list from AionUi (the real "which AI" selector). Empty when the
@@ -538,9 +539,11 @@ export function LivCommandInput({
 //     ▲                │                  (logo spins)      (badge)         │
 //     └────────────────┴──────────────── close / Esc ──────────────────────┘
 //
-// All five states live in top-bar.tsx; the pieces below render them. Every
-// colour is a theme CSS var (or emerald, legible on both) → dark/light safe.
-export type LivState = 'idle' | 'compose' | 'working' | 'done' | 'answer'
+// All states live in top-bar.tsx; the pieces below render them. Every colour is
+// a theme CSS var (or emerald, legible on both) → dark/light safe. The 'approval'
+// state shows a tool-approval prompt inline (question in the bar + option buttons
+// in the panel below) instead of bailing to "Open in Liv".
+export type LivState = 'idle' | 'compose' | 'working' | 'done' | 'answer' | 'approval'
 
 /**
  * LivBrandMarkInner — the animated donut VISUALS (working halo + donut +
@@ -729,6 +732,113 @@ export function LivAnswerPanel({
 						</div>
 					)
 				})}
+			</div>
+			{onOpenInLiv ? (
+				<div className='flex justify-end border-t border-line px-5 py-2.5'>
+					<button
+						type='button'
+						onClick={onOpenInLiv}
+						className='inline-flex items-center gap-1 rounded-full border border-line px-3 py-1 text-[12px] font-medium text-[color:var(--fg-dim)] transition-colors hover:border-line-strong hover:bg-[color:var(--bg-2)] hover:text-[color:var(--fg)]'
+					>
+						Open in Liv
+						<ArrowUpRight className='h-3.5 w-3.5' />
+					</button>
+				</div>
+			) : null}
+		</div>
+	)
+}
+
+/**
+ * LivApprovalView — the bar (pill) content for the `approval` state: a Shield +
+ * the question Liv is asking, with a cancel ✕. The actual choices render in
+ * LivApprovalPanel below (operator: "soru navbarın içinde yazsın, üç buton
+ * altında"). Escape cancels.
+ */
+export function LivApprovalView({question, onClose}: {question: string; onClose: () => void}) {
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') onClose()
+		}
+		document.addEventListener('keydown', onKey)
+		return () => document.removeEventListener('keydown', onKey)
+	}, [onClose])
+
+	return (
+		<div className='flex h-full w-full items-center gap-3 pl-2 pr-1'>
+			<Shield className='h-4 w-4 shrink-0 text-[color:var(--accent,#6366f1)]' aria-hidden />
+			<div className='min-w-0 flex-1 leading-tight'>
+				<div className='text-[11px] text-[color:var(--fg-faint)]'>Liv needs your approval</div>
+				<div className='truncate text-[13.5px] font-medium text-[color:var(--fg)]'>{question}</div>
+			</div>
+			<button
+				type='button'
+				onClick={onClose}
+				title='Cancel (Esc)'
+				aria-label='Cancel'
+				className='grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--fg-faint)] transition-colors hover:bg-[color:var(--bg-2)] hover:text-[color:var(--fg)]'
+			>
+				<X className='h-4 w-4' />
+			</button>
+		</div>
+	)
+}
+
+/**
+ * LivApprovalPanel — the option buttons for the `approval` state, dropped in a
+ * card directly below the bar. Each AionUi confirmation option becomes a button:
+ * approve = filled, reject = red outline, other = neutral. "Open in Liv" stays as
+ * an escape hatch if the inline confirm can't resolve on this box.
+ */
+export function LivApprovalPanel({
+	question,
+	options,
+	onChoose,
+	onOpenInLiv,
+}: {
+	question: string
+	options: LivApprovalOption[]
+	onChoose: (value: unknown) => void
+	onOpenInLiv?: () => void
+}) {
+	return (
+		<div className='w-[min(560px,calc(100vw-48px))] overflow-hidden rounded-3xl border border-line bg-card-bg/95 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.5)] backdrop-blur-2xl'>
+			<div className='px-5 py-4'>
+				<div className='mb-1.5 flex items-center gap-2'>
+					<Shield className='h-3.5 w-3.5 shrink-0 text-[color:var(--accent,#6366f1)]' aria-hidden />
+					<span className='text-[10px] font-semibold uppercase tracking-wide text-[color:var(--fg-faint)]'>
+						Approval needed
+					</span>
+				</div>
+				<div className='mb-3 text-[14px] leading-relaxed text-[color:var(--fg)]'>{question}</div>
+				<div className='flex flex-wrap gap-2'>
+					{options.length > 0 ? (
+						options.map((o, i) => (
+							<button
+								key={i}
+								type='button'
+								onClick={() => onChoose(o.value)}
+								className={cn(
+									'inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors',
+									o.kind === 'approve'
+										? 'bg-[color:var(--fg)] text-[color:var(--bg)] hover:opacity-90'
+										: o.kind === 'reject'
+											? 'border border-red-500/40 text-red-500 hover:bg-red-500/10'
+											: 'border border-line text-[color:var(--fg-dim)] hover:border-line-strong hover:bg-[color:var(--bg-2)] hover:text-[color:var(--fg)]',
+								)}
+							>
+								{o.kind === 'approve' ? (
+									<Check className='h-3.5 w-3.5' />
+								) : o.kind === 'reject' ? (
+									<X className='h-3.5 w-3.5' />
+								) : null}
+								{o.label}
+							</button>
+						))
+					) : (
+						<span className='text-[13px] text-[color:var(--fg-faint)]'>No options offered — open Liv to continue.</span>
+					)}
+				</div>
 			</div>
 			{onOpenInLiv ? (
 				<div className='flex justify-end border-t border-line px-5 py-2.5'>

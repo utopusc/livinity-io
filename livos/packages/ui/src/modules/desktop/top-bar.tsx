@@ -17,8 +17,8 @@ import {systemAppsKeyed} from '@/providers/apps'
 import {useTheme} from '@/hooks/use-theme'
 import {openCommandPalette} from '@/components/cmdk'
 import {DisplaysSurfaceLive} from './displays-surface'
-import {LivCommandInput, LivAnswerPanel, LivBrandMarkInner, type LivState} from './liv-command-input'
-import {runLivCommand, type LivCommandRun} from './liv-command-aionui'
+import {LivCommandInput, LivAnswerPanel, LivApprovalView, LivApprovalPanel, LivBrandMarkInner, type LivState} from './liv-command-input'
+import {runLivCommand, type LivApprovalOption, type LivCommandRun} from './liv-command-aionui'
 import {FeedbackDialog} from './feedback-dialog'
 import {greeting, wmoGlyph} from './clock-helpers'
 import {cn} from '@/shadcn-lib/utils'
@@ -191,11 +191,19 @@ function TopBarDesktop() {
 	// (tool approval pending) or dispatch fell back (backend unreachable / a
 	// protocol assumption missed on this box).
 	const [livNeedsWindow, setLivNeedsWindow] = useState(false)
+	// Phase 291 R4 — the pending tool-approval prompt (question + option buttons),
+	// rendered inline in the bar instead of bailing to "Open in Liv". `confirm`
+	// echoes the chosen option back to Liv and keeps the stream alive.
+	const [livApproval, setLivApproval] = useState<{
+		question: string
+		options: LivApprovalOption[]
+		confirm: (value: unknown) => void
+	} | null>(null)
 	const livRunRef = useRef<LivCommandRun | null>(null)
 	const answerPanelRef = useRef<HTMLDivElement>(null)
 	// The pill shows the Liv composer (instead of the navbar) in compose + answer.
 	// working/done keep the navbar so the center logo is visible + animating.
-	const isLivOverlay = livState === 'compose' || livState === 'answer'
+	const isLivOverlay = livState === 'compose' || livState === 'answer' || livState === 'approval'
 	const enterCompose = () => {
 		setIsHoverExpanded(false)
 		setSurfaceClicked(false)
@@ -249,12 +257,11 @@ function TopBarDesktop() {
 		livRunRef.current = runLivCommand(
 			{
 				...payload,
-				// Phase 291 R4 — the permissive modes auto-approve tool calls
-				// client-side (a backup to the server-side mode-set, so a command
-				// still runs in the bar even if config-options didn't land). Only
-				// the explicit "ask" modes (default / plan) route a confirmation to
-				// the Open-in-Liv escape hatch.
-				autoApprove: payload.mode === 'bypassPermissions' || payload.mode === 'acceptEdits',
+				// Auto-run (bypassPermissions) auto-approves tool calls silently.
+				// Every other mode (default / plan / accept-edits) now surfaces the
+				// confirmation INLINE (question in the bar + option buttons below)
+				// via onApprovalNeeded — no more dead-end "Open in Liv".
+				autoApprove: payload.mode === 'bypassPermissions',
 				conversationId: livConvIdRef.current || undefined,
 			},
 			{
@@ -265,10 +272,23 @@ function TopBarDesktop() {
 				onText: (full) => setLivAnswer(full),
 				onDone: (full) => finish(full, false),
 				onError: (message, {fallback}) => finish(message, fallback),
-				onApprovalNeeded: () =>
-					finish('Liv needs to run an action that needs your approval. Open Liv to review and continue.', true),
+				// Render the approval inline: question in the bar, option buttons in
+				// the panel below. The operator approves/declines without leaving the
+				// command bar.
+				onApprovalNeeded: ({title, options, confirm}) => {
+					setLivAnswer(null)
+					setLivApproval({question: title || 'Liv wants to run an action. Approve to continue.', options, confirm})
+					setLivState('approval')
+				},
 			},
 		)
+	}
+	// Operator picked a confirmation option — echo it back to Liv and resume the
+	// stream (working). Another confirmation simply re-enters the approval state.
+	const livChooseApproval = (value: unknown) => {
+		livApproval?.confirm(value)
+		setLivApproval(null)
+		setLivState('working')
 	}
 	const livClose = () => {
 		livRunRef.current?.abort()
@@ -280,6 +300,7 @@ function TopBarDesktop() {
 		setLivTurns([])
 		setLivRevealed(false)
 		setLivNeedsWindow(false)
+		setLivApproval(null)
 	}
 	// Transcript the panel shows: completed turns + the in-flight turn while
 	// working (so a follow-up streams live once the panel is revealed).
@@ -862,18 +883,43 @@ function TopBarDesktop() {
 								className='absolute inset-0 flex items-center px-3.5'
 							>
 								{/* compose (first question) AND answer (follow-up) both show the
-								    composer — the answer itself lives only in the panel below. */}
-								<LivCommandInput onClose={livClose} onSubmit={livSubmit} />
+								    composer — the answer itself lives only in the panel below.
+								    approval shows the question Liv is asking (buttons render in
+								    the panel below). */}
+								{livState === 'approval' && livApproval ? (
+									<LivApprovalView question={livApproval.question} onClose={livClose} />
+								) : (
+									<LivCommandInput onClose={livClose} onSubmit={livSubmit} />
+								)}
 							</motion.div>
 						)}
 					</AnimatePresence>
 				</motion.nav>
 
-				{/* Liv answer panel — the full reply, dropped just below the bar. */}
+				{/* Liv answer / approval panel — dropped just below the bar. The
+				    approval panel (option buttons) takes priority while a tool is
+				    waiting on the operator; otherwise the answer transcript shows. */}
 				<div className='pointer-events-none absolute inset-x-0 top-[92px] flex justify-center'>
 					<AnimatePresence>
-						{livPanelVisible && livDisplayTurns.length > 0 && (
+						{livState === 'approval' && livApproval ? (
 							<motion.div
+								key='liv-approval'
+								initial={{opacity: 0, y: -10, scale: 0.98}}
+								animate={{opacity: 1, y: 0, scale: 1}}
+								exit={{opacity: 0, y: -10, scale: 0.98}}
+								transition={{type: 'spring', stiffness: 420, damping: 32}}
+								className='pointer-events-auto'
+							>
+								<LivApprovalPanel
+									question={livApproval.question}
+									options={livApproval.options}
+									onChoose={livChooseApproval}
+									onOpenInLiv={openLivWindow}
+								/>
+							</motion.div>
+						) : livPanelVisible && livDisplayTurns.length > 0 ? (
+							<motion.div
+								key='liv-answer'
 								ref={answerPanelRef}
 								initial={{opacity: 0, y: -10, scale: 0.98}}
 								animate={{opacity: 1, y: 0, scale: 1}}
@@ -887,7 +933,7 @@ function TopBarDesktop() {
 									onOpenInLiv={livNeedsWindow ? openLivWindow : undefined}
 								/>
 							</motion.div>
-						)}
+						) : null}
 					</AnimatePresence>
 				</div>
 				{/* Phase 260.2 — displays strip layer. Slides DOWN into the navbar's

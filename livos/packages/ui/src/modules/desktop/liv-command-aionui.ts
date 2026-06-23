@@ -293,13 +293,29 @@ export async function confirmLivTool(
 	}
 }
 
+/** One choice in a tool-approval prompt (confirmation.add `options[]`). */
+export interface LivApprovalOption {
+	/** Human label as AionUi sends it (e.g. "Allow", "Always allow", "Decline"). */
+	label: string
+	/** The value echoed back on confirm (option_id / value / id). */
+	value: unknown
+	/** Rough intent so the UI can style approve vs reject distinctly. */
+	kind: 'approve' | 'reject' | 'other'
+}
+
 export interface LivStreamHandlers {
 	/** Fired on every assistant text delta with the FULL accumulated text. */
 	onText: (fullText: string) => void
 	/** Turn finished (turn.completed). `fullText` is the final accumulated text. */
 	onComplete: (fullText: string) => void
-	/** A tool call needs approval (confirmation.add). */
-	onApprovalNeeded?: (info: {callId?: string; msgId?: string; approveValue?: unknown; title?: string}) => void
+	/** A tool call needs approval (confirmation.add) — carries the full option set. */
+	onApprovalNeeded?: (info: {
+		callId?: string
+		msgId?: string
+		approveValue?: unknown
+		title?: string
+		options: LivApprovalOption[]
+	}) => void
 	/** A protocol/transport error. */
 	onError: (message: string) => void
 }
@@ -386,16 +402,28 @@ export class LivCommandStream {
 				break
 			case 'confirmation.add': {
 				const d = (data ?? {}) as Record<string, unknown>
-				const options = Array.isArray(d.options) ? (d.options as Array<Record<string, unknown>>) : []
-				// Prefer an allow/approve option; echo its value back on confirm.
-				const approve =
-					options.find((o) => /allow|approve|yes/i.test(String(o.value ?? o.option_id ?? o.id ?? o.label ?? ''))) ??
-					options[0]
+				const raw = Array.isArray(d.options) ? (d.options as Array<Record<string, unknown>>) : []
+				// Normalize every option to {label, value, kind} so the inline
+				// approval UI can render real buttons (approve / reject / other).
+				const options: LivApprovalOption[] = raw.map((o) => {
+					const value = o.value ?? o.option_id ?? o.id
+					const label = String(o.label ?? o.title ?? o.value ?? o.option_id ?? o.id ?? 'Option')
+					const probe = `${String(value ?? '')} ${label}`.toLowerCase()
+					const kind: LivApprovalOption['kind'] = /reject|deny|decline|cancel|\bno\b/.test(probe)
+						? 'reject'
+						: /allow|approve|accept|\byes\b/.test(probe)
+							? 'approve'
+							: 'other'
+					return {label, value, kind}
+				})
+				// Prefer an allow/approve option; echo its value back on auto-confirm.
+				const approve = options.find((o) => o.kind === 'approve') ?? options[0]
 				this.handlers.onApprovalNeeded?.({
 					callId: (d.call_id ?? d.id) as string | undefined,
 					msgId: d.msg_id as string | undefined,
-					approveValue: approve ? (approve.value ?? approve.option_id ?? approve.id) : undefined,
+					approveValue: approve ? approve.value : undefined,
 					title: (d.title ?? d.action) as string | undefined,
+					options,
 				})
 				break
 			}
@@ -507,8 +535,12 @@ export interface RunLivCommandCallbacks {
 	onDone: (fullText: string) => void
 	/** Fatal error; `fallback` true means the caller should open the Liv window. */
 	onError: (message: string, opts: {fallback: boolean}) => void
-	/** A tool needs approval and auto-approve is OFF — surface the escape hatch. */
-	onApprovalNeeded: () => void
+	/**
+	 * A tool needs approval and auto-approve is OFF — render the prompt inline.
+	 * `confirm(value)` sends the chosen option back to Liv and keeps the stream
+	 * alive; the caller picks the option (approve / reject / …) from `options`.
+	 */
+	onApprovalNeeded: (info: {title?: string; options: LivApprovalOption[]; confirm: (value: unknown) => void}) => void
 }
 
 export interface LivCommandRun {
@@ -594,7 +626,7 @@ export function runLivCommand(
 						full || '(Liv finished without a text reply — open Liv to see details.)',
 					)
 				},
-				onApprovalNeeded: ({callId, msgId, approveValue}) => {
+				onApprovalNeeded: ({callId, msgId, approveValue, title, options}) => {
 					if (aborted) return
 					if (opts.autoApprove && callId) {
 						// Auto-approve and keep streaming. Re-arm the watchdog: the
@@ -603,7 +635,17 @@ export function runLivCommand(
 						void confirmLivTool(conversationId, callId, {msgId, data: approveValue})
 						armSilenceTimer()
 					} else {
-						cb.onApprovalNeeded()
+						// Surface the prompt inline. `confirm(value)` echoes the chosen
+						// option back to Liv and re-arms the watchdog so the resumed
+						// turn isn't killed while the (now approved) tool runs.
+						cb.onApprovalNeeded({
+							title,
+							options,
+							confirm: (value) => {
+								if (callId) void confirmLivTool(conversationId, callId, {msgId, data: value})
+								armSilenceTimer()
+							},
+						})
 					}
 				},
 				onError: (m) => fail(m),
