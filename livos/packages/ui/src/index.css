@@ -57,8 +57,15 @@
  * re-declared below — the Files window (added to isForceLightApp) reads them
  * via the arbitrary `var(--fg)` / `var(--bg-2)` forms, which body.dark flips
  * dark. (Docker/App Store/OpenUI don't use them, so this is a harmless superset
- * for those.) The `--liv-*` (v32-tokens, chat surfaces) family is NOT
- * re-declared — no force-light app references it. */
+ * for those.)
+ *
+ * Phase 297 — the v32 `--liv-*` family (src/styles/v32-tokens.css; the chat /
+ * Suna design tokens) is ALSO re-declared back to its `:root` LIGHT values
+ * below. No force-light app references it TODAY, but those tokens are
+ * `.dark`-scoped (not `body.dark`-scoped), so without this re-declaration a
+ * future force-light app that used any `--liv-*` token would still render dark
+ * inside this wrapper. Re-declaring them makes `.livos-app-light` a COMPLETE
+ * light reset for every token family — robustness / future-proofing. */
 .livos-app-light {
 	color-scheme: light;
 	/* Card + dialog surfaces. */
@@ -94,6 +101,36 @@
 	--fg-faint: #a1a1a6;
 	--accent: #1d1d1f;
 	--accent-soft: rgb(0 0 0 / 0.06);
+	/* v32 family (--liv-*, src/styles/v32-tokens.css) — light values verbatim
+	   from that file's :root block. `.dark`-scoped upstream, so re-declared here
+	   to keep .livos-app-light a complete light reset (Phase 297). */
+	--liv-background: oklch(98.46% 0.002 247.84);
+	--liv-foreground: oklch(0.145 0 0);
+	--liv-card: oklch(1 0 0);
+	--liv-card-foreground: oklch(0.145 0 0);
+	--liv-popover: oklch(1 0 0);
+	--liv-popover-foreground: oklch(0.145 0 0);
+	--liv-primary: oklch(0.205 0 0);
+	--liv-primary-foreground: oklch(0.985 0 0);
+	--liv-secondary: oklch(54.65% 0.246 262.87);
+	--liv-secondary-foreground: oklch(0.205 0 0);
+	--liv-muted: oklch(0.97 0 0);
+	--liv-muted-foreground: oklch(0.42 0 0);
+	--liv-accent: oklch(0.97 0 0);
+	--liv-accent-foreground: oklch(0.145 0 0);
+	--liv-destructive: oklch(0.577 0.245 27.325);
+	--liv-destructive-foreground: oklch(0.985 0 0);
+	--liv-border: oklch(0.922 0 0);
+	--liv-input: oklch(0.922 0 0);
+	--liv-ring: oklch(0.708 0 0);
+	--liv-sidebar: oklch(98.46% 0.002 247.84);
+	--liv-sidebar-foreground: oklch(0.145 0 0);
+	--liv-sidebar-primary: oklch(0.205 0 0);
+	--liv-sidebar-primary-foreground: oklch(0.985 0 0);
+	--liv-sidebar-accent: oklch(0.97 0 0);
+	--liv-sidebar-accent-foreground: oklch(0.205 0 0);
+	--liv-sidebar-border: oklch(0.922 0 0);
+	--liv-sidebar-ring: oklch(0.708 0 0);
 }
 
 ::view-transition-old(root),

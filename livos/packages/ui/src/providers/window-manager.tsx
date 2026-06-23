@@ -555,6 +555,89 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		pinnedDeleteMutation.mutate({windowId})
 	}, [pinnedDeleteMutation])
 
+	// Phase 297 (A) — re-clamp open windows on viewport / resolution change.
+	//
+	// getResponsiveSize() fits a window to 85% of the viewport ONLY at open
+	// time (openWindow, above). With no resize listener, shrinking the browser
+	// or lowering the screen resolution AFTER a window is open left it at its
+	// old (now-too-big) pixel size — overflowing the viewport and drifting
+	// off-screen (operator: "çözünürlük değişince pencereler çok büyüyor"). This
+	// debounced listener re-fits any window that has become oversized and pulls
+	// any now-off-screen window back so its title bar stays reachable.
+	//
+	// Idempotency / no-loop guarantees:
+	//   - It dispatches ONLY on a real delta (size or position actually
+	//     changed), so a repeat resize that yields the same geometry is a no-op.
+	//   - The effect reads `windowsRef.current` (a ref, not state) and depends
+	//     only on the two stable (empty-dep) update callbacks, so dispatching a
+	//     size/position update never re-runs the effect → no feedback loop.
+	//   - It NEVER grows a window on a viewport GROW (getResponsiveSize only
+	//     clamps DOWN; oversized is the only trigger) — growing would fight the
+	//     user's own resize / their chosen window size.
+	// REUSES getResponsiveSize so the re-fit matches open-time sizing exactly.
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		const TOP_BAR = 42
+		const DOCK = 62
+		let timer: ReturnType<typeof setTimeout> | undefined
+
+		const reclamp = () => {
+			const vw = window.innerWidth
+			const vh = window.innerHeight
+			const availH = vh - TOP_BAR - DOCK
+			for (const w of windowsRef.current) {
+				// A window docked to the TopBar shelf renders as a chip, not a
+				// real on-screen rectangle — skip it (its geometry is restored
+				// fresh on unpin). MINIMIZED windows are intentionally NOT
+				// skipped: re-clamping their stored geometry now means they
+				// restore on-screen and correctly-sized after a resolution drop,
+				// instead of popping back oversized / off-screen.
+				if (w.isPinnedToTopBar) continue
+
+				// Stream-ish windows preserve their aspect ratio when re-fitting,
+				// matching the open-time clamp (openWindow passes the same flag
+				// for WEBAPP_/NATIVE_/DISPLAY_/shortcut kinds).
+				const isStreamish =
+					w.appId.startsWith('WEBAPP_') ||
+					w.appId.startsWith('NATIVE_') ||
+					w.appId.startsWith('DISPLAY_') ||
+					isShortcutKind(w.appId)
+
+				const oversized = w.size.width > 0.9 * vw || w.size.height > 0.9 * availH
+				const fitted = oversized
+					? getResponsiveSize(w.size.width, w.size.height, isStreamish)
+					: w.size
+				if (fitted.width !== w.size.width || fitted.height !== w.size.height) {
+					updateWindowSize(w.id, fitted)
+				}
+
+				// Re-pull a now-off-screen window back on-screen. Clamp x into
+				// [0, vw - width] and y into [TOP_BAR, vh - DOCK - min(height,120)]
+				// so at least the title-bar strip stays grabbable. The Math.max
+				// guards keep the ranges valid when the window is wider/taller
+				// than the viewport (range collapses to its lower bound).
+				const maxX = Math.max(0, vw - fitted.width)
+				const maxY = Math.max(TOP_BAR, vh - DOCK - Math.min(fitted.height, 120))
+				const clampedX = Math.min(Math.max(w.position.x, 0), maxX)
+				const clampedY = Math.min(Math.max(w.position.y, TOP_BAR), maxY)
+				if (clampedX !== w.position.x || clampedY !== w.position.y) {
+					updateWindowPosition(w.id, {x: clampedX, y: clampedY})
+				}
+			}
+		}
+
+		const onResize = () => {
+			if (timer) clearTimeout(timer)
+			timer = setTimeout(reclamp, 150)
+		}
+
+		window.addEventListener('resize', onResize)
+		return () => {
+			window.removeEventListener('resize', onResize)
+			if (timer) clearTimeout(timer)
+		}
+	}, [updateWindowSize, updateWindowPosition])
+
 	return (
 		<WindowManagerContext.Provider
 			value={{

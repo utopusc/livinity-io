@@ -143,9 +143,24 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 		if (resizeDirection.includes('s')) newHeight += deltaY
 		if (resizeDirection.includes('n')) { newHeight -= deltaY; newY += deltaY }
 
-		// Enforce minimum size (400x400 matches getResponsiveSize minimum)
-		newWidth = Math.max(400, newWidth)
-		newHeight = Math.max(400, newHeight)
+		// Clamp size: never below the 400×400 minimum (matches getResponsiveSize),
+		// and — Phase 297 (A2) — never bigger than the screen (~104px reserved for
+		// the top bar 42 + dock 62), the manual-resize counterpart to the viewport
+		// re-clamp in window-manager.tsx. Math.max(400, …) is applied LAST so the
+		// minimum always wins, mirroring getResponsiveSize's clamp order.
+		newWidth = Math.max(400, Math.min(newWidth, window.innerWidth - 20))
+		newHeight = Math.max(400, Math.min(newHeight, window.innerHeight - 104))
+
+		// Phase 297 (A2) — when resizing from the north/west edge the OPPOSITE
+		// (south/east) edge must stay anchored. Re-derive the origin from the FINAL
+		// clamped size so a MIN/MAX clamp can never detach the dragged edge from the
+		// cursor (also corrects the pre-existing 400-min detach on n/w drags).
+		if (resizeDirection.includes('w')) {
+			newX = resizeStartPosition.current.x + resizeStartSize.current.width - newWidth
+		}
+		if (resizeDirection.includes('n')) {
+			newY = resizeStartPosition.current.y + resizeStartSize.current.height - newHeight
+		}
 
 		updateWindowSize(id, {width: newWidth, height: newHeight})
 		// Update position for north/west resizing (window origin moves)
