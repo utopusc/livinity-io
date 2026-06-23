@@ -515,8 +515,12 @@ export interface LivCommandRun {
 	abort: () => void
 }
 
-/** Hard cap before we give up waiting for a silent stream and fall back. */
-const NO_RESPONSE_TIMEOUT_MS = 20_000
+/**
+ * Hard cap before we give up waiting for a SILENT stream and fall back. Re-armed
+ * whenever a tool call is auto-approved (a tool may run for a while before it
+ * emits any text), so a real, tool-heavy Auto-run command isn't killed mid-work.
+ */
+const NO_RESPONSE_TIMEOUT_MS = 45_000
 
 /**
  * Orchestrates one command: prime → create → subscribe → send → stream → done,
@@ -544,6 +548,16 @@ export function runLivCommand(
 		clearTimer()
 		stream?.close()
 		cb.onError(message, {fallback: true})
+	}
+	// Arm (or re-arm) the no-response watchdog. Called once after the prompt is
+	// sent and again each time a tool is auto-approved (work is in progress, so
+	// reset the countdown). Once any text arrives the timer is cleared for good
+	// (gotText), so this only guards a genuinely silent stream.
+	const armSilenceTimer = () => {
+		clearTimer()
+		silenceTimer = setTimeout(() => {
+			if (!gotText) fail('Liv did not respond in time.')
+		}, NO_RESPONSE_TIMEOUT_MS)
 	}
 
 	void (async () => {
@@ -583,7 +597,11 @@ export function runLivCommand(
 				onApprovalNeeded: ({callId, msgId, approveValue}) => {
 					if (aborted) return
 					if (opts.autoApprove && callId) {
+						// Auto-approve and keep streaming. Re-arm the watchdog: the
+						// approved tool may run a while before any text, and we must
+						// not bail to "Open in Liv" while it's actually working.
 						void confirmLivTool(conversationId, callId, {msgId, data: approveValue})
+						armSilenceTimer()
 					} else {
 						cb.onApprovalNeeded()
 					}
@@ -595,9 +613,7 @@ export function runLivCommand(
 				stream.close()
 				return
 			}
-			silenceTimer = setTimeout(() => {
-				if (!gotText) fail('Liv did not respond in time.')
-			}, NO_RESPONSE_TIMEOUT_MS)
+			armSilenceTimer()
 			await sendLivMessage(conversationId, opts.prompt, {
 				files: opts.files,
 				injectSkills: opts.injectSkills,

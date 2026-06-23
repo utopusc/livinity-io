@@ -249,9 +249,12 @@ function TopBarDesktop() {
 		livRunRef.current = runLivCommand(
 			{
 				...payload,
-				// YOLO mode auto-approves tool calls; other modes route any
-				// confirmation to the Open-in-Liv escape hatch.
-				autoApprove: payload.mode === 'bypassPermissions',
+				// Phase 291 R4 — the permissive modes auto-approve tool calls
+				// client-side (a backup to the server-side mode-set, so a command
+				// still runs in the bar even if config-options didn't land). Only
+				// the explicit "ask" modes (default / plan) route a confirmation to
+				// the Open-in-Liv escape hatch.
+				autoApprove: payload.mode === 'bypassPermissions' || payload.mode === 'acceptEdits',
 				conversationId: livConvIdRef.current || undefined,
 			},
 			{

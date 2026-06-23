@@ -376,7 +376,11 @@ export function LivCommandInput({
 	autoFocus?: boolean
 }) {
 	const [prompt, setPrompt] = useState('')
-	const [permissionId, setPermissionId] = useState<LivPermissionMode['id']>(LIV_PERMISSION_MODES[0].id)
+	// Phase 291 R4 — default to Auto-run so a command actually EXECUTES from the
+	// bar instead of pausing on the first tool and bailing to "Open in Liv"
+	// (operator: "ne yaparsam yapayım benden onay istiyor"). The other modes stay
+	// selectable for anyone who wants Liv to ask first.
+	const [permissionId, setPermissionId] = useState<LivPermissionMode['id']>('bypassPermissions')
 	const inputRef = useRef<HTMLTextAreaElement>(null)
 
 	// Live agent list from AionUi (the real "which AI" selector). Empty when the
