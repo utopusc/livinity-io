@@ -65,6 +65,30 @@ function loadSettingsFromLocalStorage(): WallpaperSettings {
 	}
 }
 
+// ─── Wallpaper id first-paint cache ─────────────────────────────
+// The user's wallpaper id (from the WebSocket `user.wallpaper` query) is cached
+// here so a cold reload paints the correct wallpaper INSTANTLY instead of a blank
+// screen while the WS query is in flight. Same instant-first-paint pattern the
+// settings above use. The remote value still wins once it resolves.
+const WALLPAPER_ID_KEY = 'livinity-wallpaper-id'
+
+function loadWallpaperIdFromLocalStorage(): WallpaperId | undefined {
+	try {
+		const id = localStorage.getItem(WALLPAPER_ID_KEY)
+		return id && arrayIncludes(wallpaperIds, id) ? (id as WallpaperId) : undefined
+	} catch {
+		return undefined
+	}
+}
+
+function saveWallpaperIdToLocalStorage(id: string) {
+	try {
+		localStorage.setItem(WALLPAPER_ID_KEY, id)
+	} catch {
+		// localStorage unavailable — ignore
+	}
+}
+
 // ---
 
 type WallpaperType = {
@@ -83,8 +107,22 @@ const WallPaperContext = createContext<WallpaperType>(null as any)
 export function WallpaperProviderConnected({children}: {children: ReactNode}) {
 	const remote = useRemoteWallpaper()
 
+	// Instant first paint: the last-known wallpaper from localStorage (or the
+	// default) so the desktop is NEVER blank while the WebSocket `user.wallpaper`
+	// query is loading. Read once at mount.
+	const [firstPaint] = useState<WallpaperBase>(() => {
+		const id = loadWallpaperIdFromLocalStorage()
+		return (id && wallpapersKeyed[id]) || defaultWallpaper
+	})
+
 	const remoteWallpaper = remote.wallpaper
-	const wallpaper = remote.isLoading ? nullWallpaper : remoteWallpaper || defaultWallpaper
+	// Previously this returned `nullWallpaper` while `remote.isLoading`, which
+	// blanked the desktop. On cold loads — especially right after a livinityd
+	// restart when the WS is still reconnecting — the query could stall (retry was
+	// off), so the blank persisted until a manual refresh (the reported bug). Now
+	// we always show a real wallpaper (remote → first-paint cache → default); the
+	// remote value swaps in seamlessly once it resolves.
+	const wallpaper = remoteWallpaper || firstPaint
 
 	return (
 		<WallpaperProvider
@@ -223,12 +261,19 @@ export function Wallpaper({
 
 function useRemoteWallpaper(onSuccess?: (id: WallpaperId) => void) {
 	const userQ = trpcReact.user.wallpaper.useQuery(undefined, {
-		retry: false,
+		// Was `retry: false` — a single transient WebSocket hiccup on a cold load
+		// (the WS reconnecting right after a livinityd restart) left the query
+		// stuck/failed with no recovery, so the wallpaper stayed blank until a
+		// manual refresh. Retry a few times with backoff so it self-heals.
+		retry: 3,
+		retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
 	})
 	const wallpaperQId = userQ.data
 
 	useEffect(() => {
 		if (userQ.isSuccess && wallpaperQId && arrayIncludes(wallpaperIds, wallpaperQId)) {
+			// Cache for instant first paint on the next cold load.
+			saveWallpaperIdToLocalStorage(wallpaperQId)
 			onSuccess?.(wallpaperQId as WallpaperId)
 		}
 	}, [userQ.isSuccess, wallpaperQId, onSuccess])
