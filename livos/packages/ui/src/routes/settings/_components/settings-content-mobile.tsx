@@ -10,7 +10,7 @@ import {
 	TbTool,
 	TbUser,
 } from 'react-icons/tb'
-import {Link, useNavigate} from 'react-router-dom'
+import {useNavigate} from 'react-router-dom'
 
 // import {useNavigate} from 'react-router-dom'
 
@@ -87,36 +87,22 @@ export function SettingsContentMobile() {
 
 			{/* --- */}
 			<div className='grid grid-cols-2 gap-2'>
-				<Link
-					to={{
-						search: addLinkSearchParams({dialog: 'live-usage', tab: 'storage'}),
-					}}
-				>
-					<Card>
-						<StorageCardContent />
-					</Card>
-				</Link>
+				{/* Phase 296 — these cards used to deep-link into the full-screen
+				    Live Usage dialog (now removed; live usage is the desktop navbar
+				    dropdown). They stay as inline live-stat cards so mobile Settings
+				    still surfaces storage/memory/CPU at a glance. */}
+				<Card>
+					<StorageCardContent />
+				</Card>
 
-				<Link
-					to={{
-						search: addLinkSearchParams({dialog: 'live-usage', tab: 'memory'}),
-					}}
-				>
-					{/* Set id on the second card because we wanna scroll to see them all */}
-					<Card id={SETTINGS_SYSTEM_CARDS_ID}>
-						<MemoryCardContent />
-					</Card>
-				</Link>
+				{/* Set id on the second card because we wanna scroll to see them all */}
+				<Card id={SETTINGS_SYSTEM_CARDS_ID}>
+					<MemoryCardContent />
+				</Card>
 
-				<Link
-					to={{
-						search: addLinkSearchParams({dialog: 'live-usage', tab: 'cpu'}),
-					}}
-				>
-					<Card>
-						<CpuCardContent />
-					</Card>
-				</Link>
+				<Card>
+					<CpuCardContent />
+				</Card>
 
 				<Card>
 					<CpuTemperatureCardContent

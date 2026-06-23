@@ -95,6 +95,10 @@ function isDisplayKind(appId: string): boolean {
  *   - Docker (native React app with its own `dark:` theme that html.dark
  *     re-activates on top of its hardcoded white canvas)
  *   - App Store + OpenUI (iframe web content that honours prefers-color-scheme)
+ *   - Files — built light-first (0 `dark:` variants, but pervasive hardcoded
+ *     light colors: text-neutral-*, bg-white, text-black + v36 var() tokens),
+ *     so it renders broken under the OS dark theme. `.livos-app-light` (now
+ *     also re-declaring the v36 family) makes those light-first colors correct.
  *
  * Deliberately EXCLUDED:
  *   - Liv Assistant (LIV_ASSISTANT_APP_ID) — a separate SPA that manages its
@@ -102,14 +106,17 @@ function isDisplayKind(appId: string): boolean {
  *   - VNC stream windows (isWebAppKind / isNativeAppKind / isDisplayKind, and
  *     shortcut windows which now render as a browser-stream) — raw <canvas>
  *     pixels are immune to CSS, and their floating chrome stays on the OS theme.
- *   - The LivOS first-party token-apps (Settings / Files / Terminal /
- *     Server Control / My Devices) — they theme coherently via the body.dark
- *     CSS-var tokens, so they stay on the OS theme ("OS stays dark"). Forcing
- *     them light additionally needs the body.dark tokens re-declared light — a
- *     box-verified follow-up (Phase 295 T2), not shipped here.
+ *   - The other LivOS token-apps (Settings / Terminal / Server Control /
+ *     My Devices) — they theme coherently via the body.dark CSS-var tokens, so
+ *     they stay on the OS theme ("OS stays dark").
  */
 function isForceLightApp(appId: string): boolean {
-	return appId === 'LIVINITY_docker' || appId === 'LIVINITY_app-store' || isOpenUiAppKind(appId)
+	return (
+		appId === 'LIVINITY_docker' ||
+		appId === 'LIVINITY_app-store' ||
+		appId === 'LIVINITY_files' ||
+		isOpenUiAppKind(appId)
+	)
 }
 
 type WindowContentProps = {

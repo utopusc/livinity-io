@@ -131,7 +131,6 @@ export const DEFAULT_WINDOW_SIZES: Record<string, Size> = {
 	'LIVINITY_app-store': {width: 1500, height: 750},
 	'LIVINITY_files': {width: 1000, height: 1230},
 	'LIVINITY_settings': {width: 1100, height: 980},
-	'LIVINITY_live-usage': {width: 650, height: 500},
 	'LIVINITY_ai-chat': {width: 1300, height: 850},
 	'LIVINITY_docker': {width: 1400, height: 900},
 	'LIVINITY_my-devices': {width: 900, height: 650},

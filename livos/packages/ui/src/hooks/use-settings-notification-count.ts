@@ -52,7 +52,10 @@ export function useSettingsNotificationCount() {
 				action: {
 					label: t('notifications.view'),
 					onClick: () => {
-						navigate(`?dialog=live-usage`)
+						// Phase 296 — the full-screen Live Usage dialog was removed (live
+						// usage is now the navbar dropdown, which isn't URL-addressable).
+						// Point the toast's "View" at Settings (mirrors the CPU-temp toast).
+						navigate(`/settings`)
 					},
 				},
 				// Don't auto-close

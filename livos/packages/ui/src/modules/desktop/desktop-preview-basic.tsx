@@ -89,7 +89,6 @@ export function DesktopPreview({
 						<DockItemPreview icon={systemAppsKeyed['LIVINITY_home'].icon} />
 						<DockItemPreview icon={systemAppsKeyed['LIVINITY_files'].icon} />
 						<DockItemPreview icon={systemAppsKeyed['LIVINITY_settings'].icon} />
-						<DockItemPreview icon={systemAppsKeyed['LIVINITY_live-usage'].icon} />
 						<DockItemPreview icon={systemAppsKeyed['LIVINITY_app-store'].icon} />
 					</div>
 					<div className='h-[2px]' />

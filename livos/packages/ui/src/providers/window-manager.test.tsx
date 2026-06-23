@@ -99,7 +99,6 @@ describe('DEFAULT_WINDOW_SIZES Phase 234-02 — LIVINITY_liv-assistant entry', (
             'LIVINITY_app-store',
             'LIVINITY_files',
             'LIVINITY_settings',
-            'LIVINITY_live-usage',
             'LIVINITY_ai-chat',
             'LIVINITY_docker',
             'LIVINITY_my-devices',

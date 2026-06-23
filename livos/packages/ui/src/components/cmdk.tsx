@@ -134,15 +134,6 @@ function CmdkContent() {
 			>
 				{t('cmdk.change-wallpaper')}
 			</CommandItem>
-			<CommandItem
-				icon={systemAppsKeyed['LIVINITY_live-usage'].icon}
-				onSelect={() => {
-					navigate(systemAppsKeyed['LIVINITY_live-usage'].systemAppTo)
-					setOpen(false)
-				}}
-			>
-				{t('cmdk.live-usage')}
-			</CommandItem>
 			<SearchItem
 				icon={systemAppsKeyed['LIVINITY_home'].icon}
 				value={systemAppsKeyed['LIVINITY_home'].name}

@@ -70,7 +70,6 @@ const SYSTEM_GRID_IDS = [
 	'LIVINITY_server-control',
 	'LIVINITY_terminal',
 	'LIVINITY_my-devices',
-	'LIVINITY_live-usage',
 ]
 
 const TILE_SIZE = 72

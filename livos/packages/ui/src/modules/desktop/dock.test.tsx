@@ -57,7 +57,6 @@ vi.mock('@/providers/apps', () => ({
 	systemAppsKeyed: {
 		'LIVINITY_files': {name: 'Files', icon: '/figma-exports/dock-files-new.svg', systemAppTo: '/files/Home'},
 		'LIVINITY_settings': {name: 'Settings', icon: '/figma-exports/dock-settings-new.svg', systemAppTo: '/settings'},
-		'LIVINITY_live-usage': {name: 'Live Usage', icon: '/figma-exports/dock-live-usage.png', systemAppTo: '?dialog=live-usage'},
 		'LIVINITY_app-store': {name: 'App Store', icon: '/figma-exports/dock-app-store.png', systemAppTo: '/app-store'},
 		'LIVINITY_server-control': {name: 'Server Management', icon: '/figma-exports/dock-server.svg', systemAppTo: '/server-control'},
 		'LIVINITY_my-devices': {name: 'Devices', icon: '/figma-exports/dock-settings-new.svg?v=285', systemAppTo: '/my-devices'},
@@ -106,10 +105,6 @@ vi.mock('react-router-dom', () => ({
 vi.mock('./logout-dialog', () => ({
 	LogoutDialog: () => null,
 }))
-vi.mock('@/routes/live-usage', () => ({
-	default: () => null,
-}))
-// ErrorBoundary swallows the LiveUsageDialog Suspense tree — keep it simple.
 vi.mock('react-error-boundary', () => ({
 	ErrorBoundary: ({children}: {children?: React.ReactNode}) => <>{children}</>,
 }))

@@ -32,6 +32,8 @@ import {
 } from '@/shadcn-components/ui/dialog'
 import {AnimatedInputError, Input} from '@/shadcn-components/ui/input'
 import {Button} from '@/shadcn-components/ui/button'
+import {Popover, PopoverContent, PopoverTrigger} from '@/shadcn-components/ui/popover'
+import {LiveUsagePanel} from './live-usage-popover'
 import {t} from '@/utils/i18n'
 
 /**
@@ -165,6 +167,11 @@ function TopBarDesktop() {
 	// quick-controls cluster).
 	const [showFeedback, setShowFeedback] = useState(false)
 	const [isHoverExpanded, setIsHoverExpanded] = useState(false)
+	// Phase 296 — the Live Usage navbar dropdown's open state. OR'd into
+	// `isExpanded` below so the navbar (and thus the trigger button) stays
+	// mounted while the popover is open — otherwise a hover-collapse would
+	// unmount the Radix trigger and slam the dropdown shut.
+	const [liveUsageOpen, setLiveUsageOpen] = useState(false)
 	// ── Liv command bar → AionUi (the live Liv) ───────────────────────────────
 	const [livState, setLivState] = useState<LivState>('idle')
 	const [livPrompt, setLivPrompt] = useState('')           // in-flight prompt
@@ -359,7 +366,7 @@ function TopBarDesktop() {
 	// Pinned windows are surfaced by the {n} badge (260-04 / SC5) + the
 	// Displays popover list (260-04 / SC3), not a center chip shelf.
 	const dragState = useWindowDragState()
-	const isExpanded = dragState.isDragging || isHoverExpanded || isLivOverlay
+	const isExpanded = dragState.isDragging || isHoverExpanded || isLivOverlay || liveUsageOpen
 	const [isDragOverShelf, setIsDragOverShelf] = useState(false)
 
 	// Hit-test cursor against the drop-zone rect while a drag is active.
@@ -731,17 +738,33 @@ function TopBarDesktop() {
 									animate='show'
 									exit='hidden'
 								>
-									{/* Live Usage — moved here from the dock; opens the live-usage dialog. */}
-									<motion.button
-										variants={navUtilItem}
-										type='button'
-										aria-label='Live Usage'
-										title='Live Usage'
-										onClick={() => navigate(linkToDialog('live-usage'))}
-										className='grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--fg)] transition-colors hover:bg-[color:var(--bg-2)]'
-									>
-										<Activity className='h-4 w-4' />
-									</motion.button>
+									{/* Phase 296 — Live Usage opens a compact 3-gauge dropdown
+									    (CPU/Memory/Storage) anchored below the navbar, replacing
+									    the old full-screen `?dialog=live-usage`. Controlled so the
+									    navbar stays expanded while open (see `liveUsageOpen`). */}
+									<Popover open={liveUsageOpen} onOpenChange={setLiveUsageOpen}>
+										<PopoverTrigger asChild>
+											<motion.button
+												variants={navUtilItem}
+												type='button'
+												aria-label='Live Usage'
+												title='Live Usage'
+												className={cn(
+													'grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--fg)] transition-colors hover:bg-[color:var(--bg-2)]',
+													liveUsageOpen && 'bg-[color:var(--bg-2)] ring-2 ring-[color:var(--fg)] ring-offset-1',
+												)}
+											>
+												<Activity className='h-4 w-4' />
+											</motion.button>
+										</PopoverTrigger>
+										<PopoverContent
+											align='end'
+											sideOffset={10}
+											className='w-auto rounded-2xl border-line bg-card-bg/95 p-3 text-text-primary backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/60'
+										>
+											<LiveUsagePanel />
+										</PopoverContent>
+									</Popover>
 
 									{/* Displays — toggles the navbar⇄displays swap. Wrapped so the
 									    reveal variant lives on the outer div while the button keeps

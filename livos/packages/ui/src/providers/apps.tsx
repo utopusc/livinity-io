@@ -70,15 +70,6 @@ export const systemApps = [
 		systemAppTo: '/settings',
 	},
 	{
-		id: 'LIVINITY_live-usage',
-		name: 'Live Usage',
-		icon: '/figma-exports/dock-live-usage.png',
-		systemApp: true,
-		// NOTE: using this will clear existing search params
-		// In practice, this means cmdk will clear params and clicking dock icon will not
-		systemAppTo: '?dialog=live-usage',
-	},
-	{
 		id: 'LIVINITY_app-store',
 		name: 'App Store',
 		icon: '/figma-exports/dock-app-store.png',

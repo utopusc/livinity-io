@@ -3,8 +3,7 @@ import {restrictToHorizontalAxis} from '@dnd-kit/modifiers'
 import {horizontalListSortingStrategy, SortableContext, useSortable} from '@dnd-kit/sortable'
 import {CSS} from '@dnd-kit/utilities'
 import {motion, useMotionValue} from 'framer-motion'
-import React, {Suspense, useCallback, useMemo} from 'react'
-import {ErrorBoundary} from 'react-error-boundary'
+import React, {useCallback, useMemo} from 'react'
 import {useLocation} from 'react-router-dom'
 
 import {useIsMobile} from '@/hooks/use-is-mobile'
@@ -27,7 +26,6 @@ import {LogoutDialog} from './logout-dialog'
 import {WINDOWED_SYSTEM_ROUTES} from './system-windowed-routes'
 import {DockPin, dockPinKey, useDockPins} from './use-dock-pins'
 
-const LiveUsageDialog = React.lazy(() => import('@/routes/live-usage'))
 
 const DOCK_BOTTOM_PADDING_PX = 8
 
@@ -197,12 +195,6 @@ export function Dock() {
 				/>
 			</motion.div>
 			<LogoutDialog />
-
-			<ErrorBoundary fallbackRender={() => null}>
-				<Suspense>
-					<LiveUsageDialog />
-				</Suspense>
-			</ErrorBoundary>
 		</>
 	)
 }
@@ -402,13 +394,6 @@ export function DockPreview() {
 				iconSize={iconSize}
 				iconSizeZoomed={iconSizeZoomed}
 			/>
-			<DockDivider iconSize={iconSize} />
-			<DockItem
-				appId='LIVINITY_live-usage'
-				mouseX={mouseX}
-				iconSize={iconSize}
-				iconSizeZoomed={iconSizeZoomed}
-			/>
 		</div>
 	)
 }
@@ -487,8 +472,3 @@ function RecentAppsDock({
 	)
 }
 
-const DockDivider = ({iconSize}: {iconSize: number}) => (
-	<div className='br grid w-1 place-items-center' style={{height: iconSize}}>
-		<div className='h-6 border-r border-border-subtle' />
-	</div>
-)

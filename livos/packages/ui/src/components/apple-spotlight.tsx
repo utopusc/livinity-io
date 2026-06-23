@@ -329,12 +329,6 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 				action: () => navigate(systemAppsKeyed['LIVINITY_settings'].systemAppTo),
 			},
 			{
-				label: t('cmdk.live-usage'),
-				description: 'CPU, memory, storage usage',
-				icon: <TbServer className='text-neutral-500' />,
-				action: () => navigate(systemAppsKeyed['LIVINITY_live-usage'].systemAppTo),
-			},
-			{
 				label: t('cmdk.restart-livinity'),
 				description: 'Restart your server',
 				icon: <TbSettings className='text-neutral-500' />,

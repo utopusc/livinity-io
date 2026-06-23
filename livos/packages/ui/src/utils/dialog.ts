@@ -8,7 +8,7 @@ import {sleep} from '@/utils/misc'
 /** Duration in ms to wait after a dialog closes before cleaning up URL params */
 export const DIALOG_CLOSE_DELAY = 150
 
-export type GlobalDialogKey = 'logout' | 'live-usage' | 'whats-new'
+export type GlobalDialogKey = 'logout' | 'whats-new'
 export type AppStoreDialogKey = 'updates' | 'add-community-store' | 'default-credentials' | 'app-settings'
 export type FilesDialogKey =
 	| 'files-share-info'

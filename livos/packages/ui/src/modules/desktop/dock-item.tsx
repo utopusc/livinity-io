@@ -22,7 +22,6 @@ import {cn} from '@/shadcn-lib/utils'
 // chat bubble, stacked racks, phone outline, prompt caret). Recent /
 // user apps + uncovered system apps still fall back to Tabler.
 import {
-	IconAnalytics,
 	IconAppStore,
 	IconDevices,
 	IconFiles,
@@ -52,7 +51,6 @@ const DOCK_LABELS: Record<string, string> = {
 	'LIVINITY_files': 'Files',
 	'LIVINITY_app-store': 'App Store',
 	'LIVINITY_settings': 'Settings',
-	'LIVINITY_live-usage': 'Live Usage',
 	'LIVINITY_ai-chat': 'AI Chat',
 	'LIVINITY_liv-assistant': 'Liv AI',
 	'LIVINITY_docker': 'Docker',
@@ -77,7 +75,6 @@ const DOCK_ICONS: Record<string, DockGlyph> = {
 	'LIVINITY_files': IconFiles,
 	'LIVINITY_app-store': IconAppStore,
 	'LIVINITY_settings': IconSettings,
-	'LIVINITY_live-usage': IconAnalytics,
 	'LIVINITY_ai-chat': IconLiv,
 	// Phase 260.2 — Liv AI dock tile was rendering blank (no glyph mapped → gradient
 	// fallback). Map it to the chat-bubble glyph so it shows as the Chat icon.
@@ -102,7 +99,6 @@ const DOCK_TINTS: Record<string, string> = {
 	'LIVINITY_launchpad': 'rgba(140, 130, 255, 0.30)',
 	'LIVINITY_files': 'rgba(255, 138, 101, 0.35)',
 	'LIVINITY_settings': 'rgba(110, 110, 115, 0.25)',
-	'LIVINITY_live-usage': 'rgba(91, 141, 239, 0.30)',
 	'LIVINITY_app-store': 'rgba(77, 219, 195, 0.30)',
 	'LIVINITY_ai-chat': 'rgba(255, 138, 101, 0.40)',
 	'LIVINITY_liv-assistant': 'rgba(122, 162, 255, 0.35)',

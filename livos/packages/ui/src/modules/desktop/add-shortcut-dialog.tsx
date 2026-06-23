@@ -36,11 +36,14 @@ import {WEB_APP_CATALOG, WEB_APP_CATEGORIES, webAppIconUrl, type WebAppCategory}
 
 const TERMINAL_ICON = '/figma-exports/dock-terminal.svg'
 
-// R2 — the single source of the white/wide/scrollable surface. All STATIC
-// literals (M1 — JIT-safe). `!` defeats the shared dialogContentClass dark
-// surface; width override appended last so it wins.
+// Phase 296 — the single source of the WIDE/scrollable dialog surface. Was
+// hardcoded white (bg-white + text-gray-900 + border-black/10) which made the
+// dialog open LIGHT even on the dark OS theme; now uses the THEMED semantic
+// tokens (solid card surface) so it follows the OS theme — dark in dark, light
+// in light. `!` keeps it winning over the shared dialogContentClass; width
+// override appended last. All STATIC literals (M1 — JIT-safe).
 const WHITE_WIDE_DIALOG =
-	'!bg-white !text-gray-900 backdrop-blur-none sm:!max-w-[860px] max-w-[calc(100%-24px)] max-h-[88vh] overflow-y-auto border-black/10'
+	'!bg-card-bg !text-text-primary !border-border-default sm:!max-w-[860px] max-w-[calc(100%-24px)] max-h-[88vh] overflow-y-auto'
 
 // Bare-domain normalize: "github.com" → "https://github.com".
 function normalizeUrlInput(raw: string): string | null {
@@ -94,7 +97,7 @@ export function AddShortcutDialog({
 		>
 			<DialogContent className={WHITE_WIDE_DIALOG}>
 				<DialogHeader>
-					<DialogTitle className='!text-gray-900'>Add Shortcut</DialogTitle>
+					<DialogTitle className='text-text-primary'>Add Shortcut</DialogTitle>
 				</DialogHeader>
 
 				<Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
@@ -134,7 +137,7 @@ export function AddShortcutDialog({
 
 function FieldLabel({htmlFor, children}: {htmlFor?: string; children: React.ReactNode}) {
 	return (
-		<label className='text-xs font-medium text-gray-600' htmlFor={htmlFor}>
+		<label className='text-xs font-medium text-text-secondary' htmlFor={htmlFor}>
 			{children}
 		</label>
 	)
@@ -196,7 +199,7 @@ function WebTab({onClose, active}: {onClose: () => void; active: boolean}) {
 			<div className='flex flex-col gap-4'>
 				{WEB_APP_CATEGORIES.filter((c) => byCategory.has(c)).map((cat) => (
 					<div key={cat} className='flex flex-col gap-2'>
-						<p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>{cat}</p>
+						<p className='text-xs font-semibold uppercase tracking-wide text-text-tertiary'>{cat}</p>
 						<div className='grid grid-cols-4 gap-2 sm:grid-cols-6'>
 							{(byCategory.get(cat) ?? []).map((entry) => (
 								<button
@@ -204,10 +207,10 @@ function WebTab({onClose, active}: {onClose: () => void; active: boolean}) {
 									type='button'
 									disabled={createMut.isPending}
 									onClick={() => void addFromCatalog(entry)}
-									className='flex flex-col items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 p-2 text-center transition-colors hover:bg-gray-100 disabled:opacity-50'
+									className='flex flex-col items-center gap-1.5 rounded-lg border border-border-subtle bg-surface-1 p-2 text-center transition-colors hover:bg-surface-2 disabled:opacity-50'
 									title={`Add ${entry.name}`}
 								>
-									<span className='flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-white'>
+									<span className='flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-card-bg'>
 										{/* eslint-disable-next-line jsx-a11y/alt-text */}
 										<img
 											src={webAppIconUrl(entry)}
@@ -218,7 +221,7 @@ function WebTab({onClose, active}: {onClose: () => void; active: boolean}) {
 											}}
 										/>
 									</span>
-									<span className='w-full truncate text-[11px] text-gray-700'>
+									<span className='w-full truncate text-[11px] text-text-secondary'>
 										{addingName === entry.name ? 'Adding…' : entry.name}
 									</span>
 								</button>
@@ -227,7 +230,7 @@ function WebTab({onClose, active}: {onClose: () => void; active: boolean}) {
 					</div>
 				))}
 				{filtered.length === 0 ? (
-					<p className='py-6 text-center text-sm text-gray-500'>No matching apps.</p>
+					<p className='py-6 text-center text-sm text-text-tertiary'>No matching apps.</p>
 				) : null}
 			</div>
 
@@ -235,10 +238,10 @@ function WebTab({onClose, active}: {onClose: () => void; active: boolean}) {
 				<p className='text-xs text-red-600'>{createMut.error?.message ?? 'Failed to add shortcut.'}</p>
 			) : null}
 
-			<div className='border-t border-gray-200 pt-3'>
+			<div className='border-t border-border-subtle pt-3'>
 				<button
 					type='button'
-					className='text-sm font-medium text-gray-700 hover:text-gray-900'
+					className='text-sm font-medium text-text-secondary hover:text-text-primary'
 					onClick={() => setShowCustom((v) => !v)}
 				>
 					{showCustom ? '▾' : '▸'} Add a custom URL
@@ -319,19 +322,19 @@ function CustomUrlForm({onClose}: {onClose: () => void}) {
 			</div>
 
 			{debouncedUrl ? (
-				<div className='flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3'>
-					<div className='flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white'>
+				<div className='flex items-start gap-3 rounded-lg border border-border-subtle bg-surface-1 p-3'>
+					<div className='flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-card-bg'>
 						{resolvedIcon ? (
 							// eslint-disable-next-line jsx-a11y/alt-text
 							<img src={resolvedIcon} loading='lazy' className='h-full w-full object-contain' />
 						) : null}
 					</div>
 					<div className='min-w-0 flex-1'>
-						<p className='truncate text-sm font-medium text-gray-900'>
+						<p className='truncate text-sm font-medium text-text-primary'>
 							{metadataQ.isFetching ? 'Fetching site info…' : title || '(no title)'}
 						</p>
 						{frameable === undefined ? null : (
-							<p className='mt-0.5 text-xs text-gray-500'>
+							<p className='mt-0.5 text-xs text-text-tertiary'>
 								{frameable ? 'Opens embedded in a window.' : 'Opens as a live stream (site blocks embedding).'}
 							</p>
 						)}
@@ -486,7 +489,7 @@ function TerminalTab({onClose, active}: {onClose: () => void; active: boolean}) 
 			{/* Left — form. */}
 			<div className='flex min-w-0 flex-1 flex-col gap-4'>
 				<div className='flex flex-col gap-2'>
-					<span className='text-xs font-medium text-gray-600'>Templates</span>
+					<span className='text-xs font-medium text-text-secondary'>Templates</span>
 					<div className='grid grid-cols-3 gap-2 sm:grid-cols-4'>
 						{builtins.map((tpl) => (
 							<button
@@ -494,13 +497,13 @@ function TerminalTab({onClose, active}: {onClose: () => void; active: boolean}) 
 								type='button'
 								className={`flex flex-col items-center gap-1.5 rounded-lg border p-2 text-center transition-colors ${
 									templateId === tpl.id
-										? 'border-gray-400 bg-gray-100'
-										: 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+										? 'border-border-emphasis bg-surface-3'
+										: 'border-border-subtle bg-surface-1 hover:bg-surface-2'
 								}`}
 								title={tpl.hint}
 								onClick={() => applyBuiltin(tpl)}
 							>
-								<span className='flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-white'>
+								<span className='flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-card-bg'>
 									{/* eslint-disable-next-line jsx-a11y/alt-text */}
 									<img
 										src={tpl.icon || TERMINAL_ICON}
@@ -511,7 +514,7 @@ function TerminalTab({onClose, active}: {onClose: () => void; active: boolean}) 
 										}}
 									/>
 								</span>
-								<span className='w-full truncate text-[11px] text-gray-700'>{tpl.label}</span>
+								<span className='w-full truncate text-[11px] text-text-secondary'>{tpl.label}</span>
 							</button>
 						))}
 						{/* REQ4 — '+'/More tile opens the 80+ professional template library. */}
@@ -519,16 +522,16 @@ function TerminalTab({onClose, active}: {onClose: () => void; active: boolean}) 
 							type='button'
 							className={`flex flex-col items-center gap-1.5 rounded-lg border border-dashed p-2 text-center transition-colors ${
 								showLibrary
-									? 'border-gray-400 bg-gray-100'
-									: 'border-gray-300 bg-white hover:bg-gray-50'
+									? 'border-border-emphasis bg-surface-3'
+									: 'border-border-default bg-card-bg hover:bg-surface-1'
 							}`}
 							title='Browse more templates'
 							onClick={() => setShowLibrary((v) => !v)}
 						>
-							<span className='flex h-8 w-8 items-center justify-center rounded-md bg-gray-100 text-lg leading-none text-gray-500'>
+							<span className='flex h-8 w-8 items-center justify-center rounded-md bg-surface-2 text-lg leading-none text-text-tertiary'>
 								+
 							</span>
-							<span className='w-full truncate text-[11px] text-gray-700'>More</span>
+							<span className='w-full truncate text-[11px] text-text-secondary'>More</span>
 						</button>
 					</div>
 				</div>
@@ -539,19 +542,19 @@ function TerminalTab({onClose, active}: {onClose: () => void; active: boolean}) 
 				{/* R6 — user-saved templates. */}
 				{(userTemplatesQ.data?.length ?? 0) > 0 ? (
 					<div className='flex flex-col gap-2'>
-						<span className='text-xs font-medium text-gray-600'>Saved</span>
+						<span className='text-xs font-medium text-text-secondary'>Saved</span>
 						<div className='flex flex-wrap gap-2'>
 							{(userTemplatesQ.data ?? []).map((tpl) => (
 								<span
 									key={tpl.id}
-									className='inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 py-1 pl-3 pr-1 text-xs text-emerald-800'
+									className='inline-flex items-center gap-1 rounded-full border border-border-subtle bg-surface-2 py-1 pl-3 pr-1 text-xs text-text-secondary'
 								>
 									<button type='button' className='hover:underline' onClick={() => applyUserTemplate(tpl)}>
 										{tpl.label}
 									</button>
 									<button
 										type='button'
-										className='flex h-4 w-4 items-center justify-center rounded-full text-emerald-700 hover:bg-emerald-100'
+										className='flex h-4 w-4 items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-red-500 hover:text-white'
 										title='Delete saved template'
 										onClick={async () => {
 											await deleteTplMut.mutateAsync({id: tpl.id}).catch(() => {})
@@ -626,18 +629,18 @@ function TerminalTab({onClose, active}: {onClose: () => void; active: boolean}) 
 
 			{/* Right — AI-CLI flag reference (R4) when an ai-cli template is selected. */}
 			{selectedFlags && selectedBuiltin ? (
-				<div className='w-full shrink-0 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:w-[300px]'>
-					<p className='mb-2 text-xs font-semibold text-gray-700'>{selectedBuiltin.label} flags</p>
+				<div className='w-full shrink-0 rounded-lg border border-border-subtle bg-surface-1 p-3 sm:w-[300px]'>
+					<p className='mb-2 text-xs font-semibold text-text-secondary'>{selectedBuiltin.label} flags</p>
 					<div className='flex max-h-[360px] flex-col gap-2 overflow-y-auto'>
 						{selectedFlags.map((f) => (
 							<div key={f.flag} className='flex items-start justify-between gap-2'>
 								<div className='min-w-0'>
-									<code className='break-all text-[11px] font-medium text-gray-900'>{f.flag}</code>
-									<p className='text-[11px] text-gray-500'>{f.description}</p>
+									<code className='break-all text-[11px] font-medium text-text-primary'>{f.flag}</code>
+									<p className='text-[11px] text-text-tertiary'>{f.description}</p>
 								</div>
 								<button
 									type='button'
-									className='shrink-0 rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-700 hover:bg-gray-100'
+									className='shrink-0 rounded border border-border-subtle bg-card-bg px-1.5 py-0.5 text-[10px] font-medium text-text-secondary hover:bg-surface-2'
 									title='Append this flag to the command'
 									onClick={() => {
 										// Opt-in only (M5) — append the flag token (first form, sans desc).
@@ -699,7 +702,7 @@ function TemplateLibraryPanel({onPick}: {onPick: (entry: TerminalTemplateLibrary
 	}, [search, category])
 
 	return (
-		<div className='flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3'>
+		<div className='flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface-1 p-3'>
 			<Input placeholder='Search templates…' value={search} onValueChange={setSearch} />
 
 			<div className='flex flex-wrap gap-1.5'>
@@ -707,8 +710,8 @@ function TemplateLibraryPanel({onPick}: {onPick: (entry: TerminalTemplateLibrary
 					type='button'
 					className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
 						category === 'All'
-							? 'border-gray-400 bg-gray-200 text-gray-900'
-							: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+							? 'border-border-emphasis bg-surface-3 text-text-primary'
+							: 'border-border-subtle bg-card-bg text-text-secondary hover:bg-surface-2'
 					}`}
 					onClick={() => setCategory('All')}
 				>
@@ -720,8 +723,8 @@ function TemplateLibraryPanel({onPick}: {onPick: (entry: TerminalTemplateLibrary
 						type='button'
 						className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
 							category === cat
-								? 'border-gray-400 bg-gray-200 text-gray-900'
-								: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+								? 'border-border-emphasis bg-surface-3 text-text-primary'
+								: 'border-border-subtle bg-card-bg text-text-secondary hover:bg-surface-2'
 						}`}
 						onClick={() => setCategory(cat)}
 					>
@@ -732,17 +735,17 @@ function TemplateLibraryPanel({onPick}: {onPick: (entry: TerminalTemplateLibrary
 
 			<div className='flex max-h-[300px] flex-col gap-1 overflow-y-auto'>
 				{rows.length === 0 ? (
-					<p className='py-4 text-center text-sm text-gray-500'>No matching templates.</p>
+					<p className='py-4 text-center text-sm text-text-tertiary'>No matching templates.</p>
 				) : (
 					rows.map((entry) => (
 						<button
 							key={entry.name}
 							type='button'
-							className='flex items-center gap-3 rounded-md border border-transparent bg-white p-2 text-left transition-colors hover:border-gray-200 hover:bg-gray-100'
+							className='flex items-center gap-3 rounded-md border border-transparent bg-card-bg p-2 text-left transition-colors hover:border-border-subtle hover:bg-surface-2'
 							onClick={() => onPick(entry)}
 							title={`Use: ${entry.command}`}
 						>
-							<span className='flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50'>
+							<span className='flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-1'>
 								{/* eslint-disable-next-line jsx-a11y/alt-text */}
 								<img
 									src={terminalTemplateIconUrl(entry)}
@@ -755,10 +758,10 @@ function TemplateLibraryPanel({onPick}: {onPick: (entry: TerminalTemplateLibrary
 							</span>
 							<span className='min-w-0 flex-1'>
 								<span className='flex items-baseline gap-2'>
-									<span className='truncate text-sm font-medium text-gray-900'>{entry.name}</span>
-									<code className='truncate text-[11px] text-gray-500'>{entry.command}</code>
+									<span className='truncate text-sm font-medium text-text-primary'>{entry.name}</span>
+									<code className='truncate text-[11px] text-text-tertiary'>{entry.command}</code>
 								</span>
-								<span className='block truncate text-[11px] text-gray-500'>{entry.description}</span>
+								<span className='block truncate text-[11px] text-text-tertiary'>{entry.description}</span>
 							</span>
 						</button>
 					))
@@ -1125,7 +1128,7 @@ function NativeTab({active}: {active: boolean}) {
 		<div className='flex flex-col gap-5 pt-2'>
 			{/* App store — browse by category (All = popular) or search, paginated. */}
 			<div className='flex flex-col gap-2'>
-				<p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Browse apps</p>
+				<p className='text-xs font-semibold uppercase tracking-wide text-text-tertiary'>Browse apps</p>
 				<Input placeholder='Search apps…' value={fhQuery} onValueChange={setFhQuery} />
 
 				{/* Category chips: "All" + one per category. Hidden while searching. */}
@@ -1135,8 +1138,8 @@ function NativeTab({active}: {active: boolean}) {
 							type='button'
 							className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
 								selectedCategory === null
-									? 'border-gray-400 bg-gray-200 text-gray-900'
-									: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+									? 'border-border-emphasis bg-surface-3 text-text-primary'
+									: 'border-border-subtle bg-card-bg text-text-secondary hover:bg-surface-2'
 							}`}
 							onClick={() => setSelectedCategory(null)}
 						>
@@ -1148,8 +1151,8 @@ function NativeTab({active}: {active: boolean}) {
 								type='button'
 								className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
 									selectedCategory === cat
-										? 'border-gray-400 bg-gray-200 text-gray-900'
-										: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+										? 'border-border-emphasis bg-surface-3 text-text-primary'
+										: 'border-border-subtle bg-card-bg text-text-secondary hover:bg-surface-2'
 								}`}
 								onClick={() => setSelectedCategory(cat)}
 							>
@@ -1160,13 +1163,13 @@ function NativeTab({active}: {active: boolean}) {
 				) : null}
 
 				{showing.isLoading && accApps.length === 0 ? (
-					<p className='py-4 text-center text-sm text-gray-500'>Loading apps…</p>
+					<p className='py-4 text-center text-sm text-text-tertiary'>Loading apps…</p>
 				) : showing.isError && accApps.length === 0 ? (
 					<p className='py-4 text-center text-sm text-red-600'>
 						Couldn&apos;t load the app catalog. Check your connection and try again.
 					</p>
 				) : accApps.length === 0 ? (
-					<p className='py-4 text-center text-sm text-gray-500'>
+					<p className='py-4 text-center text-sm text-text-tertiary'>
 						{isSearching ? `No results for "${fhDebounced.trim()}".` : 'No apps found.'}
 					</p>
 				) : (
@@ -1174,9 +1177,9 @@ function NativeTab({active}: {active: boolean}) {
 						{accApps.map((app) => (
 							<div
 								key={app.appId}
-								className='flex items-center gap-3 rounded-md border border-gray-200 bg-white p-2'
+								className='flex items-center gap-3 rounded-md border border-border-subtle bg-card-bg p-2'
 							>
-								<span className='flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50'>
+								<span className='flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-1'>
 									{app.iconUrl ? (
 										// eslint-disable-next-line jsx-a11y/alt-text
 										<img
@@ -1190,9 +1193,9 @@ function NativeTab({active}: {active: boolean}) {
 									) : null}
 								</span>
 								<span className='min-w-0 flex-1'>
-									<span className='block truncate text-sm font-medium text-gray-900'>{app.name}</span>
+									<span className='block truncate text-sm font-medium text-text-primary'>{app.name}</span>
 									{app.summary ? (
-										<span className='block truncate text-[11px] text-gray-500'>{app.summary}</span>
+										<span className='block truncate text-[11px] text-text-tertiary'>{app.summary}</span>
 									) : null}
 								</span>
 								<Button
@@ -1211,7 +1214,7 @@ function NativeTab({active}: {active: boolean}) {
 							<button
 								type='button'
 								disabled={showing.isFetching}
-								className='mt-1 rounded-md border border-gray-200 bg-gray-50 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50'
+								className='mt-1 rounded-md border border-border-subtle bg-surface-1 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50'
 								onClick={() => setPage((p) => p + 1)}
 							>
 								{showing.isFetching ? 'Loading…' : 'Load more'}
@@ -1221,11 +1224,11 @@ function NativeTab({active}: {active: boolean}) {
 				)}
 				{installingId !== null ? (
 					<div className='flex flex-col gap-1'>
-						<div className='flex items-center justify-between text-[11px] text-gray-500'>
+						<div className='flex items-center justify-between text-[11px] text-text-tertiary'>
 							<span>Installing… this can take a few minutes.</span>
-							<span className='font-mono tabular-nums text-gray-700'>{installPct}%</span>
+							<span className='font-mono tabular-nums text-text-secondary'>{installPct}%</span>
 						</div>
-						<div className='h-1 w-full overflow-hidden rounded-full bg-gray-200'>
+						<div className='h-1 w-full overflow-hidden rounded-full bg-surface-3'>
 							<div
 								className='h-full rounded-full bg-emerald-500 transition-[width]'
 								style={{width: `${installPct}%`}}
@@ -1247,15 +1250,15 @@ function NativeTab({active}: {active: boolean}) {
 			</div>
 
 			{/* Installed-on-device picker. */}
-			<div className='flex flex-col gap-2 border-t border-gray-200 pt-4'>
-				<p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Installed on this device</p>
+			<div className='flex flex-col gap-2 border-t border-border-subtle pt-4'>
+				<p className='text-xs font-semibold uppercase tracking-wide text-text-tertiary'>Installed on this device</p>
 				<Input placeholder='Search installed apps…' value={query} onValueChange={setQuery} autoFocus={active} />
 				{scanQ.isLoading && nativeListQ.isLoading ? (
-					<p className='py-4 text-center text-sm text-gray-500'>Scanning…</p>
+					<p className='py-4 text-center text-sm text-text-tertiary'>Scanning…</p>
 				) : scanQ.isError && (nativeListQ.data ?? []).length === 0 ? (
 					<p className='py-4 text-center text-sm text-red-600'>{scanQ.error?.message ?? 'Scan failed.'}</p>
 				) : filtered.length === 0 ? (
-					<p className='py-4 text-center text-sm text-gray-500'>No installed apps found.</p>
+					<p className='py-4 text-center text-sm text-text-tertiary'>No installed apps found.</p>
 				) : (
 					<div className='grid max-h-[260px] grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6'>
 						{filtered.map((entry) =>
@@ -1265,11 +1268,11 @@ function NativeTab({active}: {active: boolean}) {
 									type='button'
 									disabled={createMut.isPending}
 									onClick={() => void addScanned(entry.app)}
-									className='flex flex-col items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 p-2 text-center transition-colors hover:bg-gray-100 disabled:opacity-50'
+									className='flex flex-col items-center gap-1.5 rounded-lg border border-border-subtle bg-surface-1 p-2 text-center transition-colors hover:bg-surface-2 disabled:opacity-50'
 									title={entry.app.binaryPath}
 								>
-									<span className='relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-white'>
-										<span className='absolute text-[9px] text-gray-400'>app</span>
+									<span className='relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-card-bg'>
+										<span className='absolute text-[9px] text-text-tertiary'>app</span>
 										{entry.app.iconUrl ? (
 											// REQ3d — render the scanner-resolved iconUrl; onError hides the
 											// <img> so the placeholder behind it shows through.
@@ -1284,7 +1287,7 @@ function NativeTab({active}: {active: boolean}) {
 											/>
 										) : null}
 									</span>
-									<span className='w-full truncate text-[11px] text-gray-700'>
+									<span className='w-full truncate text-[11px] text-text-secondary'>
 										{addedId === entry.app.id ? 'Adding…' : entry.app.name}
 									</span>
 								</button>
@@ -1294,7 +1297,7 @@ function NativeTab({active}: {active: boolean}) {
 								// from disk; apt/system tiles are just un-tiled (package kept).
 								<div
 									key={'c-' + entry.cfg.id}
-									className='relative flex flex-col items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/40 p-2 text-center'
+									className='relative flex flex-col items-center gap-1.5 rounded-lg border border-border-default bg-surface-1 p-2 text-center'
 									title={entry.cfg.binaryPath}
 								>
 									<button
@@ -1303,12 +1306,12 @@ function NativeTab({active}: {active: boolean}) {
 										onClick={() => void removeNativeConfig(entry.cfg.id)}
 										aria-label={'Remove ' + entry.cfg.name}
 										title={'Remove ' + entry.cfg.name}
-										className='absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-200 text-[10px] leading-none text-gray-600 transition-colors hover:bg-red-500 hover:text-white disabled:opacity-50'
+										className='absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-surface-3 text-[10px] leading-none text-text-secondary transition-colors hover:bg-red-500 hover:text-white disabled:opacity-50'
 									>
 										{removingId === entry.cfg.id ? '·' : '×'}
 									</button>
-									<span className='relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-white'>
-										<span className='absolute text-[9px] text-gray-400'>app</span>
+									<span className='relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-card-bg'>
+										<span className='absolute text-[9px] text-text-tertiary'>app</span>
 										{entry.cfg.iconUrl ? (
 											// eslint-disable-next-line jsx-a11y/alt-text
 											<img
@@ -1321,7 +1324,7 @@ function NativeTab({active}: {active: boolean}) {
 											/>
 										) : null}
 									</span>
-									<span className='w-full truncate text-[11px] text-gray-700'>
+									<span className='w-full truncate text-[11px] text-text-secondary'>
 										{removingId === entry.cfg.id ? 'Removing…' : entry.cfg.name}
 									</span>
 								</div>
@@ -1335,8 +1338,8 @@ function NativeTab({active}: {active: boolean}) {
 			</div>
 
 			{/* Install from apt. */}
-			<div className='flex flex-col gap-2 border-t border-gray-200 pt-4'>
-				<p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Install via apt</p>
+			<div className='flex flex-col gap-2 border-t border-border-subtle pt-4'>
+				<p className='text-xs font-semibold uppercase tracking-wide text-text-tertiary'>Install via apt</p>
 				<div className='flex items-center gap-2'>
 					<Input
 						placeholder='gimp  (or paste: sudo apt install gimp)'
@@ -1353,7 +1356,7 @@ function NativeTab({active}: {active: boolean}) {
 						{installMut.isPending ? 'Installing…' : 'Install'}
 					</Button>
 				</div>
-				<p className='text-[11px] text-gray-500'>
+				<p className='text-[11px] text-text-tertiary'>
 					One package name, or paste a "sudo apt install &lt;pkg&gt;" command — we&apos;ll clean it up.
 					apt only, no scripts.
 				</p>
@@ -1365,8 +1368,8 @@ function NativeTab({active}: {active: boolean}) {
 			</div>
 
 			{/* Upload a local app package (Discord, Chrome, … — apps not in apt). */}
-			<div className='flex flex-col gap-2 border-t border-gray-200 pt-4'>
-				<p className='text-xs font-semibold uppercase tracking-wide text-gray-500'>Upload an app file</p>
+			<div className='flex flex-col gap-2 border-t border-border-subtle pt-4'>
+				<p className='text-xs font-semibold uppercase tracking-wide text-text-tertiary'>Upload an app file</p>
 				<div className='flex flex-wrap items-center gap-2'>
 					<input
 						ref={debInputRef}
@@ -1382,7 +1385,7 @@ function NativeTab({active}: {active: boolean}) {
 					/>
 					<label
 						htmlFor='native-deb-file'
-						className='inline-flex cursor-pointer items-center rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100'
+						className='inline-flex cursor-pointer items-center rounded-md border border-border-subtle bg-surface-1 px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2'
 					>
 						Choose app file…
 					</label>
@@ -1398,13 +1401,13 @@ function NativeTab({active}: {active: boolean}) {
 				</div>
 
 				{debFile ? (
-					<div className='flex items-center gap-2 text-[11px] text-gray-600'>
+					<div className='flex items-center gap-2 text-[11px] text-text-secondary'>
 						<span className='truncate'>
 							{debFile.name} · {(debFile.size / (1024 * 1024)).toFixed(1)} MB
 						</span>
 						<button
 							type='button'
-							className='shrink-0 text-gray-500 underline hover:text-gray-700'
+							className='shrink-0 text-text-tertiary underline hover:text-text-secondary'
 							onClick={() => clearDeb()}
 						>
 							Remove
@@ -1413,12 +1416,12 @@ function NativeTab({active}: {active: boolean}) {
 				) : null}
 
 				{debProgress !== null ? (
-					<div className='h-1 w-full overflow-hidden rounded-full bg-gray-200'>
+					<div className='h-1 w-full overflow-hidden rounded-full bg-surface-3'>
 						<div className='h-full rounded-full bg-emerald-500 transition-[width]' style={{width: `${debProgress}%`}} />
 					</div>
 				) : null}
 
-				<p className='text-[11px] text-gray-500'>
+				<p className='text-[11px] text-text-tertiary'>
 					Install a .deb, .AppImage, .flatpak, or .snap. Runs as root for .deb/.snap — only upload packages you
 					trust.
 				</p>
