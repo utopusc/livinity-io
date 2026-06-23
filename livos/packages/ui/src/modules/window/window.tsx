@@ -1,7 +1,7 @@
 import {motion} from 'framer-motion'
 import React, {forwardRef, useCallback, useEffect, useRef, useState} from 'react'
 
-import {OriginRect, Position, Size, useWindowManager, WindowId} from '@/providers/window-manager'
+import {CONTENT_TOP_MIN, DOCK_H, OriginRect, Position, Size, useWindowManager, WINDOW_MARGIN, WindowId} from '@/providers/window-manager'
 import {emitWindowDragDrop, getDisplaysButtonRect, setWindowDragState} from '@/providers/window-drag-state'
 import {isShortcutKind} from '@/modules/shortcuts/shortcut-window-route'
 import {tw} from '@/utils/tw'
@@ -143,23 +143,34 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 		if (resizeDirection.includes('s')) newHeight += deltaY
 		if (resizeDirection.includes('n')) { newHeight -= deltaY; newY += deltaY }
 
-		// Clamp size: never below the 400×400 minimum (matches getResponsiveSize),
-		// and — Phase 297 (A2) — never bigger than the screen (~104px reserved for
-		// the top bar 42 + dock 62), the manual-resize counterpart to the viewport
-		// re-clamp in window-manager.tsx. Math.max(400, …) is applied LAST so the
-		// minimum always wins, mirroring getResponsiveSize's clamp order.
-		newWidth = Math.max(400, Math.min(newWidth, window.innerWidth - 20))
-		newHeight = Math.max(400, Math.min(newHeight, window.innerHeight - 104))
+		// Phase 297 (A2) — clamp the manual resize to the USABLE area, using the
+		// SAME shared chrome/dock geometry as window-manager so a drag can neither
+		// push the body behind the dock nor tuck the floating chrome under the top
+		// navbar (the manual-resize counterpart to the open-time fit + viewport
+		// re-clamp). The 400 minimum yields on a viewport too small to hold it. For
+		// an edge that MOVES the origin (n/w) the opposite edge stays anchored and
+		// the moving edge is capped against the navbar / left margin; for an edge
+		// that grows from a fixed origin (s/e) the growing edge is capped against
+		// the dock / right margin.
+		const vw = window.innerWidth
+		const vh = window.innerHeight
+		const eastAnchor = resizeStartPosition.current.x + resizeStartSize.current.width
+		const southAnchor = resizeStartPosition.current.y + resizeStartSize.current.height
+		newWidth = Math.max(Math.min(400, vw - 2 * WINDOW_MARGIN), newWidth)
+		newHeight = Math.max(Math.min(400, vh - CONTENT_TOP_MIN - DOCK_H), newHeight)
 
-		// Phase 297 (A2) — when resizing from the north/west edge the OPPOSITE
-		// (south/east) edge must stay anchored. Re-derive the origin from the FINAL
-		// clamped size so a MIN/MAX clamp can never detach the dragged edge from the
-		// cursor (also corrects the pre-existing 400-min detach on n/w drags).
 		if (resizeDirection.includes('w')) {
-			newX = resizeStartPosition.current.x + resizeStartSize.current.width - newWidth
+			newWidth = Math.min(newWidth, eastAnchor - WINDOW_MARGIN)
+			newX = eastAnchor - newWidth
+		} else if (resizeDirection.includes('e')) {
+			newWidth = Math.min(newWidth, vw - WINDOW_MARGIN - newX)
 		}
+
 		if (resizeDirection.includes('n')) {
-			newY = resizeStartPosition.current.y + resizeStartSize.current.height - newHeight
+			newHeight = Math.min(newHeight, southAnchor - CONTENT_TOP_MIN)
+			newY = southAnchor - newHeight
+		} else if (resizeDirection.includes('s')) {
+			newHeight = Math.min(newHeight, vh - DOCK_H - newY)
 		}
 
 		updateWindowSize(id, {width: newWidth, height: newHeight})
@@ -175,9 +186,11 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 		const newX = initialPosition.current.x + dragOffset.x
 		const newY = initialPosition.current.y + dragOffset.y
 
-		// Keep window on screen
+		// Keep window on screen. Phase 297 — the lower y bound is CONTENT_TOP_MIN
+		// (not 50) so a dragged window's floating title bar also stays below the OS
+		// navbar and reachable, consistent with the open-time + resize clamps.
 		const clampedX = Math.max(0, Math.min(newX, window.innerWidth - 100))
-		const clampedY = Math.max(50, Math.min(newY, window.innerHeight - 100))
+		const clampedY = Math.max(CONTENT_TOP_MIN, Math.min(newY, window.innerHeight - 100))
 
 		updateWindowPosition(id, {x: clampedX, y: clampedY})
 		setIsDragging(false)

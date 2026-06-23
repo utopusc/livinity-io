@@ -133,6 +133,18 @@
 	--liv-sidebar-ring: oklch(0.708 0 0);
 }
 
+/* Phase 297 — in the OS DARK theme, paint an opaque light surface behind the
+ * force-light content so it covers the window SHELL, which is `dark:bg-zinc-900/95`
+ * (window.tsx `windowClass`, a sibling ABOVE this wrapper). Apps that draw their
+ * own opaque background (Docker `bg-white`, iframe web apps) were already light;
+ * Files renders a TRANSPARENT surface, so without this the dark shell bled through
+ * and Files looked dark. Scoped to `body.dark` ONLY — in the light theme the shell
+ * is already `bg-card-bg/95`, so Files keeps the same frosted translucency as every
+ * other window. `var(--card-bg)` resolves to the #ffffff re-declared just above. */
+body.dark .livos-app-light {
+	background-color: var(--card-bg);
+}
+
 ::view-transition-old(root),
 ::view-transition-new(root) {
 	animation-duration: 0.1s;

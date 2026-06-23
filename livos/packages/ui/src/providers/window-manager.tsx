@@ -76,6 +76,24 @@ type WindowManagerContextT = {
 	closeDisplay: (windowId: WindowId) => void
 }
 
+// Phase 297 — shared window-chrome geometry. Single source of truth for window
+// SIZING (getResponsiveSize), OPEN POSITION (getInitialPosition), and the
+// viewport re-clamp listener. A window's floating title bar renders in a 42px
+// band ABOVE its content (window.tsx: `top = currentY - 42`), so a window must
+// open low enough that this band clears the OS top navbar, and short enough that
+// the content body clears the dock — at EVERY resolution.
+// OS top navbar: a centered pill at `pt-[18px]` + `h-16` (64px) → its bottom
+// edge sits at ~82px (top-bar.tsx). The chrome must clear THIS, not the old
+// 42px guess (which left a window's title bar tucked under the nav).
+export const TOP_BAR_H = 82
+export const WINDOW_CHROME_H = 42 // floating title-bar band above the content (window.tsx: top = currentY - 42)
+// Bottom dock: desktop dockHeight (iconSize 46 + padding 2×8 = 62) + 8px bottom
+// padding → reserves ~70px from the viewport bottom (dock.tsx).
+export const DOCK_H = 70
+export const WINDOW_MARGIN = 10 // breathing room from the screen edges
+// The highest a window's CONTENT may start so its chrome band clears the navbar.
+export const CONTENT_TOP_MIN = TOP_BAR_H + WINDOW_CHROME_H + WINDOW_MARGIN // 134
+
 // Get responsive window size based on screen dimensions.
 //
 // `preserveAspect` (Phase 100-06.2): when true, the window scales down
@@ -92,7 +110,20 @@ function getResponsiveSize(
 	const screenW = typeof window !== 'undefined' ? window.innerWidth : 1920
 	const screenH = typeof window !== 'undefined' ? window.innerHeight : 1080
 	const maxAllowedW = screenW * 0.85
-	const maxAllowedH = screenH * 0.85
+	// Phase 297 — the height ceiling must also fit BETWEEN the chrome band (which
+	// clears the top navbar) and the dock, not just 85% of the full viewport: on
+	// short screens 0.85*screenH would leave a tall window overlapping the dock.
+	// Take whichever is tighter so windows never grow past the old 0.85 look on
+	// tall screens, yet always fit on short ones ("fit at all resolutions").
+	const maxAllowedH = Math.min(screenH * 0.85, screenH - CONTENT_TOP_MIN - DOCK_H - WINDOW_MARGIN)
+
+	// Phase 297 — the 400px minimum must YIELD when the viewport is itself smaller
+	// than 400 (+ chrome + dock); otherwise a window can't be shrunk to fit and
+	// its body would hide behind the dock or overflow the edge. Use the smaller of
+	// 400 and the available bound as the floor: normal screens keep the 400
+	// minimum, tiny ones shrink to fit ("fit at all resolutions").
+	const floorW = Math.min(400, maxAllowedW)
+	const floorH = Math.min(400, maxAllowedH)
 
 	if (preserveAspect) {
 		const aspect = baseWidth / baseHeight
@@ -107,8 +138,8 @@ function getResponsiveSize(
 			w = h * aspect
 		}
 		return {
-			width: Math.max(400, Math.round(w)),
-			height: Math.max(400, Math.round(h)),
+			width: Math.max(floorW, Math.round(w)),
+			height: Math.max(floorH, Math.round(h)),
 		}
 	}
 
@@ -116,8 +147,8 @@ function getResponsiveSize(
 	const maxW = Math.min(baseWidth, maxAllowedW)
 	const maxH = Math.min(baseHeight, maxAllowedH)
 	return {
-		width: Math.max(400, maxW),
-		height: Math.max(400, maxH),
+		width: Math.max(floorW, Math.round(maxW)),
+		height: Math.max(floorH, Math.round(maxH)),
 	}
 }
 
@@ -151,29 +182,42 @@ export const DEFAULT_WINDOW_SIZES: Record<string, Size> = {
 	default: {width: 900, height: 600},
 }
 
-// Get initial position with offset for stacking
+// Get initial position with offset for stacking.
+//
+// Phase 297 — every window opens FULLY inside the usable area: its chrome band
+// clears the top navbar (y >= CONTENT_TOP_MIN) and its body clears the dock
+// (bottom <= screenH - DOCK_H), at any resolution. Previously Files opened at
+// y=30, tucking its title bar behind the 42px navbar ("navbarin üstünde
+// açılıyor"); centered apps could also slip a tall window's title bar under the
+// navbar and its body behind the dock.
 function getInitialPosition(windowCount: number, windowSize?: Size, appId?: string): Position {
 	const width = windowSize?.width || 900
 	const height = windowSize?.height || 600
+	const vw = window.innerWidth
+	const vh = window.innerHeight
 	const offset = (windowCount % 10) * 30 // Cycle after 10 windows
 
-	// Files opens at top right corner
+	// On-screen bounds for the window ORIGIN (top-left of the content).
+	const minX = WINDOW_MARGIN
+	const maxX = Math.max(minX, vw - width - WINDOW_MARGIN)
+	const minY = CONTENT_TOP_MIN
+	const maxY = Math.max(minY, vh - DOCK_H - height)
+
+	let x: number
+	let y: number
 	if (appId === 'LIVINITY_files') {
-		const baseX = Math.max(50, window.innerWidth - width - 50)
-		const baseY = 30
-		return {
-			x: baseX - offset,
-			y: baseY + offset,
-		}
+		// Files opens toward the top-right corner (cascading down-left as more open).
+		x = vw - width - WINDOW_MARGIN - offset
+		y = minY + offset
+	} else {
+		// Other apps open centered.
+		x = (vw - width) / 2 + offset
+		y = (vh - height) / 2 + offset
 	}
 
-	// Other apps open centered
-	const baseX = Math.max(50, (window.innerWidth - width) / 2)
-	const baseY = Math.max(50, (window.innerHeight - height) / 2)
-
 	return {
-		x: baseX + offset,
-		y: baseY + offset,
+		x: Math.min(Math.max(x, minX), maxX),
+		y: Math.min(Math.max(y, minY), maxY),
 	}
 }
 
@@ -571,27 +615,28 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 	//   - The effect reads `windowsRef.current` (a ref, not state) and depends
 	//     only on the two stable (empty-dep) update callbacks, so dispatching a
 	//     size/position update never re-runs the effect → no feedback loop.
-	//   - It NEVER grows a window on a viewport GROW (getResponsiveSize only
-	//     clamps DOWN; oversized is the only trigger) — growing would fight the
-	//     user's own resize / their chosen window size.
-	// REUSES getResponsiveSize so the re-fit matches open-time sizing exactly.
+	//   - It re-fits ONLY a window that OVERFLOWS the usable area, and only ever
+	//     DOWN (getResponsiveSize is min-based) — a window that still fits, even
+	//     one the user enlarged past 85%, is left untouched, so it never grows or
+	//     otherwise fights the user's chosen size.
+	// REUSES getResponsiveSize + the shared chrome geometry so the re-fit and the
+	// reposition match open-time sizing/placement EXACTLY (chrome below the
+	// navbar, body above the dock — "fit at all resolutions").
 	useEffect(() => {
 		if (typeof window === 'undefined') return
-		const TOP_BAR = 42
-		const DOCK = 62
 		let timer: ReturnType<typeof setTimeout> | undefined
 
 		const reclamp = () => {
 			const vw = window.innerWidth
 			const vh = window.innerHeight
-			const availH = vh - TOP_BAR - DOCK
 			for (const w of windowsRef.current) {
 				// A window docked to the TopBar shelf renders as a chip, not a
-				// real on-screen rectangle — skip it (its geometry is restored
-				// fresh on unpin). MINIMIZED windows are intentionally NOT
-				// skipped: re-clamping their stored geometry now means they
-				// restore on-screen and correctly-sized after a resolution drop,
-				// instead of popping back oversized / off-screen.
+				// real on-screen rectangle — skip it (it keeps its stored geometry
+				// and is re-clamped by the next resize after it is unpinned).
+				// MINIMIZED windows are intentionally NOT skipped: re-clamping their
+				// stored geometry now means they restore on-screen and
+				// correctly-sized after a resolution drop, instead of popping back
+				// oversized / off-screen.
 				if (w.isPinnedToTopBar) continue
 
 				// Stream-ish windows preserve their aspect ratio when re-fitting,
@@ -603,23 +648,36 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 					w.appId.startsWith('DISPLAY_') ||
 					isShortcutKind(w.appId)
 
-				const oversized = w.size.width > 0.9 * vw || w.size.height > 0.9 * availH
-				const fitted = oversized
-					? getResponsiveSize(w.size.width, w.size.height, isStreamish)
-					: w.size
-				if (fitted.width !== w.size.width || fitted.height !== w.size.height) {
+				// Only re-fit a window that actually OVERFLOWS the usable area, so a
+				// window the user deliberately enlarged but that STILL fits is left
+				// alone (no fighting the user's chosen size). When it overflows,
+				// shrink via the SAME function used at open time. getResponsiveSize
+				// never grows and a shrunk window then fits, so this is
+				// oscillation-free; the >1px tolerance absorbs sub-pixel rounding.
+				const fitsViewport =
+					w.size.width <= vw - 2 * WINDOW_MARGIN &&
+					w.size.height <= vh - CONTENT_TOP_MIN - DOCK_H
+				const fitted = fitsViewport
+					? w.size
+					: getResponsiveSize(w.size.width, w.size.height, isStreamish)
+				if (
+					Math.abs(fitted.width - w.size.width) > 1 ||
+					Math.abs(fitted.height - w.size.height) > 1
+				) {
 					updateWindowSize(w.id, fitted)
 				}
 
-				// Re-pull a now-off-screen window back on-screen. Clamp x into
-				// [0, vw - width] and y into [TOP_BAR, vh - DOCK - min(height,120)]
-				// so at least the title-bar strip stays grabbable. The Math.max
-				// guards keep the ranges valid when the window is wider/taller
-				// than the viewport (range collapses to its lower bound).
-				const maxX = Math.max(0, vw - fitted.width)
-				const maxY = Math.max(TOP_BAR, vh - DOCK - Math.min(fitted.height, 120))
-				const clampedX = Math.min(Math.max(w.position.x, 0), maxX)
-				const clampedY = Math.min(Math.max(w.position.y, TOP_BAR), maxY)
+				// Re-pull a now-off-screen window FULLY back on-screen, using the
+				// same bounds as getInitialPosition: x in [margin, vw-width-margin],
+				// y in [CONTENT_TOP_MIN, vh-DOCK-height] so the chrome clears the
+				// navbar and the body clears the dock. The Math.max guards keep the
+				// ranges valid for a window wider/taller than the viewport.
+				const minX = WINDOW_MARGIN
+				const maxX = Math.max(minX, vw - fitted.width - WINDOW_MARGIN)
+				const minY = CONTENT_TOP_MIN
+				const maxY = Math.max(minY, vh - DOCK_H - fitted.height)
+				const clampedX = Math.min(Math.max(w.position.x, minX), maxX)
+				const clampedY = Math.min(Math.max(w.position.y, minY), maxY)
 				if (clampedX !== w.position.x || clampedY !== w.position.y) {
 					updateWindowPosition(w.id, {x: clampedX, y: clampedY})
 				}
