@@ -24,7 +24,12 @@
 
 import type React from 'react'
 
+import {ConstellationWallpaper} from './wallpapers/constellation'
+import {DriftWallpaper} from './wallpapers/drift'
 import {FluidParticlesWallpaper} from './wallpapers/fluid-particles'
+import {MistWallpaper} from './wallpapers/mist'
+import {RainWallpaper} from './wallpapers/rain'
+import {WavesWallpaper} from './wallpapers/waves'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -36,7 +41,7 @@ export type AnimatedWallpaperProps = {
 
 export type WallpaperTheme = 'light' | 'dark' | 'auto'
 
-export type AnimatedWallpaperId = 'fluid'
+export type AnimatedWallpaperId = 'fluid' | 'waves' | 'drift' | 'constellation' | 'mist' | 'rain'
 
 export interface AnimatedWallpaperEntry {
 	component: React.ComponentType<AnimatedWallpaperProps>
@@ -54,6 +59,39 @@ export const animatedWallpapers: Record<AnimatedWallpaperId, AnimatedWallpaperEn
 		component: FluidParticlesWallpaper,
 		name: 'Fluid',
 		brandColorHsl: '0 0% 50%',
+		theme: 'auto',
+	},
+	// Phase 294 — additional lightweight 2D-canvas wallpapers in the SAME family
+	// as Fluid (calm, theme-aware, performant — NO WebGL, so switching never lags).
+	// Each carries a distinct calm accent hue so the picker swatches differ.
+	waves: {
+		component: WavesWallpaper,
+		name: 'Waves',
+		brandColorHsl: '210 60% 45%',
+		theme: 'auto',
+	},
+	drift: {
+		component: DriftWallpaper,
+		name: 'Drift',
+		brandColorHsl: '265 45% 52%',
+		theme: 'auto',
+	},
+	constellation: {
+		component: ConstellationWallpaper,
+		name: 'Constellation',
+		brandColorHsl: '190 70% 45%',
+		theme: 'auto',
+	},
+	mist: {
+		component: MistWallpaper,
+		name: 'Mist',
+		brandColorHsl: '160 60% 42%',
+		theme: 'auto',
+	},
+	rain: {
+		component: RainWallpaper,
+		name: 'Rain',
+		brandColorHsl: '220 25% 48%',
 		theme: 'auto',
 	},
 }
