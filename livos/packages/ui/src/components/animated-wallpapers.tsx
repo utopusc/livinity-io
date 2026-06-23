@@ -29,6 +29,8 @@ import {AuroraClockWallpaper} from './wallpapers/aurora-clock'
 import {DreamWallpaper} from './wallpapers/dream'
 import {FluidParticlesWallpaper} from './wallpapers/fluid-particles'
 import {MeshWallpaper} from './wallpapers/mesh'
+import {NebulaWallpaper} from './wallpapers/nebula'
+import {StarsWallpaper} from './wallpapers/stars'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -40,7 +42,7 @@ export type AnimatedWallpaperProps = {
 
 export type WallpaperTheme = 'light' | 'dark' | 'auto'
 
-export type AnimatedWallpaperId = 'fluid' | 'aurora' | 'aurora-clock' | 'dream' | 'mesh'
+export type AnimatedWallpaperId = 'fluid' | 'aurora' | 'aurora-clock' | 'dream' | 'mesh' | 'nebula' | 'stars'
 
 export interface AnimatedWallpaperEntry {
 	component: React.ComponentType<AnimatedWallpaperProps>
@@ -89,6 +91,22 @@ export const animatedWallpapers: Record<AnimatedWallpaperId, AnimatedWallpaperEn
 		component: MeshWallpaper,
 		name: 'Mesh',
 		brandColorHsl: '224 76% 48%',
+		theme: 'auto',
+	},
+	// Flowing aurora WebGL shader (the "AnoAI" one), raw-WebGL2 (no Three.js).
+	// Dark theme good as-is; light theme is a soft pastel wash (v44.75 fix).
+	nebula: {
+		component: NebulaWallpaper,
+		name: 'Nebula',
+		brandColorHsl: '280 65% 60%',
+		theme: 'auto',
+	},
+	// Glowing star points (cloud background removed), WebGL2 shader. Dark good;
+	// light theme reworked to coloured points on a soft sky (v44.75 fix).
+	stars: {
+		component: StarsWallpaper,
+		name: 'Stars',
+		brandColorHsl: '230 60% 60%',
 		theme: 'auto',
 	},
 }
