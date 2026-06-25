@@ -121,12 +121,15 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 	const isConfigured = !!existingSubdomain
 	const isEnabled = existingSubdomain?.enabled || false
 
-	// Phase 301 — DNS quota. atCap blocks only NEW creates (an already-configured
-	// app editing its own subdomain never counts against the cap).
+	// Phase 301 / 302-R2 — DNS quota. The counter is shown to EVERYONE (limit is
+	// always present); `enforced` is false for admins/operators, so atCap never
+	// BLOCKS them — for an admin the counter is reference-only. blockNewByCap (the
+	// button disable + "limit reached" notice) fires only for an enforced caller
+	// creating a NEW subdomain.
 	const quota = quotaQuery.data
-	const dnsLimited = !!quota && quota.limit !== null
-	const atCap = dnsLimited && quota.used >= (quota.limit as number)
-	const blockNewByCap = atCap && !isConfigured
+	const dnsLimited = !!quota
+	const atCap = !!quota && quota.used >= quota.limit
+	const blockNewByCap = atCap && !isConfigured && !!quota?.enforced
 
 	// Phase 219 T5 + post-deploy 2026-05-26 fix — hyphen-pattern preview.
 	// Operator quote 2026-05-26: "files-bruce.bruce.livinity.io Burasi hala
@@ -170,8 +173,12 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 				<span className='text-body-sm font-medium text-text-primary'>Public Access</span>
 				{dnsLimited ? (
 					<span
-						className={`ml-auto text-caption ${atCap ? 'text-yellow-400' : 'text-text-tertiary'}`}
-						title='Number of public subdomains (DNS) you have used out of your limit.'
+						className={`ml-auto text-caption ${atCap && quota?.enforced ? 'text-yellow-400' : 'text-text-tertiary'}`}
+						title={
+							quota?.enforced
+								? 'Public subdomains (DNS) you have used out of your limit.'
+								: 'Subdomains you have created. Admins are exempt from the limit (shown for reference).'
+						}
 					>
 						{quota?.used}/{quota?.limit} DNS used
 					</span>

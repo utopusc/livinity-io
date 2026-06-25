@@ -221,21 +221,24 @@ const domain = router({
 	}),
 
 	/**
-	 * Phase 301 — the caller's own subdomain quota, for the "N/5 DNS used"
-	 * counter in the UI. `used` counts only the caller's subdomains; `limit` is
-	 * null when the caller is uncapped (admin/operator, or single-user/no-auth)
-	 * and MAX_DNS_PER_USER otherwise.
+	 * Phase 301 / 302-R2 — the caller's own subdomain quota for the "N/5 DNS
+	 * used" counter. `used` counts only the caller's subdomains. `limit` is
+	 * ALWAYS MAX_DNS_PER_USER so the counter is VISIBLE to everyone incl.
+	 * admins/operators. `enforced` is false for admins (and the no-auth
+	 * single-user case) — the UI then shows the count FOR REFERENCE but never
+	 * blocks them. Server-side enforcement (setAppSubdomain throw /
+	 * registerAppSubdomain skip) stays admin-exempt; this flag is UI-only.
 	 */
 	getSubdomainQuota: privateProcedure.query(async ({ctx}) => {
 		// livinityd is always present for a privateProcedure (the rest of this
 		// router dereferences ctx.livinityd.ai.redis the same way); assert here so
-		// this NEW query adds zero net-new strict-null (TS18048) noise to baseline.
+		// this query adds zero net-new strict-null (TS18048) noise to baseline.
 		const subdomains = await getSubdomains(ctx.livinityd!.ai.redis)
 		const me = ctx.currentUser?.id
-		const uncapped = !me || ctx.currentUser?.role === 'admin'
 		return {
 			used: me ? countOwnedSubdomains(subdomains, me) : 0,
-			limit: uncapped ? null : MAX_DNS_PER_USER,
+			limit: MAX_DNS_PER_USER,
+			enforced: !!me && ctx.currentUser?.role !== 'admin',
 		}
 	}),
 
