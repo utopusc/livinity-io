@@ -37,7 +37,7 @@ import {
 	revokeMeteredKeyForApp,
 	type BrokerClient,
 } from './metered-key.js'
-import {applyCaddyConfig, generateFullCaddyfile, writeCaddyfile, reloadCaddy, type SubdomainConfig, type CaddyConfig} from '../domain/caddy.js'
+import {applyCaddyConfig, generateFullCaddyfile, writeCaddyfile, reloadCaddy, MAX_DNS_PER_USER, countOwnedSubdomains, appIdOwner, type SubdomainConfig, type CaddyConfig} from '../domain/caddy.js'
 import {buildCaddyConfigFromState, type CaddyStateInstance, type CaddyStateSubdomain} from '../domain/caddy-state.js'
 import {getTunnelStatus} from '../domain/tunnel.js'
 import {verifyDns} from '../domain/dns-check.js'
@@ -2119,11 +2119,26 @@ export default class Apps {
 
 		// Check if already exists
 		const existingIdx = subdomains.findIndex((s) => s.appId === appId)
+
+		// Phase 301 — per-user DNS cap on the AUTO-install path. Only NEW per-user
+		// subdomains count (re-registers update in place → existingIdx>=0; builtin/
+		// global plain appIds have no owner → uncapped). Skip GRACEFULLY (never
+		// throw / never break an install) when the owner is already at the cap —
+		// the app still installs locally, it just doesn't get an auto public host.
+		const ownerId = appIdOwner(appId)
+		if (existingIdx < 0 && ownerId && countOwnedSubdomains(subdomains, ownerId) >= MAX_DNS_PER_USER) {
+			this.logger.log(
+				`DNS limit (${MAX_DNS_PER_USER}/user) reached for ${ownerId} — skipping auto-subdomain for ${appId}`,
+			)
+			return
+		}
+
 		const newSub: SubdomainConfig = {
 			subdomain: subdomainName.toLowerCase(),
 			appId,
 			port,
 			enabled: true,
+			...(ownerId ? {userId: ownerId} : {}),
 			...(fullHost ? {host: fullHost.toLowerCase()} : {}),
 			...(upstreamBearer ? {upstreamBearer} : {}),
 			...(publicAccess ? {publicAccess} : {}),

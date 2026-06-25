@@ -6,6 +6,9 @@ import {
 	applyCaddyConfig,
 	removeDomain,
 	validateSubdomain,
+	MAX_DNS_PER_USER,
+	countOwnedSubdomains,
+	subdomainOwner,
 	type CaddyConfig,
 	type SubdomainConfig,
 } from './caddy.js'
@@ -218,6 +221,25 @@ const domain = router({
 	}),
 
 	/**
+	 * Phase 301 — the caller's own subdomain quota, for the "N/5 DNS used"
+	 * counter in the UI. `used` counts only the caller's subdomains; `limit` is
+	 * null when the caller is uncapped (admin/operator, or single-user/no-auth)
+	 * and MAX_DNS_PER_USER otherwise.
+	 */
+	getSubdomainQuota: privateProcedure.query(async ({ctx}) => {
+		// livinityd is always present for a privateProcedure (the rest of this
+		// router dereferences ctx.livinityd.ai.redis the same way); assert here so
+		// this NEW query adds zero net-new strict-null (TS18048) noise to baseline.
+		const subdomains = await getSubdomains(ctx.livinityd!.ai.redis)
+		const me = ctx.currentUser?.id
+		const uncapped = !me || ctx.currentUser?.role === 'admin'
+		return {
+			used: me ? countOwnedSubdomains(subdomains, me) : 0,
+			limit: uncapped ? null : MAX_DNS_PER_USER,
+		}
+	}),
+
+	/**
 	 * Get subdomain config for a specific app.
 	 *
 	 * Phase 219 T5 — returns `userSlug` so the UI can render the
@@ -298,6 +320,37 @@ const domain = router({
 			const newSlug = input.subdomain.toLowerCase()
 			const slugChanged = idx < 0 || oldSlug !== newSlug
 
+			// Phase 301 — ownership guard. A member may not modify another user's
+			// subdomain; admins/operators bypass; legacy/global entries (no owner)
+			// stay editable for back-compat. Closes the privilege-escalation gap
+			// where any authenticated caller could overwrite a peer's subdomain by
+			// appId (set/toggle/remove were unguarded).
+			if (idx >= 0) {
+				const owner = subdomainOwner(subdomains[idx])
+				// Note: NO `me &&` short-circuit — an owned entry must reject a
+				// caller with no identity too (a legacy / no-userId WS token leaves
+				// currentUser undefined; without this it would slip past the guard).
+				// owner!==undefined is always true, so a no-identity caller is blocked
+				// from any OWNED entry; legacy/global (owner null) stay open.
+				if (owner && owner !== ctx.currentUser?.id && ctx.currentUser?.role !== 'admin') {
+					throw new Error('Not authorized to modify this subdomain')
+				}
+			}
+
+			// Phase 301 — per-user DNS cap (NEW entries only; editing an existing
+			// one never trips it). Members capped at MAX_DNS_PER_USER; admins/
+			// operators exempt; single-user/no-auth (no currentUser) uncapped.
+			// Enforced BEFORE the Cloudflare round-trip below so a denied create
+			// never provisions a record it then rejects.
+			if (idx < 0 && ctx.currentUser?.id && ctx.currentUser.role !== 'admin') {
+				const owned = countOwnedSubdomains(subdomains, ctx.currentUser.id)
+				if (owned >= MAX_DNS_PER_USER) {
+					throw new Error(
+						`DNS limit reached (${MAX_DNS_PER_USER} per user). Remove an existing subdomain to add a new one.`,
+					)
+				}
+			}
+
 			let provisionedHost: string | undefined
 			if (input.enabled && slugChanged && ctx.apps) {
 				if (idx >= 0 && oldSlug) {
@@ -313,11 +366,18 @@ const domain = router({
 				}
 			}
 
+			// Phase 301 — owner stamp. NEW entries record the creating user; edits
+			// PRESERVE the existing owner (an admin editing a member's subdomain
+			// must not silently transfer ownership; a legacy entry with no owner
+			// stays unowned rather than being claimed by the editor).
+			const ownerId = idx >= 0 ? subdomains[idx].userId : ctx.currentUser?.id
+
 			const newSub: SubdomainConfig = {
 				subdomain: newSlug,
 				appId: input.appId,
 				port: input.port,
 				enabled: input.enabled,
+				...(ownerId ? {userId: ownerId} : {}),
 				// Preserve a previously-stored host when no Server5 round-trip
 				// happened (slug unchanged, or apps ctx missing). Phase 140
 				// hyphen-pattern hosts must survive enable/disable toggles.
@@ -365,6 +425,15 @@ const domain = router({
 				throw new Error('Subdomain not configured for this app')
 			}
 
+			// Phase 301 — ownership guard (see setAppSubdomain; no `me &&` so a
+			// no-identity caller can't touch an owned entry).
+			{
+				const owner = subdomainOwner(subdomains[idx])
+				if (owner && owner !== ctx.currentUser?.id && ctx.currentUser?.role !== 'admin') {
+					throw new Error('Not authorized to modify this subdomain')
+				}
+			}
+
 			subdomains[idx].enabled = input.enabled
 			await setSubdomains(ctx.livinityd.ai.redis, subdomains)
 
@@ -387,6 +456,18 @@ const domain = router({
 		.mutation(async ({ctx, input}) => {
 			const subdomains = await getSubdomains(ctx.livinityd.ai.redis)
 			const existing = subdomains.find((s) => s.appId === input.appId)
+
+			// Phase 301 — ownership guard (see setAppSubdomain). A member may not
+			// delete another user's subdomain; admins/operators bypass; legacy
+			// entries (no owner) stay removable for back-compat.
+			if (existing) {
+				const owner = subdomainOwner(existing)
+				// No `me &&` — a no-identity caller must not delete an owned entry.
+				if (owner && owner !== ctx.currentUser?.id && ctx.currentUser?.role !== 'admin') {
+					throw new Error('Not authorized to modify this subdomain')
+				}
+			}
+
 			const filtered = subdomains.filter((s) => s.appId !== input.appId)
 
 			// Best-effort: helper logs + swallows errors so a Server5 outage

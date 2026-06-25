@@ -44,7 +44,7 @@ function Clock() {
 	return (
 		<div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
 			<div
-				className="flex items-start justify-center font-semibold leading-none tabular-nums text-zinc-900/85 dark:text-white/90"
+				className="flex items-baseline justify-center font-semibold leading-none tabular-nums text-zinc-900/85 dark:text-white/90"
 				style={{fontSize: 'clamp(48px, 12vw, 220px)', fontVariantNumeric: 'tabular-nums'}}
 			>
 				{time}

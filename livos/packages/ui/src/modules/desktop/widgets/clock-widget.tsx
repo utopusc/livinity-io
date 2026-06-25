@@ -32,7 +32,7 @@ function DigitalClock({now}: {now: Date}) {
 	return (
 		<WidgetContainer>
 			<div className='flex flex-1 flex-col items-center justify-center gap-0.5'>
-				<span className='inline-flex items-start text-[38px] font-[200] leading-none tabular-nums tracking-tight text-gray-800'>
+				<span className='inline-flex items-baseline text-[38px] font-[200] leading-none tabular-nums tracking-tight text-gray-800'>
 					{time}
 					{dayPeriod && <span className='ml-1 mt-1 text-[13px] font-medium'>{dayPeriod}</span>}
 				</span>

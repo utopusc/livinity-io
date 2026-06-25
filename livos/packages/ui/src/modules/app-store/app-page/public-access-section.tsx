@@ -39,10 +39,17 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 	// Get current subdomain config for this app
 	const subdomainQuery = trpcReact.domain.getAppSubdomain.useQuery({appId})
 
+	// Phase 301 — per-user DNS quota for the "N/5 used" counter + at-cap gate.
+	// limit is null when the caller is uncapped (admin/operator or single-user).
+	const quotaQuery = trpcReact.domain.getSubdomainQuota.useQuery()
+
 	// Mutations
 	const setSubdomainMut = trpcReact.domain.setAppSubdomain.useMutation({
 		onSuccess: () => {
 			utils.domain.getAppSubdomain.invalidate({appId})
+			// Phase 301 — refresh the N/5 counter so the next create sees the new
+			// count immediately (a create consumes a slot).
+			utils.domain.getSubdomainQuota.invalidate()
 			setIsEditing(false)
 		},
 	})
@@ -56,6 +63,8 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 	const removeMut = trpcReact.domain.removeAppSubdomain.useMutation({
 		onSuccess: () => {
 			utils.domain.getAppSubdomain.invalidate({appId})
+			// Phase 301 — removing a subdomain frees a slot; refresh the counter.
+			utils.domain.getSubdomainQuota.invalidate()
 		},
 	})
 
@@ -112,6 +121,13 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 	const isConfigured = !!existingSubdomain
 	const isEnabled = existingSubdomain?.enabled || false
 
+	// Phase 301 — DNS quota. atCap blocks only NEW creates (an already-configured
+	// app editing its own subdomain never counts against the cap).
+	const quota = quotaQuery.data
+	const dnsLimited = !!quota && quota.limit !== null
+	const atCap = dnsLimited && quota.used >= (quota.limit as number)
+	const blockNewByCap = atCap && !isConfigured
+
 	// Phase 219 T5 + post-deploy 2026-05-26 fix — hyphen-pattern preview.
 	// Operator quote 2026-05-26: "files-bruce.bruce.livinity.io Burasi hala
 	// yanlis gosteriyor!". The stored `mainDomain` already includes the user
@@ -152,6 +168,14 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 			<div className='flex items-center gap-2'>
 				<TbWorld className='h-5 w-5 text-text-primary' />
 				<span className='text-body-sm font-medium text-text-primary'>Public Access</span>
+				{dnsLimited ? (
+					<span
+						className={`ml-auto text-caption ${atCap ? 'text-yellow-400' : 'text-text-tertiary'}`}
+						title='Number of public subdomains (DNS) you have used out of your limit.'
+					>
+						{quota?.used}/{quota?.limit} DNS used
+					</span>
+				) : null}
 			</div>
 
 			{!isConfigured || isEditing ? (
@@ -187,12 +211,18 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 						</p>
 					) : null}
 
+					{blockNewByCap ? (
+						<p role='alert' className='text-caption text-yellow-400'>
+							DNS limit reached ({quota?.limit} per user). Remove an existing subdomain to add a new one.
+						</p>
+					) : null}
+
 					<div className='flex gap-2'>
 						<Button
 							size='sm'
 							variant='default'
 							onClick={handleSave}
-							disabled={!subdomain.trim() || setSubdomainMut.isPending || Boolean(slugError)}
+							disabled={!subdomain.trim() || setSubdomainMut.isPending || Boolean(slugError) || blockNewByCap}
 						>
 							{setSubdomainMut.isPending ? (
 								<TbLoader2 className='mr-1 h-4 w-4 animate-spin' />

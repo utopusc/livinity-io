@@ -14,7 +14,57 @@ import {
 	validateHybridDomain,
 	validatePortalDomain,
 	validateHost,
+	MAX_DNS_PER_USER,
+	appIdOwner,
+	subdomainOwner,
+	countOwnedSubdomains,
+	type SubdomainConfig,
 } from './caddy.js'
+
+// Phase 301 — per-user DNS cap helpers (the pure core of the limit + the
+// ownership guard; the route wiring that throws/skips is built on these).
+describe('Phase 301 — per-user DNS ownership + cap helpers', () => {
+	const sub = (appId: string, userId?: string): SubdomainConfig => ({
+		subdomain: appId.split(':')[0],
+		appId,
+		port: 8080,
+		enabled: true,
+		...(userId ? {userId} : {}),
+	})
+
+	it('appIdOwner parses the owner from a per-user composite appId, null otherwise', () => {
+		expect(appIdOwner('filebrowser:user:u-123')).toBe('u-123')
+		expect(appIdOwner('linkwarden')).toBeNull()
+		expect(appIdOwner('n8n-bruce')).toBeNull()
+		// UUIDs contain no extra `:user:` — the suffix capture is greedy-to-end.
+		expect(appIdOwner('app:user:8a1f-44bc-9e00')).toBe('8a1f-44bc-9e00')
+	})
+
+	it('subdomainOwner prefers the explicit userId stamp, falls back to the appId', () => {
+		expect(subdomainOwner(sub('linkwarden', 'u-1'))).toBe('u-1')
+		expect(subdomainOwner(sub('files:user:u-2'))).toBe('u-2')
+		expect(subdomainOwner(sub('linkwarden'))).toBeNull() // legacy/global → unowned
+	})
+
+	it('countOwnedSubdomains counts only the given user, excluding legacy/other-owner rows', () => {
+		const subs = [
+			sub('a:user:u-1'),
+			sub('b', 'u-1'),
+			sub('c:user:u-2'),
+			sub('d'), // legacy/global, unowned
+		]
+		expect(countOwnedSubdomains(subs, 'u-1')).toBe(2)
+		expect(countOwnedSubdomains(subs, 'u-2')).toBe(1)
+		expect(countOwnedSubdomains(subs, 'u-3')).toBe(0)
+	})
+
+	it('the cap boundary: a user at MAX_DNS_PER_USER is blocked, below is allowed', () => {
+		expect(MAX_DNS_PER_USER).toBe(5)
+		const five = Array.from({length: MAX_DNS_PER_USER}, (_, i) => sub(`app${i}:user:u-1`))
+		expect(countOwnedSubdomains(five, 'u-1') >= MAX_DNS_PER_USER).toBe(true) // 6th create denied
+		expect(countOwnedSubdomains(five.slice(0, 4), 'u-1') >= MAX_DNS_PER_USER).toBe(false) // 5th create allowed
+	})
+})
 
 // Phase 203 retirement (Plan 231-01) — the following describe blocks
 // were removed:

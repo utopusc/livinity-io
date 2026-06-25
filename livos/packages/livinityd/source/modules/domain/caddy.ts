@@ -215,11 +215,60 @@ export interface SubdomainConfig {
 	 * resolver is NOT the operator's client resolver, so this is a floor only).
 	 */
 	readySource?: 'platform-doh' | 'box-resolver'
+	/**
+	 * Phase 301 — owning user id (the cloud user.id of whoever created this
+	 * subdomain). Used ONLY as ownership metadata for the per-user DNS cap
+	 * (MAX_DNS_PER_USER) and the modify-guard on the domain routes — the Caddy
+	 * emitter ignores it. OPTIONAL + omit-when-absent: a pre-301 Redis blob with
+	 * no userId parses fine and is treated as legacy/unowned (counted against no
+	 * one, editable by anyone for back-compat). For per-user installs the owner
+	 * is also recoverable from the `${appId}:user:${userId}` composite appId, so
+	 * this field is belt-and-suspenders, not the sole source of truth.
+	 */
+	userId?: string
 }
 
 export interface CaddyConfig {
 	mainDomain: string | null
 	subdomains: SubdomainConfig[]
+}
+
+/**
+ * Phase 301 — per-user DNS (subdomain) cap. Single source of truth shared by
+ * the manual create path (domain.setAppSubdomain) and the auto-install path
+ * (apps.registerAppSubdomain) so the limit can't be bypassed through one route.
+ * Applies to member (non-admin) users; admins/operators are uncapped — per-user
+ * subdomains are a non-admin construct (apps/routes.ts only mints per-user
+ * instances for role!=='admin'; admins share the global instance). To also cap
+ * admins, drop the `role !== 'admin'` guard at each call site.
+ */
+export const MAX_DNS_PER_USER = 5
+
+/**
+ * Phase 301 — derive the owning user id from a per-user composite appId
+ * (`${appId}:user:${userId}`, minted by apps/routes.ts on a non-admin install).
+ * Plain/global appIds carry no embedded owner → null.
+ */
+export function appIdOwner(appId: string): string | null {
+	const m = appId.match(/:user:(.+)$/)
+	return m ? m[1] : null
+}
+
+/**
+ * Phase 301 — the owner of a subdomain entry: the explicit `userId` stamp when
+ * present, else parsed from a per-user composite appId, else null (legacy/global
+ * entries are unowned → counted against no one).
+ */
+export function subdomainOwner(sub: SubdomainConfig): string | null {
+	return sub.userId ?? appIdOwner(sub.appId)
+}
+
+/**
+ * Phase 301 — count the subdomains owned by a given user (the MAX_DNS_PER_USER
+ * gate). Legacy/global entries (owner null) are excluded.
+ */
+export function countOwnedSubdomains(subs: SubdomainConfig[], userId: string): number {
+	return subs.filter((s) => subdomainOwner(s) === userId).length
 }
 
 /**
