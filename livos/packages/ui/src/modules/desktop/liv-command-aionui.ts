@@ -655,9 +655,15 @@ export function runLivCommand(
 						void confirmLivTool(conversationId, callId, {msgId, data: approveValue})
 						armSilenceTimer()
 					} else {
-						// Surface the prompt inline. `confirm(value)` echoes the chosen
-						// option back to Liv and re-arms the watchdog so the resumed
-						// turn isn't killed while the (now approved) tool runs.
+						// The approval IS a response from Liv — STOP the silence watchdog
+						// while the OPERATOR decides (which can take a while). Without this
+						// the 45s timer (armed after send) keeps ticking, fires mid-prompt,
+						// aborts the stream, and the inline approval becomes unreachable —
+						// leaving the conversation locked on AionUi's side so the next
+						// navbar message 409s ("Liv did not respond in time"). `confirm`
+						// re-arms the watchdog so the resumed (approved) tool is still
+						// guarded.
+						clearTimer()
 						cb.onApprovalNeeded({
 							title,
 							options,
@@ -681,7 +687,15 @@ export function runLivCommand(
 				injectSkills: opts.injectSkills,
 			})
 		} catch (e) {
-			fail(e instanceof Error ? e.message : 'Could not reach Liv.')
+			const msg = e instanceof Error ? e.message : 'Could not reach Liv.'
+			// HTTP 409 = this conversation is busy / still awaiting a confirmation
+			// from a previous turn (a stuck approval). Give an actionable message +
+			// the Open-in-Liv hatch instead of a cryptic "→ HTTP 409".
+			fail(
+				/→ HTTP 409\b/.test(msg)
+					? 'This Liv chat is busy finishing a previous step. Close and reopen the bar to start fresh, or use Open in Liv.'
+					: msg,
+			)
 		}
 	})()
 
