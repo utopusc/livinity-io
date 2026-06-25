@@ -495,6 +495,44 @@ export class StreamManager extends EventEmitter {
 		return {stopped: true}
 	}
 
+	/**
+	 * Phase 304 — stop every still-alive VNC stream whose capture target is this
+	 * X display. Closing a DISPLAY_:N window calls this so the concurrent-stream
+	 * cap slot is freed DETERMINISTICALLY, instead of relying on the indirect
+	 * Xvfb-death → x11vnc-exit → status-flip chain. That chain works for
+	 * luse-created displays (displays.close kills their Xvfb, so x11vnc exits)
+	 * but NEVER fires for the boot host `:1`/`:0`, whose Xvfb StreamManager does
+	 * not own — so their x11vnc view streams lingered as `alive` forever and,
+	 * five closes later, produced "stream cap exceeded (limit 5)" on the next
+	 * spawn. Stopping the x11vnc here only kills the CAPTURE process; the
+	 * underlying X display is untouched (the host stays up). Returns the count
+	 * stopped. Idempotent: stopStream short-circuits on an already-stopping
+	 * session.
+	 *
+	 * Scoped to `userId`: a SHARED display (the host `:1`/`:0`, ownerSession='')
+	 * can carry view streams from multiple members, and displays.close gates on
+	 * the DISPLAY not the stream — so without this filter one member closing
+	 * their host view would tear down another member's live stream. We only stop
+	 * the CALLER's own streams; freeing their own cap slots never touches a peer.
+	 */
+	async stopStreamsForDisplay(display: string, userId: string): Promise<number> {
+		const ids: string[] = []
+		for (const session of this.streams.values()) {
+			if (
+				session.kind === 'vnc' &&
+				session.display === display &&
+				session.userId === userId &&
+				session.status === 'alive'
+			) {
+				ids.push(session.streamId)
+			}
+		}
+		for (const streamId of ids) {
+			await this.stopStream(streamId)
+		}
+		return ids.length
+	}
+
 	listStreams(filter: {userId: string}): StreamRecord[] {
 		const out: StreamRecord[] = []
 		for (const session of this.streams.values()) {

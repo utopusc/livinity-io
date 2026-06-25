@@ -598,6 +598,40 @@ describe('StreamManager — PortAllocator wire-up (Phase 101-02)', () => {
 		expect(mgr.getSession(streamId)).toBeNull()
 	})
 
+	it('T-304-SM: stopStreamsForDisplay(:N, user) stops only that user+display alive view stream', async () => {
+		const {mgr} = makeVncManager()
+		const a = mgr.startStream({userId: 'u', mode: 'vnc-window' as any, target: {display: ':11'} as any})
+		const b = mgr.startStream({userId: 'u', mode: 'vnc-window' as any, target: {display: ':12'} as any})
+		expect(mgr.getSession(a.streamId)?.kind).toBe('vnc')
+		expect(mgr.getSession(b.streamId)?.kind).toBe('vnc')
+
+		// Stops ONLY the :11 view stream (the cap counts alive sessions).
+		const stopped = await mgr.stopStreamsForDisplay(':11', 'u')
+		expect(stopped).toBe(1)
+		expect(mgr.getSession(a.streamId)).toBeNull()
+		expect(mgr.getSession(b.streamId)?.kind).toBe('vnc')
+
+		// Idempotent: a second call finds nothing alive for :11.
+		expect(await mgr.stopStreamsForDisplay(':11', 'u')).toBe(0)
+		mgr._clearForTests()
+	})
+
+	it('T-304-SM-2: stopStreamsForDisplay is user-scoped — closing a SHARED display never stops a peer\'s stream', async () => {
+		const {mgr} = makeVncManager()
+		// Two members viewing the SAME shared host display :1 (distinct sessions —
+		// the idempotency key is userId+mode+targetKey, so different users get
+		// their own x11vnc).
+		const alice = mgr.startStream({userId: 'alice', mode: 'vnc-window' as any, target: {display: ':1'} as any})
+		const bob = mgr.startStream({userId: 'bob', mode: 'vnc-window' as any, target: {display: ':1'} as any})
+
+		// Bob closes his :1 view → ONLY bob's stream stops; alice's survives.
+		const stopped = await mgr.stopStreamsForDisplay(':1', 'bob')
+		expect(stopped).toBe(1)
+		expect(mgr.getSession(bob.streamId)).toBeNull()
+		expect(mgr.getSession(alice.streamId)?.kind).toBe('vnc')
+		mgr._clearForTests()
+	})
+
 	it('T-101-02-SM-04: re-allocate after stop returns pool to single-live-stream count (round-trip)', async () => {
 		const allocator = new PortAllocator()
 		const {mgr} = makeVncManagerWithAllocator(allocator)

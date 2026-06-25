@@ -283,6 +283,43 @@ export const displaysRouter = router({
 				})
 			}
 
+			// Phase 304 — free the concurrent-stream cap slot DETERMINISTICALLY:
+			// stop the x11vnc capture stream(s) for this display directly, instead
+			// of waiting for the Xvfb-death → x11vnc-exit → status-flip chain (which
+			// never fires for the boot host :1/:0, so their view streams lingered as
+			// 'alive' and, five closes later, produced "stream cap exceeded
+			// (limit 5)"). Only the capture process is stopped — the X display is
+			// untouched. Guarded so a stream-stop hiccup can never crash close.
+			const streamMgr = ctx.livinityd?.streamManager
+			if (streamMgr) {
+				try {
+					// userId-scoped: on a SHARED display (host :1/:0) only stop the
+					// caller's own view streams, never a peer member's (STRIDE-I).
+					const stopped = await streamMgr.stopStreamsForDisplay(input.display, userId)
+					if (stopped > 0) {
+						ctx.logger?.log?.(
+							`displays.close user=${userId} display=${input.display} stopped ${stopped} view stream(s)`,
+						)
+					}
+				} catch {
+					/* never crash close on a stream-stop hiccup */
+				}
+			}
+
+			// Phase 304 — the boot host displays (:0 GDM desktop, :1 livinityd Xvfb)
+			// are shared/system and MUST persist: closing their VIEW window stops the
+			// stream above but must NEVER SIGTERM their apps or DEL their Redis
+			// record. dm.kill below would do both (and can't kill the boot-owned
+			// Xvfb anyway, so it would also leak the slot we just freed), so
+			// short-circuit here — mirrors the TTL-GC reaper's :0/:1 guard
+			// (display-manager.ts).
+			if (input.display === ':0' || input.display === ':1') {
+				ctx.logger?.log?.(
+					`displays.close user=${userId} display=${input.display} kind=host (view stream stopped; display preserved)`,
+				)
+				return {ok: true as const, kind: 'host' as const}
+			}
+
 			// NATIVE display → delegate to the existing closeNativeApp teardown
 			// (never double-tear the binary/Xvfb/port), then DEL the Redis record
 			// (native displays use ownerSession:'' → '' passes the owner gate). The
