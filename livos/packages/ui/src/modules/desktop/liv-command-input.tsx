@@ -148,7 +148,7 @@ function SelectorChip({
 }
 
 // ── "+" add-context menu (Upload from device · Skills · MCP) ──────────────────
-// Mirrors AionUi's composer "+" menu. File upload is real (POST /liv/api/fs/upload
+// Mirrors AionUi's composer "+" menu. File upload is real (POST /api/fs/upload
 // → path → sendMessage files); Skills toggle real (inject_skills); MCP is an
 // informational count (display-only in AionUi too).
 

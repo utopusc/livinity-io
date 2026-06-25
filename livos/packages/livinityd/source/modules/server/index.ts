@@ -3,7 +3,7 @@ import process from 'node:process'
 import crypto from 'node:crypto'
 import {promisify} from 'node:util'
 import {fileURLToPath} from 'node:url'
-import {dirname, join, resolve} from 'node:path'
+import {basename, dirname, extname, join, resolve} from 'node:path'
 import {createGzip} from 'node:zlib'
 import {pipeline} from 'node:stream/promises'
 import {createConnection} from 'node:net'
@@ -1525,6 +1525,161 @@ class Server {
 			} catch (error) {
 				this.livinityd.logger.error('[fs/browse] failed', error)
 				response.status(500).json({success: false, error: 'Could not list directory'})
+			}
+		})
+
+		// Phase 302 — server-side file upload for Liv AI (AionUi).
+		//
+		// AionUi's composer "+ → Upload from device" (and drag-drop) POSTs each
+		// file to `/api/fs/upload` (multipart). Like /api/fs/browse, the VENDORED
+		// aionui-web build has NO Rust backend, so the apex call 404'd and uploads
+		// silently failed on BOTH surfaces: the navbar AionUi iframe (httpBridge
+		// getBaseUrl()==='' → same-origin apex) AND the LivOS command bar's
+		// uploadLivFile. We mirror AionUi v2.x's EXACT contract (researched from
+		// iOfficeAI/AionCore crates/aionui-file): multipart fields `file` (binary,
+		// required), `file_name` (optional text, wins over Content-Disposition),
+		// `conversation_id` (optional text → per-conversation subdir). Success →
+		// {success:true, data:"<abs path>"} where `data` is the BARE absolute path
+		// string the frontend resolves with `resolve(result.data)` and passes to
+		// sendMessage `files:[...]`; failure → {success:false, error, code} (the
+		// frontend only reads the HTTP status on error, but we send a body too).
+		//
+		// Auth: a valid session resolving to an ACTIVE user (mirrors the
+		// container-upload gate below — verifyToken alone would honor a still-valid
+		// JWT for a deactivated tenant). Any active user may upload to their own
+		// sandboxed temp dir; NOT admin-only (unlike /api/fs/browse, which lists
+		// arbitrary server dirs). The inline check IS the gate — the apex catch-all
+		// routes `/api/*` straight to livinityd. Hardened: writes ONLY under a
+		// fixed sandboxed uploads root, sanitized filename (no traversal / null
+		// byte), sanitized conversation_id label, 110MB cap.
+		this.app.post('/api/fs/upload', async (request, response) => {
+			try {
+				const token = request.cookies?.LIVINITY_SESSION
+				const payload = token
+					? ((await this.verifyToken(token).catch(() => null)) as {userId?: string; loggedIn?: boolean} | null)
+					: null
+				if (!payload) {
+					response.status(401).json({success: false, error: 'unauthorized', code: 'UNAUTHORIZED'})
+					return
+				}
+				// Legacy {loggedIn:true} tokens resolve to the admin (single-user mode).
+				let uid = typeof payload.userId === 'string' ? payload.userId : undefined
+				if (!uid && payload.loggedIn === true) uid = (await getAdminUser())?.id
+				const u = uid ? await findUserById(uid) : null
+				if (!u) {
+					response.status(401).json({success: false, error: 'unauthorized', code: 'UNAUTHORIZED'})
+					return
+				}
+				if (u.isActive === false) {
+					response.status(403).json({success: false, error: 'account inactive', code: 'FORBIDDEN'})
+					return
+				}
+
+				const contentType = request.headers['content-type'] || ''
+				if (!contentType.startsWith('multipart/form-data')) {
+					response
+						.status(400)
+						.json({success: false, error: 'Content-Type must be multipart/form-data', code: 'BAD_REQUEST'})
+					return
+				}
+
+				const {tmpdir} = await import('node:os')
+				const fsp = await import('node:fs/promises')
+
+				const MAX_UPLOAD_BYTES = 110 * 1024 * 1024
+				const bb = Busboy({headers: request.headers, limits: {files: 1, fileSize: MAX_UPLOAD_BYTES}})
+				let fileBuffer: Buffer | null = null
+				let dispositionName: string | null = null
+				let truncated = false
+				const fields: Record<string, string> = {}
+
+				const finished = new Promise<void>((resolveP, reject) => {
+					bb.on('field', (name, val) => {
+						if (name === 'file_name' || name === 'conversation_id') fields[name] = String(val)
+					})
+					bb.on('file', (_field, stream, info) => {
+						dispositionName = info.filename ?? null
+						const chunks: Buffer[] = []
+						stream.on('data', (c: Buffer) => chunks.push(c))
+						stream.on('limit', () => {
+							truncated = true
+						})
+						stream.on('end', () => {
+							fileBuffer = Buffer.concat(chunks as unknown as Uint8Array[])
+						})
+						stream.on('error', reject)
+					})
+					bb.on('finish', () => resolveP())
+					bb.on('error', reject)
+				})
+				request.pipe(bb as unknown as NodeJS.WritableStream)
+				await finished
+
+				if (truncated) {
+					response
+						.status(413)
+						.json({success: false, error: `file exceeds ${MAX_UPLOAD_BYTES} bytes`, code: 'FILE_TOO_LARGE'})
+					return
+				}
+				if (!fileBuffer) {
+					response.status(400).json({success: false, error: "missing 'file' field", code: 'BAD_REQUEST'})
+					return
+				}
+
+				// Filename: explicit `file_name` wins over the part's
+				// Content-Disposition filename (AionUi contract). basename() drops a
+				// leading dir component, then the regex strips BOTH separators (`\` and
+				// `/`) + NUL — so traversal is closed regardless of whether node:path is
+				// posix (box) or win32 (dev) — plus leading dots, then cap length.
+				const rawName = (fields.file_name || dispositionName || 'upload').trim()
+				let safeName = basename(rawName).replace(/[\\/\0]/g, '_').replace(/^\.+/, '').slice(0, 200)
+				if (!safeName) safeName = 'upload'
+
+				// conversation_id → a sandboxed subdir label. Strict charset (no
+				// separators) AND no `..` sequence (the charset allows dots, so `..`
+				// would otherwise pass and climb one level) → it can never escape root.
+				const convRaw = (fields.conversation_id || '').trim()
+				const conv =
+					/^[A-Za-z0-9._-]{1,128}$/.test(convRaw) && !convRaw.includes('..') ? convRaw : 'general'
+
+				const uploadsRoot = join(tmpdir(), 'liv-ai-uploads', conv)
+				await fsp.mkdir(uploadsRoot, {recursive: true})
+
+				// Collision-safe naming: image.png → image(2).png → … (matches AionUi).
+				// Atomic exclusive-create (O_EXCL via 'wx') instead of access()+write
+				// closes the TOCTOU window AND the silent-overwrite when slots are
+				// exhausted — each attempt either creates fresh or EEXISTs and bumps the
+				// suffix; give up with 409 after 1000.
+				const ext = extname(safeName)
+				const base = basename(safeName, ext)
+				let finalPath = join(uploadsRoot, safeName)
+				let handle: Awaited<ReturnType<typeof fsp.open>> | null = null
+				for (let n = 2; ; n++) {
+					try {
+						handle = await fsp.open(finalPath, 'wx')
+						break
+					} catch (e) {
+						if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
+						if (n > 1000) break
+						finalPath = join(uploadsRoot, `${base}(${n})${ext}`)
+					}
+				}
+				if (!handle) {
+					response.status(409).json({success: false, error: 'too many name collisions', code: 'CONFLICT'})
+					return
+				}
+				try {
+					await handle.writeFile(fileBuffer as Buffer)
+				} finally {
+					await handle.close()
+				}
+
+				response.json({success: true, data: finalPath})
+			} catch (error) {
+				this.livinityd.logger.error('[fs/upload] failed', error)
+				if (!response.headersSent) {
+					response.status(500).json({success: false, error: 'Upload failed', code: 'INTERNAL_SERVER_ERROR'})
+				}
 			}
 		})
 

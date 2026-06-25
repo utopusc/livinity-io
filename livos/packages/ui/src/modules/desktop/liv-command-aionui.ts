@@ -166,15 +166,23 @@ export async function getLivMcpServers(): Promise<LivMcpServer[]> {
 }
 
 /**
- * POST /liv/api/fs/upload — upload one file (multipart, field `file`). Returns
- * the absolute server-side path to pass in sendMessage `files:[...]`, or null on
- * failure. Conversation-less upload uses temp storage (fine for a one-shot).
+ * POST /api/fs/upload — upload one file (multipart). Returns the absolute
+ * server-side path to pass in sendMessage `files:[...]`, or null on failure.
+ *
+ * Phase 302: hits the APEX `/api/fs/upload` (livinityd Express), NOT the old
+ * `/liv/api/fs/upload`. The `/liv/api/*` path is reverse-proxied to the AionUi
+ * :3020 service, which has NO filesystem backend (vendored web build) → it
+ * always 404'd, so device-upload never worked. The apex route falls through
+ * Caddy's catch-all to livinityd, the same place the navbar AionUi iframe posts
+ * (httpBridge getBaseUrl()===''). Fields/response match AionUi's contract:
+ * `file` (binary) + `file_name`; success → {success:true, data:"<abs path>"}.
  */
 export async function uploadLivFile(file: File): Promise<string | null> {
 	try {
 		const fd = new FormData()
 		fd.append('file', file)
-		const res = await fetch('/liv/api/fs/upload', {method: 'POST', credentials: 'include', body: fd})
+		fd.append('file_name', file.name) // explicit name wins over Content-Disposition
+		const res = await fetch('/api/fs/upload', {method: 'POST', credentials: 'include', body: fd})
 		if (!res.ok) return null
 		const json = (await res.json()) as {success?: boolean; data?: unknown}
 		return json?.success === true && typeof json.data === 'string' ? json.data : null
