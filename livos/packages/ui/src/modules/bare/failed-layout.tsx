@@ -5,7 +5,7 @@ import {buttonClass, secondaryButtonClasss} from '@/layouts/bare/shared'
 import {cn} from '@/shadcn-lib/utils'
 import {t} from '@/utils/i18n'
 
-import {bareContainerClass, BareLogoTitle, BareSpacer, bareTextClass} from './shared'
+import {bareCardClass, BareLogoTitle, bareTextClass} from './shared'
 
 export default function FailedLayout({
 	title,
@@ -21,18 +21,16 @@ export default function FailedLayout({
 	buttonOnClick?: () => void
 }) {
 	return (
-		<div className={cn(bareContainerClass, 'animate-in slide-in-from-bottom-2')}>
+		<div className={cn(bareCardClass, 'animate-in slide-in-from-bottom-2')}>
 			<BareLogoTitle>{title}</BareLogoTitle>
-			<BareSpacer />
 			<p className={bareTextClass}>{description}</p>
-			<BareSpacer />
 			{to && (
 				<Link to={to} className={buttonClass} onClick={buttonOnClick}>
 					{buttonText}
 				</Link>
 			)}
 			{!to && (
-				<div className='flex flex-row gap-2.5'>
+				<div className='flex flex-row flex-wrap justify-center gap-2.5'>
 					<a href='/' className={buttonClass}>
 						{t('not-found-404.home')}
 					</a>
