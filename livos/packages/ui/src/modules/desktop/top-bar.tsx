@@ -187,6 +187,9 @@ function TopBarDesktop() {
 	// True once the operator clicked the done-logo to reveal the panel — keeps the
 	// transcript visible through subsequent working/done turns in the session.
 	const [livRevealed, setLivRevealed] = useState(false)
+		// Phase 302 R2 — true while the operator is TYPING a follow-up in 'answer'
+		// state; hides the old answer panel until submit (or the input is cleared).
+		const [livEditingFollowup, setLivEditingFollowup] = useState(false)
 	// Show the "Open in Liv ↗" escape hatch when a turn needs the full window
 	// (tool approval pending) or dispatch fell back (backend unreachable / a
 	// protocol assumption missed on this box).
@@ -244,6 +247,7 @@ function TopBarDesktop() {
 		livRunRef.current?.abort()
 		setLivPrompt(payload.prompt)
 		setLivAnswer(null)
+		setLivEditingFollowup(false) // new turn → panel reappears with the streaming reply
 		setLivNeedsWindow(false)
 		// A revealed session keeps the composer open after each turn (answer);
 		// the very first turn rests at done so the operator clicks to reveal.
@@ -299,16 +303,21 @@ function TopBarDesktop() {
 		setLivPrompt('')
 		setLivTurns([])
 		setLivRevealed(false)
+			setLivEditingFollowup(false)
 		setLivNeedsWindow(false)
 		setLivApproval(null)
 	}
 	// Transcript the panel shows: completed turns + the in-flight turn while
 	// working (so a follow-up streams live once the panel is revealed).
-	const livDisplayTurns =
+	const livOnInputChange = (hasText: boolean) => {
+			if (livState === 'answer') setLivEditingFollowup(hasText)
+		}
+		const livDisplayTurns =
 		livState === 'working' ? [...livTurns, {prompt: livPrompt, answer: livAnswer ?? ''}] : livTurns
 	// Panel reveals on the done-click (answer), then stays through the session.
 	const livPanelVisible =
-		livState === 'answer' || (livRevealed && (livState === 'working' || livState === 'done'))
+		(livState === 'answer' && !livEditingFollowup) ||
+			(livRevealed && (livState === 'working' || livState === 'done'))
 	const profileWrapRef = useRef<HTMLDivElement>(null)
 	// Phase 260.2 — nav element ref for the hover-collapse safety net (bug fix).
 	const navRef = useRef<HTMLElement>(null)
@@ -889,7 +898,7 @@ function TopBarDesktop() {
 								{livState === 'approval' && livApproval ? (
 									<LivApprovalView question={livApproval.question} onClose={livClose} />
 								) : (
-									<LivCommandInput onClose={livClose} onSubmit={livSubmit} />
+									<LivCommandInput onClose={livClose} onSubmit={livSubmit} onInputChange={livOnInputChange} />
 								)}
 							</motion.div>
 						)}

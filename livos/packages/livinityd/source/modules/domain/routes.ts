@@ -243,6 +243,32 @@ const domain = router({
 	}),
 
 	/**
+	 * Phase 302 R3 — the caller's subdomains for the Settings → Domains page (no
+	 * per-app "Public Access" Domain-Required gate). Admin/operator (or no-auth
+	 * single-user) sees EVERY subdomain on the box — an oversight view that's
+	 * never empty for the operator whose own entries may be legacy/unowned;
+	 * members see only the subdomains they own. Includes the main domain so the
+	 * UI can compute an FQDN for legacy entries lacking a stored host.
+	 */
+	listMySubdomains: privateProcedure.query(async ({ctx}) => {
+		const subdomains = await getSubdomains(ctx.livinityd!.ai.redis)
+		const config = await getConfig(ctx.livinityd!.ai.redis)
+		const me = ctx.currentUser?.id
+		const isAdmin = ctx.currentUser?.role === 'admin'
+		const mine = isAdmin || !me ? subdomains : subdomains.filter((s) => subdomainOwner(s) === me)
+		return {
+			mainDomain: config?.active ? config.domain : null,
+			isAdmin,
+			items: mine.map((s) => ({
+				subdomain: s.subdomain,
+				appId: s.appId,
+				host: s.host ?? null,
+				enabled: s.enabled,
+			})),
+		}
+	}),
+
+	/**
 	 * Get subdomain config for a specific app.
 	 *
 	 * Phase 219 T5 — returns `userSlug` so the UI can render the

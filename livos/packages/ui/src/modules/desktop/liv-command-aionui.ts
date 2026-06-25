@@ -262,8 +262,20 @@ export async function sendLivMessage(
 	content: string,
 	opts?: {files?: string[]; injectSkills?: string[]},
 ): Promise<void> {
-	const body: Record<string, unknown> = {content}
-	if (opts?.files?.length) body.files = opts.files
+	const files = opts?.files?.length ? opts.files : undefined
+	// AionUi's ACP pipeline feeds ONLY `content` to the agent — the `files` array
+	// is stored + shown in the message bubble but is NEVER turned into a model
+	// content block (verified against iOfficeAI/AionCore `prompt_existing_session`,
+	// which sends a single text ContentBlock from data.content; `data.files` is
+	// dropped before the ACP call). So we ALSO embed the absolute path(s) in
+	// `content` — exactly what AionUi's own Team mode does — and the agent
+	// (Claude Code / Codex under ACP) opens each path with its file tools (incl.
+	// reading an image). The `files` array is kept for the bubble + DB display.
+	const contentWithFiles = files
+		? `${content}\n\nAttached file${files.length > 1 ? 's' : ''} (open with your tools):\n${files.join('\n')}`
+		: content
+	const body: Record<string, unknown> = {content: contentWithFiles}
+	if (files) body.files = files
 	if (opts?.injectSkills?.length) body.inject_skills = opts.injectSkills
 	await fetchJson(
 		`/liv/api/conversations/${encodeURIComponent(conversationId)}/messages`,

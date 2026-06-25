@@ -48,6 +48,7 @@ import {
 	TbDeviceSdCard,
 	TbShieldLock,
 	TbMessages,
+	TbWorld,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -118,6 +119,8 @@ const PowerSectionLazy = React.lazy(() => import('./power-section').then((m) => 
 const DateTimeSectionLazy = React.lazy(() => import('./date-time-section').then((m) => ({default: m.DateTimeSection})))
 const StorageDrivesSectionLazy = React.lazy(() => import('./storage-section').then((m) => ({default: m.StorageDrivesSection})))
 const SecuritySessionsSectionLazy = React.lazy(() => import('./security-sessions-section').then((m) => ({default: m.SecuritySessionsSection})))
+// Phase 302 R3 — Settings → Domains (subdomain list + per-user DNS counter).
+const DomainsSectionLazy = React.lazy(() => import('./domains-section').then((m) => ({default: m.DomainsSection})))
 // Phase 246-05 — Settings → System section (hosts the v44 "Active terminals"
 // admin panel). The panel self-gates via useTerminalPanelEnabled, so when the
 // v43 feature flag is OFF the section renders nothing — the surface vanishes
@@ -149,6 +152,7 @@ type SettingsSection =
 	| 'troubleshoot'
 	| 'advanced'
 	| 'software-update'
+	| 'domains'
 	// v29.4 Phase 47 Plan 05 — AI Diagnostics admin section.
 	| 'diagnostics'
 
@@ -188,6 +192,7 @@ const MENU_ITEMS: MenuItem[] = [
 	// just un-commenting this one line. (NOTE: on desktop this tab also hosted the
 	// Migration sub-tab; mobile keeps Migration as its own separate row.)
 	// {id: 'backups',          group: 'system', icon: TbDatabase,        label: 'Backups',           description: 'Backup, restore & migration',             adminOnly: true},
+	{id: 'domains', group: 'system', icon: TbWorld, label: 'Domains', description: 'Subdomains & DNS usage', adminOnly: true},
 	{id: 'software-update',  group: 'system', icon: TbDownload,        label: 'Software Update',   description: 'Apply updates & view deploy history',     adminOnly: true},
 	// ── FOOTER ────────────────────────────────────────────────────────
 	{id: 'troubleshoot',     group: 'system', icon: TbTool,            label: 'Troubleshoot',      description: 'Logs & diagnostics',                      adminOnly: true, footer: true},
@@ -593,6 +598,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <AdvancedSection />
 		case 'software-update':
 			return <SoftwareUpdateSection />
+		case 'domains':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><DomainsSectionLazy /></Suspense>
 		case 'diagnostics':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><DiagnosticsSectionLazy /></Suspense>
 		default:

@@ -361,6 +361,7 @@ function LivPlusMenu({
 export function LivCommandInput({
 	onClose,
 	onSubmit,
+	onInputChange,
 	autoFocus = true,
 }: {
 	onClose: () => void
@@ -373,6 +374,9 @@ export function LivCommandInput({
 		files: string[]
 		injectSkills: string[]
 	}) => void
+	/** Fired on every keystroke with whether the input has text — lets the parent
+	 *  hide the old answer panel while the operator composes a follow-up. */
+	onInputChange?: (hasText: boolean) => void
 	autoFocus?: boolean
 }) {
 	const [prompt, setPrompt] = useState('')
@@ -475,7 +479,10 @@ export function LivCommandInput({
 				ref={inputRef}
 				rows={1}
 				value={prompt}
-				onChange={(e) => setPrompt(e.target.value)}
+				onChange={(e) => {
+					setPrompt(e.target.value)
+					onInputChange?.(e.target.value.trim().length > 0)
+				}}
 				onKeyDown={onKeyDown}
 				placeholder='Ask Liv to do anything…'
 				className='h-7 min-w-0 flex-1 resize-none self-center bg-transparent text-[14px] leading-7 text-[color:var(--fg)] placeholder:text-[color:var(--fg-faint)] focus:outline-none'
