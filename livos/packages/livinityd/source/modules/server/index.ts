@@ -2784,6 +2784,11 @@ class Server {
 				// 207 R5 fix for `/openclawos/*` above. Exact-prefix match;
 				// `/liv-login` is the only path on the namespace.
 				'/liv-login',
+				// Phase 305 R7 — `/liv-streaming-diag` is likewise mounted in
+				// livinityd.start() after server.start(); without this entry the
+				// SPA catch-all serves index.html (200 text/html) instead of the
+				// JSON diagnostic. Same shadowing root cause as `/liv-login` above.
+				'/liv-streaming-diag',
 			]
 			this.app.use('*', (request, response, next) => {
 				const path = request.originalUrl?.split('?')[0] ?? request.path ?? ''

@@ -392,6 +392,18 @@ export default class Livinityd {
 	// T93-11 wires the lifecycle in start(); this field is declared up-front so
 	// the /ws/stream/:id upgrade handler in server/index.ts can typecheck.
 	streamManager?: StreamManager
+	// Phase 305 R7 — streaming-subsystem boot diagnostic. Captures the error the
+	// big start() try/catch swallows ("Failed to start streaming subsystem /
+	// WebAppWindowManager") so an operator WITHOUT sudo/journalctl can read WHY
+	// streaming failed (and thus why the production tRPC router swap was skipped →
+	// config/setup 412/500) via GET /liv-streaming-diag. undefined = booted clean.
+	streamingBootError?: {
+		component: string
+		name: string
+		message: string
+		stack: string
+		timestamp: string
+	}
 	// Phase 254-01 — display lifecycle manager (UI seam). Optional because it is
 	// wired in start() AFTER ai.start() (needs this.ai.redis) and its
 	// construction is non-fatal: if Redis is unavailable the field stays
@@ -592,6 +604,43 @@ export default class Livinityd {
 			}
 		} catch (livLoginErr) {
 			this.logger.error('Phase 234-04 — /liv-login mount failed; Liv AI iframe will land on the upstream AionUi login form', livLoginErr as Error)
+		}
+
+		// Phase 305 R7 — sudo-free streaming-boot diagnostic. Mounted HERE (before
+		// the big streaming try at ~L860) on the shared Express app so it stays
+		// reachable even when the streaming subsystem throws and the production
+		// tRPC router swap is skipped (a NEW tRPC route would itself land on the
+		// dead stub — exactly why config/setup 412/500). Session-gated with the
+		// SAME verifySessionFull used by /liv-login: no sudo — the operator opens
+		// https://<box>/liv-streaming-diag while logged in and reads the exact
+		// failing component + stack. Unmatched paths reach :8080 via Caddy's
+		// catch-all `handle { reverse_proxy :8080 }`, same as /liv-login.
+		try {
+			if (this.server.app) {
+				this.server.app.get('/liv-streaming-diag', async (req, res) => {
+					const token = req.cookies?.LIVINITY_SESSION
+					const session = token ? await this.server.verifySessionFull(token).catch(() => null) : null
+					if (!session) {
+						res.status(401).json({error: 'unauthorized'})
+						return
+					}
+					const e = this.streamingBootError
+					res.json({
+						ok: !e,
+						component: e?.component ?? null,
+						name: e?.name ?? null,
+						message: e?.message ?? null,
+						stack: e?.stack ?? null,
+						timestamp: e?.timestamp ?? null,
+						// Live corroboration that the swap was skipped / streaming is down:
+						streamManagerPresent: !!this.streamManager,
+						webappWindowManagerPresent: !!this.webappWindowManager,
+					})
+				})
+				this.logger.log('Phase 305 R7 — GET /liv-streaming-diag mounted (sudo-free streaming-boot diagnostic)')
+			}
+		} catch (diagErr) {
+			this.logger.error('Phase 305 R7 — /liv-streaming-diag mount failed', diagErr as Error)
 		}
 
 		// Phase 203 Hot-fix F 2026-05-24 — DELETE the Hot-fix D/E desktop
@@ -2154,6 +2203,18 @@ export default class Livinityd {
 			// Non-fatal — boot continues. Streaming + WebApp launcher will
 			// degrade to SERVICE_UNAVAILABLE for the affected tRPC routes
 			// until the next service restart resolves the problem.
+			// Phase 305 R7 — capture the (otherwise journalctl-only) cause onto an
+			// observable field so GET /liv-streaming-diag can name the exact failing
+			// component + stack for a sudo-less operator. Pure field assignment —
+			// never throws, never alters the existing fail-soft behaviour.
+			const e = err instanceof Error ? err : new Error(String(err))
+			this.streamingBootError = {
+				component: 'streaming/WebAppWindowManager',
+				name: e.name,
+				message: e.message,
+				stack: e.stack ?? '',
+				timestamp: new Date().toISOString(),
+			}
 			this.logger.error(
 				'Failed to start streaming subsystem / WebAppWindowManager',
 				err,
