@@ -204,6 +204,7 @@ function TopBarDesktop() {
 	} | null>(null)
 	const livRunRef = useRef<LivCommandRun | null>(null)
 	const answerPanelRef = useRef<HTMLDivElement>(null)
+	const approvalPanelRef = useRef<HTMLDivElement>(null)
 	// The pill shows the Liv composer (instead of the navbar) in compose + answer.
 	// working/done keep the navbar so the center logo is visible + animating.
 	const isLivOverlay = livState === 'compose' || livState === 'answer' || livState === 'approval'
@@ -490,6 +491,13 @@ function TopBarDesktop() {
 			const target = e.target as Node
 			if (navRef.current?.contains(target)) return
 			if (answerPanelRef.current?.contains(target)) return
+			// Phase 305 — the approval option buttons live in a SEPARATE panel below
+			// the bar (not inside navRef). Without this exemption a mousedown on
+			// Approve/Decline fires livClose() FIRST → aborts the run + unmounts the
+			// buttons before their onClick (livChooseApproval) runs, so the approval
+			// is unreachable ("stays in the background") AND the AionUi conversation
+			// is left awaiting a confirm → next message 409s (breaks even YOLO).
+			if (approvalPanelRef.current?.contains(target)) return
 			livClose()
 		}
 		document.addEventListener('mousedown', onDown)
@@ -913,6 +921,7 @@ function TopBarDesktop() {
 						{livState === 'approval' && livApproval ? (
 							<motion.div
 								key='liv-approval'
+								ref={approvalPanelRef}
 								initial={{opacity: 0, y: -10, scale: 0.98}}
 								animate={{opacity: 1, y: 0, scale: 1}}
 								exit={{opacity: 0, y: -10, scale: 0.98}}

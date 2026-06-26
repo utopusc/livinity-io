@@ -197,8 +197,8 @@ export async function uploadLivFile(file: File): Promise<string | null> {
  * find the one in the 'mode' category, PUT the value. Silent on any failure (the
  * conversation then runs at its built-in default mode).
  */
-export async function applyLivMode(conversationId: string, mode: string): Promise<void> {
-	if (!mode) return
+export async function applyLivMode(conversationId: string, mode: string): Promise<boolean> {
+	if (!mode) return false
 	try {
 		const body = await fetchJson(
 			`/liv/api/conversations/${encodeURIComponent(conversationId)}/config-options`,
@@ -206,11 +206,11 @@ export async function applyLivMode(conversationId: string, mode: string): Promis
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const b = body as any
 		const list = (b?.config_options ?? b?.data ?? b) as Array<Record<string, unknown>>
-		if (!Array.isArray(list)) return
+		if (!Array.isArray(list)) return false
 		const opt =
 			list.find((o) => String(o?.category ?? '').toLowerCase() === 'mode') ??
 			list.find((o) => o?.id === 'mode')
-		if (!opt) return
+		if (!opt) return false
 		const optionId = String(opt.id ?? 'mode')
 		await fetchJson(
 			`/liv/api/conversations/${encodeURIComponent(conversationId)}/config-options/${encodeURIComponent(optionId)}`,
@@ -220,8 +220,13 @@ export async function applyLivMode(conversationId: string, mode: string): Promis
 				body: JSON.stringify({value: mode}),
 			},
 		)
+		return true
 	} catch {
-		// best-effort — mode stays at the conversation default
+		// best-effort — mode stays at the conversation default (e.g. a box whose
+		// AionUi predates the config-options route → 404). Returning false lets the
+		// caller engage a CLIENT-SIDE auto-approve fallback for acceptEdits so the
+		// selected mode still takes effect instead of silently asking for everything.
+		return false
 	}
 }
 
@@ -619,6 +624,10 @@ export function runLivCommand(
 			if (aborted) return
 			const isNew = !opts.conversationId
 			let conversationId = opts.conversationId ?? ''
+			// Phase 305 — did the server accept the permission mode? false on a stale
+			// box without the config-options route → drives the acceptEdits client-side
+			// auto-approve fallback in onApprovalNeeded below.
+			let modeApplied = true
 			if (isNew) {
 				conversationId = await createLivConversation(opts.agentId, opts.modelId)
 				cb.onConversation?.(conversationId)
@@ -628,7 +637,12 @@ export function runLivCommand(
 			// 'default', so only push a non-default choice there; a follow-up always
 			// pushes so a mid-session mode change (incl. back to default) takes effect.
 			if (opts.mode && (!isNew || opts.mode !== 'default')) {
-				await applyLivMode(conversationId, opts.mode)
+				modeApplied = await applyLivMode(conversationId, opts.mode)
+				if (!modeApplied) {
+					console.warn(
+						`[liv] permission mode '${opts.mode}' could not be applied on this box (config-options route unavailable — AionUi may need an update); using client-side fallback`,
+					)
+				}
 			}
 			if (aborted) return
 			stream = new LivCommandStream(conversationId, {
@@ -648,7 +662,14 @@ export function runLivCommand(
 				},
 				onApprovalNeeded: ({callId, msgId, approveValue, title, options}) => {
 					if (aborted) return
-					if (opts.autoApprove && callId) {
+					// Auto-approve client-side for YOLO (bypassPermissions — AionUi emits
+					// confirmation.add even there, so the client MUST confirm) and for
+					// acceptEdits WHEN the box couldn't apply the mode server-side (stale
+					// AionUi). On a current box acceptEdits is gated server-side, so we do
+					// NOT blanket-approve here — command confirmations still surface inline.
+					const shouldAutoApprove =
+						opts.autoApprove === true || (opts.mode === 'acceptEdits' && !modeApplied)
+					if (shouldAutoApprove && callId) {
 						// Auto-approve and keep streaming. Re-arm the watchdog: the
 						// approved tool may run a while before any text, and we must
 						// not bail to "Open in Liv" while it's actually working.
