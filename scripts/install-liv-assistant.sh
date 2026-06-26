@@ -1055,4 +1055,25 @@ log "  License: ${INSTALL_ROOT}/LICENSE"
 log "  Notice:  ${INSTALL_ROOT}/NOTICE"
 log "  Bun:     ${BUN_BIN}"
 log "  Branding: ${BRANDING_DST} (Phase 232 — livinity-overlay.css + favicon.svg + manifest.json)"
-log "Next: systemctl daemon-reload && systemctl enable --now liv-assistant"
+
+# Phase 305 R4 — RESTART liv-assistant so the freshly-symlinked aioncore BACKEND is
+# actually re-exec'd. The `current` symlink + static web bundle now point at the new
+# version, but a symlink flip does NOT re-exec a LIVE process: aioncore loaded its
+# binary at service-start, so on a self-heal/update it keeps serving the OLD API
+# while the browser loads the NEW web bundle → the new frontend calls routes the
+# stale backend lacks → 404/502 (observed: config-options/effort 502, /api/agents
+# 404). Only when the unit is ALREADY active (an update on a live box) — fresh
+# installs run `systemctl enable --now` via deploy-livinityd.sh, so we never start a
+# not-yet-configured unit here. Unconditional (not "only if symlink changed") so it
+# self-corrects a box already symlinked to the pin but still running the old process.
+# Non-fatal: a restart hiccup must never fail the (fail-soft) install.
+if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet liv-assistant 2>/dev/null; then
+  log "Restarting liv-assistant to load aioncore ${AIONUI_VERSION} (live process would otherwise stay stale)"
+  if systemctl restart liv-assistant 2>/dev/null; then
+    log "liv-assistant restarted — now serving ${AIONUI_VERSION}"
+  else
+    log "WARN: 'systemctl restart liv-assistant' failed (non-fatal); restart it manually to load ${AIONUI_VERSION}"
+  fi
+else
+  log "Next: systemctl daemon-reload && systemctl enable --now liv-assistant"
+fi
