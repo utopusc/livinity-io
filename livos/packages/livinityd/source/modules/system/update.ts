@@ -69,6 +69,70 @@ export async function readDeployedRelease(): Promise<string | null> {
 	}
 }
 
+// Phase 305 R3 — the on-box vendored AionUi symlink + the installer that carries
+// the pinned version, used to detect a box whose CORE update succeeded but whose
+// FAIL-SOFT install-liv-assistant self-heal left AionUi STALE. The self-heal
+// (update.sh step 4.6) warns+continues on a download/SHA/timeout hiccup, so
+// update.sh still records .deployed-release → the tag-vs-tag `available` goes false
+// → AionUi sits stale → Liv permission Modes / config-options keep 404ing. We surface
+// this as the DIAGNOSTIC `aionuiStale` flag on checkUpdate (see getLatestRelease).
+const LIV_ASSISTANT_CURRENT_LINK = '/opt/liv-assistant/current'
+const LIV_ASSISTANT_INSTALLER_PATH = '/opt/livos/scripts/install-liv-assistant.sh'
+
+// Short in-memory memo so the off-pin probe doesn't re-read the (~55KB) installer
+// on every checkUpdate — that query is polled hourly + on every mount/focus and by
+// several consumers, while the symlink/pin only change on a deploy. Mirrors the
+// tagsCache/releasesCache TTL pattern above. 30s is ample to absorb a page-load
+// burst while staying fresh enough that a just-healed box clears within seconds.
+const AIONUI_OFF_PIN_CACHE_TTL_MS = 30 * 1000
+let aionuiOffPinCache: {at: number; value: boolean} | null = null
+
+// True iff liv-assistant IS installed (the `current` symlink exists) but points at
+// a version OTHER than the one pinned in install-liv-assistant.sh. Returns false
+// (not stale) when liv-assistant is not installed, the installer/pin can't be read,
+// or it's already on pin. NEVER throws and defaults to false on ANY uncertainty —
+// getLatestRelease is polled hourly + on every window focus, so this must degrade
+// to "not stale" rather than break update detection or false-alarm.
+export async function isAionuiOffPin(): Promise<boolean> {
+	if (aionuiOffPinCache && Date.now() - aionuiOffPinCache.at < AIONUI_OFF_PIN_CACHE_TTL_MS) {
+		return aionuiOffPinCache.value
+	}
+	const value = await computeAionuiOffPin()
+	aionuiOffPinCache = {at: Date.now(), value}
+	return value
+}
+
+async function computeAionuiOffPin(): Promise<boolean> {
+	try {
+		// The version the `current` symlink points at. readlink the link TEXT (not the
+		// resolved path) so a half-extracted tree still reads off-pin — matches
+		// update.sh's _liv_symlink_on_pin. Any error (ENOENT = not installed, EINVAL =
+		// not a symlink) → not "stale" (the fresh-install path handles those).
+		let linkTarget: string
+		try {
+			linkTarget = await fs.readlink(LIV_ASSISTANT_CURRENT_LINK)
+		} catch {
+			return false
+		}
+		// The pinned version, read from the installer shipped with THIS release, so the
+		// check never drifts from the pin (single source of truth — the update.sh
+		// self-heal greps AIONUI_VERSION from the very same file).
+		let pin = ''
+		try {
+			const installer = await fs.readFile(LIV_ASSISTANT_INSTALLER_PATH, 'utf8')
+			pin = installer.match(/AIONUI_VERSION="([^"]+)"/)?.[1] ?? ''
+		} catch {
+			return false
+		}
+		if (!pin) return false
+		// On-pin iff the link text contains `aionui-web-<pin>/`
+		// (e.g. /opt/liv-assistant/aionui-web-2.1.24/aionui-web).
+		return !linkTarget.includes(`aionui-web-${pin}/`)
+	} catch {
+		return false
+	}
+}
+
 // Phase 266 — fetch the latest published GitHub Release. NEVER throws: a 404
 // (no releases yet) returns null and is cached as null; rate-limit/5xx/network
 // serve the last good value (which may itself be null) so the UI degrades to a
@@ -225,6 +289,11 @@ export async function getLatestRelease(livinityd: Livinityd) {
 
 	const release = await fetchLatestRelease(livinityd)
 
+	// Phase 305 R3 — is the box's vendored AionUi off the pinned version? (fail-soft
+	// self-heal left it stale). Surfaced as a DIAGNOSTIC flag on both return paths
+	// below; intentionally NOT used to drive `available` (see the main return).
+	const aionuiStale = await isAionuiOffPin()
+
 	// No release published yet (404) OR the API is down on a cold cache.
 	// Graceful fallback: advertise NO update + show a sensible current-version
 	// label (deployed release tag if known, else resolved from the commit). This
@@ -236,6 +305,9 @@ export async function getLatestRelease(livinityd: Livinityd) {
 			(deployedSha ? await resolveVersionLabel(deployedSha, livinityd) : '')
 		return {
 			available: false,
+			// Phase 305 R3 — diagnostic only (see the main return below); never forces
+			// `available`, so a release-less repo keeps its quiet "On latest" behaviour.
+			aionuiStale,
 			sha: deployedSha,
 			shortSha: deployedSha ? deployedSha.slice(0, 7) : '',
 			version: fallbackLabel,
@@ -270,6 +342,20 @@ export async function getLatestRelease(livinityd: Livinityd) {
 
 	return {
 		available,
+		// Phase 305 R3 — DIAGNOSTIC ONLY (deliberately NOT OR'd into `available`).
+		// True when the box's vendored AionUi symlink is off the pinned version (a
+		// fail-soft install-liv-assistant self-heal left it stale → config-options
+		// 404 → Liv permission Modes keep prompting). We do NOT force `available`
+		// here: `available` drives release-update surfaces (the desktop card, Settings
+		// list-row, mobile view, sidebar badge, notification count) whose "vX available"
+		// copy + per-release SHA dismissal are wrong for a persistent local fault —
+		// forcing it mislabels the running version and creates an un-silenceable nag
+		// (review wf_b5556ae0). Recovery is cutting a new release (re-runs the
+		// idempotent self-heal via the normal tag-compare path) or re-running the
+		// installer; a dedicated "repair Liv AI" prompt consuming this flag is a
+		// tracked follow-up. Exposed now so the stuck state is OBSERVABLE
+		// (GET system.checkUpdate → aionuiStale:true).
+		aionuiStale,
 		// The RELEASE's commit (NOT the deployed one) so UpdateNotification's
 		// shasDiffer guard shows the card when behind + hides it when current.
 		sha: releaseSha || deployedSha,
