@@ -44,6 +44,18 @@ export const LIV_PERMISSION_MODES: LivPermissionMode[] = [
 	{id: 'bypassPermissions', label: 'Auto-run', hint: 'Approve every action (YOLO)', icon: Zap},
 ]
 
+// Phase 305 R8 — persist the chosen Agent so the operator's pick (e.g. Claude)
+// survives a page reload AND the composer's per-open/per-turn remount (motion
+// key={livState}), instead of snapping back to the first installed agent.
+const AGENT_STORAGE_KEY = 'liv:command:agentId'
+function readStoredAgentId(): string {
+	try {
+		return localStorage.getItem(AGENT_STORAGE_KEY) ?? ''
+	} catch {
+		return '' // storage blocked (private mode / SSR) — fall back to the default
+	}
+}
+
 // ── Generic chip dropdown ────────────────────────────────────────────────────
 
 function SelectorChip({
@@ -380,29 +392,43 @@ export function LivCommandInput({
 	autoFocus?: boolean
 }) {
 	const [prompt, setPrompt] = useState('')
-	// Phase 291 R4 — default to Accept-edits: routine edits run, but commands (and
-	// anything Liv wants to confirm) surface the INLINE approval prompt — question
-	// in the bar, option buttons below — instead of the old dead-end "Open in Liv"
-	// (operator wanted the approve/decline shown in the bar, "daha cezbedici").
-	// Auto-run (no prompts) and Default/Plan stay selectable.
-	const [permissionId, setPermissionId] = useState<LivPermissionMode['id']>('acceptEdits')
+	// Phase 305 R8 — default to Auto-run (YOLO / bypassPermissions) on EVERY open:
+	// the operator wants the bar to start in YOLO (actions run without prompts) and
+	// to RESET to YOLO each time it opens. The composer remounts per bar-open/turn
+	// (motion key={livState} in top-bar), so a fresh useState gives YOLO every time;
+	// switching to Default/Plan/Accept-edits applies for that turn only, and
+	// reopening returns to YOLO. (Was 'acceptEdits' in R4.)
+	const [permissionId, setPermissionId] = useState<LivPermissionMode['id']>('bypassPermissions')
 	const inputRef = useRef<HTMLTextAreaElement>(null)
 
 	// Live agent list from AionUi (the real "which AI" selector). Empty when the
 	// backend isn't reachable (dev / cold box) → the chip is hidden and dispatch
 	// uses AionUi's configured default agent.
 	const {agents} = useLivAgents(true)
-	const [agentId, setAgentId] = useState<string>('')
+	// Initialise from the persisted pick so a reload/remount keeps the operator's
+	// agent. Empty until the list resolves (or if nothing was stored).
+	const [agentId, setAgentId] = useState<string>(() => readStoredAgentId())
 	const [modelId, setModelId] = useState<string>('') // '' = the agent's Default Model
 	const agent = useMemo(() => agents.find((a) => a.id === agentId), [agents, agentId])
-	// Default to the first agent once the list resolves; reset the model whenever
-	// the agent changes (each agent has its own model list).
+	// Once the list resolves: keep a still-valid stored/selected agent; otherwise
+	// fall back to the first installed agent (covers a stored agent that has since
+	// been uninstalled/disabled). Reset the model whenever the agent changes.
 	useEffect(() => {
-		if (!agentId && agents.length > 0) setAgentId(agents[0].id)
-	}, [agents, agentId])
+		if (agents.length === 0) return
+		setAgentId((cur) => (cur && agents.some((a) => a.id === cur) ? cur : agents[0].id))
+	}, [agents])
 	useEffect(() => {
 		setModelId('')
 	}, [agentId])
+	// Persist EXPLICIT picks (not the auto-fallback) so the choice survives reloads.
+	const selectAgent = (id: string) => {
+		setAgentId(id)
+		try {
+			localStorage.setItem(AGENT_STORAGE_KEY, id)
+		} catch {
+			/* storage blocked — the selection still applies for this session */
+		}
+	}
 
 	// "+" menu — files uploaded + skills selected for the next message.
 	const [files, setFiles] = useState<{name: string; path: string}[]>([])
@@ -495,7 +521,7 @@ export function LivCommandInput({
 					label='Agent'
 					value={agentLabel}
 					options={agents.map((a) => ({id: a.id, label: a.name}))}
-					onSelect={setAgentId}
+					onSelect={selectAgent}
 				/>
 			) : null}
 			{models.length > 0 ? (
