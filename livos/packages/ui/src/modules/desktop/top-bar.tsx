@@ -328,14 +328,22 @@ function TopBarDesktop() {
 	// hit-test only reads getBoundingClientRect, which every element has.
 	const dropZoneRef = useRef<HTMLElement>(null)
 
-	// Phase 305 R9 — the Displays {n} count badge was REMOVED. `displays.list`
-	// counts STALE/GHOST Redis display records (display-manager.list() does no
-	// liveness check; reapDeadDisplays runs boot-only + fail-safe), so it
-	// over-counted (e.g. 7 for 4 real displays) and could not be made correct from
-	// the client (DisplayRecord exposes no alive/status field). The Displays button
-	// is now icon-only; the popover still lists displays. A correct live counter
-	// needs a server-side reap-on-read in display-manager.list() — follow-up. The
-	// always-on `displays.list` poll + the `pinnedWindows` floor were removed too.
+	// Phase 305 R9 — the Displays {n} count BADGE was removed (it showed a WRONG
+	// count: `displays.list` returns STALE/GHOST Redis display records — no
+	// server-side liveness check — so it over-counted, e.g. 7 for 4 real displays;
+	// DisplayRecord has no alive field to correct it client-side). The button is now
+	// icon-only; the popover still lists displays. A correct live counter needs a
+	// server-side reap-on-read in display-manager.list() — follow-up.
+	//
+	// R9.1 FIX — but KEEP this always-on `displays.list` poll (badge gone, poll
+	// stays). The global React Query staleTime is 60s (trpc-provider.tsx) and the
+	// Displays popover (displays-surface.tsx) SHARES this exact query key, so this
+	// background poll keeps the shared cache warm → the popover reflects
+	// opened/minimized/closed displays LIVE the moment it opens. Removing it in R9
+	// regressed the popover to up-to-60s-stale-until-page-refresh (operator:
+	// "display kısmı eş zamanlı gözükmüyor"). Bare call — its only job is the
+	// shared-cache refresh; no UI reads its return value anymore.
+	trpcReact.displays.list.useQuery(undefined, {refetchInterval: 4000})
 
 	// Open the ⌘K command palette. TopBar is mounted OUTSIDE CmdkProvider, so we
 	// can't call useCmdkOpen() here — use the module-level opener the provider
