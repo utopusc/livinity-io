@@ -62,7 +62,36 @@ DATA_DIR="${INSTALL_ROOT}/data"
 # Variable name kept BRUCE_USER to avoid churn across the ~5 downstream
 # references; only the VALUE is now dynamic. BRUCE_HOME resolves from the user's
 # real passwd entry (its home may not be /home/<user> on every box).
-BRUCE_USER="${LIVOS_DESKTOP_USER:-${DESKTOP_USER:-livos}}"
+#
+# Phase 305 R4 — SELF-DERIVE the user when no valid one is passed. The old
+# `:-livos` last-resort was a silent footgun: update.sh's per-update self-heal
+# (step 4.6) invokes THIS installer with NO LIVOS_DESKTOP_USER/DESKTOP_USER in its
+# env (update.sh's own _DESKTOP_USER isn't populated until AFTER the self-heal step
+# runs), so BRUCE_USER fell to the literal `livos`. On any box whose operator user
+# is NOT `livos` (e.g. `everything`), the `id "${BRUCE_USER}"` preflight below then
+# DIED → the installer fail-soft-stranded AionUi on the OLD install pin forever (the
+# original fresh deploy worked only because deploy-livinityd.sh passes the user).
+# So: honor an explicit env user first, but if it's empty OR doesn't exist, derive
+# it exactly like update.sh's _set_desktop_identity (livos.service User= → first
+# uid>=1000 login → owner of the install/repo dir → uid-1000 name) and NEVER pin to
+# a non-existent literal. set +e around the probe so a missing tool can't abort.
+BRUCE_USER="${LIVOS_DESKTOP_USER:-${DESKTOP_USER:-}}"
+if [[ -z "${BRUCE_USER}" ]] || ! id "${BRUCE_USER}" >/dev/null 2>&1; then
+  set +e
+  for _cand in \
+    "$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1)" \
+    "$(getent passwd | awk -F: '$3>=1000 && $3<65534 {print $1; exit}')" \
+    "$(stat -c '%U' /opt/liv-assistant/current 2>/dev/null)" \
+    "$(stat -c '%U' /opt/livos 2>/dev/null)" \
+    "$(id -un 1000 2>/dev/null)"; do
+    if [[ -n "${_cand}" && "${_cand}" != "root" && "${_cand}" != "UNKNOWN" ]] \
+        && id "${_cand}" >/dev/null 2>&1; then
+      BRUCE_USER="${_cand}"
+      break
+    fi
+  done
+  set -e
+fi
 BRUCE_HOME="$(getent passwd "${BRUCE_USER}" 2>/dev/null | cut -d: -f6)"
 [[ -n "${BRUCE_HOME}" ]] || BRUCE_HOME="/home/${BRUCE_USER}"
 BUN_DIR="${BRUCE_HOME}/.bun"
