@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install-liv-assistant.sh
 #
-# Idempotent installer for the vendored AionUi v2.1.14 binary distribution
+# Idempotent installer for the vendored AionUi v2.1.24 binary distribution
 # that powers Liv Assistant (v42 milestone, Phase 223).
 #
 # Strategy: vendor-and-wrap (no source fork). See:
@@ -23,26 +23,32 @@ IFS=$'\n\t'
 # ---------------------------------------------------------------------------
 # Pinned constants (DO NOT EDIT without bumping Phase + re-running spike)
 # ---------------------------------------------------------------------------
-# AionUi bump 2026-06-17: v2.1.14 -> v2.1.19 (5 upstream releases; new ACP/AionRS
-# runtime policy + turn-aware conversation view that prevents late events from
-# overwriting newer turns, HTTP error-response handling fix, aioncore
-# v0.1.24 -> v0.1.27 — improves graceful recovery from transient upstream errors
-# (e.g. Claude API 529 Overloaded) instead of killing the chat). SHA256 = the
-# official .sha256 sidecar for the linux-x86_64 web tarball, re-verified by
-# downloading the tarball and running sha256sum (matched exactly: d22d2b5b…).
-# Patch note: the Phase-253-W4 MCP-importer filter literal
-# (F.source===c&&_.push(...F.servers)) was refactored upstream to
-# `.find(le=>le.source===i)?.servers`, so that sed no-ops GRACEFULLY on v2.1.19
-# (its grep pre-check misses) — LivOS MCPs still work for the default agent;
-# cross-agent importer re-derivation is a follow-up. Path-rewrite (/api,/ws) +
-# index.html/branding/sw.js patches verified present in the v2.1.19 bundle.
-# Rollback is trivial: the prior aionui-web-2.1.14/ version dir is left intact;
-# `ln -sfn .../aionui-web-2.1.14/aionui-web /opt/liv-assistant/current` + restart.
-AIONUI_VERSION="2.1.19"
+# AionUi bump 2026-06-26 (Phase 305): v2.1.19 -> v2.1.24 (aioncore v0.1.27 ->
+# v0.1.37) — FIXES the Liv/AionUi PERMISSION MODE not taking effect. The 2.1.19
+# pin bundled aioncore 0.1.27, whose backend does NOT register
+# /api/conversations/{id}/config-options (-> HTTP 404) and whose web bundle logs
+# "Unsupported message type 'acp_mode_info'". So choosing a Permission Mode
+# (Accept Edits / YOLO / Don't Ask / Plan) in the AionUi iframe never reached
+# Claude Code (run under claude-agent-acp) — it kept asking Allow/Reject for every
+# tool. config-options landed in aioncore 0.1.31 (AionUi v2.1.20, "feat(acp): add
+# observed config option selectors"); v2.1.24 ships aioncore 0.1.37 (latest, best
+# session/set_mode enforcement). LivOS canNOT patch this from its own code — the
+# iframe's /liv/api/* bypasses livinityd straight to aioncore :3020 — so bumping
+# the vendored pin is the only fix. SHA256 = the official .sha256 sidecar for the
+# linux-x86_64 web tarball (3122de42…), fetched from the GitHub release.
+# Patch safety: the load-bearing path-rewrite (/api->/liv/api, /ws->/liv/ws) is
+# PATTERN-based (count_unprefixed_paths + generic sed over html/js/css), so it is
+# version-AGNOSTIC and applies to v2.1.24 exactly like v2.1.19; the Phase-253-W4
+# MCP-importer filter sed no-ops GRACEFULLY (grep pre-check misses) as before —
+# default-agent MCPs still work; cross-agent importer is a follow-up.
+# Rollback is trivial: the prior aionui-web-2.1.19/ version dir is left intact;
+# `ln -sfn .../aionui-web-2.1.19/aionui-web /opt/liv-assistant/current` +
+# `systemctl restart liv-assistant`.
+AIONUI_VERSION="2.1.24"
 AIONUI_ARCH="linux-x86_64"
 AIONUI_TARBALL="aionui-web-${AIONUI_VERSION}-${AIONUI_ARCH}.tar.gz"
 AIONUI_URL="https://github.com/iOfficeAI/AionUi/releases/download/v${AIONUI_VERSION}/${AIONUI_TARBALL}"
-EXPECTED_SHA256="d22d2b5be90fba2217938f624932b5c5608aadfb378d9f45ae1b45d6810f41c2"
+EXPECTED_SHA256="3122de42b893e97a3ea80f4bd849d9aeba15756c2103b29b5af6218819474cfe"
 
 INSTALL_ROOT="/opt/liv-assistant"
 CACHE_DIR="${INSTALL_ROOT}/cache"
