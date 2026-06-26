@@ -104,6 +104,9 @@ type FmpSession = {
 	startedAt: number
 	status: StreamStatus
 	stopRequested: boolean
+	/** Phase 305 — viewerless-grace reaper bookkeeping (see attachViewer). */
+	viewers: number
+	lastViewerLeftAt: number | null
 }
 
 type VncSession = {
@@ -126,6 +129,9 @@ type VncSession = {
 	startedAt: number
 	status: StreamStatus
 	stopRequested: boolean
+	/** Phase 305 — viewerless-grace reaper bookkeeping (see attachViewer). */
+	viewers: number
+	lastViewerLeftAt: number | null
 }
 
 export type StreamSession = FmpSession | VncSession
@@ -268,6 +274,8 @@ export class StreamManager extends EventEmitter {
 				startedAt: Date.now(),
 				status: 'alive',
 				stopRequested: false,
+				viewers: 0,
+				lastViewerLeftAt: Date.now(),
 			}
 			this.streams.set(streamId, vncSession)
 			const targetLabel = hasDisplay ? `display=${displayValue}` : `wid=${widValue}`
@@ -342,6 +350,8 @@ export class StreamManager extends EventEmitter {
 			startedAt: Date.now(),
 			status: 'alive',
 			stopRequested: false,
+			viewers: 0,
+			lastViewerLeftAt: Date.now(),
 		}
 		this.streams.set(streamId, session)
 
@@ -569,6 +579,51 @@ export class StreamManager extends EventEmitter {
 		if (!session || session.kind !== 'fmp4') return false
 		session.fanout.addSubscriber(ws)
 		return true
+	}
+
+	/**
+	 * Phase 305 — viewerless-grace reaper bookkeeping. The WS upgrade handler
+	 * (`/ws/stream/:id`) calls `attachViewer` on connect and `detachViewer` on
+	 * close/error for BOTH vnc and fmp4 streams. A stream becomes reapable only
+	 * after it has been CONTINUOUSLY viewerless past the grace window, so a
+	 * transient reconnect (noVNC auto-reconnect, brief network blip) re-arms it
+	 * via `attachViewer` and is never reaped. This frees cap slots orphaned by a
+	 * browser tab crash / force-close / navigate-away — x11vnc runs with
+	 * `-forever -shared`, so a disconnected browser leaves its capture process
+	 * running and the session 'alive' forever (5 ghosts → "stream cap exceeded").
+	 */
+	attachViewer(streamId: string): void {
+		const session = this.streams.get(streamId)
+		if (!session) return
+		session.viewers += 1
+		session.lastViewerLeftAt = null
+	}
+
+	detachViewer(streamId: string): void {
+		const session = this.streams.get(streamId)
+		if (!session) return
+		session.viewers = Math.max(0, session.viewers - 1)
+		if (session.viewers === 0) session.lastViewerLeftAt = Date.now()
+	}
+
+	/**
+	 * Phase 305 — streamIds of alive sessions that have been continuously
+	 * viewerless for longer than `graceMs`. Used by the stream-idle reaper.
+	 * Excludes streams with a live viewer (`lastViewerLeftAt === null`) and any
+	 * still inside the grace window. Per-streamId (so reaping one user's
+	 * orphaned host-display view never touches a peer's still-viewed stream).
+	 */
+	listIdleStreamIds(graceMs: number): string[] {
+		const now = Date.now()
+		const out: string[] = []
+		for (const session of this.streams.values()) {
+			if (session.status !== 'alive') continue
+			if (session.viewers > 0) continue
+			if (session.lastViewerLeftAt === null) continue
+			if (now - session.lastViewerLeftAt <= graceMs) continue
+			out.push(session.streamId)
+		}
+		return out
 	}
 
 	private toRecord(session: StreamSession): StreamRecord {

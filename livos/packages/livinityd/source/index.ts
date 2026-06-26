@@ -124,6 +124,7 @@ import {initV37InstallService} from './modules/apps/v37-install-service.js'
 // 30min). Defense in depth for the window-manager-mediated close handler
 // (159-02) and the fire-and-forget native-routes close mutation.
 import {startNativeAppIdleReaper} from './modules/apps/native-app-idle-reaper.js'
+import {startStreamIdleReaper} from './modules/streaming/stream-idle-reaper.js'
 import {activeNative, nativeDisplayAllocator} from './modules/apps/native-routes.js'
 // Phase 101-01 + 101-04 — singleton Chrome bootstrap + typed CDP client.
 // `bootstrapChrome` spawns Chrome with --remote-debugging-port=9222 and
@@ -386,6 +387,7 @@ export default class Livinityd {
 	// Undefined while the reaper has not been started (boot edge before
 	// streamManager is constructed, or post-stop).
 	private nativeAppIdleReaperStop?: () => void
+	private streamIdleReaperStop?: () => void
 	// Phase 93 — Streaming subsystem (T93-05 StreamManager). Optional because
 	// T93-11 wires the lifecycle in start(); this field is declared up-front so
 	// the /ws/stream/:id upgrade handler in server/index.ts can typecheck.
@@ -942,6 +944,23 @@ export default class Livinityd {
 				displayAllocator: nativeDisplayAllocator,
 				streamManager: this.streamManager,
 				logger: reaperLogger,
+			})
+
+			// Phase 305 — arm the stream idle (viewerless) reaper. Frees cap slots
+			// orphaned by a browser tab crash / force-close / navigate-away, which
+			// x11vnc (-forever) keeps 'alive' forever (root cause of recurring
+			// "stream cap exceeded (limit 5)"). Reconnect-safe via a viewerless
+			// grace window (STREAM_VIEWERLESS_GRACE_MS, default 60s).
+			this.streamIdleReaperStop = startStreamIdleReaper({
+				streamManager: this.streamManager,
+				logger: (() => {
+					const c = this.logger.createChildLogger('stream-reaper')
+					return {
+						info: (msg: string) => c.log(msg),
+						warn: (msg: string, error?: unknown) => c.error(msg, error),
+						error: (msg: string, error?: unknown) => c.error(msg, error),
+					}
+				})(),
 			})
 
 			// Phase 102-03 — Master Chrome profile seeder
@@ -2239,6 +2258,7 @@ export default class Livinityd {
 			// stream-manager surface.
 			try {
 				this.nativeAppIdleReaperStop?.()
+				this.streamIdleReaperStop?.()
 			} catch (err) {
 				this.logger.error('Failed to stop native-app idle reaper', err)
 			}

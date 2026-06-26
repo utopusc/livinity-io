@@ -1307,11 +1307,20 @@ class Server {
 							// Phase 99 VNC bridge — pure-Node WS↔TCP byte pipe to x11vnc.
 							// Handles close propagation, 4 MB backpressure drop, and
 							// 3×100ms ECONNREFUSED retry (Pitfall 4).
+							// Phase 305 — register the viewer so the stream-idle reaper can
+							// free this cap slot when the browser disconnects (tab crash /
+							// force-close / navigate-away) and never reconnects. x11vnc
+							// (-forever -shared) keeps the capture 'alive' otherwise, so 5
+							// orphans surface as "stream cap exceeded (limit 5)". A reconnect
+							// re-attaches before the grace window elapses, so it is never reaped.
+							streamManager.attachViewer(streamId)
 							attachVncBridge(ws as never, {
 								host: '127.0.0.1',
 								port: session.rfbPort,
 								logger: this.logger,
 							})
+							ws.on('close', () => streamManager.detachViewer(streamId))
+							ws.on('error', () => streamManager.detachViewer(streamId))
 							return
 						}
 						// fmp4 path (existing — D-99-04 preserved for mode:'desktop')
@@ -1321,12 +1330,16 @@ class Server {
 							ws.close(1011, 'stream gone')
 							return
 						}
+						// Phase 305 — viewerless-grace reaper bookkeeping (see vnc branch).
+						streamManager.attachViewer(streamId)
 						ws.on('close', () => {
+							streamManager.detachViewer(streamId)
 							const fanout = streamManager.getFanout(streamId)
 							if (fanout) fanout.removeSubscriber(ws)
 						})
 						ws.on('error', (err) => {
 							this.logger.warn(`WS stream ${streamId}: client error`, err)
+							streamManager.detachViewer(streamId)
 							const fanout = streamManager.getFanout(streamId)
 							if (fanout) fanout.removeSubscriber(ws)
 						})
