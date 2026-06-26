@@ -15,6 +15,10 @@ one assistant — **Liv** — that understands what you ask and gets it done.
 
 <br/>
 
+![Livinity — in action](docs/media/livinity-2.gif)
+
+<br/>
+
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-1f1f1f?style=flat-square)](LICENSE)
 [![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-3c3c3c?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![TypeScript 5.7](https://img.shields.io/badge/TypeScript-5.7-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
