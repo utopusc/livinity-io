@@ -70,46 +70,56 @@ afterEach(() => {
 })
 
 describe('listLivAgents', () => {
-	it('parses the {success,data:[...]} envelope + handshake models (vendored AionUi shape)', async () => {
+	it('GETs /api/agents/management + parses {success,data:[...]} with agent_type, dropping not-installed (2.1.24)', async () => {
+		let calledUrl = ''
+		mockFetchOnce((url) => {
+			calledUrl = url
+			return {
+				body: {
+					success: true,
+					data: [
+						{id: '2d23ff1c', name: 'Claude Code', agent_type: 'acp', installed: true},
+						{id: 'g1', name: 'Gemini', agent_type: 'acp'},
+						{id: 'qwen', name: 'Qwen', agent_type: 'acp', installed: false}, // dropped
+					],
+				},
+			}
+		})
+		const agents = await listLivAgents()
+		// 2.1.24 moved the list to /api/agents/management (bare /api/agents → 404).
+		expect(calledUrl).toContain('/liv/api/agents/management')
+		expect(agents).toEqual([
+			{id: '2d23ff1c', name: 'Claude Code', agentType: 'acp', models: [], defaultModelId: null},
+			{id: 'g1', name: 'Gemini', agentType: 'acp', models: [], defaultModelId: null},
+		])
+	})
+	it('still tolerates a legacy handshake.available_models block if a build re-adds it', async () => {
 		mockFetchOnce(() => ({
 			body: {
 				success: true,
 				data: [
 					{
-						id: '2d23ff1c',
-						name: 'Claude Code',
+						id: 'a',
+						name: 'A',
 						handshake: {
 							available_models: {
 								current_model_id: 'sonnet',
-								available_models: [
-									{id: 'sonnet', label: 'Sonnet'},
-									{id: 'haiku', label: 'Haiku'},
-								],
+								available_models: [{id: 'sonnet', label: 'Sonnet'}],
 							},
 						},
 					},
-					{id: 'g1', name: 'Gemini'},
 				],
 			},
 		}))
 		expect(await listLivAgents()).toEqual([
-			{
-				id: '2d23ff1c',
-				name: 'Claude Code',
-				models: [
-					{id: 'sonnet', label: 'Sonnet'},
-					{id: 'haiku', label: 'Haiku'},
-				],
-				defaultModelId: 'sonnet',
-			},
-			{id: 'g1', name: 'Gemini', models: [], defaultModelId: null},
+			{id: 'a', name: 'A', agentType: undefined, models: [{id: 'sonnet', label: 'Sonnet'}], defaultModelId: 'sonnet'},
 		])
 	})
 	it('parses a bare array and an {agents:[...]} wrapper, dropping id-less rows', async () => {
 		mockFetchOnce(() => ({body: [{id: 'a', name: 'A'}, {name: 'no-id'}]}))
-		expect(await listLivAgents()).toEqual([{id: 'a', name: 'A', models: [], defaultModelId: null}])
+		expect(await listLivAgents()).toEqual([{id: 'a', name: 'A', agentType: undefined, models: [], defaultModelId: null}])
 		mockFetchOnce(() => ({body: {agents: [{id: 'b'}]}}))
-		expect(await listLivAgents()).toEqual([{id: 'b', name: 'b', models: [], defaultModelId: null}])
+		expect(await listLivAgents()).toEqual([{id: 'b', name: 'b', agentType: undefined, models: [], defaultModelId: null}])
 	})
 })
 
@@ -154,22 +164,31 @@ describe('applyLivMode', () => {
 	})
 })
 
-describe('createLivConversation model + sendLivMessage files/skills', () => {
-	it('puts the chosen model in extra.current_model_id', async () => {
+describe('createLivConversation body + sendLivMessage files/skills', () => {
+	it('sends the 2.1.24 assistant-preset body bare:<agentId> for ANY agent (no legacy type/extra.agent_id/model)', async () => {
 		const fetchMock = vi.fn(
 			async () => ({ok: true, status: 200, text: async () => JSON.stringify({data: {id: 'c1'}})}) as Response,
 		)
 		vi.stubGlobal('fetch', fetchMock)
-		expect(await createLivConversation('claude', 'sonnet')).toBe('c1')
+		// A non-Claude agent id, with a model arg — both honoured agent-agnostically.
+		expect(await createLivConversation('g1-gemini', 'gemini-2.5')).toBe('c1')
 		const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)
-		expect(body.extra).toEqual({agent_id: 'claude', current_model_id: 'sonnet'})
+		expect(body).toEqual({name: 'Liv command', extra: {}, assistant: {id: 'bare:g1-gemini'}})
+		expect(body.type).toBeUndefined()
+		expect(body.extra.agent_id).toBeUndefined()
+		// modelId is NOT sent at create for ACP (model is set later via config-options).
+		expect(JSON.stringify(body)).not.toContain('gemini-2.5')
 	})
 	it('sends files + inject_skills only when provided', async () => {
 		const fetchMock = vi.fn(async () => ({ok: true, status: 200, text: async () => '{}'}) as Response)
 		vi.stubGlobal('fetch', fetchMock)
 		await sendLivMessage('c1', 'hi', {files: ['/tmp/a.png'], injectSkills: ['commit']})
 		expect(JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)).toEqual({
-			content: 'hi',
+			// Phase 302 R3: the absolute path is ALSO embedded in `content` (AionUi's ACP
+			// pipeline feeds only content to the agent; the files[] array alone never
+			// reaches the model). The bare files[] + inject_skills are still sent for the
+			// bubble/DB display.
+			content: 'hi\n\nAttached file (open with your tools):\n/tmp/a.png',
 			files: ['/tmp/a.png'],
 			inject_skills: ['commit'],
 		})
@@ -188,26 +207,46 @@ describe('createLivConversation', () => {
 		expect(await createLivConversation()).toBe('c3')
 	})
 
-	it('retries WITHOUT extra when the agent-scoped create is rejected', async () => {
+	it('creates with a single bare-assistant attempt for the given agent (no legacy retry)', async () => {
 		let call = 0
-		const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+		const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => {
 			call += 1
-			// First attempt (with extra.agent_id) → 400; second (no extra) → ok.
-			const ok = call > 1
-			return {
-				ok,
-				status: ok ? 200 : 400,
-				text: async () => JSON.stringify(ok ? {data: {id: 'c-default'}} : {error: 'bad agent'}),
-			} as Response
+			return {ok: true, status: 200, text: async () => JSON.stringify({data: {id: 'c-ok'}})} as Response
 		})
 		vi.stubGlobal('fetch', fetchMock)
-		expect(await createLivConversation('bogus-agent')).toBe('c-default')
-		expect(call).toBe(2)
-		// Body of the first attempt carried the agent; the retry did not.
-		const firstBody = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)
-		const secondBody = JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string)
-		expect(firstBody.extra).toEqual({agent_id: 'bogus-agent'})
-		expect(secondBody.extra).toBeUndefined()
+		expect(await createLivConversation('any-agent')).toBe('c-ok')
+		expect(call).toBe(1) // agentId given → no listLivAgents resolution, single create POST
+		const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)
+		expect(body.assistant).toEqual({id: 'bare:any-agent'})
+		expect(body.extra).toEqual({})
+		expect(body.type).toBeUndefined()
+	})
+
+	it('with NO agentId, resolves a default from /api/agents/management (first ACP, NOT hardcoded Claude)', async () => {
+		let createBody: string | undefined
+		const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+			if (url.includes('/agents/management')) {
+				return {
+					ok: true,
+					status: 200,
+					text: async () =>
+						JSON.stringify({
+							success: true,
+							data: [
+								{id: 'aion', name: 'Aion CLI', agent_type: 'aionrs'},
+								{id: 'gem', name: 'Gemini', agent_type: 'acp'},
+								{id: '2d23ff1c', name: 'Claude Code', agent_type: 'acp'},
+							],
+						}),
+				} as Response
+			}
+			createBody = init?.body as string
+			return {ok: true, status: 200, text: async () => JSON.stringify({data: {id: 'c1'}})} as Response
+		})
+		vi.stubGlobal('fetch', fetchMock)
+		expect(await createLivConversation()).toBe('c1')
+		// First ACP agent (Gemini here) wins — proves it's agent-agnostic, not Claude-pinned.
+		expect(JSON.parse(createBody!).assistant).toEqual({id: 'bare:gem'})
 	})
 
 	it('throws when no attempt yields an id', async () => {

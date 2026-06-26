@@ -41,7 +41,12 @@
 export interface LivAgent {
 	id: string
 	name: string
-	/** Per-agent model list (from AionUi's /api/agents handshake.available_models). */
+	/** AionUi agent kind: 'acp' (Claude Code / Codex), 'aionrs' (Aion CLI), … (2.1.24
+	 *  /api/agents/management `agent_type`). Used to pick the default ACP agent. */
+	agentType?: string
+	/** Per-agent model list. NOTE 2.1.24: /api/agents/management no longer carries
+	 *  handshake.available_models — ACP model selection moved to the conversation's
+	 *  config-options — so this is usually empty now (kept for back-compat / aionrs). */
 	models: {id: string; label: string}[]
 	/** The agent's own default/current model id (null = let the agent use its built-in default). */
 	defaultModelId: string | null
@@ -112,9 +117,23 @@ export async function primeLivSession(): Promise<void> {
 	}
 }
 
-/** GET /liv/api/agents — livinityd-filtered list of installed Liv agents. */
+/**
+ * GET /liv/api/agents/management — installed-agent list.
+ *
+ * 2.1.24 (aioncore 0.1.37): the bare `GET /api/agents` endpoint was REMOVED (404
+ * "Route not found"). The canonical list is now `/api/agents/management`, shape
+ * `{success:true, data:[{id, name, agent_type, backend, status, installed, …}]}`.
+ * We hit it via `/liv/api/agents/management`, which Caddy's `@liv_api_subresource`
+ * proxies to :3020 — this intentionally BYPASSES the legacy `@liv_agents` :8080
+ * auth-filter overlay (that overlay fetched the now-removed /api/agents). Acceptable:
+ * aioncore's own `installed`/`status` mark usable agents; re-adding the per-CLI
+ * LivOS auth filter on top of /management is a follow-up. The old
+ * `handshake.available_models` is gone from this endpoint (ACP model selection moved
+ * to per-conversation config-options), so `models` is normally empty now — tolerated
+ * if a future build re-adds it.
+ */
 export async function listLivAgents(): Promise<LivAgent[]> {
-	const body = await fetchJson('/liv/api/agents')
+	const body = await fetchJson('/liv/api/agents/management')
 	const raw = Array.isArray(body)
 		? body
 		: Array.isArray((body as {data?: unknown[]})?.data)
@@ -122,25 +141,27 @@ export async function listLivAgents(): Promise<LivAgent[]> {
 			: Array.isArray((body as {agents?: unknown[]})?.agents)
 				? (body as {agents: unknown[]}).agents
 				: []
-	return raw
-		.map((a) => {
-			const r = a as Record<string, unknown>
-			const id = String(r?.id ?? r?.agent_id ?? r?.backend ?? '')
-			const name = String(r?.name ?? r?.title ?? r?.id ?? 'Agent')
-			// AionUi advertises each agent's model list under handshake.available_models
-			// (AcpModelInfo: {available_models:[{id,label}], current_model_id}).
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const hs = (r?.handshake as any)?.available_models as any
-			const models = Array.isArray(hs?.available_models)
-				? hs.available_models
-						// eslint-disable-next-line @typescript-eslint/no-explicit-any
-						.map((m: any) => ({id: String(m?.id ?? ''), label: String(m?.label ?? m?.id ?? '')}))
-						.filter((m: {id: string}) => m.id.length > 0)
-				: []
-			const defaultModelId = typeof hs?.current_model_id === 'string' ? hs.current_model_id : null
-			return {id, name, models, defaultModelId}
-		})
-		.filter((a) => a.id.length > 0)
+	const out: LivAgent[] = []
+	for (const a of raw) {
+		const r = a as Record<string, unknown>
+		const id = String(r?.id ?? r?.agent_id ?? r?.backend ?? '')
+		if (!id) continue
+		// Hide agents aioncore reports as not installed (e.g. a builtin CLI not on $PATH).
+		if (r?.installed === false) continue
+		const name = String(r?.name ?? r?.title ?? r?.id ?? 'Agent')
+		const agentType = typeof r?.agent_type === 'string' ? (r.agent_type as string) : undefined
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const hs = (r?.handshake as any)?.available_models as any
+		const models = Array.isArray(hs?.available_models)
+			? hs.available_models
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					.map((m: any) => ({id: String(m?.id ?? ''), label: String(m?.label ?? m?.id ?? '')}))
+					.filter((m: {id: string}) => m.id.length > 0)
+			: []
+		const defaultModelId = typeof hs?.current_model_id === 'string' ? hs.current_model_id : null
+		out.push({id, name, agentType, models, defaultModelId})
+	}
+	return out
 }
 
 /** GET /liv/api/skills — the full skill catalog (its length is the "/24" total). */
@@ -235,14 +256,39 @@ export async function applyLivMode(conversationId: string, mode: string): Promis
  * Tries with the chosen agent first, then without (best-effort agent select).
  */
 export async function createLivConversation(agentId?: string, modelId?: string): Promise<string> {
-	const base: Record<string, unknown> = {type: 'acp', name: 'Liv command'}
-	// ACP agents carry agent + model in `extra` (NOT the top-level `model` field,
-	// which is aionrs-only). modelId omitted = "Default Model" (agent's own default).
-	const extra: Record<string, unknown> = {}
-	if (agentId) extra.agent_id = agentId
-	if (modelId) extra.current_model_id = modelId
-	const attempts: Record<string, unknown>[] =
-		Object.keys(extra).length > 0 ? [{...base, extra}, base] : [base]
+	// 2.1.24 (aioncore 0.1.37) BREAKING CHANGE: conversation-create is now
+	// assistant-preset-centric. The old `{type:'acp', name, extra:{agent_id,
+	// current_model_id}}` body is REJECTED with 400 "Invalid JSON request body"
+	// (confirmed POSTing it DIRECTLY to :3020 — a backend serde-schema change, not a
+	// proxy issue). The new body keys on `assistant.id`; the preset-less ("bare")
+	// assistant for a given agent is addressed as `bare:<agentId>` (verified GET
+	// /api/assistants/bare:<id> = 200). `type` and `extra.agent_id` are GONE; for ACP
+	// no top-level `model` is sent — the model is chosen per-conversation via
+	// config-options AFTER the session starts. (Source: AionUi v2.1.24
+	// apiModelMapper.ts `buildCreateConversationBody`.)
+	// Works for ANY agent: a selected agentId is honoured verbatim as `bare:<agentId>`
+	// (ACP agents — Claude Code / Codex / Gemini / … — and aionrs alike; the bare
+	// preset-less assistant exists for every agent, verified GET /api/assistants/bare:<id>).
+	let resolvedAgentId = agentId
+	if (!resolvedAgentId) {
+		// No explicit pick → resolve a sensible default from the management list:
+		// the first installed ACP agent (ACP has the simple assistant-only create body),
+		// else the first installed agent. NOT hardcoded to Claude — agent-agnostic.
+		try {
+			const agents = await listLivAgents()
+			const fallback = agents.find((a) => a.agentType === 'acp') ?? agents[0]
+			resolvedAgentId = fallback?.id
+		} catch {
+			// listLivAgents failed — fall through; the create may 400, surfaced to caller.
+		}
+	}
+	// modelId is intentionally NOT sent at create for ACP (set later via config-options);
+	// reference it so the param stays meaningful and noUnusedParameters is satisfied.
+	void modelId
+	const base: Record<string, unknown> = {name: 'Liv command', extra: {}}
+	const attempts: Record<string, unknown>[] = resolvedAgentId
+		? [{...base, assistant: {id: `bare:${resolvedAgentId}`}}]
+		: [base]
 	let lastErr: unknown
 	for (const body of attempts) {
 		try {
