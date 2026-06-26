@@ -420,9 +420,14 @@ export function DockItem({
 						unstable_viewTransition
 					/>
 				)}
-				{!!notificationCount && <NotificationBadge count={notificationCount} />}
 			</motion.div>
 			{open && <OpenDot inverted={useDarkTile} />}
+			{/* Render the badge as a sibling of OpenDot — i.e. inside the OUTER
+			    `relative` wrapper, NOT the inner tile (which has `overflow-hidden`
+			    and was cropping the badge's -top-1/-right-1 overhang so the red
+			    circle/number showed half-tucked). The outer wrapper has no clip, so
+			    the full badge paints in front, exactly like OpenDot. */}
+			{!!notificationCount && <NotificationBadge count={notificationCount} />}
 		</motion.div>
 	)
 }

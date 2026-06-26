@@ -65,7 +65,7 @@ export function UpdateConfirmModal({
 					</AlertDialogTitle>
 					<AlertDialogDescription className='space-y-3'>
 						{latestVersion?.message && (
-							<span className='block text-sm font-medium text-zinc-700'>
+							<span className='block text-sm font-medium text-text-primary'>
 								{latestVersion.message.split('\n')[0].slice(0, 200)}
 							</span>
 						)}
@@ -86,7 +86,7 @@ export function UpdateConfirmModal({
 								View full release notes ↗
 							</a>
 						) : null}
-						<span className='block text-sm text-zinc-500'>
+						<span className='block text-sm text-text-tertiary'>
 							This will rebuild Livinity from the latest source and restart services. The
 							process takes 2–4 minutes; your session is preserved (no reboot).
 						</span>

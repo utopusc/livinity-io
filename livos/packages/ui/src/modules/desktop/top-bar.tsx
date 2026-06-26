@@ -328,42 +328,14 @@ function TopBarDesktop() {
 	// hit-test only reads getBoundingClientRect, which every element has.
 	const dropZoneRef = useRef<HTMLElement>(null)
 
-	// Phase 130-09 — pinned windows now live in the WindowManager as
-	// `isPinnedToTopBar` instead of a local array, so the actual WindowState
-	// stays alive and renderable when minimized into the shelf. The TopBar
-	// derives its chip list directly from windowManager.windows.
-	const pinnedWindows = (windowManager?.windows ?? []).filter((w) => w.isPinnedToTopBar)
-
-	// Phase 260-04 (SC5) — the {n} count badge on the Displays button.
-	//
-	// BADGE SEMANTICS (resolved Open Question Q1 / Assumption A3):
-	// CONTEXT SC5 says "number of currently open/docked windows (displays)" and
-	// verify step 1 says the badge "reflects" a native app the MOMENT you OPEN it
-	// (before docking). Both point at the count the Displays POPOVER itself shows
-	// — i.e. the live `displays.list` count (which, after 260-02, includes open
-	// native-app displays), NOT only the docked/pinned subset. So the badge is
-	// driven by an always-on lightweight `displays.list` query, floored by the
-	// number of docked (pinned) windows so a docked stream is never under-counted
-	// even if its server-side display record has not yet refreshed:
-	//
-	//   badge = max(displays.list.length, pinnedWindows.length)
-	//
-	// This keeps the count == the popover contents (SC5 "matches the popover")
-	// while guaranteeing every docked window is represented. The query polls at
-	// the same 4s cadence the popover uses; it is always-on (not gated on the
-	// popover being open) because the badge must update live without the popover.
-	const displaysQuery = trpcReact.displays.list.useQuery(undefined, {
-		refetchInterval: 4000,
-	})
-	// Count APP displays only — exclude the always-present host `:1` ("Host
-	// Display", the XFCE desktop infra). Counting it made the badge read ≥1 even
-	// with no app window open, so it never matched "how many windows are open"
-	// (operator 2026-06-09: "display sayısı düzgün çalışmıyor … kaç pencere açık
-	// kontrol etsin"). Floored by pinned (docked) windows so a just-docked stream
-	// is never under-counted before its server-side display record refreshes. The
-	// 4s poll already gives the "check every few seconds" cadence requested.
-	const appDisplays = (displaysQuery.data?.displays ?? []).filter((d) => d.display !== ':1')
-	const displaysBadgeCount = Math.max(appDisplays.length, pinnedWindows.length)
+	// Phase 305 R9 — the Displays {n} count badge was REMOVED. `displays.list`
+	// counts STALE/GHOST Redis display records (display-manager.list() does no
+	// liveness check; reapDeadDisplays runs boot-only + fail-safe), so it
+	// over-counted (e.g. 7 for 4 real displays) and could not be made correct from
+	// the client (DisplayRecord exposes no alive/status field). The Displays button
+	// is now icon-only; the popover still lists displays. A correct live counter
+	// needs a server-side reap-on-read in display-manager.list() — follow-up. The
+	// always-on `displays.list` poll + the `pinnedWindows` floor were removed too.
 
 	// Open the ⌘K command palette. TopBar is mounted OUTSIDE CmdkProvider, so we
 	// can't call useCmdkOpen() here — use the module-level opener the provider
@@ -535,7 +507,8 @@ function TopBarDesktop() {
 	// (restorePinnedWindow / closePinnedWindow) were removed along with the
 	// shelf. Recall + close of docked windows moves to the Displays popover
 	// list in plan 260-04 (SC3), which reuses windowManager.unpinWindowFromTopBar
-	// directly. `pinnedWindows` (derived above) is retained for the 260-04 badge.
+	// directly. (The 260-04 Displays badge + its `pinnedWindows`/`displays.list`
+	// derivation were removed in 305 R9.)
 
 	const menuItems: Array<
 		| {icon: typeof TbPencil; label: string; action: () => void; danger?: boolean}
@@ -826,22 +799,6 @@ function TopBarDesktop() {
 											)}
 										>
 											<Monitor className='h-4 w-4' />
-											{/* Phase 260-04 (SC5) — {n} count badge. */}
-											<AnimatePresence>
-												{displaysBadgeCount > 0 && (
-													<motion.span
-														key={displaysBadgeCount}
-														initial={{scale: 0, opacity: 0}}
-														animate={{scale: 1, opacity: 1}}
-														exit={{scale: 0, opacity: 0}}
-														transition={{type: 'spring', stiffness: 500, damping: 28}}
-														className='pointer-events-none absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-[color:var(--fg)] px-1 text-[10px] font-semibold leading-none text-[color:var(--bg)] tabular-nums'
-														aria-label={`${displaysBadgeCount} display${displaysBadgeCount === 1 ? '' : 's'}`}
-													>
-														{displaysBadgeCount}
-													</motion.span>
-												)}
-											</AnimatePresence>
 										</motion.button>
 									</motion.div>
 

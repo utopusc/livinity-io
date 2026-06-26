@@ -1,6 +1,6 @@
 import {useState} from 'react'
 import {AnimatePresence, motion} from 'framer-motion'
-import {TbDownload} from 'react-icons/tb'
+import {RiArrowUpCircleFill} from 'react-icons/ri'
 import {formatDistanceToNow, parseISO} from 'date-fns'
 
 import {useIsMobile} from '@/hooks/use-is-mobile'
@@ -73,13 +73,15 @@ export function UpdateNotification() {
 						animate={{opacity: 1, y: 0}}
 						exit={{opacity: 0, y: 20}}
 						transition={{type: 'spring', stiffness: 300, damping: 30}}
-						className='fixed bottom-4 right-4 z-[80] flex w-80 flex-col gap-3 rounded-dash border border-border-default bg-card-bg p-4 shadow-lg'
+						className='fixed bottom-4 right-4 z-[80] flex w-80 flex-col gap-4 overflow-hidden rounded-2xl border border-border-default bg-card-bg px-5 py-4 text-text-primary shadow-2xl'
 						role='dialog'
 						aria-label='Software update available'
 					>
-						<div className='flex items-center gap-2'>
-							<TbDownload className='h-5 w-5 text-accent-blue' />
-							<span className='font-semibold text-text-primary'>New update available</span>
+						<div className='flex items-center gap-3'>
+							<span className='flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand'>
+								<RiArrowUpCircleFill className='h-5 w-5' />
+							</span>
+							<span className='text-[15px] font-semibold tracking-tight text-text-primary'>New update available</span>
 						</div>
 						<div className='flex flex-col gap-1'>
 							<p className='text-sm text-text-secondary'>
@@ -95,13 +97,13 @@ export function UpdateNotification() {
 						<div className='flex items-center gap-2'>
 							<button
 								onClick={handleUpdate}
-								className='flex-1 rounded-lg bg-accent-blue px-3 py-1.5 text-sm font-semibold text-white hover:bg-accent-blue/90 active:scale-95'
+								className='flex-1 rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-lighter active:scale-95'
 							>
 								Update
 							</button>
 							<button
 								onClick={handleLater}
-								className='rounded-lg border border-border-default px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-card-bg-2 active:scale-95'
+								className='rounded-full border border-border-default px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-2 active:scale-95'
 							>
 								Later
 							</button>
