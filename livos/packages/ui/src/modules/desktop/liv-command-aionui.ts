@@ -12,11 +12,11 @@
  *      `aionui-session` cookie via AionUi qr-token+qr-login and forwards the
  *      Set-Cookie). After that, the browser auto-attaches the cookie to every
  *      same-origin /liv/* and /ws request. JS never reads the cookie.
- *   2. CREATE — POST /liv/api/conversations {type:'acp', name} → conversation id.
- *      An optional agent is carried in `extra.agent_id`; if that create is
- *      rejected we retry WITHOUT extra so the agent picker can never break the
- *      core stream (it just falls back to AionUi's configured default agent —
- *      LivOS forces Claude Code).
+ *   2. CREATE — POST /liv/api/conversations {name, assistant:{id:`bare:<agentId>`},
+ *      extra} → conversation id (2.1.24 assistant-preset schema). A non-default
+ *      permission mode is preloaded via `extra.pending_config_options:{mode}`; if
+ *      that body is rejected we retry WITHOUT it so the preload can't break create.
+ *      The chosen agent is honoured verbatim (any installed agent — no Claude pin).
  *   3. SEND — POST /liv/api/conversations/{id}/messages {content}.
  *   4. STREAM — WebSocket wss://<host>/ws (bare /ws, NOT /liv/ws: Caddy @liv_ws
  *      proxies /ws → :3020 with NO forward_auth, while /liv/ws would hit the
@@ -148,6 +148,10 @@ export async function listLivAgents(): Promise<LivAgent[]> {
 		if (!id) continue
 		// Hide agents aioncore reports as not installed (e.g. a builtin CLI not on $PATH).
 		if (r?.installed === false) continue
+		// Hide agents the operator DISABLED in AionUi (2.1.24 `enabled` flag on every
+		// /api/agents/management row). undefined === enabled — match AionUi's own guard
+		// (`agent.enabled !== false`) so only an explicit false drops the agent.
+		if (r?.enabled === false) continue
 		const name = String(r?.name ?? r?.title ?? r?.id ?? 'Agent')
 		const agentType = typeof r?.agent_type === 'string' ? (r.agent_type as string) : undefined
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -251,11 +255,63 @@ export async function applyLivMode(conversationId: string, mode: string): Promis
 	}
 }
 
+/** Hard cap on the warmup wait so a slow/misconfigured agent can't stall dispatch. */
+const WARMUP_TIMEOUT_MS = 15_000
+
+/**
+ * POST /liv/api/conversations/{id}/warmup — block until the conversation's ACP
+ * session is ALIVE (connected + authenticated). This mirrors AionUi 2.1.24's own
+ * `warmupConversation → fetchConfigOptions` gate: config-options 404 until the
+ * session is `session_active`, and warmup is what AionUi awaits before fetching
+ * them. Calling it after create lets the subsequent `applyLivMode` GET/PUT land on
+ * a live session (200) instead of 404ing — so the mode is authoritatively applied
+ * server-side (and `modeApplied` is true, which keeps the client-side fallback from
+ * over-approving commands under acceptEdits on a current box).
+ *
+ * Best-effort + time-bounded: a stale box without the route (404) or a slow agent
+ * must not hang the dispatch — on timeout/failure we proceed and let applyLivMode
+ * 404 → client-side fallback. `abortSignal` (the run's own signal) cancels the
+ * in-flight warmup the instant the operator closes the bar or fires a new command,
+ * so a slow warmup is never left lingering after an abort.
+ */
+async function warmLivConversation(conversationId: string, abortSignal?: AbortSignal): Promise<void> {
+	if (abortSignal?.aborted) return
+	const ctrl = new AbortController()
+	const onAbort = () => ctrl.abort()
+	abortSignal?.addEventListener('abort', onAbort)
+	const timer = setTimeout(() => ctrl.abort(), WARMUP_TIMEOUT_MS)
+	try {
+		await fetchJson(`/liv/api/conversations/${encodeURIComponent(conversationId)}/warmup`, {
+			method: 'POST',
+			signal: ctrl.signal,
+		})
+	} catch {
+		// best-effort — the session may still come alive when the first message is
+		// sent; applyLivMode will then 404 → client-side fallback engages.
+	} finally {
+		clearTimeout(timer)
+		abortSignal?.removeEventListener('abort', onAbort)
+	}
+}
+
 /**
  * POST /liv/api/conversations — create an ephemeral ACP conversation.
  * Tries with the chosen agent first, then without (best-effort agent select).
+ *
+ * `mode` (default | plan | acceptEdits | bypassPermissions), when non-default, is
+ * PRELOADED at create time via `extra.pending_config_options: {mode}` — a
+ * Record<string,string> mapping the config-option id ('mode') to the value.
+ * aioncore 2.1.24 reads it during session WARMUP, BEFORE the config-options HTTP
+ * route is callable, so the permission mode applies server-side without the
+ * post-create GET/PUT round-trip that 404s while the session is still starting.
+ * (Source: AionUi v2.1.24 ipcBridge.ts `ICreateConversationParams.extra
+ * .pending_config_options` + agentModes.ts; PRD permissions.md F-PERM-06 "mode &
+ * permission initialization at conversation create time [实现]".) If a body with
+ * pending_config_options is rejected, we retry WITHOUT it (the mode is then set
+ * via the warmup→applyLivMode path in runLivCommand), so the preload can never
+ * break conversation creation.
  */
-export async function createLivConversation(agentId?: string, modelId?: string): Promise<string> {
+export async function createLivConversation(agentId?: string, modelId?: string, mode?: string): Promise<string> {
 	// 2.1.24 (aioncore 0.1.37) BREAKING CHANGE: conversation-create is now
 	// assistant-preset-centric. The old `{type:'acp', name, extra:{agent_id,
 	// current_model_id}}` body is REJECTED with 400 "Invalid JSON request body"
@@ -285,10 +341,22 @@ export async function createLivConversation(agentId?: string, modelId?: string):
 	// modelId is intentionally NOT sent at create for ACP (set later via config-options);
 	// reference it so the param stays meaningful and noUnusedParameters is satisfied.
 	void modelId
-	const base: Record<string, unknown> = {name: 'Liv command', extra: {}}
-	const attempts: Record<string, unknown>[] = resolvedAgentId
-		? [{...base, assistant: {id: `bare:${resolvedAgentId}`}}]
-		: [base]
+	// Preload a non-default permission mode at create time (see JSDoc). A fresh conv
+	// already starts at 'default', so only embed a non-default choice.
+	const modeExtra =
+		mode && mode !== 'default' ? {pending_config_options: {mode}} : null
+	const assistant = resolvedAgentId ? {id: `bare:${resolvedAgentId}`} : undefined
+	const mkBody = (withMode: boolean): Record<string, unknown> => {
+		const body: Record<string, unknown> = {
+			name: 'Liv command',
+			extra: withMode && modeExtra ? modeExtra : {},
+		}
+		if (assistant) body.assistant = assistant
+		return body
+	}
+	// Primary: with the mode preload (if any). Fallback: without it, so a box that
+	// rejects pending_config_options still creates the conversation.
+	const attempts: Record<string, unknown>[] = modeExtra ? [mkBody(true), mkBody(false)] : [mkBody(false)]
 	let lastErr: unknown
 	for (const body of attempts) {
 		try {
@@ -638,6 +706,9 @@ export function runLivCommand(
 	let aborted = false
 	let gotText = false
 	let silenceTimer: ReturnType<typeof setTimeout> | undefined
+	// Cancels the only pre-send blocking call (warmup) the instant abort() fires —
+	// the stream isn't open yet there, so stream?.close() can't reach it.
+	const runAbort = new AbortController()
 
 	const clearTimer = () => {
 		if (silenceTimer) {
@@ -675,7 +746,9 @@ export function runLivCommand(
 			// auto-approve fallback in onApprovalNeeded below.
 			let modeApplied = true
 			if (isNew) {
-				conversationId = await createLivConversation(opts.agentId, opts.modelId)
+				// Pass the mode so it's PRELOADED at create via extra.pending_config_options
+				// (applied server-side during session warmup, before config-options is callable).
+				conversationId = await createLivConversation(opts.agentId, opts.modelId, opts.mode)
 				cb.onConversation?.(conversationId)
 			}
 			if (aborted) return
@@ -683,12 +756,34 @@ export function runLivCommand(
 			// 'default', so only push a non-default choice there; a follow-up always
 			// pushes so a mid-session mode change (incl. back to default) takes effect.
 			if (opts.mode && (!isNew || opts.mode !== 'default')) {
-				modeApplied = await applyLivMode(conversationId, opts.mode)
-				if (!modeApplied) {
-					console.warn(
-						`[liv] permission mode '${opts.mode}' could not be applied on this box (config-options route unavailable — AionUi may need an update); using client-side fallback`,
-					)
+				const selectedMode = opts.mode
+				const applyMode = async () => {
+					modeApplied = await applyLivMode(conversationId, selectedMode)
+					if (!modeApplied) {
+						console.warn(
+							`[liv] permission mode '${selectedMode}' could not be applied on this box (config-options route unavailable — AionUi may need an update); using client-side fallback`,
+						)
+					}
 				}
+				if (!isNew) {
+					// Follow-up: the ACP session is already alive → apply directly (no warmup).
+					await applyMode()
+				} else if (selectedMode === 'acceptEdits' || selectedMode === 'plan') {
+					// New conv: the create-time preload (extra.pending_config_options) already
+					// applies the mode server-side at session start. We additionally WARM the
+					// session (until session_active, mirroring AionUi's own gate) then confirm
+					// via applyLivMode for the two modes that need it — acceptEdits so the GET/PUT
+					// lands on a live session (200 → modeApplied true), which stops the client
+					// fallback from over-approving COMMANDS on a current box; plan as a belt so
+					// the agent plans before acting even if the preload were a no-op. Warmup is
+					// abort-cancellable + time-bounded. bypassPermissions SKIPS this (the create
+					// preload + the client auto-approve cover it) so the fast YOLO path pays no
+					// warmup latency.
+					await warmLivConversation(conversationId, runAbort.signal)
+					if (aborted) return
+					await applyMode()
+				}
+				// else: new + bypassPermissions → preload + client auto-approve; no warmup.
 			}
 			if (aborted) return
 			stream = new LivCommandStream(conversationId, {
@@ -770,6 +865,7 @@ export function runLivCommand(
 		abort: () => {
 			aborted = true
 			clearTimer()
+			runAbort.abort() // cancel an in-flight warmup (stream may not be open yet)
 			stream?.close()
 		},
 	}

@@ -121,6 +121,19 @@ describe('listLivAgents', () => {
 		mockFetchOnce(() => ({body: {agents: [{id: 'b'}]}}))
 		expect(await listLivAgents()).toEqual([{id: 'b', name: 'b', agentType: undefined, models: [], defaultModelId: null}])
 	})
+	it('drops operator-DISABLED agents (enabled:false), keeping enabled:true and undefined (2.1.24 enabled flag)', async () => {
+		mockFetchOnce(() => ({
+			body: {
+				success: true,
+				data: [
+					{id: 'cc', name: 'Claude Code', agent_type: 'acp', enabled: true},
+					{id: 'aion', name: 'Aion CLI', agent_type: 'aionrs', enabled: false}, // operator disabled → dropped
+					{id: 'gem', name: 'Gemini', agent_type: 'acp'}, // enabled undefined → kept (AionUi guard: enabled !== false)
+				],
+			},
+		}))
+		expect((await listLivAgents()).map((a) => a.id)).toEqual(['cc', 'gem'])
+	})
 })
 
 describe('listLivSkills / getLivMcpServers', () => {
@@ -247,6 +260,43 @@ describe('createLivConversation', () => {
 		expect(await createLivConversation()).toBe('c1')
 		// First ACP agent (Gemini here) wins — proves it's agent-agnostic, not Claude-pinned.
 		expect(JSON.parse(createBody!).assistant).toEqual({id: 'bare:gem'})
+	})
+
+	it('preloads a non-default mode via extra.pending_config_options at create (2.1.24)', async () => {
+		const fetchMock = vi.fn(async () => ({ok: true, status: 200, text: async () => JSON.stringify({data: {id: 'c1'}})}) as Response)
+		vi.stubGlobal('fetch', fetchMock)
+		expect(await createLivConversation('g1', undefined, 'acceptEdits')).toBe('c1')
+		const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)
+		expect(body).toEqual({
+			name: 'Liv command',
+			extra: {pending_config_options: {mode: 'acceptEdits'}},
+			assistant: {id: 'bare:g1'},
+		})
+	})
+	it('omits pending_config_options for the default mode (fresh conv already starts default)', async () => {
+		const fetchMock = vi.fn(async () => ({ok: true, status: 200, text: async () => JSON.stringify({data: {id: 'c1'}})}) as Response)
+		vi.stubGlobal('fetch', fetchMock)
+		await createLivConversation('g1', undefined, 'default')
+		expect(JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string).extra).toEqual({})
+	})
+	it('retries WITHOUT pending_config_options when the preload body is rejected', async () => {
+		let call = 0
+		const bodies: string[] = []
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (_url: string, init?: RequestInit) => {
+				call += 1
+				bodies.push(init?.body as string)
+				// First attempt (with pending_config_options) → 400; fallback (without) → 200.
+				if (call === 1) return {ok: false, status: 400, text: async () => 'Invalid JSON request body'} as Response
+				return {ok: true, status: 200, text: async () => JSON.stringify({data: {id: 'c-ok'}})} as Response
+			}),
+		)
+		expect(await createLivConversation('g1', undefined, 'plan')).toBe('c-ok')
+		expect(call).toBe(2)
+		expect(JSON.parse(bodies[0]!).extra).toEqual({pending_config_options: {mode: 'plan'}})
+		expect(JSON.parse(bodies[1]!).extra).toEqual({}) // fallback drops the preload
+		expect(JSON.parse(bodies[1]!).assistant).toEqual({id: 'bare:g1'})
 	})
 
 	it('throws when no attempt yields an id', async () => {
@@ -381,6 +431,95 @@ describe('LivCommandStream frame handling', () => {
 })
 
 describe('runLivCommand', () => {
+	it('new conv + non-default mode: create → warmup → config-options(GET+PUT) → message, in order', async () => {
+		const seq: string[] = []
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string, init?: RequestInit) => {
+				const method = init?.method ?? 'GET'
+				const path = url.replace(/^.*\/liv\/api/, '').replace(/^.*\/liv-login.*/, '/liv-login')
+				if (path !== '/liv-login') seq.push(`${method} ${path}`)
+				let body: unknown = {}
+				if (url.endsWith('/conversations')) body = {data: {id: 'c-new'}}
+				else if (url.includes('config-options') && method !== 'PUT') body = {config_options: [{id: 'mode', category: 'mode'}]}
+				return {ok: true, status: 200, text: async () => JSON.stringify(body)} as Response
+			}),
+		)
+		const run = runLivCommand(
+			{prompt: 'hi', agentId: 'g1', mode: 'acceptEdits', autoApprove: false},
+			{onWorking: vi.fn(), onConversation: vi.fn(), onText: vi.fn(), onDone: vi.fn(), onError: vi.fn(), onApprovalNeeded: vi.fn()},
+		)
+		// The WS is constructed inside stream.open(); open it so send() proceeds.
+		await vi.waitFor(() => expect(FakeWebSocket.instances[0]).toBeTruthy())
+		FakeWebSocket.instances[0]!.triggerOpen()
+		await vi.waitFor(() => expect(seq.some((s) => s.includes('/messages'))).toBe(true))
+		run.abort()
+		expect(seq).toEqual([
+			'POST /conversations',
+			'POST /conversations/c-new/warmup',
+			'GET /conversations/c-new/config-options',
+			'PUT /conversations/c-new/config-options/mode',
+			'POST /conversations/c-new/messages',
+		])
+	})
+
+	it('new conv + bypassPermissions SKIPS warmup (preload + client auto-approve) → create → message', async () => {
+		const seq: string[] = []
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string, init?: RequestInit) => {
+				const method = init?.method ?? 'GET'
+				const path = url.replace(/^.*\/liv\/api/, '').replace(/^.*\/liv-login.*/, '/liv-login')
+				if (path !== '/liv-login') seq.push(`${method} ${path}`)
+				return {ok: true, status: 200, text: async () => JSON.stringify(url.endsWith('/conversations') ? {data: {id: 'c-yolo'}} : {})} as Response
+			}),
+		)
+		const run = runLivCommand(
+			{prompt: 'go', agentId: 'g1', mode: 'bypassPermissions', autoApprove: true},
+			{onWorking: vi.fn(), onConversation: vi.fn(), onText: vi.fn(), onDone: vi.fn(), onError: vi.fn(), onApprovalNeeded: vi.fn()},
+		)
+		await vi.waitFor(() => expect(FakeWebSocket.instances[0]).toBeTruthy())
+		FakeWebSocket.instances[0]!.triggerOpen()
+		await vi.waitFor(() => expect(seq.some((s) => s.includes('/messages'))).toBe(true))
+		run.abort()
+		// No warmup, no config-options round-trip — the fast YOLO path goes straight to send.
+		expect(seq).toEqual(['POST /conversations', 'POST /conversations/c-yolo/messages'])
+		// The create body still preloads the mode server-side.
+		expect(seq.every((s) => !s.includes('warmup') && !s.includes('config-options'))).toBe(true)
+	})
+
+	it('abort during warmup cancels the in-flight warmup and never sends a message', async () => {
+		let warmupSignal: AbortSignal | undefined
+		let warmupAborted = false
+		const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+			if (url.includes('/warmup')) {
+				warmupSignal = init?.signal ?? undefined
+				// A warmup that never resolves on its own — only the run's abort can end it
+				// (mirrors a real long-poll blocking until session_active).
+				return new Promise<Response>((_resolve, reject) => {
+					init?.signal?.addEventListener('abort', () => {
+						warmupAborted = true
+						reject(new DOMException('Aborted', 'AbortError'))
+					})
+				})
+			}
+			const body = url.endsWith('/conversations') ? {data: {id: 'c-new'}} : {}
+			return Promise.resolve({ok: true, status: 200, text: async () => JSON.stringify(body)} as Response)
+		})
+		vi.stubGlobal('fetch', fetchMock)
+		const run = runLivCommand(
+			{prompt: 'hi', agentId: 'g1', mode: 'acceptEdits', autoApprove: false},
+			{onWorking: vi.fn(), onConversation: vi.fn(), onText: vi.fn(), onDone: vi.fn(), onError: vi.fn(), onApprovalNeeded: vi.fn()},
+		)
+		// Wait until warmup is in flight, then abort — the run's signal must cancel it.
+		await vi.waitFor(() => expect(warmupSignal).toBeTruthy())
+		run.abort()
+		await vi.waitFor(() => expect(warmupAborted).toBe(true))
+		// The orchestration bailed at `if (aborted) return` — no message, no WS opened.
+		expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/messages'))).toBe(false)
+		expect(FakeWebSocket.instances.length).toBe(0)
+	})
+
 	it('falls back (fallback:true) when the conversation cannot be created', async () => {
 		mockFetchOnce((url) => {
 			if (url.includes('/liv-login')) return {ok: true, body: {}}
