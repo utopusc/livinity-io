@@ -301,6 +301,10 @@ type StoreSchema = {
 			password?: string
 		}
 		externalDns?: boolean
+		// Phase 305 R10 — reopen pinned windows after a reload / Update (default ON
+		// when unset; OFF starts the desktop clean each reload). Read/written by
+		// system.isRestoreWindows / setRestoreWindows.
+		restoreWindowsOnReload?: boolean
 	}
 	development: {
 		hostname?: string

@@ -1475,6 +1475,14 @@ function AdvancedSection() {
 	const isExternalDns = externalDnsQ.data === true
 	const isExternalDnsLoading = externalDnsMut.isPending || externalDnsQ.isLoading
 
+	// Restore open windows on reload (Phase 305 R10)
+	const restoreWindowsQ = trpcReact.system.isRestoreWindows.useQuery()
+	const restoreWindowsMut = trpcReact.system.setRestoreWindows.useMutation({
+		onSuccess: () => restoreWindowsQ.refetch(),
+	})
+	const isRestoreWindows = restoreWindowsQ.data !== false // default ON (undefined/true → on)
+	const isRestoreWindowsLoading = restoreWindowsMut.isPending || restoreWindowsQ.isLoading
+
 	return (
 		<div className='space-y-4'>
 			{/* Beta Program */}
@@ -1493,6 +1501,15 @@ function AdvancedSection() {
 				checked={isExternalDns}
 				onCheckedChange={(checked) => externalDnsMut.mutate(checked)}
 				disabled={isExternalDnsLoading}
+			/>
+
+			{/* Restore open windows on reload (Phase 305 R10) */}
+			<SettingsToggleRow
+				title='Restore open windows on reload'
+				description='Reopen your pinned windows after a page refresh or a system update. Turn off to start with a clean desktop each time.'
+				checked={isRestoreWindows}
+				onCheckedChange={(checked) => restoreWindowsMut.mutate(checked)}
+				disabled={isRestoreWindowsLoading}
 			/>
 
 			{/* Factory Reset */}

@@ -78,6 +78,17 @@ export default router({
 	isExternalDns: privateProcedure.query(async ({ctx}) => {
 		return await ctx.livinityd.store.get('settings.externalDns', true)
 	}),
+	// Phase 305 R10 — "Restore open windows on reload" desktop preference. ON
+	// (default) reopens pinned windows after a page reload / system Update; OFF
+	// starts clean each reload (the pin rows are KEPT in Postgres → re-enabling +
+	// reloading restores them). Box-level store key, same pattern as externalDns.
+	isRestoreWindows: privateProcedure.query(async ({ctx}) => {
+		return await ctx.livinityd!.store.get('settings.restoreWindowsOnReload', true)
+	}),
+	setRestoreWindows: privateProcedure.input(z.boolean()).mutation(async ({ctx, input}) => {
+		await ctx.livinityd!.store.set('settings.restoreWindowsOnReload', input)
+		return true
+	}),
 	setExternalDns: privateProcedure.input(z.boolean()).mutation(async ({ctx, input}) => {
 		const previousExternalDns = await ctx.livinityd.store.get('settings.externalDns', true)
 		if (previousExternalDns === input) return true

@@ -354,6 +354,15 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		retry: 1,
 	})
 
+	// Phase 305 R10 — "Restore open windows on reload" Setting (system.isRestoreWindows,
+	// default ON). The hydrate effect below gates on this so the operator can stop
+	// pinned windows from auto-reopening after a page reload / system Update.
+	const restoreWindowsQuery = trpcReact.system.isRestoreWindows.useQuery(undefined, {
+		refetchOnWindowFocus: false,
+		refetchOnReconnect: false,
+		retry: 1,
+	})
+
 	// Phase 260.1 (SC-B) — server-side display teardown. closeDisplay (below)
 	// fires this for DISPLAY_:N windows so the `:N` actually tears down
 	// (Redis record gone, stream stopped, badge decrements) and does NOT
@@ -402,7 +411,14 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		// "still loading" as "no live displays" and erase every native pin.
 		const displaysData = displaysListQuery.data
 		if (displaysData === undefined) return
+		// Phase 305 R10 — "Restore open windows on reload" toggle (default ON). Wait
+		// for the flag to settle (undefined = still loading) so we never restore-then-
+		// hide; once known, if it's OFF skip re-opening the pinned windows. The Postgres
+		// pin rows are LEFT INTACT — turning the toggle back on + reloading restores them.
+		const restoreWindows = restoreWindowsQuery.data
+		if (restoreWindows === undefined) return
 		hydratedRef.current = true
+		if (restoreWindows === false) return
 
 		// Set of live display NAMES (after 260-02, a native display's `name`
 		// is its app name — the same value persisted as the pin `title`).
@@ -452,7 +468,7 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 				},
 			})
 		}
-	}, [pinnedListQuery.data, displaysListQuery.data, pinnedDeleteMutation])
+	}, [pinnedListQuery.data, displaysListQuery.data, restoreWindowsQuery.data, pinnedDeleteMutation])
 
 	const openWindow = useCallback((appId: string, route: string, title: string, icon: string, originRect?: OriginRect, suggested?: {width: number; height: number}): WindowId => {
 		const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36)
