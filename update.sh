@@ -2400,6 +2400,14 @@ fi
 # boxes whose desktop user was created WITHOUT a password (useradd -m) get a known
 # sudo password the operator can read in Settings. Fully fail-tolerant: a missing
 # source or any error here never aborts the Update.
+#
+# NOTE (v45.06): inline update.sh changes only take effect the update AFTER they
+# ship — update.sh self-replaces /opt/livos/update.sh (L1167) but does NOT re-exec
+# the fresh clone, so a box that took v45.05 first runs THIS block on its next
+# update. v45.06 is a no-op re-ship purely to trigger that follow-up update on
+# boxes already on v45.05 (the v45.05 update.sh on disk runs this block, then
+# self-replaces to v45.06). Future must-run-this-update logic should instead be a
+# freshly-cloned SCRIPT invoked by the already-deployed update.sh, not inline.
 step "Phase 306: desktop-user password helper (set-desktop-password.sh + sudoers + bootstrap)"
 
 # (a) set-desktop-password.sh wrapper → /usr/local/lib/livos (root-owned 0755)
