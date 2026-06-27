@@ -86,6 +86,7 @@ import {
 	DropdownMenuTrigger,
 } from '@/shadcn-components/ui/dropdown-menu'
 import {trpcReact} from '@/trpc/trpc'
+import {CopyableField} from '@/components/ui/copyable-field'
 import {t} from '@/utils/i18n'
 import {cn} from '@/shadcn-lib/utils'
 import {useIsMobile} from '@/hooks/use-is-mobile'
@@ -619,6 +620,13 @@ function AccountSection() {
 	const userQ = trpcReact.user.get.useQuery()
 	const userName = userQ.data?.name
 
+	// Phase 306 — desktop user OS / sudo credentials (read + regenerate).
+	const utils = trpcReact.useUtils()
+	const desktopCredsQ = trpcReact.system.getDesktopUserCredentials.useQuery(undefined, {retry: false})
+	const regenerateDesktopPwMut = trpcReact.system.regenerateDesktopPassword.useMutation({
+		onSuccess: () => utils.system.getDesktopUserCredentials.invalidate(),
+	})
+
 	return (
 		<div className='flex flex-col gap-8'>
 			<SettingsPageHeader
@@ -660,6 +668,48 @@ function AccountSection() {
 					}
 				/>
 			</FieldCard>
+
+			{/* Phase 306 — desktop user OS / sudo password (terminal + SSH login) */}
+			<SettingsPageHeader
+				eyebrow='02 · System access'
+				title='Desktop &'
+				titleAccent='sudo password.'
+				sub='The Linux account password for this device — use it for sudo in the terminal or to sign in over SSH. Auto-generated; regenerate any time.'
+			/>
+
+			<FieldCard>
+				<FieldRow
+					label='User'
+					value={
+						desktopCredsQ.data?.username
+							? <span className='truncate font-mono'>{desktopCredsQ.data.username}</span>
+							: <span className='text-[color:var(--fg-faint)]'>—</span>
+					}
+				/>
+				<FieldRow
+					label='Password'
+					value={
+						desktopCredsQ.isLoading
+							? <span className='text-[color:var(--fg-faint)]'>Loading…</span>
+							: desktopCredsQ.data?.password
+								? <CopyableField value={desktopCredsQ.data.password} isPassword narrow className='max-w-[280px]' />
+								: <span className='text-[color:var(--fg-faint)]'>Not set yet — click Regenerate</span>
+					}
+					trailing={
+						<Button
+							variant='v36-ghost'
+							size='v36-pill-sm'
+							onClick={() => regenerateDesktopPwMut.mutate()}
+							disabled={regenerateDesktopPwMut.isPending}
+						>
+							{regenerateDesktopPwMut.isPending ? 'Regenerating…' : 'Regenerate'}
+						</Button>
+					}
+				/>
+			</FieldCard>
+			{regenerateDesktopPwMut.error ? (
+				<p className='text-13 text-red-400'>{regenerateDesktopPwMut.error.message}</p>
+			) : null}
 
 			<InlineChangeNameDialog open={showChangeName} onOpenChange={setShowChangeName} />
 			<InlineChangePasswordDialog open={showChangePassword} onOpenChange={setShowChangePassword} />

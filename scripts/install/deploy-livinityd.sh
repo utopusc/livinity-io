@@ -555,6 +555,62 @@ _dld_create_desktop_user() {
         ok "Legacy lowercase blanket drop-in removed: /etc/sudoers.d/${user}"
     fi
     ok "Legacy blanket sudoers drop-in(s) absent/removed: /etc/sudoers.d/99-${user} (+ legacy ${user})"
+
+    # ── Phase 306 — desktop-user password helper (wrapper + sudoers + bootstrap) ─
+    # Mirrors update.sh Step 7.11: install /usr/local/lib/livos/set-desktop-password.sh
+    # + the scoped sudoers fragment (subject templated to ${user}), then bootstrap a
+    # password ONCE when /etc/livos/desktop-user-credentials is absent so the operator
+    # gets a known sudo password readable in Settings → Account. Fully fail-tolerant.
+    local _pwd_wrap_src="${_DLD_LIVOS_DIR}/scripts/install/set-desktop-password.sh"
+    [[ -f "$_pwd_wrap_src" ]] || _pwd_wrap_src="${_DLD_STAGE_DIR}/scripts/install/set-desktop-password.sh"
+    local _pwd_wrap_dst="/usr/local/lib/livos/set-desktop-password.sh"
+    if [[ -f "$_pwd_wrap_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_pwd_wrap_dst" ]] || ! cmp -s "$_pwd_wrap_src" "$_pwd_wrap_dst"; then
+            if install -m 0755 -o root -g root "$_pwd_wrap_src" "$_pwd_wrap_dst"; then
+                ok "set-desktop-password.sh installed at $_pwd_wrap_dst"
+            else
+                warn "Failed to install set-desktop-password.sh (non-fatal)"
+            fi
+        fi
+    else
+        info "set-desktop-password.sh source not found — skipping (password regenerate unavailable)"
+    fi
+
+    local _pwd_sud_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-desktop-password"
+    [[ -f "$_pwd_sud_src" ]] || _pwd_sud_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-desktop-password"
+    local _pwd_sud_dst="/etc/sudoers.d/livos-desktop-password"
+    if [[ -f "$_pwd_sud_src" ]]; then
+        local _pwd_sud_tmp
+        _pwd_sud_tmp=$(mktemp)
+        if [[ "$user" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${user}\1/" "$_pwd_sud_src" > "$_pwd_sud_tmp"
+        else
+            cp -f "$_pwd_sud_src" "$_pwd_sud_tmp"
+        fi
+        if [[ ! -f "$_pwd_sud_dst" ]] || ! cmp -s "$_pwd_sud_tmp" "$_pwd_sud_dst"; then
+            if ! install -m 0440 -o root -g root "$_pwd_sud_tmp" "$_pwd_sud_dst"; then
+                warn "Failed to install sudoers.d/livos-desktop-password (non-fatal)"
+            elif command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_pwd_sud_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_pwd_sud_dst — removing (password regenerate unavailable until fixed)"
+                rm -f "$_pwd_sud_dst"
+            else
+                ok "sudoers.d/livos-desktop-password installed (subject: ${user})"
+            fi
+        fi
+        rm -f "$_pwd_sud_tmp"
+    else
+        info "sudoers.d/livos-desktop-password source not found — skipping"
+    fi
+
+    if [[ ! -f /etc/livos/desktop-user-credentials && -x "$_pwd_wrap_dst" ]]; then
+        info "Bootstrapping desktop-user password via $_pwd_wrap_dst"
+        if LIVOS_DESKTOP_USER="$user" "$_pwd_wrap_dst"; then
+            ok "Desktop-user password bootstrapped (readable in Settings → Account)"
+        else
+            warn "Desktop-user password bootstrap failed (non-fatal; use Regenerate in Settings)"
+        fi
+    fi
 }
 
 # ── 4. Source clone ─────────────────────────────────────────────────────────

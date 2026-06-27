@@ -2390,6 +2390,87 @@ else
     info "livos-add-apt-repo.sh source not found — skipping (apt-repo apps unavailable)"
 fi
 
+# ── Step 7.11: Phase 306 — desktop-user password helper (wrapper + sudoers + bootstrap) ──
+# The "Regenerate" button on the Desktop password row in Settings → Account calls
+# livinityd's system.regenerateDesktopPassword, which runs
+#   sudo -n /usr/local/lib/livos/set-desktop-password.sh
+# via the scoped /etc/sudoers.d/livos-desktop-password grant. Neither existed on
+# day-2 boxes, so we install both here every Update (idempotent). We also BOOTSTRAP
+# a password ONCE (when /etc/livos/desktop-user-credentials is absent) so existing
+# boxes whose desktop user was created WITHOUT a password (useradd -m) get a known
+# sudo password the operator can read in Settings. Fully fail-tolerant: a missing
+# source or any error here never aborts the Update.
+step "Phase 306: desktop-user password helper (set-desktop-password.sh + sudoers + bootstrap)"
+
+# (a) set-desktop-password.sh wrapper → /usr/local/lib/livos (root-owned 0755)
+_PWD_WRAP_SRC="$LIVOS_DIR/scripts/install/set-desktop-password.sh"
+if [[ ! -f "$_PWD_WRAP_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _PWD_WRAP_SRC="$TEMP_DIR/scripts/install/set-desktop-password.sh"
+fi
+_PWD_WRAP_DST="/usr/local/lib/livos/set-desktop-password.sh"
+if [[ -f "$_PWD_WRAP_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_PWD_WRAP_DST" ]] || ! cmp -s "$_PWD_WRAP_SRC" "$_PWD_WRAP_DST"; then
+        if install -m 0755 -o root -g root "$_PWD_WRAP_SRC" "$_PWD_WRAP_DST"; then
+            ok "set-desktop-password.sh installed at $_PWD_WRAP_DST"
+        else
+            warn "Failed to install set-desktop-password.sh (non-fatal; password regenerate unavailable)"
+        fi
+    else
+        info "set-desktop-password.sh already current"
+    fi
+else
+    info "set-desktop-password.sh source not found — skipping (password regenerate unavailable)"
+fi
+
+# (b) sudoers.d/livos-desktop-password — template the `bruce` subject to the desktop user
+_PWD_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-desktop-password"
+if [[ ! -f "$_PWD_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _PWD_SUDOERS_SRC="$TEMP_DIR/scripts/install/sudoers.d/livos-desktop-password"
+fi
+_PWD_SUDOERS_DST="/etc/sudoers.d/livos-desktop-password"
+if [[ -f "$_PWD_SUDOERS_SRC" ]]; then
+    _PWD_SUDOERS_TMP=$(mktemp)
+    if [[ "$_DESKTOP_USER" != "bruce" ]]; then
+        sed -E "s/^bruce([[:space:]]+ALL=)/${_DESKTOP_USER}\1/" \
+            "$_PWD_SUDOERS_SRC" > "$_PWD_SUDOERS_TMP"
+    else
+        cp -f "$_PWD_SUDOERS_SRC" "$_PWD_SUDOERS_TMP"
+    fi
+    if [[ ! -f "$_PWD_SUDOERS_DST" ]] || ! cmp -s "$_PWD_SUDOERS_TMP" "$_PWD_SUDOERS_DST"; then
+        # SAFETY-CRITICAL: a malformed sudoers file can break sudo system-wide.
+        # Validate the INSTALLED file; if visudo rejects it, REMOVE it. The install
+        # itself is non-fatal — a failure must never abort the Update.
+        if ! install -m 0440 -o root -g root "$_PWD_SUDOERS_TMP" "$_PWD_SUDOERS_DST"; then
+            warn "Failed to install sudoers.d/livos-desktop-password (non-fatal; password regenerate unavailable)"
+        elif command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_PWD_SUDOERS_DST" >/dev/null 2>&1; then
+            warn "visudo rejected $_PWD_SUDOERS_DST — removing (password regenerate stays unavailable until fixed)"
+            rm -f "$_PWD_SUDOERS_DST"
+        else
+            ok "sudoers.d/livos-desktop-password installed (subject: ${_DESKTOP_USER})"
+        fi
+    else
+        info "sudoers.d/livos-desktop-password already current (subject: ${_DESKTOP_USER})"
+    fi
+    rm -f "$_PWD_SUDOERS_TMP"
+else
+    info "sudoers.d/livos-desktop-password source not found — skipping"
+fi
+
+# (c) one-time bootstrap — give the desktop user a known password if it has none.
+# Guard on the credential snapshot: present ⇒ a password was already generated;
+# never overwrite it on subsequent Updates.
+if [[ ! -f /etc/livos/desktop-user-credentials && -x "$_PWD_WRAP_DST" ]]; then
+    info "No desktop-user credential snapshot yet — bootstrapping a password via $_PWD_WRAP_DST"
+    if LIVOS_DESKTOP_USER="$_DESKTOP_USER" "$_PWD_WRAP_DST"; then
+        ok "Desktop-user password bootstrapped (operator can read it in Settings → Account)"
+    else
+        warn "Desktop-user password bootstrap failed (non-fatal; operator can use Regenerate in Settings)"
+    fi
+else
+    info "Desktop-user credential snapshot present or wrapper missing — skipping bootstrap"
+fi
+
 # --- (c) v44.57 — admin local-bundle runtimes (AppImage / Flatpak / Snap) -------------------
 # v44.56 added admin .deb upload; v44.57 extends it to AppImage/Flatpak/Snap. Each format
 # needs a host RUNTIME present before installLocalDeb's sibling code-paths can succeed.

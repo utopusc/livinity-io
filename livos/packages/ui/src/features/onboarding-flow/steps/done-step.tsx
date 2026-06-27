@@ -1,3 +1,6 @@
+import {CopyableField} from '@/components/ui/copyable-field'
+import {trpcReact} from '@/trpc/trpc'
+
 import type {OnboardingData} from '../constants'
 import {Confetti} from '../effects/confetti'
 import {Icon} from '../icon'
@@ -18,6 +21,11 @@ type Props = {
 
 export function DoneStep({data, onEnter, isActive}: Props) {
 	const firstName = (data.name || 'Bruce').trim().split(' ')[0]
+	// Phase 306 — surface the auto-generated desktop / sudo password once here so
+	// the operator can save it. Read-only; retry:false (NOT_FOUND until the
+	// install/update bootstrap has written the snapshot).
+	const desktopCredsQ = trpcReact.system.getDesktopUserCredentials.useQuery(undefined, {retry: false})
+	const desktopCreds = desktopCredsQ.data
 	return (
 		<div
 			className='done'
@@ -52,6 +60,25 @@ export function DoneStep({data, onEnter, isActive}: Props) {
 						{firstName} <span className='val-sub'>· password</span>
 					</div>
 				</div>
+				{desktopCreds?.password ? (
+					<div className='done-row' style={{alignItems: 'flex-start'}}>
+						<div className='lbl'>Sudo password</div>
+						<div className='val' style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4}}>
+							<span style={{fontFamily: 'monospace', fontSize: 12}}>{desktopCreds.username}</span>
+							<CopyableField value={desktopCreds.password} narrow />
+							<span className='val-sub'>Save this — terminal &amp; SSH login</span>
+						</div>
+					</div>
+				) : desktopCredsQ.error && desktopCredsQ.error.data?.code !== 'NOT_FOUND' ? (
+					// A genuine server error (not just "not initialized yet") — don't fail
+					// silently; point the operator to where they can always retrieve it.
+					<div className='done-row'>
+						<div className='lbl'>Sudo password</div>
+						<div className='val'>
+							<span className='val-sub'>Find it in Settings → Account</span>
+						</div>
+					</div>
+				) : null}
 				<div className='done-row'>
 					<div className='lbl'>Wallpaper</div>
 					<div className='val'>{WALLPAPER_NAMES[data.wallpaper] || 'Fluid'}</div>
