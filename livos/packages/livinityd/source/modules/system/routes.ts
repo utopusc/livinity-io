@@ -39,8 +39,25 @@ export function setSystemStatus(status: SystemStatus) {
 // wrapper /usr/local/lib/livos/set-desktop-password.sh (at install/update, or on
 // demand via the Regenerate button) and snapshotted to a 0600 file owned by the
 // desktop user. livinityd runs AS the desktop user (Phase 192) so it can read it.
+//
+// Phase 306 R2 — SECURITY: revealing or regenerating the OS/sudo password is a
+// step-up action gated behind the operator's 2FA (TOTP). The Settings card only
+// ever loads {username, hasPassword}; the plaintext is returned ONLY by
+// reveal/regenerate after a valid TOTP. The one-time onboarding handoff reads a
+// SEPARATE first-boot file that is consumed (deleted) on read.
 const DESKTOP_CREDS_FILE = '/etc/livos/desktop-user-credentials'
+const DESKTOP_FIRSTBOOT_FILE = '/etc/livos/desktop-user-credentials.firstboot'
 const SET_DESKTOP_PASSWORD_WRAPPER = '/usr/local/lib/livos/set-desktop-password.sh'
+
+function parseCreds(content: string): {username?: string; password?: string} {
+	const creds: Record<string, string> = {}
+	for (const line of content.split('\n')) {
+		const eq = line.indexOf('=')
+		if (eq <= 0) continue
+		creds[line.slice(0, eq).trim().toLowerCase()] = line.slice(eq + 1).trim()
+	}
+	return creds
+}
 
 async function readDesktopCredentials(): Promise<{username: string; password: string}> {
 	let content: string
@@ -58,12 +75,7 @@ async function readDesktopCredentials(): Promise<{username: string; password: st
 			message: `Failed to read desktop credentials: ${String((err as Error)?.message ?? err)}`,
 		})
 	}
-	const creds: Record<string, string> = {}
-	for (const line of content.split('\n')) {
-		const eq = line.indexOf('=')
-		if (eq <= 0) continue
-		creds[line.slice(0, eq).trim().toLowerCase()] = line.slice(eq + 1).trim()
-	}
+	const creds = parseCreds(content)
 	if (!creds.username || !creds.password) {
 		throw new TRPCError({
 			code: 'INTERNAL_SERVER_ERROR',
@@ -72,6 +84,26 @@ async function readDesktopCredentials(): Promise<{username: string; password: st
 	}
 	return {username: creds.username, password: creds.password}
 }
+
+// Step-up auth: revealing/regenerating the OS password requires the operator's
+// 2FA. If 2FA isn't enabled, the action is refused (the operator must enable it
+// first) — never silently allowed. `user` is the authenticated User (adminProcedure).
+async function require2faVerified(
+	user: {is2faEnabled(): Promise<boolean>; validate2faToken(token: string): Promise<boolean>},
+	totp: string,
+): Promise<void> {
+	if (!(await user.is2faEnabled())) {
+		throw new TRPCError({
+			code: 'PRECONDITION_FAILED',
+			message: 'Enable two-factor authentication (Settings → 2FA) before revealing or changing the desktop password.',
+		})
+	}
+	if (!(await user.validate2faToken(totp))) {
+		throw new TRPCError({code: 'UNAUTHORIZED', message: 'Invalid two-factor code.'})
+	}
+}
+
+const desktopTotpInput = z.object({totp: z.string().trim().min(6).max(12)})
 
 // Lightweight per-process rate-limit: regenerating rotates the OS password, so
 // double-clicks / spray are capped to one call per 10s.
@@ -312,19 +344,41 @@ export default router({
 
 		return true
 	}),
-	// ── Phase 306 — desktop-user OS password (Settings → Account + onboarding) ──
-	// getDesktopUserCredentials returns the snapshot written by the privileged
-	// wrapper. adminProcedure — surfacing the OS sudo password is admin-only (the
-	// desktop user is already docker-group root-equivalent on this appliance, so
-	// this discloses no new privilege to an admin who can already run Updates).
-	getDesktopUserCredentials: adminProcedure.query(async () => {
+	// ── Phase 306 R2 — desktop-user OS/sudo password (Settings → Account) ───────
+	// getDesktopUserInfo: lightweight, NON-secret. Returns just the username + a
+	// hasPassword flag so the card can render without ever shipping the plaintext.
+	// The plaintext is returned ONLY by the 2FA-gated reveal/regenerate mutations.
+	getDesktopUserInfo: adminProcedure.query(async () => {
+		// Defense-in-depth: reaching Settings means onboarding is over, so purge any
+		// leftover one-time first-boot copy — that file is the only no-2FA read path
+		// and must never linger past the onboarding handoff.
+		void fs.unlink(DESKTOP_FIRSTBOOT_FILE).catch(() => {})
+		try {
+			const content = await fs.readFile(DESKTOP_CREDS_FILE, 'utf8')
+			const creds = parseCreds(content)
+			return {username: creds.username ?? null, hasPassword: Boolean(creds.password)}
+		} catch (err) {
+			if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') {
+				return {username: null, hasPassword: false}
+			}
+			throw new TRPCError({
+				code: 'INTERNAL_SERVER_ERROR',
+				message: `Failed to read desktop user info: ${String((err as Error)?.message ?? err)}`,
+			})
+		}
+	}),
+	// revealDesktopPassword: returns the plaintext ONLY after a valid 2FA code. A
+	// mutation (not a query) so it's never cached and always requires a fresh
+	// step-up verification.
+	revealDesktopPassword: adminProcedure.input(desktopTotpInput).mutation(async ({ctx, input}) => {
+		await require2faVerified(ctx.user!, input.totp)
 		return readDesktopCredentials()
 	}),
-	// regenerateDesktopPassword rotates the desktop user's OS password by invoking
-	// the scoped sudo wrapper (the new password is generated INSIDE the wrapper —
-	// never passed as an argv, so it can't leak via `ps`), then returns the fresh
-	// {username,password}. adminProcedure + rate-limited.
-	regenerateDesktopPassword: adminProcedure.mutation(async () => {
+	// regenerateDesktopPassword: rotate the OS password via the scoped sudo wrapper
+	// (the new password is generated INSIDE the wrapper — never an argv, so it
+	// can't leak via `ps`). 2FA-gated + rate-limited; returns the fresh creds.
+	regenerateDesktopPassword: adminProcedure.input(desktopTotpInput).mutation(async ({ctx, input}) => {
+		await require2faVerified(ctx.user!, input.totp)
 		const now = Date.now()
 		if (now - lastDesktopPasswordRegenAt < DESKTOP_PASSWORD_REGEN_MIN_INTERVAL_MS) {
 			throw new TRPCError({
@@ -349,6 +403,26 @@ export default router({
 		// (wrapper/sudoers missing) doesn't block an immediate retry once fixed.
 		lastDesktopPasswordRegenAt = now
 		return readDesktopCredentials()
+	}),
+	// consumeFirstBootDesktopPassword: the ONE-TIME onboarding handoff. Reads the
+	// first-boot copy written by the install/update bootstrap and DELETES it, so the
+	// plaintext is shown exactly once on the done screen and can never be re-read
+	// without 2FA afterwards. Returns null once consumed / on a non-first-boot box.
+	consumeFirstBootDesktopPassword: adminProcedure.mutation(async () => {
+		let content: string
+		try {
+			content = await fs.readFile(DESKTOP_FIRSTBOOT_FILE, 'utf8')
+		} catch {
+			return null
+		}
+		try {
+			await fs.unlink(DESKTOP_FIRSTBOOT_FILE)
+		} catch {
+			// best-effort consume; file is 0600 and never read by the Settings path
+		}
+		const creds = parseCreds(content)
+		if (!creds.username || !creds.password) return null
+		return {username: creds.username, password: creds.password}
 	}),
 	logs: privateProcedure
 		.input(

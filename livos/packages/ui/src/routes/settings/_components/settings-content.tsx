@@ -87,6 +87,7 @@ import {
 } from '@/shadcn-components/ui/dropdown-menu'
 import {trpcReact} from '@/trpc/trpc'
 import {CopyableField} from '@/components/ui/copyable-field'
+import {PinInput} from '@/components/ui/pin-input'
 import {t} from '@/utils/i18n'
 import {cn} from '@/shadcn-lib/utils'
 import {useIsMobile} from '@/hooks/use-is-mobile'
@@ -620,12 +621,16 @@ function AccountSection() {
 	const userQ = trpcReact.user.get.useQuery()
 	const userName = userQ.data?.name
 
-	// Phase 306 — desktop user OS / sudo credentials (read + regenerate).
+	// Phase 306 R2 — desktop user OS/sudo password. The card never loads the
+	// plaintext; reveal + regenerate are 2FA step-up actions.
 	const utils = trpcReact.useUtils()
-	const desktopCredsQ = trpcReact.system.getDesktopUserCredentials.useQuery(undefined, {retry: false})
-	const regenerateDesktopPwMut = trpcReact.system.regenerateDesktopPassword.useMutation({
-		onSuccess: () => utils.system.getDesktopUserCredentials.invalidate(),
-	})
+	const desktopInfoQ = trpcReact.system.getDesktopUserInfo.useQuery(undefined, {retry: false})
+	const desktopTwoFaQ = trpcReact.user.is2faEnabled.useQuery()
+	const twoFaOn = desktopTwoFaQ.data === true
+	const [revealedDesktopPw, setRevealedDesktopPw] = useState<string | null>(null)
+	const [desktopVerifyIntent, setDesktopVerifyIntent] = useState<null | 'reveal' | 'regenerate'>(null)
+	const revealDesktopPwMut = trpcReact.system.revealDesktopPassword.useMutation()
+	const regenerateDesktopPwMut = trpcReact.system.regenerateDesktopPassword.useMutation()
 
 	return (
 		<div className='flex flex-col gap-8'>
@@ -669,51 +674,134 @@ function AccountSection() {
 				/>
 			</FieldCard>
 
-			{/* Phase 306 — desktop user OS / sudo password (terminal + SSH login) */}
+			{/* Phase 306 R2 — desktop user OS/sudo password (terminal + SSH login) */}
 			<SettingsPageHeader
 				eyebrow='02 · System access'
 				title='Desktop &'
 				titleAccent='sudo password.'
-				sub='The Linux account password for this device — use it for sudo in the terminal or to sign in over SSH. Auto-generated; regenerate any time.'
+				sub='The Linux account password for this device — for sudo in the terminal or SSH login. Revealing or regenerating it requires two-factor authentication.'
 			/>
 
 			<FieldCard>
 				<FieldRow
 					label='User'
 					value={
-						desktopCredsQ.data?.username
-							? <span className='truncate font-mono'>{desktopCredsQ.data.username}</span>
+						desktopInfoQ.data?.username
+							? <span className='truncate font-mono'>{desktopInfoQ.data.username}</span>
 							: <span className='text-[color:var(--fg-faint)]'>—</span>
 					}
 				/>
 				<FieldRow
 					label='Password'
 					value={
-						desktopCredsQ.isLoading
-							? <span className='text-[color:var(--fg-faint)]'>Loading…</span>
-							: desktopCredsQ.data?.password
-								? <CopyableField value={desktopCredsQ.data.password} isPassword narrow className='max-w-[280px]' />
-								: <span className='text-[color:var(--fg-faint)]'>Not set yet — click Regenerate</span>
+						revealedDesktopPw
+							? <CopyableField value={revealedDesktopPw} narrow className='max-w-[280px]' />
+							: desktopInfoQ.data?.hasPassword
+								? <span className='font-mono tracking-[0.2em] text-[color:var(--fg-mute)]'>••••••••••••</span>
+								: <span className='text-[color:var(--fg-faint)]'>Not set yet</span>
 					}
 					trailing={
-						<Button
-							variant='v36-ghost'
-							size='v36-pill-sm'
-							onClick={() => regenerateDesktopPwMut.mutate()}
-							disabled={regenerateDesktopPwMut.isPending}
-						>
-							{regenerateDesktopPwMut.isPending ? 'Regenerating…' : 'Regenerate'}
-						</Button>
+						<div className='flex items-center gap-2'>
+							{revealedDesktopPw ? (
+								<Button variant='v36-ghost' size='v36-pill-sm' onClick={() => setRevealedDesktopPw(null)}>
+									Hide
+								</Button>
+							) : desktopInfoQ.data?.hasPassword ? (
+								<Button
+									variant='v36-ghost'
+									size='v36-pill-sm'
+									disabled={!twoFaOn}
+									onClick={() => setDesktopVerifyIntent('reveal')}
+								>
+									Reveal
+								</Button>
+							) : null}
+							<Button
+								variant='v36-ghost'
+								size='v36-pill-sm'
+								disabled={!twoFaOn}
+								onClick={() => setDesktopVerifyIntent('regenerate')}
+							>
+								Regenerate
+							</Button>
+						</div>
 					}
 				/>
 			</FieldCard>
-			{regenerateDesktopPwMut.error ? (
-				<p className='text-13 text-red-400'>{regenerateDesktopPwMut.error.message}</p>
+			{!twoFaOn ? (
+				<p className='text-13 text-[color:var(--fg-faint)]'>
+					Enable two-factor authentication in Settings → 2FA to reveal or regenerate the sudo password.
+				</p>
 			) : null}
+
+			<DesktopPasswordVerifyDialog
+				intent={desktopVerifyIntent}
+				error={(regenerateDesktopPwMut.error || revealDesktopPwMut.error)?.message ?? null}
+				onOpenChange={(open) => {
+					if (!open) {
+						setDesktopVerifyIntent(null)
+						revealDesktopPwMut.reset()
+						regenerateDesktopPwMut.reset()
+					}
+				}}
+				onVerify={async (code) => {
+					try {
+						if (desktopVerifyIntent === 'regenerate') {
+							const r = await regenerateDesktopPwMut.mutateAsync({totp: code})
+							if (!r?.password) return false
+							setRevealedDesktopPw(r.password)
+							utils.system.getDesktopUserInfo.invalidate()
+						} else {
+							const r = await revealDesktopPwMut.mutateAsync({totp: code})
+							if (!r?.password) return false
+							setRevealedDesktopPw(r.password)
+						}
+						setTimeout(() => setDesktopVerifyIntent(null), 500)
+						return true
+					} catch {
+						return false
+					}
+				}}
+			/>
 
 			<InlineChangeNameDialog open={showChangeName} onOpenChange={setShowChangeName} />
 			<InlineChangePasswordDialog open={showChangePassword} onOpenChange={setShowChangePassword} />
 		</div>
+	)
+}
+
+// Phase 306 R2 — step-up 2FA dialog for revealing/regenerating the sudo password.
+// PinInput auto-submits on fill → onVerify; on success the parent closes it.
+function DesktopPasswordVerifyDialog({
+	intent,
+	error,
+	onOpenChange,
+	onVerify,
+}: {
+	intent: null | 'reveal' | 'regenerate'
+	error: string | null
+	onOpenChange: (open: boolean) => void
+	onVerify: (code: string) => Promise<boolean>
+}) {
+	const open = intent !== null
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogPortal>
+				<DialogContent className='flex flex-col items-center gap-5'>
+					<DialogHeader>
+						<DialogTitle>
+							{intent === 'regenerate' ? 'Regenerate sudo password' : 'Reveal sudo password'}
+						</DialogTitle>
+					</DialogHeader>
+					<p className='text-body-sm text-text-secondary text-center'>
+						Enter your six-digit two-factor code to{' '}
+						{intent === 'regenerate' ? 'generate a new desktop password' : 'reveal the desktop password'}.
+					</p>
+					{open ? <PinInput autoFocus length={6} onCodeCheck={onVerify} /> : null}
+					{error ? <p className='text-13 text-red-400 text-center'>{error}</p> : null}
+				</DialogContent>
+			</DialogPortal>
+		</Dialog>
 	)
 }
 

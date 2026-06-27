@@ -605,8 +605,8 @@ _dld_create_desktop_user() {
 
     if [[ ! -f /etc/livos/desktop-user-credentials && -x "$_pwd_wrap_dst" ]]; then
         info "Bootstrapping desktop-user password via $_pwd_wrap_dst"
-        if LIVOS_DESKTOP_USER="$user" "$_pwd_wrap_dst"; then
-            ok "Desktop-user password bootstrapped (readable in Settings → Account)"
+        if LIVOS_DESKTOP_USER="$user" "$_pwd_wrap_dst" --firstboot; then
+            ok "Desktop-user password bootstrapped (shown once on onboarding; Settings reveal is 2FA-gated)"
         else
             warn "Desktop-user password bootstrap failed (non-fatal; use Regenerate in Settings)"
         fi

@@ -1,3 +1,5 @@
+import {useEffect, useRef, useState} from 'react'
+
 import {CopyableField} from '@/components/ui/copyable-field'
 import {trpcReact} from '@/trpc/trpc'
 
@@ -21,11 +23,24 @@ type Props = {
 
 export function DoneStep({data, onEnter, isActive}: Props) {
 	const firstName = (data.name || 'Bruce').trim().split(' ')[0]
-	// Phase 306 — surface the auto-generated desktop / sudo password once here so
-	// the operator can save it. Read-only; retry:false (NOT_FOUND until the
-	// install/update bootstrap has written the snapshot).
-	const desktopCredsQ = trpcReact.system.getDesktopUserCredentials.useQuery(undefined, {retry: false})
-	const desktopCreds = desktopCredsQ.data
+	// Phase 306 R2 — one-time sudo-password handoff. Consume the first-boot copy
+	// exactly once (the mutation deletes it server-side) and cache it in state so
+	// re-renders don't lose it. After this, the password is only retrievable in
+	// Settings → Account behind 2FA.
+	const consumeFirstBootPw = trpcReact.system.consumeFirstBootDesktopPassword.useMutation()
+	const [desktopCreds, setDesktopCreds] = useState<{username: string; password: string} | null>(null)
+	const consumedRef = useRef(false)
+	useEffect(() => {
+		if (consumedRef.current) return
+		consumedRef.current = true
+		consumeFirstBootPw
+			.mutateAsync()
+			.then((r) => {
+				if (r?.password) setDesktopCreds(r)
+			})
+			.catch(() => {})
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [])
 	return (
 		<div
 			className='done'
@@ -66,16 +81,7 @@ export function DoneStep({data, onEnter, isActive}: Props) {
 						<div className='val' style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4}}>
 							<span style={{fontFamily: 'monospace', fontSize: 12}}>{desktopCreds.username}</span>
 							<CopyableField value={desktopCreds.password} narrow />
-							<span className='val-sub'>Save this — terminal &amp; SSH login</span>
-						</div>
-					</div>
-				) : desktopCredsQ.error && desktopCredsQ.error.data?.code !== 'NOT_FOUND' ? (
-					// A genuine server error (not just "not initialized yet") — don't fail
-					// silently; point the operator to where they can always retrieve it.
-					<div className='done-row'>
-						<div className='lbl'>Sudo password</div>
-						<div className='val'>
-							<span className='val-sub'>Find it in Settings → Account</span>
+							<span className='val-sub'>Save this now — shown once. Later: Settings → Account (needs 2FA)</span>
 						</div>
 					</div>
 				) : null}

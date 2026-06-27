@@ -2470,8 +2470,8 @@ fi
 # never overwrite it on subsequent Updates.
 if [[ ! -f /etc/livos/desktop-user-credentials && -x "$_PWD_WRAP_DST" ]]; then
     info "No desktop-user credential snapshot yet — bootstrapping a password via $_PWD_WRAP_DST"
-    if LIVOS_DESKTOP_USER="$_DESKTOP_USER" "$_PWD_WRAP_DST"; then
-        ok "Desktop-user password bootstrapped (operator can read it in Settings → Account)"
+    if LIVOS_DESKTOP_USER="$_DESKTOP_USER" "$_PWD_WRAP_DST" --firstboot; then
+        ok "Desktop-user password bootstrapped (shown once on the onboarding screen; Settings → Account reveal is 2FA-gated)"
     else
         warn "Desktop-user password bootstrap failed (non-fatal; operator can use Regenerate in Settings)"
     fi

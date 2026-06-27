@@ -48,12 +48,14 @@ export const httpOnlyPaths = [
 	// extends Phase 33 OBS-01 schema with status:"factory-reset"). HTTP only —
 	// the WS would 401 mid-wipe when livinityd is killed. Mirror system.update.
 	'system.factoryReset',
-	// Phase 306 — desktop-user OS password: the read + the regenerate (which
-	// shells out to sudo + chpasswd) are admin-gated and must survive WS reconnect
-	// across a `systemctl restart livos` window (same B-12/X-04 rationale as
-	// provider.config.set / system.update).
-	'system.getDesktopUserCredentials',
+	// Phase 306 — desktop-user OS password: info read + 2FA-gated reveal/regenerate
+	// (regenerate shells out to sudo + chpasswd) + the one-time onboarding consume.
+	// All admin-gated and must survive WS reconnect across a `systemctl restart
+	// livos` window (same B-12/X-04 rationale as provider.config.set / system.update).
+	'system.getDesktopUserInfo',
+	'system.revealDesktopPassword',
 	'system.regenerateDesktopPassword',
+	'system.consumeFirstBootDesktopPassword',
 	// Phase 135-F — 2FA enrollment from onboarding fires immediately after
 	// loginMut.onSuccess closes the WS (so it can reconnect with the fresh
 	// JWT). HTTP avoids the "Active connection is not open" race during that

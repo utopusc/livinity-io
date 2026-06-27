@@ -37,6 +37,13 @@ die() { log "ERROR: $*"; exit 1; }
 # Must run as root (we chpasswd + chown + write under /etc).
 [[ $EUID -eq 0 ]] || die "Run as root (invoked via sudo by livinityd, or directly at install)"
 
+# --firstboot: ALSO write a one-time copy consumed once by the onboarding done
+# screen. ONLY the install/update bootstrap passes this (direct root call); the
+# sudo-invoked Regenerate path passes NO args (the sudoers grant matches no-args
+# only), so it can never create the first-boot copy.
+WRITE_FIRSTBOOT=0
+[[ "${1:-}" == "--firstboot" ]] && WRITE_FIRSTBOOT=1
+
 for c in chpasswd id getent install openssl awk grep; do
 	command -v "$c" >/dev/null 2>&1 || die "Missing dependency: $c"
 done
@@ -102,4 +109,19 @@ chmod 0600 "${TMP_FILE}"
 mv -f "${TMP_FILE}" "${CREDS_FILE}"
 
 log "Credentials written to ${CREDS_FILE} ($(stat -c '%a %U:%G' "${CREDS_FILE}" 2>/dev/null || echo '0600'))"
+
+# One-time first-boot copy (consumed + deleted once by the onboarding done
+# screen). Settings → Account NEVER reads this — its reveal path is 2FA-gated.
+if [[ "${WRITE_FIRSTBOOT}" == "1" ]]; then
+	FB_FILE="${CREDS_DIR}/desktop-user-credentials.firstboot"
+	FB_TMP="${FB_FILE}.tmp.$$"
+	{
+		echo "username=${DESKTOP_USER}"
+		echo "password=${PASSWORD}"
+	} > "${FB_TMP}"
+	chown "${DESKTOP_USER}:${DESKTOP_GROUP}" "${FB_TMP}"
+	chmod 0600 "${FB_TMP}"
+	mv -f "${FB_TMP}" "${FB_FILE}"
+	log "First-boot credential copy written to ${FB_FILE} (consumed once by onboarding)"
+fi
 exit 0
