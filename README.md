@@ -25,11 +25,6 @@ Nothing to install on your devices. Nothing to carry. Just sign in.
 <a href="#quick-start"><img src="https://img.shields.io/badge/Self--host_in_one_line-111827?style=for-the-badge" alt="Self-host" /></a>
 <a href="https://livinity.io"><img src="https://img.shields.io/badge/Try_the_managed_cloud-2563eb?style=for-the-badge" alt="Try the cloud" /></a>
 
-<br/>
-<br/>
-
-<img src="docs/media/hero.gif" alt="Livinity — a full computer in your browser" width="760" />
-
 </div>
 
 ---
