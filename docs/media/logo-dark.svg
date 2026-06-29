@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60">
+  <!-- Dark-theme variant of the Livinity wordmark (white mark on dark backgrounds). -->
+  <circle cx="30" cy="30" r="22" fill="#f5f5f5"/>
+  <circle cx="30" cy="30" r="8" fill="#0d1117"/>
+  <text x="64" y="38" fill="#f5f5f5" font-family="system-ui, -apple-system, 'Space Grotesk', sans-serif" font-size="28" font-weight="700" letter-spacing="-0.02em">Livinity</text>
+</svg>
