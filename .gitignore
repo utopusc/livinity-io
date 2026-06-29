@@ -59,7 +59,9 @@ agent-app/*.zip
 .planning/
 /mobile-audit/
 /ONBOARDING.md
-/SECURITY-AUDIT.md
+# Internal security analysis docs (audit / research / remediation playbooks).
+# Keeps the public /SECURITY.md (no hyphen) tracked.
+/SECURITY-*.md
 
 # Session handoff notes
 /NEXT-MILESTONE-PROMPT.md
