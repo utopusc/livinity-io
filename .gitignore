@@ -41,6 +41,12 @@ agent-app/release/
 docker-images/*.tar
 docker-images/*.tar.gz
 
+# Build artifacts that must never be committed (ship via Releases / Docker Hub).
+*.tar
+*.tar.gz
+agent/*.zip
+agent-app/*.zip
+
 # === Internal tooling / agent state (local-only) ===
 .claude/*
 !.claude/skills/
@@ -53,6 +59,7 @@ docker-images/*.tar.gz
 .planning/
 /mobile-audit/
 /ONBOARDING.md
+/SECURITY-AUDIT.md
 
 # Session handoff notes
 /NEXT-MILESTONE-PROMPT.md

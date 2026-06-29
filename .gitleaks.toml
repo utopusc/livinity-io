@@ -1,0 +1,36 @@
+# Livinity secret-scan config — consumed by .github/workflows/secret-scan.yml
+#
+# Forward-looking gate: it scans the WORKING TREE (gitleaks `dir`, no git history) so it
+# blocks NEW secrets without going permanently red on the historical leaks that the
+# Phase 1 history purge removes separately. Run `gitleaks dir . --config .gitleaks.toml`
+# locally before pushing.
+title = "Livinity secret scan"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "livinity-api-key"
+description = "Livinity API key (liv_k_…)"
+regex = '''liv_k_[A-Za-z0-9_-]{16,}'''
+keywords = ["liv_k_"]
+
+[[rules]]
+id = "cloudflare-tunnel-token"
+description = "Cloudflare tunnel token (base64 JSON, eyJhIjoi…)"
+regex = '''eyJhIjoi[A-Za-z0-9+/=_-]{30,}'''
+keywords = ["eyJhIjoi"]
+
+# Synthetic fixtures only. NEVER add a real key here — rotate it and replace the fixture instead.
+# The genuinely-suspect keys (liv_k_uYmD…, rX_G…, lF6W…) are deliberately NOT allowlisted so the
+# gate keeps flagging them until they are rotated AND scrubbed from committed source/tests.
+[allowlist]
+description = "Known synthetic test fixtures / placeholders (not live credentials)"
+regexes = [
+  '''liv_k_AAAA[A-Za-z0-9]*''',          # api-key.test.ts padding
+  '''liv_k_phase[0-9A-Za-z]*''',         # planning-doc placeholder
+  '''liv_k_super[A-Za-z0-9_-]*''',       # test-subdomain-args.sh placeholder
+  '''liv_k_25[67][AD][A-Za-z0-9]*''',    # is-authenticated.test.ts sequential fixtures
+  '''liv_k_iCCx[A-Za-z0-9]*''',          # api-key / heartbeat-sender test fixture
+  '''eyJhIjoiZmFr[A-Za-z0-9+/=_-]*''',   # {"a":"fake-cf-tunnel-token…"} test fixture
+]
