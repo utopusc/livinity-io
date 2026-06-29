@@ -28,7 +28,7 @@ Nothing to install on your devices. Nothing to carry. Just sign in.
 <br/>
 <br/>
 
-<img src="docs/media/hero.gif" alt="Livinity — a full computer in your browser" width="820" />
+<img src="docs/media/hero.gif" alt="Livinity — a full computer in your browser" width="760" />
 
 </div>
 
