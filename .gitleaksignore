@@ -1,0 +1,17 @@
+# Verified false positives — each reviewed 2026-06-29. Format: <file>:<rule>:<line>.
+# These are NOT live secrets. If a file changes and a FP reappears with a new line
+# number, re-run gitleaks and update the fingerprint here.
+
+# Public Claude OAuth PKCE client id (identical to the Claude Code CLI) — a client ID
+# is a public identifier, not a credential.
+liv/packages/core/src/providers/claude.ts:generic-api-key:55
+
+# Placeholder text for the SSH-private-key input field in a credential dialog — example
+# text shown in an empty <textarea>, never a real key.
+livos/packages/ui/src/routes/docker/stacks/add-git-credential-dialog.tsx:private-key:135
+
+# "Authorization: Bearer subscription" — a literal sentinel the local broker recognizes
+# (subscription-auth path), not a token. Appears in internal smoke/migration scripts.
+scripts/migrate-nexus-to-liv.sh:curl-auth-header:282
+scripts/migrate-nexus-to-liv.sh:curl-auth-header:299
+scripts/rollback-liv-to-nexus.sh:curl-auth-header:208
