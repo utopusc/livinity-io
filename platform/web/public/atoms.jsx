@@ -129,6 +129,90 @@ const Icon = ({ name, size = 18, stroke = 1.5, ...rest }) => {
   }
 };
 
+// ---- LivVideo — lazy product clip. mode="auto": muted loop, plays only while
+//      in view (IntersectionObserver). mode="click": poster + play button → controls. ----
+const LivVideo = ({ src, poster, className = "", frame = false, rate = 1, ratio = "16 / 9", mode = "auto", label = "" }) => {
+  const ref = useRef(null);
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    if (mode !== "auto") return;
+    const v = ref.current;
+    if (!v) return;
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) { v.play && v.play().catch(() => {}); }
+      else { v.pause && v.pause(); }
+    }, { threshold: 0.2 });
+    io.observe(v);
+    return () => io.disconnect();
+  }, [mode]);
+
+  let media;
+  if (mode === "click") {
+    const start = () => {
+      const v = ref.current;
+      if (!v) return;
+      v.play && v.play().catch(() => {});
+      setPlaying(true);
+    };
+    media = (
+      <div className={"liv-click" + (playing ? " on" : "")} onClick={playing ? undefined : start}>
+        <video ref={ref} className={"liv-video " + className} poster={poster}
+               playsInline preload="none" controls={playing} style={{ aspectRatio: ratio }}>
+          <source src={src} type="video/mp4" />
+        </video>
+        {!playing && (
+          <button className="liv-play" type="button" aria-label={label || "Play video"}>
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+        )}
+      </div>
+    );
+  } else {
+    media = (
+      <video ref={ref} className={"liv-video " + className} poster={poster}
+             muted loop playsInline preload="none" style={{ aspectRatio: ratio }}
+             onLoadedMetadata={(e) => { e.currentTarget.playbackRate = rate; }}>
+        <source src={src} type="video/mp4" />
+      </video>
+    );
+  }
+
+  if (!frame) return media;
+  return (
+    <div className={"liv-frame " + className}>
+      <div className="liv-frame-bar"><span/><span/><span/></div>
+      {media}
+    </div>
+  );
+};
+
+// ---- LivYouTube — lazy facade: poster + play button, swaps to the YouTube iframe on click ----
+const LivYouTube = ({ id, label = "Play video" }) => {
+  const [on, setOn] = useState(false);
+  if (on) {
+    return (
+      <div className="liv-yt on">
+        <iframe
+          src={"https://www.youtube-nocookie.com/embed/" + id + "?autoplay=1&rel=0&modestbranding=1"}
+          title={label} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen
+          frameBorder="0"/>
+      </div>
+    );
+  }
+  return (
+    <div className="liv-yt" role="button" aria-label={label} tabIndex={0}
+         onClick={() => setOn(true)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setOn(true); }}>
+      <img className="liv-yt-poster" alt="" loading="lazy"
+           src={"https://i.ytimg.com/vi/" + id + "/maxresdefault.jpg"}
+           onError={(e) => { e.currentTarget.src = "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg"; }}/>
+      <button className="liv-play" type="button" aria-label={label}>
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+    </div>
+  );
+};
+
 const Brand = ({ withText = true }) => (
   <a href="/" className="brand">
     <span className="brand-mark" aria-hidden="true"></span>
@@ -168,9 +252,9 @@ const Nav = () => {
         <a href="#liv">Liv Agent</a>
         <a href="#apps">App Library</a>
         <a href="#install">Self-Host</a>
-        <a href="#developers">Developers</a>
+        <a href="/developers">Developers</a>
         <a href="/docs">Docs</a>
-        <a href="#pricing">Pricing</a>
+        <a href="/pricing">Pricing</a>
       </div>
       <div className="nav-cta">
         <a className="btn btn-ghost btn-icon" href="https://github.com/utopusc/livinity-io" target="_blank" rel="noreferrer" aria-label="GitHub">
@@ -192,4 +276,4 @@ const Nav = () => {
   );
 };
 
-Object.assign(window, { Icon, Brand, Nav, ProfileMenu, fetchProfileOnce });
+Object.assign(window, { Icon, Brand, Nav, ProfileMenu, fetchProfileOnce, LivVideo, LivYouTube });

@@ -1,147 +1,49 @@
 // Sections — Apple-clean monochrome, Cloud AI Computer language
 const { useState: useStateS } = React;
 
-const Features = () => (
-  <section className="section" id="liv">
+// ---- A reusable alternating (zig-zag) feature row: big video one side, copy the other ----
+const FeatureRow = ({ item, i }) => (
+  <div className={"walk-row" + (i % 2 ? " flip" : "")} id={item.id}>
+    <div className="walk-media">
+      <LivVideo src={"/videos/web/" + item.f + ".mp4"} poster={"/videos/web/posters/" + item.f + ".jpg"} ratio="16 / 9"/>
+    </div>
+    <div className="walk-text">
+      <span className="walk-eyebrow">{item.eyebrow}</span>
+      <h3>{item.title}</h3>
+      <p>{item.text}</p>
+      {item.chips && (
+        <div className="walk-channels">
+          {item.chips.map((c, k) => <span key={k} className="walk-chip">{c}</span>)}
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+// ---- Walkthrough — the product, A to Z, every step shown on a big looping video ----
+const WALK_ITEMS = [
+  {f: "login",             eyebrow: "Sign in",     title: "Liv is wherever you are.", text: "Open your-name.livinity.io in any browser, on your laptop, phone, or tablet. Sign in, and Liv, your apps, and your files are right there. Nothing to install, nothing to carry."},
+  {f: "dock-navbar",       eyebrow: "The desktop", title: "A desktop that stays out of your way.", text: "A clean dock, a quiet navbar. Everything one click away, nothing shouting for your attention."},
+  {f: "liv-ai",            eyebrow: "Meet Liv",    title: "An assistant that does the thing.", text: "Ask in plain words. Liv plans your week, finds that file, drafts the reply, and runs your apps. It even works while you sleep.", chips: ["writes for you", "remembers everything", "runs your apps", "stays private"]},
+  {f: "files",             eyebrow: "Files",       title: "Files, photos, and storage in one place.", text: "Drag, drop, preview, share. Your whole drive lives in the browser, encrypted and exportable any time you like."},
+  {f: "appstore",          eyebrow: "App Store",   title: "Everything you already use, in a tap.", text: "More than 200 carefully selected open-source apps for files, photos, notes, mail, and automation. Installed, polished, and kept current for you."},
+  {f: "terminal",          eyebrow: "For builders", id: "developers", title: "A real terminal, built in.", text: "Open a full shell right in the browser. Run commands, manage your apps and services, and drive your whole computer from the command line. No SSH, no local setup."},
+  {f: "terminal-shortcut", eyebrow: "Shortcuts",   title: "Turn anything into a shortcut.", text: "Set up a shortcut once, like a terminal command, and Liv remembers it. Run the whole flow again with a single click, any time."},
+  {f: "app-sharing",       eyebrow: "App sharing",  title: "Share your apps with friends.", text: "Installed an app you love? Open it up to friends in a click. They get to use it right on your computer, with no setup of their own."},
+];
+
+const Walkthrough = () => (
+  <section className="section walk-section" id="liv">
     <div className="container">
       <span className="eyebrow">A new kind of computer.</span>
       <h2 className="h2" style={{marginTop: 16, maxWidth: "22ch"}}>
         Designed to feel simple. Built to do anything.
       </h2>
-      <p className="lede" style={{marginTop: 18}}>
-        Livinity is the operating system. Liv is the assistant. Together they replace dozens of tools with one clean place to think, work, and live.
+      <p className="lede" style={{marginTop: 18, maxWidth: "58ch"}}>
+        Livinity is the operating system. Liv is the assistant. Here's the whole thing, from your first sign-in to a computer that runs itself.
       </p>
-
-      <div className="features">
-        <div className="card span-7">
-          <span className="num">Liv</span>
-          <h3>An assistant that actually does the thing.</h3>
-          <p>Ask in plain language. Liv understands, remembers, and takes action — moving files, planning your week, drafting replies. She works while you sleep.</p>
-          <div className="fv fv-skills">
-            <div className="skill-row"><Icon name="puzzle" size={14}/> plan.day <span className="tag">skill</span></div>
-            <div className="skill-row"><Icon name="puzzle" size={14}/> compose.reply <span className="tag">skill</span></div>
-            <div className="skill-row"><Icon name="puzzle" size={14}/> files.sort <span className="tag">skill</span></div>
-            <div className="skill-row"><Icon name="puzzle" size={14}/> memory.recall <span className="tag">core</span></div>
-            <div className="skill-row"><Icon name="puzzle" size={14}/> notify.me <span className="tag">i/o</span></div>
-            <div className="skill-row"><Icon name="puzzle" size={14}/> search.web <span className="tag">skill</span></div>
-          </div>
-        </div>
-
-        <div className="card span-5">
-          <span className="num">L<span style={{display: "inline-block", verticalAlign: "middle", margin: "0 2px", fontSize: "0.9em", lineHeight: 1}}>·</span>use</span>
-          <h3>Teach Liv how you work. Then let it work.</h3>
-          <p>Show Liv your browser, your apps, your shortcuts — once. It learns the flow, remembers the steps, and runs them on its own next time. Your computer, on autopilot when you want it.</p>
-          <div className="fv fv-luse">
-            <div className="luse-browser" aria-hidden="true">
-              <div className="luse-bar">
-                <span></span><span></span><span></span>
-                <div className="luse-url">livinity.io/setup</div>
-              </div>
-              <div className="luse-stage">
-                <div className="luse-card">
-                  <div className="luse-card-title"></div>
-                  <div className="luse-card-row r1"></div>
-                  <div className="luse-card-row r2"></div>
-                  <div className="luse-card-row r3"></div>
-                </div>
-                <div className="luse-btn t1">Skip</div>
-                <div className="luse-btn t2">Connect account</div>
-                <div className="luse-btn t3">Continue →</div>
-                <div className="luse-cursor">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                    <path d="M3 2l6 16 2.5-6.5L18 9z"/>
-                  </svg>
-                </div>
-                <div className="luse-ping p1"></div>
-                <div className="luse-ping p2"></div>
-                <div className="luse-ping p3"></div>
-                <div className="luse-toast s1">Step 1 learned · Skip</div>
-                <div className="luse-toast s2">Step 2 learned · Connect</div>
-                <div className="luse-toast s3">Step 3 learned · Continue</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card span-5" id="developers">
-          <span className="num">For builders</span>
-          <h3>A computer with an open API.</h3>
-          <p>One Model Context Protocol endpoint connects Liv to Claude, Cursor, and the tools you already write. Hot-reload skills in TypeScript. tRPC end-to-end.</p>
-          <div className="fv fv-mcp">
-            <div className="mcp-line"><span className="ts">22:14</span><span>cursor → liv</span></div>
-            <div className="mcp-line in">  → tools.list</div>
-            <div className="mcp-line out">  ← 47 tools registered</div>
-            <div className="mcp-line in">  → files.read("notes/Q1.md")</div>
-            <div className="mcp-line out">  ← 4.2 KB delivered</div>
-            <div className="mcp-line in">  → app.run("studio")</div>
-            <div className="mcp-line out">  ← started in 1.3s</div>
-          </div>
-        </div>
-
-        <div className="card span-7">
-          <span className="num">Everywhere</span>
-          <h3>Liv is wherever you are.</h3>
-          <p>WhatsApp at lunch. Telegram on the train. Discord with your team. The web at your desk. Claude or Cursor while you build — one assistant, one memory, every surface.</p>
-          <div className="channels">
-            {[
-              {n:"WhatsApp", ic:"whatsapp", sub:"Chat with Liv like a friend",     hue:"#25D366"},
-              {n:"Telegram", ic:"telegram", sub:"Quick commands, instant replies",  hue:"#229ED9"},
-              {n:"Discord",  ic:"discord",  sub:"Bring Liv into your server",       hue:"#5865F2"},
-              {n:"Web",      ic:"globe",    sub:"Your computer in any browser",     hue:"#9aa0aa"},
-              {n:"Claude · Cursor", ic:"claude", sub:"MCP, native to your IDE",     hue:"#D97757", wide:true},
-            ].map((c,i)=>(
-              <a key={i} href="#" className={"channel" + (c.wide ? " wide" : "")}>
-                <span className="ch-ic" style={{background: c.hue}}><Icon name={c.ic} size={16}/></span>
-                <span className="ch-meta">
-                  <span className="ch-n">{c.n}</span>
-                  <span className="ch-sub">{c.sub}</span>
-                </span>
-                <span className="ch-arr"><Icon name="arrow-up-right" size={14}/></span>
-              </a>
-            ))}
-          </div>
-        </div>
-
-        <div className="card span-4">
-          <span className="num">Stack</span>
-          <h3>Five layers, one computer.</h3>
-          <div className="stack-diagram in-card" aria-label="Livinity stack">
-            <div className="stack-row">
-              <div className="stack-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></div>
-              <div className="stack-body"><div className="stack-name">Browser</div><div className="stack-desc">any device, any tab</div></div>
-            </div>
-            <div className="stack-arrow"></div>
-            <div className="stack-row">
-              <div className="stack-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></div>
-              <div className="stack-body"><div className="stack-name">Liv</div><div className="stack-desc">your AI, your keys</div></div>
-            </div>
-            <div className="stack-arrow"></div>
-            <div className="stack-row">
-              <div className="stack-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="3" width="7" height="7" rx="1.2"/><rect x="14" y="3" width="7" height="7" rx="1.2"/><rect x="3" y="14" width="7" height="7" rx="1.2"/><rect x="14" y="14" width="7" height="7" rx="1.2"/></svg></div>
-              <div className="stack-body"><div className="stack-name">Apps</div><div className="stack-desc">200+ open-source</div></div>
-            </div>
-            <div className="stack-arrow"></div>
-            <div className="stack-row">
-              <div className="stack-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><ellipse cx="12" cy="5" rx="8" ry="2.4"/><path d="M4 5v6c0 1.3 3.6 2.4 8 2.4S20 12.3 20 11V5"/><path d="M4 11v6c0 1.3 3.6 2.4 8 2.4S20 18.3 20 17v-6"/></svg></div>
-              <div className="stack-body"><div className="stack-name">Data</div><div className="stack-desc">encrypted, exportable</div></div>
-            </div>
-            <div className="stack-arrow"></div>
-            <div className="stack-row">
-              <div className="stack-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="4" width="18" height="5" rx="1"/><rect x="3" y="11" width="18" height="5" rx="1"/><rect x="3" y="18" width="18" height="3" rx="1"/><circle cx="7" cy="6.5" r="0.6" fill="currentColor"/><circle cx="7" cy="13.5" r="0.6" fill="currentColor"/></svg></div>
-              <div className="stack-body"><div className="stack-name">Infra</div><div className="stack-desc">self-host · cloud</div></div>
-            </div>
-          </div>
-        </div>
-        <div className="card span-4">
-          <span className="num">Apps</span>
-          <h3>Everything you already use.</h3>
-          <p>Two hundred carefully selected apps — files, photos, notes, mail, automation — preinstalled, polished, kept current.</p>
-        </div>
-        <div className="card span-4">
-          <span className="num">Updates</span>
-          <h3>Always the latest.</h3>
-          <p>Livinity quietly keeps itself current overnight. You wake up to a better computer than you went to bed with.</p>
-        </div>
+      <div className="walk">
+        {WALK_ITEMS.map((item, i) => <FeatureRow key={i} item={item} i={i}/>)}
       </div>
     </div>
   </section>
@@ -275,7 +177,7 @@ const AppsMarquee = () => {
         </h2>
         <p className="lede" style={{marginTop: 16, maxWidth: "58ch"}}>
           Every subscription has a free, open-source twin. LivOS installs them in one tap,
-          publishes them on <em>your own domain</em>, and Liv manages everything by AI —
+          publishes them on <em>your own domain</em>, and Liv manages everything by AI:
           updates, backups, settings. Anywhere you sign in.
         </p>
       </div>
@@ -323,12 +225,12 @@ const Install = () => (
       <div className="install">
         <div className="install-grid">
           <div className="col" style={{gap: 20}}>
-            <span className="eyebrow">Sign in.</span>
-            <h2 className="h2" style={{maxWidth: "18ch"}}>
-              Your computer is ready in 60 seconds.
+            <span className="eyebrow">Self-host.</span>
+            <h2 className="h2" style={{maxWidth: "20ch"}}>
+              Your own computer, ready in about 10 minutes.
             </h2>
             <p className="lede">
-              Open Livinity in any browser. Sign in. That's it — your Cloud AI Computer is on, your apps are ready, and Liv is waiting to say hello.
+              One line on any Linux box. The installer brings up Docker, your apps, and a secure tunnel, then you sign in at your own address. No cloud bill, no lock-in.
             </p>
             <div className="row" style={{marginTop: 8}}>
               <a className="btn btn-primary" href="/login">Sign in to Livinity</a>
@@ -339,19 +241,19 @@ const Install = () => (
             <div className="row check-row" style={{marginTop: 22, color: "rgba(255,255,255,0.7)", fontSize: 13}}>
               <span><Icon name="check" size={14} stroke={2}/> Works in any browser</span>
               <span><Icon name="check" size={14} stroke={2}/> Bring your own AI keys</span>
-              <span><Icon name="check" size={14} stroke={2}/> Free to start</span>
+              <span><Icon name="check" size={14} stroke={2}/> 200+ apps included</span>
             </div>
           </div>
           <div className="terminal">
             <div className="terminal-bar"><span></span><span></span><span></span></div>
             <div className="terminal-body">
-              <div><span className="com"># Or self-host. One line, any Linux.</span></div>
-              <div><span className="prompt">$</span> curl -fsSL get.livinity.io | bash</div>
-              <div className="com">  ↳ preparing your computer…</div>
-              <div className="com">  ↳ installing apps… <span className="ok">done</span></div>
-              <div className="com">  ↳ securing connection… <span className="ok">done</span></div>
-              <div className="com">  ↳ waking Liv… <span className="ok">ready</span></div>
-              <div style={{marginTop: 10}}><span className="prompt">→</span> open <span style={{color: "#fff"}}>livinity.io</span> <span className="cur"></span></div>
+              <div><span className="com"># Self-host on any Linux box.</span></div>
+              <div><span className="prompt">$</span> curl -fsSL https://livinity.io/install | bash</div>
+              <div className="com">  ↳ provisioning Docker · Caddy · Postgres…</div>
+              <div className="com">  ↳ installing LivOS & 200+ apps… <span className="ok">done</span></div>
+              <div className="com">  ↳ securing tunnel… <span className="ok">done</span></div>
+              <div className="com">  ↳ waking Liv… <span className="ok">ready</span> <span className="com">(~10 min)</span></div>
+              <div style={{marginTop: 10}}><span className="prompt">→</span> open <span style={{color: "#fff"}}>your-name.livinity.io</span> <span className="cur"></span></div>
             </div>
           </div>
         </div>
@@ -365,39 +267,29 @@ const Paths = () => (
     <div className="container">
       <span className="eyebrow">Pricing.</span>
       <h2 className="h2" style={{marginTop: 16, maxWidth: "22ch"}}>
-        Choose how you want your computer.
+        One plan. Everything included.
       </h2>
-      <p className="lede" style={{marginTop: 16, maxWidth: "58ch"}}>
-        Two ways in. Run the full OS on your own hardware, or let us host a Cloud AI Computer you tune to the bone.
+      <p className="lede" style={{marginTop: 16, maxWidth: "56ch"}}>
+        Your own Cloud AI Computer with your subdomain, a secure tunnel, 200+ apps, and Liv built in. Try it free for three days.
       </p>
-      <div className="paths two">
-        <div className="path-card">
-          <span className="ribbon ghost">Open-source</span>
-          <h4>Self-host</h4>
-          <div className="price">Free<em> · forever</em></div>
-          <p className="dim" style={{fontSize: 15}}>The complete OS on your own machine. One line, any Linux. Yours, end to end.</p>
-          <ul>
-            <li>The complete operating system</li>
-            <li>Liv with vector memory</li>
-            <li>All 200+ apps, no limits</li>
-            <li>Open API for builders</li>
-            <li>Community support</li>
-          </ul>
-          <a className="btn btn-ghost cta" href="#install">Self-host now <Icon name="arrow-right" size={14}/></a>
-        </div>
+      <div className="paths one">
         <div className="path-card feat">
-          <span className="ribbon">Build yours</span>
-          <h4>Customize</h4>
-          <div className="price">from $37<em> /mo</em></div>
-          <p className="dim" style={{fontSize: 15}}>A Cloud AI Computer tuned to you. Pick CPU, RAM, storage, GPU. We run it, you sign in.</p>
+          <span className="ribbon">Livinity Pro</span>
+          <h4>Livinity Pro</h4>
+          <div className="price">$7.99<em> /mo</em></div>
+          <p className="dim" style={{fontSize: 15}}>Or $69.99/year. 3-day free trial. Cancel anytime during the trial and you're never charged.</p>
           <ul>
-            <li>Pick CPU, RAM, storage and GPU</li>
-            <li>Presets: Basic, Mid, Advanced</li>
-            <li>Liv with your keys, your memory</li>
-            <li>Automatic backups & updates</li>
-            <li>Move to your own hardware anytime</li>
+            <li>Your own <em>name</em>.livinity.io subdomain</li>
+            <li>Secure Cloudflare tunnel, no port forwarding</li>
+            <li>App Store: 200+ apps, one-click install</li>
+            <li>Liv AI assistant built in, bring your own keys</li>
+            <li>Custom domains (up to 3) & remote access</li>
+            <li>One-line self-host on your own hardware</li>
           </ul>
-          <a className="btn btn-primary cta" href="customize.html">Configure your computer <Icon name="arrow-right" size={14}/></a>
+          <a className="btn btn-primary cta" href="/pricing">Start 3-day free trial <Icon name="arrow-right" size={14}/></a>
+          <p className="dim" style={{fontSize: 13, marginTop: 16, textAlign: "center"}}>
+            Prefer to run it yourself? Livinity is open-source, so you can <a href="#install">self-host for free</a>.
+          </p>
         </div>
       </div>
     </div>
@@ -405,10 +297,10 @@ const Paths = () => (
 );
 
 const FAQ_ITEMS = [
-  {q: "What is a Cloud AI Computer?", a: "A full computer — operating system, apps, assistant — that lives in the cloud and opens in your browser. No installs, no setup, no devices to worry about. Sign in and your computer is right there."},
+  {q: "What is a Cloud AI Computer?", a: "A full computer (operating system, apps, and assistant) that lives in the cloud and opens in your browser. No installs, no setup, no devices to worry about. Sign in and your computer is right there."},
   {q: "Is my data really mine?", a: "Yes. Everything Liv learns about you, every file, every chat, is encrypted and stored in your computer's space. Open source means anyone can verify there's no telemetry. You can move it to your own hardware whenever you like."},
-  {q: "Which AI does Liv use?", a: "Bring your own. Liv works with Claude, Gemini, and local models. You choose. We never charge you for tokens — the keys are yours."},
-  {q: "Can I use Livinity on my phone?", a: "Open it in any browser. Liv remembers your conversation between every screen — phone, laptop, tablet, IDE."},
+  {q: "Which AI does Liv use?", a: "Bring your own. Liv works with Claude, Gemini, and local models. You choose. We never charge you for tokens, and the keys are yours."},
+  {q: "Can I use Livinity on my phone?", a: "Open it in any browser. Liv remembers your conversation between every screen: phone, laptop, tablet, IDE."},
   {q: "Do I have to be technical?", a: "No. The Cloud plan is one sign-in away. If you can use a website, you can use Livinity. Builders get an open API on top."},
   {q: "What if I want to leave?", a: "Export everything. Move to your own machine. Livinity is open source, so the door is always unlocked."},
 ];
@@ -479,4 +371,29 @@ const Footer = () => (
   </footer>
 );
 
-Object.assign(window, { Features, AppsMarquee, Install, Paths, FAQ, Footer });
+// ---- DockerShowcase — "Docker, built in", every step on a big alternating video ----
+const DOCKER_ITEMS = [
+  {f: "docker-first",      eyebrow: "Step 01", title: "One click in the Liv bar.",        text: "Open Docker straight from the Liv bar. No terminal, no config files to hand-edit."},
+  {f: "docker-activates",  eyebrow: "Step 02", title: "Activate with a tap.",            text: "Turn a service on and watch it come up live, with status you can actually read."},
+  {f: "docker-containers", eyebrow: "Step 03", title: "Every container, live.",          text: "See every running container, its logs, and its health at a glance, all in the browser."},
+  {f: "docker-imagepull",  eyebrow: "Step 04", title: "Pull images in the background.",  text: "Grab any image from the registry while you keep working. Liv handles the rest."},
+  {f: "docker-stacks",     eyebrow: "Step 05", title: "Compose whole stacks.",           text: "Bring up multi-service stacks from one definition. Orchestrate everything from a single place."},
+];
+const DockerShowcase = () => (
+  <section className="section walk-section" id="docker">
+    <div className="container">
+      <span className="eyebrow">For builders.</span>
+      <h2 className="h2" style={{marginTop: 16, maxWidth: "20ch"}}>
+        Docker, built in.
+      </h2>
+      <p className="lede" style={{marginTop: 16, maxWidth: "56ch"}}>
+        Run containers, pull images, and orchestrate stacks straight from your computer, no terminal required. Scroll through how it works.
+      </p>
+      <div className="walk">
+        {DOCKER_ITEMS.map((item, i) => <FeatureRow key={i} item={item} i={i}/>)}
+      </div>
+    </div>
+  </section>
+);
+
+Object.assign(window, { Walkthrough, AppsMarquee, Install, Paths, FAQ, Footer, DockerShowcase });

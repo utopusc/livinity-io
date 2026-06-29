@@ -49,11 +49,29 @@ const App = () => {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Reveal-on-scroll for the alternating walkthrough rows (progressive enhancement:
+  // the .js-reveal class gates the hidden state, so without JS everything stays visible).
+  useEffectA(() => {
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) return;
+    const rows = Array.from(document.querySelectorAll(".walk-row"));
+    if (!rows.length || !("IntersectionObserver" in window)) return;
+    document.documentElement.classList.add("js-reveal");
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) { e.target.classList.add("in-view"); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.18, rootMargin: "0px 0px -8% 0px" });
+    rows.forEach((r) => io.observe(r));
+    return () => io.disconnect();
+  }, []);
+
   return (
     <>
       <Nav />
       <Hero />
-      <Features />
+      <Walkthrough />
+      <DockerShowcase />
       <AppsMarquee />
       <Install />
       <Paths />

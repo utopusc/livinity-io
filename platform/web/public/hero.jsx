@@ -1,50 +1,6 @@
 // Hero — atmospheric headline + glassy OS window mockup
 const { useState: useStateH, useEffect: useEffectH } = React;
 
-const HeroOS = () => {
-  const prompts = [
-    "Plan my week and clear Thursday afternoon.",
-    "Pull last quarter's invoices into one folder.",
-    "Draft a thank-you note to the design team.",
-    "What did I forget today?",
-    "Find that photo from Lisbon, 2022.",
-  ];
-  const [i, setI] = useStateH(0);
-  useEffectH(() => {
-    const t = setInterval(() => setI(v => (v + 1) % prompts.length), 2600);
-    return () => clearInterval(t);
-  }, []);
-
-  return (
-    <div className="hey-liv">
-      <div className="hey-liv-inner">
-        <svg className="hey-liv-mark" viewBox="0 0 400 220" aria-hidden="true">
-          <path d="M40 180 Q 60 40, 100 100 T 170 180 Q 200 60, 230 170 T 310 100 Q 340 60, 360 180"
-                fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-        <div className="hey-liv-greet">
-          <span className="hey-liv-text">Hey, Liv</span>
-          <span className="hey-liv-wave" role="img" aria-label="wave">👋</span>
-        </div>
-        <p className="hey-liv-sub">
-          A quiet assistant living inside your computer. Ask in your own words —
-          she plans, finds, sends, and gets things done.
-        </p>
-        <div className="hey-liv-prompt">
-          <span className="cursor"></span>
-          <span key={i} className="prompt-text">{prompts[i]}</span>
-        </div>
-        <div className="hey-liv-chips">
-          <span className="hl-chip">writes for you</span>
-          <span className="hl-chip">remembers everything</span>
-          <span className="hl-chip">runs your apps</span>
-          <span className="hl-chip">stays private</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // "do" flickers through 15 different style/color/decoration combos every 400ms
 const DO_STYLES = [
   { f: "'Playfair Display', serif",   w: 700, i: true  },
@@ -122,7 +78,7 @@ const Hero = () => {
           <span className="you-do-reveal"><span className="thin">you</span> do.</span>
         </h1>
         <p className="lede">
-          Livinity is a Cloud AI Computer. One operating system, one quiet interface, one assistant — Liv — that understands what you ask and gets it done. Designed to be the simplest powerful computer you'll ever sign in to.
+          Livinity is a Cloud AI Computer. One operating system, one quiet interface, and one assistant named Liv that understands what you ask and gets it done. Designed to be the simplest powerful computer you'll ever sign in to.
         </p>
         <div className="hero-ctas">
           <a className="btn btn-primary" href="#install">Install Now</a>
@@ -149,18 +105,6 @@ const Hero = () => {
         </div>
       </div>
 
-      <HeroOS />
-
-      <div className="channels">
-        <div className="lbl">Liv is wherever you are</div>
-        <div className="logos">
-          <span className="ch"><Icon name="whatsapp" size={18}/> WhatsApp</span>
-          <span className="ch"><Icon name="telegram" size={18}/> Telegram</span>
-          <span className="ch"><Icon name="discord" size={18}/> Discord</span>
-          <span className="ch"><Icon name="globe" size={18}/> Web</span>
-          <span className="ch"><Icon name="claude" size={18}/> Claude / Cursor (MCP)</span>
-        </div>
-      </div>
     </div>
   </section>
   );

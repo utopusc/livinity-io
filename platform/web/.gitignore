@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# landing video originals — only the optimized public/videos/web/ versions ship
+/public/videos/*.mp4
+# reel is a YouTube embed now — its local copies are unused
+/public/videos/web/livinity-reel.mp4
+/public/videos/web/posters/livinity-reel.jpg
+# local dev helpers (not part of the site)
+/optimize-videos.sh
+/LANDING-VIDEO-PLAN.md

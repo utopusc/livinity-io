@@ -18,8 +18,7 @@ export function DocsNav({ searchIndex }: { searchIndex: SearchDoc[] }) {
           <DocsSearch index={searchIndex} />
           {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a href="/#apps">App Library</a>
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-          <a href="/#pricing">Pricing</a>
+          <Link href="/pricing">Pricing</Link>
           <Link href="/docs" className="is-active">
             Docs
           </Link>

@@ -2287,6 +2287,156 @@ body.dark .path-card.feat::before {
 }
 @keyframes featRimPulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
 
+/* ============ LivVideo / LivYouTube — embedded landing videos (frameless) ============ */
+.liv-video {
+  width: 100%;
+  display: block;
+  object-fit: cover;
+  background: #0a0a0c;
+  border-radius: 22px;
+  border: none;
+  box-shadow:
+    0 1px 2px rgba(17, 24, 39, 0.04),
+    0 10px 24px -8px rgba(17, 24, 39, 0.14),
+    0 36px 70px -28px rgba(17, 24, 39, 0.32);
+}
+body.dark .liv-video {
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.4),
+    0 36px 80px -30px rgba(0, 0, 0, 0.7);
+}
+
+/* shared play button (YouTube facade) */
+.liv-play {
+  position: absolute; inset: 0; margin: auto;
+  width: 84px; height: 84px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(255,255,255,0.94); color: #0a0a0c;
+  border: none; cursor: pointer;
+  box-shadow: 0 16px 50px -10px rgba(0,0,0,0.55);
+  transition: transform .2s ease, background .2s ease;
+}
+.liv-play svg { margin-left: 4px; }
+
+/* ============ Reel — full film (YouTube facade, 16:9) ============ */
+.reel-wrap { margin-top: 48px; }
+.liv-yt {
+  position: relative;
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #0a0a0c;
+  border: 1px solid var(--line);
+  box-shadow: 0 40px 100px -44px rgba(20, 30, 60, 0.55);
+  cursor: pointer;
+}
+body.dark .liv-yt { border-color: rgba(255,255,255,0.08); }
+.liv-yt-poster { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s cubic-bezier(.2,.7,.2,1), filter .3s ease; }
+.liv-yt:hover .liv-yt-poster { transform: scale(1.02); filter: brightness(0.92); }
+.liv-yt:hover .liv-play { transform: scale(1.08); background: #fff; }
+.liv-yt iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+/* ============ Walkthrough — BIG alternating video rows (zig-zag) ============ */
+.walk-section > .container { max-width: 1320px; }
+.walk {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(72px, 10vw, 150px);
+  margin-top: clamp(64px, 9vw, 110px);
+}
+.walk-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.75fr) minmax(260px, 1fr);
+  gap: clamp(32px, 5vw, 80px);
+  align-items: center;
+}
+/* flipped rows: swap the COLUMN widths too, so the video stays in the wide column
+   (otherwise `order` alone drops the right-side video into the narrow column) */
+.walk-row.flip { grid-template-columns: minmax(260px, 1fr) minmax(0, 1.75fr); }
+.walk-row.flip .walk-media { order: 2; }
+.walk-row.flip .walk-text  { order: 1; }
+.walk-media { perspective: 1200px; }
+.walk-media .liv-video {
+  width: 100%;
+  border-radius: 22px;
+  transition: transform .5s cubic-bezier(.2,.7,.2,1), box-shadow .5s ease;
+}
+.walk-media:hover .liv-video {
+  transform: translateY(-6px);
+  box-shadow:
+    0 2px 6px rgba(17, 24, 39, 0.05),
+    0 16px 32px -10px rgba(17, 24, 39, 0.16),
+    0 56px 120px -40px rgba(17, 24, 39, 0.42);
+}
+.walk-eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
+}
+.walk-text h3 {
+  font-size: clamp(30px, 3.6vw, 46px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.06;
+  margin: 12px 0 0;
+  text-wrap: balance;
+  color: var(--fg);
+}
+.walk-text p {
+  margin-top: 16px;
+  color: var(--fg-mute);
+  font-size: 17px;
+  line-height: 1.5;
+  max-width: 46ch;
+}
+.walk-channels { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.walk-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 13px; color: var(--fg-dim);
+  padding: 7px 12px; border-radius: 999px;
+  border: 1px solid var(--line-strong);
+}
+.walk-chip svg { width: 15px; height: 15px; }
+@media (max-width: 860px) {
+  .walk-section > .container { max-width: none; }
+  .walk-row, .walk-row.flip { grid-template-columns: 1fr; gap: 22px; }
+  .walk-row .walk-media, .walk-row.flip .walk-media { order: 1; }
+  .walk-row .walk-text,  .walk-row.flip .walk-text  { order: 2; }
+  .walk-text p { max-width: none; }
+}
+
+/* reveal-on-scroll (only active once JS adds .js-reveal → no-JS keeps it visible) */
+.js-reveal .walk-media {
+  opacity: 0;
+  transform: translateX(-48px);
+  transition: opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1);
+  will-change: opacity, transform;
+}
+.js-reveal .walk-row.flip .walk-media { transform: translateX(48px); }
+.js-reveal .walk-text {
+  opacity: 0;
+  transform: translateY(26px);
+  transition: opacity .8s cubic-bezier(.2,.7,.2,1) .1s, transform .8s cubic-bezier(.2,.7,.2,1) .1s;
+  will-change: opacity, transform;
+}
+.js-reveal .walk-row.in-view .walk-media,
+.js-reveal .walk-row.in-view .walk-text { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .js-reveal .walk-media, .js-reveal .walk-text { opacity: 1; transform: none; transition: none; }
+}
+
+/* ============ Pricing — single plan, centered ============ */
+.paths.one { display: flex; justify-content: center; margin-top: 56px; }
+.paths.one .path-card { width: 100%; max-width: 480px; }
+
+/* liv-ai video inside the Hey-Liv hero box (frameless) */
+.hey-liv .liv-video.hey-liv-video { margin-top: 18px; width: 100%; max-width: 760px; }
+
 #faq { position: relative; overflow: hidden; }
 body.dark #faq::before {
   content: ""; position: absolute; left: -10%; top: 0;
