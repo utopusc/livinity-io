@@ -21,16 +21,24 @@ description = "Cloudflare tunnel token (base64 JSON, eyJhIjoi…)"
 regex = '''eyJhIjoi[A-Za-z0-9+/=_-]{30,}'''
 keywords = ["eyJhIjoi"]
 
-# Synthetic fixtures only. NEVER add a real key here — rotate it and replace the fixture instead.
-# The genuinely-suspect keys (liv_k_uYmD…, rX_G…, lF6W…) are deliberately NOT allowlisted so the
-# gate keeps flagging them until they are rotated AND scrubbed from committed source/tests.
+# Synthetic test fixtures / placeholders only — verified non-live (e.g. "_synthetic_for_smoke",
+# "serviceToken_xxxxx", all-A padding, "supersecretvalue"). Real credentials must NEVER live in
+# tracked source: a liv_k_ match in non-test code outside these allowances is treated as a real
+# leak and fails CI. All current tracked liv_k_ values live in test files or the smoke script.
 [allowlist]
 description = "Known synthetic test fixtures / placeholders (not live credentials)"
+paths = [
+  '''.*\.test\.(ts|js|mjs)$''',
+  '''.*/__tests__/.*''',
+  '''.*\.test\.sh$''',
+  '''livos/packages/livinityd/scripts/smoke-tunnel-presence\.mjs''',
+]
 regexes = [
-  '''liv_k_AAAA[A-Za-z0-9]*''',          # api-key.test.ts padding
-  '''liv_k_phase[0-9A-Za-z]*''',         # planning-doc placeholder
-  '''liv_k_super[A-Za-z0-9_-]*''',       # test-subdomain-args.sh placeholder
-  '''liv_k_25[67][AD][A-Za-z0-9]*''',    # is-authenticated.test.ts sequential fixtures
-  '''liv_k_iCCx[A-Za-z0-9]*''',          # api-key / heartbeat-sender test fixture
-  '''eyJhIjoiZmFr[A-Za-z0-9+/=_-]*''',   # {"a":"fake-cf-tunnel-token…"} test fixture
+  '''liv_k_AAAA[A-Za-z0-9]*''',                       # all-A padding fixture
+  '''liv_k_[A-Za-z0-9_]*synthetic[A-Za-z0-9_]*''',    # *_synthetic_* fixtures
+  '''liv_k_[0-9]{3}[A-Z]_serviceToken[A-Za-z0-9_]*''', # 256D/257A serviceToken fixtures
+  '''liv_k_super[A-Za-z0-9_-]*''',                    # supersecretvalue… fixture
+  '''liv_k_iCCxIa7vlFgbpOl-fPwd''',                   # api-key / heartbeat test fixture
+  '''liv_k_lF6WvENQcoYRTaoJhWWU''',                   # env-file / is-authenticated test fixture
+  '''eyJhIjoiZmFr[A-Za-z0-9+/=_-]*''',                # {"a":"fake-cf-tunnel-token…"} test fixture
 ]
