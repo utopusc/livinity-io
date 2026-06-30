@@ -239,7 +239,13 @@ const apps = t.mergeRouters(
  * until the production swap lands.
  */
 export function createAppRouter(opts: {
-	chromeMaster: ReturnType<typeof createChromeMasterRouter>
+	// Phase 305 R7+ DECOUPLE (reliability roadmap A1) — now OPTIONAL with the
+	// bare empty-injection chromeMasterRouter default (mirrors every namespace
+	// below). Lets livinityd boot wire the production app router even when the
+	// streaming subsystem failed to start, so a streaming-boot failure can no
+	// longer skip setProductionAppRouter() and strand config/setup/agents on
+	// 412/500 stubs (chromeMaster status/reset still work; startLogin degrades).
+	chromeMaster?: ReturnType<typeof createChromeMasterRouter>
 	// Phase 195 — xAI OAuth auth router. Optional with empty-injection
 	// fallback so back-compat callers (and the default appRouter below)
 	// keep type-checking. Production livinityd boot supplies a real
@@ -359,7 +365,7 @@ export function createAppRouter(opts: {
 		// Phase 102-07 / Phase 103-01 — chromeMaster.* injected via factory.
 		// Default appRouter passes the bare chromeMasterRouter (back-compat);
 		// production livinityd boot replaces it via setProductionAppRouter().
-		chromeMaster: opts.chromeMaster,
+		chromeMaster: opts.chromeMaster ?? chromeMasterRouter,
 		// Phase 131-02 — pinnedWindows.* namespace (D-131-A persistence).
 		pinnedWindows: pinnedWindowsRouter,
 		// Phase 195 — xAI OAuth auth namespace (`auth.xai.*`). Four

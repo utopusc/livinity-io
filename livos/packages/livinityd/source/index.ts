@@ -901,6 +901,30 @@ export default class Livinityd {
 		// (`info` / `warn` / `error` / `verbose`) without rewriting the
 		// underlying logger.
 		try {
+			// Phase 305 R7+ DECOUPLE (reliability roadmap A1) — hoist the logger +
+			// display allocator that BOTH the streaming subsystem and the
+			// control-plane router wire-up below depend on, then run the streaming
+			// subsystem in an INNER try. A streaming-boot failure (GPU-less vainfo
+			// probe, dead Xvfb, WebAppWindowManager ctor throw, ...) must NOT skip
+			// the setProductionAppRouter() swap further down — otherwise every DI
+			// tRPC namespace stays on its empty-injection stub and config/setup/
+			// agents serve 412/500 across the whole UI (the boot-cascade root cause).
+			const webappLogger = (() => {
+				const child = this.logger.createChildLogger('webapps')
+				return {
+					info: (msg: string) => child.log(msg),
+					warn: (msg: string, error?: unknown) =>
+						child.error(msg, error),
+					error: (msg: string, error?: unknown) =>
+						child.error(msg, error),
+					verbose: (msg: string) => child.verbose(msg),
+				}
+			})()
+			// Cross-pool shared display allocator (also aliased by native-routes'
+			// nativeDisplayAllocator). Range [10,60), disjoint from MCP create.
+			const webappDisplayAllocator = appDisplayAllocator
+			// --- streaming subsystem (degradable; handled by the inner catch) ---
+			try {
 			const streamingLogger = (() => {
 				const child = this.logger.createChildLogger('streaming')
 				return {
@@ -1120,17 +1144,8 @@ export default class Livinityd {
 			// (it was an IGNORED back-compat slot — no functional CDP consumer).
 			// chromeCdpClient stays undefined; the webapp manager ignores it.
 
-			const webappLogger = (() => {
-				const child = this.logger.createChildLogger('webapps')
-				return {
-					info: (msg: string) => child.log(msg),
-					warn: (msg: string, error?: unknown) =>
-						child.error(msg, error),
-					error: (msg: string, error?: unknown) =>
-						child.error(msg, error),
-					verbose: (msg: string) => child.verbose(msg),
-				}
-			})()
+			// webappLogger hoisted to the top of this block (DECOUPLE A1) so the
+			// control-plane router wire-up can use it even if streaming boot failed.
 			// Phase 100-08-04 — construct an McpConfigManager backed by the
 			// SAME Redis livinityd already uses (this.ai.redis). Liv-core's
 			// McpClientManager runs in a separate process and subscribes to
@@ -1151,7 +1166,7 @@ export default class Livinityd {
 			// by native-routes' nativeDisplayAllocator) so webapp + native spawns
 			// share one in-use Set and can NEVER hand out the same `:N`. Range
 			// [10,60), disjoint from MCP create (floor MCP_CREATE_ALLOCATOR_START=60).
-			const webappDisplayAllocator = appDisplayAllocator
+			// webappDisplayAllocator hoisted to the top of this block (DECOUPLE A1).
 			this.webappWindowManager = new WebAppWindowManager({
 				streamManager: this.streamManager,
 				spawn: x11Spawn as unknown as ConstructorParameters<
@@ -1185,6 +1200,26 @@ export default class Livinityd {
 			webappLogger.info(
 				'WebAppWindowManager started (5s idle-cleanup poll armed)',
 			)
+			} catch (streamErr) {
+				// DECOUPLE A1 — the streaming subsystem failed to boot. Capture the
+				// cause for GET /liv-streaming-diag and DEGRADE: this.streamManager /
+				// this.webappWindowManager stay undefined so chromeMaster falls back
+				// to its stub, but execution CONTINUES to the control-plane router
+				// wire-up below so setProductionAppRouter() still runs — no 412/500
+				// cascade across config/setup/agents (the boot-cascade root cause).
+				const e = streamErr instanceof Error ? streamErr : new Error(String(streamErr))
+				this.streamingBootError = {
+					component: 'streaming/WebAppWindowManager',
+					name: e.name,
+					message: e.message,
+					stack: e.stack ?? '',
+					timestamp: new Date().toISOString(),
+				}
+				this.logger.error(
+					'Failed to start streaming subsystem / WebAppWindowManager (control-plane router wire-up continues)',
+					streamErr,
+				)
+			}
 
 			// Phase 103-01 Task 3 — wire the chromeMaster router with the same
 			// shared deps the WebAppWindowManager already consumes. Master Chrome
@@ -1198,11 +1233,20 @@ export default class Livinityd {
 			// the express middleware with the bare default appRouter — but the
 			// middleware proxy delegates to a mutable closure that this swap
 			// rebuilds against the injected router.
-			const chromeMasterRouterInjected = createChromeMasterRouter({
-				displayAllocator: webappDisplayAllocator,
-				streamManager: this.streamManager,
-				profileSeeder: this.profileSeeder!,
-			})
+			// DECOUPLE A1 — only wire the real chromeMaster router when the
+			// streaming subsystem actually started. If it failed above,
+			// this.streamManager / this.profileSeeder are undefined; pass undefined
+			// so createAppRouter falls back to the empty-injection chromeMasterRouter
+			// stub (status/reset still work; startLogin/input.* degrade) and the
+			// setProductionAppRouter() swap below still runs.
+			const chromeMasterRouterInjected =
+				this.streamManager && this.profileSeeder
+					? createChromeMasterRouter({
+							displayAllocator: webappDisplayAllocator,
+							streamManager: this.streamManager,
+							profileSeeder: this.profileSeeder,
+						})
+					: undefined
 
 			// Phase 196-01 — XAI OAuth dependency injection.
 			//
