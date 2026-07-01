@@ -151,7 +151,7 @@ import {createProfileSeeder, type ProfileSeederHandle} from './modules/chrome-ma
 // trpcExpressHandler proxy's cached middleware closure so /trpc requests
 // route through the injected router from this swap forward.
 import {createChromeMasterRouter} from './modules/chrome-master/index.js'
-import {createAppRouter, setProductionAppRouter} from './modules/server/trpc/index.js'
+import {createAppRouter, setProductionAppRouter, isProductionAppRouterSwapped} from './modules/server/trpc/index.js'
 // Phase 246-03 — pty-sessions admin sub-router (listSessions + killSession).
 // Wired against the per-livinityd-process SessionManager singleton on
 // `this.server.ptySessionManager` and injected into createAppRouter via the
@@ -645,6 +645,26 @@ export default class Livinityd {
 			}
 		} catch (diagErr) {
 			this.logger.error('Phase 305 R7 — /liv-streaming-diag mount failed', diagErr as Error)
+		}
+
+		// Reliability A2 — unauthenticated FUNCTIONAL health probe. `:8080
+		// answered HTTP` (liveness) passes even when the production router swap
+		// was skipped and config/setup serve 412/500 stubs; this endpoint returns
+		// 200 only after setProductionAppRouter() actually ran, so update.sh can
+		// gate `.deployed-release` marker advancement on a functional boot (D1).
+		// Deliberately a bare boolean — no component/message/stack (that detail
+		// stays behind the session-gated /liv-streaming-diag). Mounted here,
+		// before the streaming try, so it answers even on a degraded boot.
+		try {
+			if (this.server.app) {
+				this.server.app.get('/healthz/full', (_req, res) => {
+					const swapped = isProductionAppRouterSwapped()
+					res.status(swapped ? 200 : 503).json({ok: swapped})
+				})
+				this.logger.log('Reliability A2 — GET /healthz/full mounted (functional-boot probe: 200 iff production tRPC router swap ran)')
+			}
+		} catch (healthzErr) {
+			this.logger.error('Reliability A2 — /healthz/full mount failed', healthzErr as Error)
 		}
 
 		// Phase 203 Hot-fix F 2026-05-24 — DELETE the Hot-fix D/E desktop

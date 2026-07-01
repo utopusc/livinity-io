@@ -473,8 +473,20 @@ let activeAppRouter: ReturnType<typeof createAppRouter> = appRouter
  * Safe to call multiple times — every swap re-creates the cached
  * createExpressMiddleware closure so the route table picks up the new router.
  */
+// Reliability A2 — dispositive "did the production swap run?" signal. While
+// false, every DI namespace is still on its empty-injection stub (the exact
+// state that serves config.getV42MigrationActive 412 / setup.getLocation 500).
+// Consumed by GET /healthz/full so update.sh can gate marker advancement on
+// FUNCTIONAL boot, not mere :8080 liveness.
+let productionRouterSwapped = false
+
+export function isProductionAppRouterSwapped(): boolean {
+	return productionRouterSwapped
+}
+
 export function setProductionAppRouter(r: ReturnType<typeof createAppRouter>): void {
 	activeAppRouter = r
+	productionRouterSwapped = true
 	cachedExpressInner = createExpressMiddleware({
 		router: activeAppRouter,
 		createContext: createContextExpress,

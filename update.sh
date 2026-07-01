@@ -663,15 +663,45 @@ livinityd_responding() {
 # status=failed and .deployed-sha is NOT advanced, so the box correctly reports
 # it's still on the previous version) — the UI is restored either way.
 health_probe_or_rollback() {
-    local i
+    local i live=0
     for i in $(seq 1 40); do
         if livinityd_responding; then
-            ok "livinityd health probe OK (serving on :8080)"
-            return 0
+            live=1
+            break
         fi
         sleep 3
     done
-    warn "livinityd did NOT respond on :8080 within ~120s after restart — AUTO-ROLLING BACK to last-good"
+    if [[ "$live" == "1" ]]; then
+        ok "livinityd health probe OK (serving on :8080)"
+        # Reliability D1 (rides A1+A2) — FUNCTIONAL gate. Liveness alone passes
+        # even when the production tRPC router swap was skipped and the box
+        # serves the 412/500 stub cascade ("update succeeded" while degraded —
+        # the exact failure this rollback net previously could not catch).
+        # /healthz/full (A2) is 200 only after setProductionAppRouter() ran and
+        # 503 until then. Any OTHER answer (200 via the SPA fallback on a
+        # pre-A2 build, 404, curl 000 blip) means the probe is not applicable /
+        # not trustworthy -> pass on liveness alone. NEVER turn a missing probe
+        # into a rollback loop (R5: the original F2 spec was refuted for
+        # exactly that — it would have pinned the box on last-good forever).
+        # The swap runs late in boot (after streaming/Xvfb init), so give it
+        # its own ~120s budget after :8080 came up.
+        local fcode
+        for i in $(seq 1 40); do
+            fcode=$(curl -s -o /dev/null -w '%{http_code}' -m 4 http://127.0.0.1:8080/healthz/full 2>/dev/null || echo 000)
+            if [[ "$fcode" == "200" ]]; then
+                ok "livinityd FUNCTIONAL probe OK (/healthz/full: production tRPC router swap ran)"
+                return 0
+            fi
+            if [[ "$fcode" != "503" ]]; then
+                ok "Functional gate not applicable (/healthz/full → $fcode; pre-A2 build or probe unavailable) — passing on liveness"
+                return 0
+            fi
+            sleep 3
+        done
+        warn "livinityd is LIVE on :8080 but /healthz/full stayed 503 for ~120s — the production tRPC router swap never ran (degraded boot: config/setup tRPC would serve 412/500 stubs). AUTO-ROLLING BACK to last-good"
+    else
+        warn "livinityd did NOT respond on :8080 within ~120s after restart — AUTO-ROLLING BACK to last-good"
+    fi
     if ! restore_last_good; then
         fail "Update failed AND there is no snapshot to roll back to — manual recovery needed (journalctl -u livos -n 50)"
     fi
