@@ -125,6 +125,7 @@ import {initV37InstallService} from './modules/apps/v37-install-service.js'
 // (159-02) and the fire-and-forget native-routes close mutation.
 import {startNativeAppIdleReaper} from './modules/apps/native-app-idle-reaper.js'
 import {startStreamIdleReaper} from './modules/streaming/stream-idle-reaper.js'
+import {startAppHealthMonitor} from './modules/apps/health-monitor.js'
 import {activeNative, nativeDisplayAllocator} from './modules/apps/native-routes.js'
 // Phase 101-01 + 101-04 — singleton Chrome bootstrap + typed CDP client.
 // `bootstrapChrome` spawns Chrome with --remote-debugging-port=9222 and
@@ -392,6 +393,8 @@ export default class Livinityd {
 	// streamManager is constructed, or post-stop).
 	private nativeAppIdleReaperStop?: () => void
 	private streamIdleReaperStop?: () => void
+	// Reliability C1 — continuous app-health monitor stop handle.
+	private appHealthMonitorStop?: () => void
 	// Phase 93 — Streaming subsystem (T93-05 StreamManager). Optional because
 	// T93-11 wires the lifecycle in start(); this field is declared up-front so
 	// the /ws/stream/:id upgrade handler in server/index.ts can typecheck.
@@ -2330,6 +2333,19 @@ export default class Livinityd {
 		})
 		await this.announcementPoller.start()
 
+		// Reliability C1 — continuous app-health monitor: reconciles the stable
+		// ready/unhealthy states against real Docker state every 60s (flap-
+		// suppressed, transient states untouched). This is what lets the A3
+		// install gate self-correct (unhealthy→ready when a slow app comes good)
+		// and what ends the "container died but tile says ready forever" lie.
+		this.appHealthMonitorStop = startAppHealthMonitor({
+			getApps: () => this.apps.instances,
+			logger: {
+				log: (message: string) => this.logger.log(message),
+				error: (message: string, error?: unknown) => this.logger.error(message, error as Error),
+			},
+		})
+
 		// Initialize DeviceBridge for remote device proxy tools
 		this.deviceBridge = new DeviceBridge({
 			redis: this.ai.redis,
@@ -2409,6 +2425,12 @@ export default class Livinityd {
 			// install completes cleanly before the api-key path goes idle.
 			this.installPoller?.stop()
 			this.announcementPoller?.stop()
+			// Reliability C1 — halt the app-health monitor before apps teardown.
+			try {
+				this.appHealthMonitorStop?.()
+			} catch (err) {
+				this.logger.error('Failed to stop app health monitor', err)
+			}
 			await Promise.all([this.files.stop(), this.apps.stop(), this.appStore.stop(), this.dbus.stop(), this.ai.stop(), this.tunnelClient.stop(), this.scheduler.stop()])
 
 			// Phase 59 — flush pending last_used_at writes BEFORE closing the DB

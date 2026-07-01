@@ -593,7 +593,9 @@ export default class App {
 	// reverse-proxies to. The container_name (set by patchComposeFile to the
 	// forced legacy scheme) is the source of truth; fall back to the deterministic
 	// `${appId}_${service}_1` name if absent.
-	private async getMainContainerName(): Promise<string | undefined> {
+	// Public: the continuous health monitor (health-monitor.ts) samples the
+	// same main container the install/start gates poll.
+	async getMainContainerName(): Promise<string | undefined> {
 		const compose = await this.readCompose()
 		const serviceNames = Object.keys(compose.services ?? {})
 		if (serviceNames.length === 0) return undefined
