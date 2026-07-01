@@ -644,6 +644,26 @@ const CF_SUBDOMAIN_PART_RE = /^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$/;
 // check below stays on CF_SUBDOMAIN_PART_RE.
 const CF_USERNAME_RE = /^[a-z0-9]{2,32}$/;
 
+// Reliability B1 — the tunnel-ingress update is a read-modify-FULL-REPLACE:
+// two concurrent installs for the same tunnel each read the current array,
+// each append only their own hostname, and the second push silently erases
+// the first app's ingress ("installed but 404s, fixed only by reinstalling").
+// Serialize the RMW per tunnel within this instance; a verify-and-repair pass
+// after the push covers writers on OTHER serverless instances the in-process
+// lock cannot see.
+const ingressLocks = new Map<string, Promise<unknown>>();
+
+async function withTunnelIngressLock<T>(tunnelId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = ingressLocks.get(tunnelId) ?? Promise.resolve();
+  const run = prev.catch(() => {}).then(fn);
+  const settled = run.catch(() => {});
+  ingressLocks.set(tunnelId, settled);
+  void settled.then(() => {
+    if (ingressLocks.get(tunnelId) === settled) ingressLocks.delete(tunnelId);
+  });
+  return run;
+}
+
 export async function provisionAppSubdomain(opts: {
   tunnel_id: string;
   username: string;
@@ -672,17 +692,30 @@ export async function provisionAppSubdomain(opts: {
   const subdomain = `${opts.app_slug}-${opts.username}`;
   const hostname = `${subdomain}.livinity.io`;
 
-  // Step 1: fetch current ingress, append, push
-  const current = await cfClient.getTunnelIngress(opts.tunnel_id);
-  const withoutCatchAll = current.filter((i) => !(i.service === 'http_status:404' && !i.hostname));
-
-  // De-dup defensively — if hostname already present, replace its entry
-  const dedup = withoutCatchAll.filter((i) => i.hostname !== hostname);
-  const next: Ingress[] = [
-    ...dedup,
-    { hostname, service: 'http://localhost:80' },
-  ];
-  await cfClient.pushTunnelIngress(opts.tunnel_id, next);
+  // Step 1: fetch current ingress, append, push — serialized per tunnel with a
+  // post-push verify-and-repair (see withTunnelIngressLock above).
+  await withTunnelIngressLock(opts.tunnel_id, async () => {
+    const pushOnce = async () => {
+      const current = await cfClient.getTunnelIngress(opts.tunnel_id);
+      const withoutCatchAll = current.filter((i) => !(i.service === 'http_status:404' && !i.hostname));
+      // De-dup defensively — if hostname already present, replace its entry
+      const dedup = withoutCatchAll.filter((i) => i.hostname !== hostname);
+      const next: Ingress[] = [
+        ...dedup,
+        { hostname, service: 'http://localhost:80' },
+      ];
+      await cfClient.pushTunnelIngress(opts.tunnel_id, next);
+    };
+    await pushOnce();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const after = await cfClient.getTunnelIngress(opts.tunnel_id);
+      if (after.some((i) => i.hostname === hostname)) return;
+      console.warn(
+        `[cf-saas] ingress lost-update detected for ${hostname} (concurrent full-replace) — repairing (attempt ${attempt + 1})`,
+      );
+      await pushOnce();
+    }
+  });
 
   // Step 2: create DNS record
   const { dns_record_id } = await cfClient.createDnsRecord({
@@ -720,11 +753,14 @@ export async function deprovisionAppSubdomain(opts: {
   const hostname = `${subdomain}.livinity.io`;
   const errors: Error[] = [];
 
-  // Step 1: remove from ingress
+  // Step 1: remove from ingress — same per-tunnel serialization as provision
+  // (removal is an RMW full-replace too).
   try {
-    const current = await cfClient.getTunnelIngress(opts.tunnel_id);
-    const filtered = current.filter((i) => i.hostname !== hostname);
-    await cfClient.pushTunnelIngress(opts.tunnel_id, filtered);
+    await withTunnelIngressLock(opts.tunnel_id, async () => {
+      const current = await cfClient.getTunnelIngress(opts.tunnel_id);
+      const filtered = current.filter((i) => i.hostname !== hostname);
+      await cfClient.pushTunnelIngress(opts.tunnel_id, filtered);
+    });
   } catch (err) {
     errors.push(err instanceof Error ? err : new Error(String(err)));
   }

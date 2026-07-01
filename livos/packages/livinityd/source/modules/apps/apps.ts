@@ -838,20 +838,31 @@ export default class Apps {
 		// (previously discarded → Caddy emitted `n8n.socinity.livinity.io`
 		// instead of `n8n-socinity.livinity.io` → CF Tunnel 404).
 		const provisioned = await this.provisionAppSubdomain(appId, manifest.port)
+		// Reliability B1 — truthful DNS status. A null return collapses two very
+		// different outcomes; split them so the persisted status is honest:
+		//   no api-key  → 'skipped' (self-hosted/LAN — automation intentionally
+		//                 does not apply; the dot-format host may be valid there)
+		//   api-key set → 'failed'  (Server5 outage / 4xx — the dot-format
+		//                 fallback will NOT match the CF ingress → 404)
+		let dnsStatus: 'ready' | 'pending' | 'failed' | 'skipped' = provisioned?.ready ? 'ready' : 'pending'
 		if (!provisioned) {
+			const hasApiKey = Boolean(await this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY).catch(() => null))
+			dnsStatus = hasApiKey ? 'failed' : 'skipped'
 			// Phase 210 Bug B: surface the silent provisioning failure. Without
 			// the Server5-minted host the local Caddy block falls back to
 			// `<sub>.<mainDomain>` (dot format) which does NOT match the
 			// CF Tunnel ingress (`<sub>-<user>.livinity.io`, hyphen format)
 			// — apps appear to "install" but are unreachable through the
-			// public subdomain. Log loudly + report through the platform
-			// event channel so operator dashboards see the missing wire.
-			this.logger.error(
-				`Phase 210: CF subdomain provisioning failed for ${appId}. ` +
-					`App will use legacy dot-format subdomain which likely won't resolve via CF Tunnel. ` +
-					`Causes: Server5 unreachable, missing platform api-key, 409 conflict from re-install, or single-char slug. ` +
-					`Re-run install after Server5 connectivity is verified.`,
-			)
+			// public subdomain. Only a real failure logs loudly; the no-api-key
+			// skip is intentional (self-hosted) and stays quiet.
+			if (dnsStatus === 'failed') {
+				this.logger.error(
+					`Phase 210: CF subdomain provisioning failed for ${appId}. ` +
+						`App will use legacy dot-format subdomain which likely won't resolve via CF Tunnel. ` +
+						`Causes: Server5 unreachable, 409 conflict from re-install, or single-char slug. ` +
+						`A second Install click (admin) re-provisions; dnsStatus='failed' is persisted for the UI.`,
+				)
+			}
 		}
 
 		// Phase 286 (SC6): verify the published host port == manifest.port (the
@@ -900,6 +911,7 @@ export default class Apps {
 						fullHost,
 						provisioned?.ready,
 						provisioned?.readyAt,
+						dnsStatus,
 					),
 				{
 					retries: 3,
@@ -1173,9 +1185,37 @@ export default class Apps {
 		// overwrites any existing entry with the same appId, so this fixes
 		// stale Caddy routes pointing at the wrong port (e.g., MiroFish
 		// subdomain pointing at the broker's :8080 instead of MiroFish :3000).
+		//
+		// Reliability B1 — this is also the "Retry DNS" path (a second Install
+		// click routes here). Two prior bugs fixed:
+		// (1) it never re-provisioned, so a failed CF record was never retried;
+		// (2) it re-registered with NO fullHost/ready args, so the overwrite
+		//     DOWNGRADED a working entry: hyphen host + subdomainReady wiped →
+		//     Caddy fell back to the dot-format host → 404 after every recovery
+		//     click. Now: re-provision first; if provisioning does not answer
+		//     (Server5 down, 409 on an already-existing record), PRESERVE the
+		//     existing entry's host/readiness instead of downgrading it.
 		if (port) {
 			try {
-				await this.registerAppSubdomain(appId, port, subdomain)
+				const provisioned = await this.provisionAppSubdomain(appId, port)
+				const existing = (await this.getSubdomains()).find((s) => s.appId === appId)
+				const fullHost = provisioned ? hostFromUrl(provisioned.url) : existing?.host
+				const ready = provisioned ? provisioned.ready : existing?.subdomainReady
+				const readyAt = provisioned ? provisioned.readyAt : existing?.readyAt
+				let dnsStatus: 'ready' | 'pending' | 'failed' | 'skipped' | undefined
+				if (provisioned) {
+					dnsStatus = provisioned.ready ? 'ready' : 'pending'
+				} else if (existing?.host) {
+					dnsStatus = existing.dnsStatus // keep whatever truth we had
+				} else {
+					const hasApiKey = Boolean(await this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY).catch(() => null))
+					dnsStatus = hasApiKey ? 'failed' : 'skipped'
+				}
+				await this.registerAppSubdomain(appId, port, subdomain, fullHost, ready, readyAt, dnsStatus)
+				if (provisioned && !provisioned.ready) {
+					const reHost = hostFromUrl(provisioned.url)
+					if (reHost) void this.rePollSubdomainReady(appId, reHost).catch(() => {})
+				}
 			} catch (error) {
 				this.logger.error(`reapplyAppConfig: failed to re-register subdomain for ${appId}`, error)
 			}
@@ -2088,6 +2128,7 @@ export default class Apps {
 		fullHost?: string,
 		ready?: boolean,
 		readyAt?: number,
+		dnsStatus?: 'ready' | 'pending' | 'failed' | 'skipped',
 	): Promise<void> {
 		const domainConfig = await this.getDomainConfig()
 		if (!domainConfig?.active) {
@@ -2148,6 +2189,8 @@ export default class Apps {
 			// NOT-ready on read (fail-safe → the UI shows Provisioning, never a
 			// clickable broken link). The Tier-2 box-resolver re-poll flips it later.
 			...(ready ? {subdomainReady: true, readyAt, readySource: 'platform-doh' as const} : {}),
+			// Reliability B1 — truthful DNS provisioning status (see SubdomainConfig).
+			...(dnsStatus ? {dnsStatus} : {}),
 		}
 
 		if (existingIdx >= 0) {
@@ -2196,6 +2239,8 @@ export default class Apps {
 							subdomainReady: true,
 							readyAt: Date.now(),
 							readySource: 'box-resolver',
+							// Reliability B1 — the pending status resolves here.
+							dnsStatus: 'ready',
 						}
 						await this.setSubdomains(subs)
 					}

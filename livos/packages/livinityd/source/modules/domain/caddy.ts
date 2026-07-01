@@ -226,6 +226,26 @@ export interface SubdomainConfig {
 	 * this field is belt-and-suspenders, not the sole source of truth.
 	 */
 	userId?: string
+	/**
+	 * Reliability B1 — truthful per-app DNS provisioning status.
+	 *   'ready'   — Server5 minted the CF record and Tier-1 (platform DoH)
+	 *               confirmed it resolves.
+	 *   'pending' — record minted, resolution not yet confirmed (Tier-2
+	 *               box-resolver re-poll flips it to 'ready').
+	 *   'failed'  — the box HAS a platform api-key but the remote provision
+	 *               failed (Server5 outage / 4xx / malformed response). The
+	 *               legacy dot-format fallback host will NOT match the CF
+	 *               Tunnel ingress → deterministic 404; this status is the
+	 *               honest signal instead of a silent green install. A second
+	 *               Install click (admin recovery path → reapplyAppConfig)
+	 *               re-provisions.
+	 *   'skipped' — no platform api-key (self-hosted / LAN / air-gapped): DNS
+	 *               automation intentionally does not apply; the dot-format
+	 *               host may be perfectly valid on an operator-managed domain.
+	 * OPTIONAL + omit-when-absent: pre-existing Redis blobs parse fine and are
+	 * treated as legacy/unknown.
+	 */
+	dnsStatus?: 'ready' | 'pending' | 'failed' | 'skipped'
 }
 
 export interface CaddyConfig {
