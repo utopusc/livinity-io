@@ -44,6 +44,7 @@ import {chromeSessionGate, buildCdpNewTabUrl, buildChromeLaunchArgv} from './chr
 import {makeHostAllowlistMiddleware} from './host-allowlist.js'
 import {getDesktopUser} from '../system/desktop-user.js'
 import {attachVncBridge} from '../streaming/vnc-bridge.js'
+import {attachWsHeartbeat} from './ws-heartbeat.js'
 import {trpcExpressHandler, trpcWssHandler} from './trpc/index.js'
 import createTerminalWebSocketHandler from './terminal-socket.js'
 import createDockerExecHandler from '../docker/docker-exec-socket.js'
@@ -903,6 +904,8 @@ class Server {
 								upstream.on('open', () => {
 									proxyWss.handleUpgrade(request, socket, head, (clientWs) => {
 										proxyWss.close()
+										// Reliability A5 — keep the CF/NAT-traversing hop warm.
+										attachWsHeartbeat(clientWs)
 										clientWs.on('message', (data, isBinary) => {
 											if (upstream.readyState === WebSocket.OPEN) upstream.send(data, {binary: isBinary})
 										})
@@ -985,6 +988,8 @@ class Server {
 										upstream.on('open', () => {
 											proxyWss.handleUpgrade(request, socket, head, (clientWs) => {
 												proxyWss.close()
+												// Reliability A5 — keep the CF/NAT-traversing hop warm.
+												attachWsHeartbeat(clientWs)
 												clientWs.on('message', (data, isBinary) => {
 													if (upstream.readyState === WebSocket.OPEN) upstream.send(data, {binary: isBinary})
 												})
@@ -1063,6 +1068,9 @@ class Server {
 						proxyWss.handleUpgrade(request, socket, head, (clientWs) => {
 							// Cleanup: proxyWss only needed for the upgrade
 							proxyWss.close()
+
+							// Reliability A5 — keep the CF/NAT-traversing hop warm.
+							attachWsHeartbeat(clientWs)
 
 							// Bidirectional frame relay
 							clientWs.on('message', (data, isBinary) => {
@@ -1176,6 +1184,10 @@ class Server {
 						desktopWss.handleUpgrade(request, socket, head, (ws) => {
 							desktopWss.close()
 							ws.binaryType = 'nodebuffer'
+
+							// Reliability A5 — a VNC session can be visually idle for minutes;
+							// without pings the CF edge (~100s) / NAT reaps it → opaque 1006.
+							attachWsHeartbeat(ws)
 
 							// Reset idle timer periodically while connection is active (every 5 min)
 							const idleResetInterval = setInterval(() => {
@@ -1303,6 +1315,9 @@ class Server {
 					streamWss.handleUpgrade(request, socket, head, (ws) => {
 						streamWss.close()
 						ws.binaryType = 'nodebuffer'
+						// Reliability A5 — the stream-idle reaper's 60s grace assumed a
+						// keepalive that never existed; now it exists (both vnc + fmp4).
+						attachWsHeartbeat(ws)
 						if (session.kind === 'vnc') {
 							// Phase 99 VNC bridge — pure-Node WS↔TCP byte pipe to x11vnc.
 							// Handles close propagation, 4 MB backpressure drop, and

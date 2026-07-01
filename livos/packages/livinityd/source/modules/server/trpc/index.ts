@@ -536,6 +536,10 @@ export const trpcWssHandler = ({
 		wss,
 		router: activeAppRouter,
 		createContext: ({req}) => createContextWss({livinityd, logger, req}),
+		// Reliability A5 — the tRPC-over-WS link idles between subscriptions;
+		// without pings the CF edge (~100s) / consumer NAT reaps it → 1006.
+		// Same 30s cadence as the proven docker-logs heartbeat.
+		keepAlive: {enabled: true, pingMs: 30_000, pongWaitMs: 10_000},
 		onError({error, ctx, path}) {
 			logger.error(`WS ${path}`, error)
 		},

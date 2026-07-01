@@ -2257,7 +2257,9 @@ _dld_update_caddy_to_livinityd() {
         root * /etc/liv-assistant/branding
         file_server
     }
-    @webapp_stream_ws path /ws/stream/*
+    # Reliability B4 — /ws/desktop + /ws/voice live on livinityd :8080; without
+    # this carve-out the @liv_ws land-grab below mis-routes them to :3020.
+    @webapp_stream_ws path /ws/stream/* /ws/desktop /ws/voice
     handle @webapp_stream_ws {
         reverse_proxy 127.0.0.1:8080 {
             flush_interval -1
