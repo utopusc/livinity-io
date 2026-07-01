@@ -52,6 +52,12 @@ type AppState =
 	// Phase 260-01 (SC1): terminal state set by uninstall() so the field never
 	// wedges on the transient 'uninstalling' value.
 	| 'not-installed'
+	// Reliability A3: STABLE honest state for "installed but the container is
+	// crash-looping / failed its healthcheck". Landed by the install health
+	// gate; cleared (→'ready') by the continuous health monitor the moment the
+	// container comes good, so a slow-boot app self-corrects instead of
+	// wedging (what made the old v44.45 hard-fail unsafe).
+	| 'unhealthy'
 // TODO: Change ready to running.
 // Also note that we don't currently handle failing events to update the app state into a failed state.
 // That should be ok for now since apps rarely fail, but there will be the potential for state bugs here
@@ -348,17 +354,24 @@ export default class App {
 		try {
 			const mainContainer = await this.getMainContainerName()
 			if (mainContainer) {
-				await pollContainerHealth(mainContainer, {logger: this.logger})
+				// 120s budget (vs the 90s default): the known false-negative class is
+				// images that turn healthy at ~120s.
+				await pollContainerHealth(mainContainer, {timeoutMs: 120_000, logger: this.logger})
 			}
 			this.state = 'ready'
 		} catch (error) {
-			// Phase 286 hotfix (v44.45): health is ADVISORY — NEVER fail the install.
-			// The container exists (restart:unless-stopped keeps retrying); a slow or
-			// not-yet-healthy app must not break install (the old `throw` here marked
-			// umami/pastefy/openclaw/campfire "Failed to start"). Log + mark ready so
-			// the app appears and can be opened/retried.
-			this.logger.error(`App ${this.id} not healthy yet after install (non-fatal)`, error)
-			this.state = 'ready'
+			// Reliability A3 — on FIRST INSTALL health is a gate again, with
+			// degrade-not-fail semantics: the install itself still succeeds (no
+			// throw — the app stays installed and `restart: unless-stopped` keeps
+			// retrying), but the state lands the honest STABLE 'unhealthy' instead
+			// of the silent-success 'ready' lie. The continuous health monitor
+			// flips unhealthy→ready as soon as the container comes good, so a
+			// slow-boot app self-corrects — that self-correction is what makes
+			// gating safe where the pre-v44.45 hard `throw` (which marked
+			// umami/pastefy/openclaw/campfire "Failed to start") was not. The
+			// start/boot path below stays ADVISORY (v44.45 hotfix preserved).
+			this.logger.error(`App ${this.id} not healthy after install — landing state 'unhealthy' (visible + self-correcting)`, error)
+			this.state = 'unhealthy'
 			this.stateProgress = 0
 		}
 		this.stateProgress = 0

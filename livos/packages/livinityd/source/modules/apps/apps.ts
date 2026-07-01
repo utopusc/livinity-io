@@ -13,6 +13,7 @@ import type Livinityd from '../../index.js'
 import appEnvironment from './legacy-compat/app-environment.js'
 import App, {readManifestInDirectory} from './app.js'
 import {reconcileAppVolumeOwnership} from './reconcile-volume-ownership.js'
+import {classifyInspect} from './health-poll.js'
 import type {AppManifest, AppSettings} from './schema.js'
 import {fillSelectedDependencies} from '../utilities/dependencies.js'
 import {getBuiltinApp} from './builtin-apps.js'
@@ -2430,6 +2431,36 @@ export default class Apps {
 		} catch (error) {
 			this.logger.error(`Failed to start per-user container for ${appId} (user: ${user.username})`, error)
 			throw new Error(`Failed to start container: ${(error as Error).message}`)
+		}
+
+		// Reliability A3 — honest per-user install. `up -d` returning 0 only means
+		// "containers created"; a container that immediately exits/dies (bad env,
+		// broken image) previously still got a DB row + subdomain and reported
+		// success — the user landed on a dead tile. Take one classifying sample
+		// after a short grace and abort ONLY on the terminal 'failed' verdict
+		// (exited/dead — a `restart: unless-stopped` crash-looper shows
+		// 'restarting' → 'pending' → passes). Timeout/starting/unhealthy samples
+		// stay non-fatal: slow boots must not break install, and the per-user
+		// state endpoint derives live status from docker inspect anyway.
+		{
+			const mainContainerName = `${appId}_${mainServiceName || 'app'}_user_${user.username}_1`
+			await new Promise((r) => setTimeout(r, 6_000))
+			try {
+				const {stdout: status} = await $`docker inspect -f {{.State.Status}} ${mainContainerName}`
+				const {stdout: health} = await $`docker inspect -f {{.State.Health.Status}} ${mainContainerName}`
+				if (classifyInspect({status: status.trim(), health: health.trim()}) === 'failed') {
+					this.logger.error(`Per-user container ${mainContainerName} is terminally dead post-up (status=${status.trim()}) — tearing down so a retry starts clean`)
+					await $`docker compose --file ${userDataDir}/docker-compose.yml --project-name ${appId}-user-${user.username} down`.catch(
+						(err) => this.logger.error(`Cleanup of dead per-user stack ${appId} failed`, err),
+					)
+					throw new Error(`App ${appId} failed to start (container ${mainContainerName} is ${status.trim()})`)
+				}
+			} catch (error) {
+				// Re-throw only our own terminal verdict; inspect flakes (name
+				// mismatch, docker hiccup) stay non-fatal.
+				if (error instanceof Error && error.message.includes('failed to start')) throw error
+				this.logger.log(`[health] per-user post-up sample unavailable for ${mainContainerName} (non-fatal)`)
+			}
 		}
 
 		// Record in database — `subdomain` stores the SHORT slug (just appId)

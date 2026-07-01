@@ -150,6 +150,10 @@ export function AppLabel({state, label = ''}: {state: AppStateOrLoading; label?:
 			return label
 		case 'unknown':
 			return t('app.offline')
+		// Reliability A3 — installed but crash-looping/unhealthy; offline copy
+		// (no new i18n key), self-corrects via the health monitor.
+		case 'unhealthy':
+			return t('app.offline')
 	}
 	return assertUnreachable(state)
 }

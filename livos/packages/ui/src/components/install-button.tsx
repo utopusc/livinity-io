@@ -91,6 +91,10 @@ function ButtonContentForState({
 			return t('app.uninstalling') + '...'
 		case 'unknown':
 		case 'stopped':
+		// Reliability A3 — installed but the container is crash-looping/unhealthy;
+		// reuse the offline copy (no new i18n key) until the health monitor
+		// flips it back to ready.
+		case 'unhealthy':
 			return t('app.offline')
 		case 'loading':
 		case undefined:

@@ -105,11 +105,17 @@ export const appStates = [
 	'uninstalling',
 	'updating',
 	'ready',
+	// Reliability A3 — STABLE "installed but container crash-looping/unhealthy"
+	// state landed by the install health gate; self-corrects to 'ready' via the
+	// continuous health monitor once the container comes good.
+	'unhealthy',
 ] satisfies AppState[]
 
 export const installStates = ['installing', 'uninstalling', 'updating'] satisfies AppState[]
 export type InstallState = (typeof installStates)[number]
-export const installedStates = ['running', 'stopped', 'ready', 'restarting', 'starting'] satisfies AppState[]
+// 'unhealthy' IS an installed state — omitting it here would flip a degraded
+// app's store page back to a bare Install button.
+export const installedStates = ['running', 'stopped', 'ready', 'restarting', 'starting', 'unhealthy'] satisfies AppState[]
 export type InstalledState = (typeof installedStates)[number]
 
 export const progressStates = [
