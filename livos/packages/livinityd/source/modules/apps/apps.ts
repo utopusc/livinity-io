@@ -912,6 +912,10 @@ export default class Apps {
 						provisioned?.ready,
 						provisioned?.readyAt,
 						dnsStatus,
+						// Reliability B5 — strict: a Caddy apply failure must reach this
+						// pRetry (previously swallowed inside rebuildCaddyFromState, so
+						// the retries + the loud SC6 failure below were phantom).
+						true,
 					),
 				{
 					retries: 3,
@@ -1678,7 +1682,11 @@ export default class Apps {
 		}
 	}
 
-	private async rebuildCaddyFromState(): Promise<void> {
+	// Reliability B5 — `rethrow: true` makes a Caddy write/validate/reload
+	// failure visible to the caller (used by the interactive install path so
+	// its pRetry + loud SC6 failure are real). Default stays swallow: the BOOT
+	// path must never turn one bad block into a daemon-boot abort (T4 class).
+	private async rebuildCaddyFromState(opts: {rethrow?: boolean} = {}): Promise<void> {
 		try {
 			const pool = getPool()
 			const stateConfig = await buildCaddyConfigFromState({
@@ -1786,7 +1794,8 @@ export default class Apps {
 			await reloadCaddy()
 			this.logger.log(`[caddy] regenerated from state: ${caddyConfig.subdomains.length} subdomain blocks`)
 		} catch (err) {
-			this.logger.error('[caddy] rebuildCaddyFromState failed (non-fatal)', err)
+			this.logger.error(`[caddy] rebuildCaddyFromState failed${opts.rethrow ? '' : ' (non-fatal)'}`, err)
+			if (opts.rethrow) throw err
 		}
 	}
 
@@ -2129,6 +2138,11 @@ export default class Apps {
 		ready?: boolean,
 		readyAt?: number,
 		dnsStatus?: 'ready' | 'pending' | 'failed' | 'skipped',
+		// Reliability B5 — strict=true propagates a Caddy apply failure to the
+		// caller (the interactive install's pRetry), instead of logging inside
+		// rebuildCaddyFromState and reporting phantom success. Non-strict
+		// callers (per-user route, reapply, toggles) keep today's behaviour.
+		strict = false,
 	): Promise<void> {
 		const domainConfig = await this.getDomainConfig()
 		if (!domainConfig?.active) {
@@ -2205,7 +2219,7 @@ export default class Apps {
 		// in the same Caddyfile. The legacy rebuildCaddy() only reads Redis,
 		// so any single-user install (Linkwarden 2026-05-26 UAT) wiped the
 		// multi-user app blocks that T1+T5 had emitted.
-		await this.rebuildCaddyFromState()
+		await this.rebuildCaddyFromState({rethrow: strict})
 
 		const displayHost = newSub.host ?? `${subdomainName}.${domainConfig.domain}`
 		this.logger.log(`Registered subdomain ${displayHost} -> localhost:${port} for ${appId}`)

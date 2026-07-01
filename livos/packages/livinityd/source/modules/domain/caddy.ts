@@ -1235,17 +1235,58 @@ ${WS_TRANSPORT_BODY}
 
 /**
  * Write content to the Caddyfile on disk.
+ *
+ * Reliability B5 — never write straight to the live path. Stage to `.fut`,
+ * `caddy validate` the staged file, snapshot the current live config to
+ * `.bak`, then atomically rename `.fut` → live. A malformed generated config
+ * can no longer poison the on-disk file (the Phase-232 `replace` incident) or
+ * brick the next cold `systemctl restart caddy`. The `.bak` is a byte copy of
+ * whatever was live — so it inherently carries the Phase-219 CF Flexible-SSL
+ * `trusted_proxies` global options if the live config had them.
+ *
+ * When the `caddy` binary itself is unavailable (dev machines, CI), the
+ * validate step is skipped with a warning — validation is an extra gate on
+ * the box, never a new way for dev environments to fail.
  */
 export async function writeCaddyfile(content: string): Promise<void> {
-	await writeFile(CADDYFILE_PATH, content, 'utf-8')
+	const fut = `${CADDYFILE_PATH}.fut`
+	await writeFile(fut, content, 'utf-8')
+	try {
+		await execAsync(`caddy validate --config ${fut}`)
+	} catch (error) {
+		const message = String((error as Error)?.message ?? error)
+		const binaryMissing = /ENOENT|not found|not recognized/i.test(message)
+		if (!binaryMissing) {
+			await fse.remove(fut).catch(() => {})
+			throw new Error(`caddy validate rejected the generated Caddyfile — live config left untouched: ${message}`)
+		}
+		console.warn('[caddy] caddy binary unavailable — skipping validate (dev/CI environment)')
+	}
+	if (await fse.pathExists(CADDYFILE_PATH)) {
+		await fse.copy(CADDYFILE_PATH, `${CADDYFILE_PATH}.bak`, {overwrite: true}).catch(() => {})
+	}
+	await fse.move(fut, CADDYFILE_PATH, {overwrite: true})
 }
 
 /**
  * Reload Caddy to pick up Caddyfile changes.
  * Uses `caddy reload` which applies changes without downtime.
+ *
+ * Reliability B5 — on reload failure, restore the `.bak` snapshot to disk (and
+ * best-effort reload it) so the on-disk file never stays a config a later cold
+ * restart would choke on; the original error is still thrown to the caller.
  */
 export async function reloadCaddy(): Promise<void> {
-	await execAsync(`caddy reload --config ${CADDYFILE_PATH}`)
+	try {
+		await execAsync(`caddy reload --config ${CADDYFILE_PATH}`)
+	} catch (error) {
+		const bak = `${CADDYFILE_PATH}.bak`
+		if (await fse.pathExists(bak).catch(() => false)) {
+			await fse.copy(bak, CADDYFILE_PATH, {overwrite: true}).catch(() => {})
+			await execAsync(`caddy reload --config ${CADDYFILE_PATH}`).catch(() => {})
+		}
+		throw error
+	}
 }
 
 /**
