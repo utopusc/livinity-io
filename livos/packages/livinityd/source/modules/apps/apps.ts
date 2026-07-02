@@ -2540,6 +2540,39 @@ export default class Apps {
 
 		// Surface context (vault CLAUDE.md scaffolder) removed with AI Chat teardown.
 
+		// Reliability B1 (per-user DNS gap) — provision the Cloudflare DNS +
+		// Tunnel ingress for the per-user subdomain. This call was PRESENT on the
+		// global install path (#finishInstall) but MISSING here, so every install
+		// that went through the per-user path (the cloud install_commands poller
+		// AND the store iframe) created the container + local Caddy route but
+		// NEVER minted a public CNAME → "app installed and running, but the
+		// subdomain never resolves (000)". Proven live 2026-07-02 (openspeedtest
+		// via poller: success=true yet <slug>-everything.livinity.io = no DNS).
+		// Best-effort + never throws: on a Server5 outage / missing api-key the
+		// install still succeeds and the local Caddy route stands; dnsStatus
+		// records the truth. The platform route derives the username from the
+		// box api-key, so the minted host is `<appId>-<owner>` — matching the
+		// owner-install (poller/store) case. A genuine SECOND box user still
+		// needs the per-tenant key work (tracked separately); this closes the
+		// dominant owner-install gap.
+		try {
+			const provisioned = await this.provisionAppSubdomain(appId, port)
+			if (provisioned) {
+				this.logger.log(
+					`Per-user install: provisioned CF subdomain for ${appId} (user ${user.username}) → ${provisioned.url} (ready=${provisioned.ready ?? false})`,
+				)
+			} else {
+				const hasApiKey = Boolean(await this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY).catch(() => null))
+				this.logger.error(
+					hasApiKey
+						? `Per-user install: CF subdomain provisioning FAILED for ${appId} (user ${user.username}) — the app runs but its public host will not resolve. Server5 outage or 409; a re-install re-provisions.`
+						: `Per-user install: no platform api-key — skipping CF subdomain for ${appId} (LAN/self-hosted; local Caddy route still applied).`,
+				)
+			}
+		} catch (error) {
+			this.logger.error(`Per-user install: provisionAppSubdomain threw for ${appId} (non-fatal)`, error)
+		}
+
 		// Phase 218 T1 — regenerate Caddyfile so the new per-user subdomain
 		// (e.g. bolt-diy-bruce.livinity.io) actually routes to the container
 		// we just started. Without this, the install lands but the subdomain
@@ -2561,6 +2594,14 @@ export default class Apps {
 
 		const instance = await getUserAppInstance(userId, appId)
 		if (!instance) throw new Error(`User ${user.username} doesn't have ${appId} installed`)
+
+		// Reliability B1 (per-user DNS gap) — deprovision the CF DNS + Tunnel
+		// ingress BEFORE teardown, mirroring the global uninstall path (which
+		// always did this). Its absence here left an orphan CNAME after every
+		// per-user uninstall → the "530 error" debris the operator saw when
+		// revisiting a removed app's old host. Best-effort: swallows errors so
+		// the local uninstall always proceeds.
+		await this.deprovisionAppSubdomain(appId)
 
 		// Stop and remove containers
 		const userDataDir = instance.volumePath
