@@ -136,7 +136,11 @@ export function FeedbackDialog({open, onOpenChange}: {open: boolean; onOpenChang
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogPortal>
 				<DialogContent asChild>
-					<form onSubmit={handleSubmit}>
+					{/* Feedback 4a53d267: cap height to the viewport and scroll the
+					    body so the Submit button is always reachable on low-res
+					    screens (previously the form overflowed off-screen and could
+					    only be submitted after zooming the whole page out). */}
+					<form onSubmit={handleSubmit} className='max-h-[90dvh] overflow-y-auto'>
 						<DialogHeader>
 							<DialogTitle>
 								{t('feedback.title', {defaultValue: 'Report a problem or share feedback'})}

@@ -40,11 +40,13 @@ export function OnboardingFooter({action}: OnboardingFooterProps) {
 			</Link>
 			{/* TODO: consider adding drawer on mobile */}
 			<LanguageDropdown />
-			<Link to={links.support} target='_blank'>
+			{/* Feedback 90358f61: external URL must be a plain <a>, not a
+			    react-router <Link> (which would treat it as an in-app route). */}
+			<a href={links.support} target='_blank' rel='noopener noreferrer'>
 				<IconButton icon={TbMessageCircle} size='default' className='border-border-subtle bg-surface-base text-text-secondary hover:bg-surface-1 hover:text-text-primary'>
 					{t('onboarding.contact-support')}
 				</IconButton>
-			</Link>
+			</a>
 		</div>
 	)
 }

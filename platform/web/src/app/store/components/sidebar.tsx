@@ -23,8 +23,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const router = useRouter();
   const isStorePage = pathname === '/store';
 
+  // Security (feedback 42ed3227): no token in link hrefs — cookie carries it.
   const storeParams = new URLSearchParams();
-  if (token) storeParams.set('token', token);
   if (instanceName) storeParams.set('instance', instanceName);
   const storeHref = `/store${storeParams.toString() ? `?${storeParams.toString()}` : ''}`;
 

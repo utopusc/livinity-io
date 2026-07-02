@@ -355,11 +355,11 @@ export function AppIconConnected({appId}: {appId: string}) {
 							<Link to={linkToDialog('app-settings', {for: appId})}>{t('desktop.app.context.settings')}</Link>
 						</ContextMenuItem>
 
-					{/* Dock+Launchpad Phase 4 — Keep in Dock / Remove from Dock */}
+					{/* Dock+Launchpad Phase 4 — Add to Dock / Remove from Dock */}
 					<ContextMenuItem
 						onSelect={() => (pinnedInDock ? unpin('app', appId) : pin({kind: 'app', id: appId}))}
 					>
-						{pinnedInDock ? 'Remove from Dock' : 'Keep in Dock'}
+						{pinnedInDock ? 'Remove from Dock' : 'Add to Dock'}
 					</ContextMenuItem>
 
 					{/* Share (admin only) */}

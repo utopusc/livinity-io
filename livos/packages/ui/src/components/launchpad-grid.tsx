@@ -526,7 +526,7 @@ export function LaunchpadGrid({
 												else addPin(entry.pin!)
 											}}
 										>
-											{pinned ? 'Remove from Dock' : 'Keep in Dock'}
+											{pinned ? 'Remove from Dock' : 'Add to Dock'}
 										</ContextMenuItem>
 									</ContextMenuContent>
 								</ContextMenu>

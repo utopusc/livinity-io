@@ -98,25 +98,25 @@ export function DateTimeSection() {
 		}
 	}, [savedCityName, cities])
 
-	// When the country changes (by the user), clear downstream picks.
-	const prevCountryRef = useRef(country)
-	useEffect(() => {
-		if (prevCountryRef.current !== country) {
-			prevCountryRef.current = country
-			setStateCode('')
-			setCityId('')
-			cityNameHydratedRef.current = true // user navigated away from the saved city
-		}
-	}, [country])
-
-	const prevStateRef = useRef(stateCode)
-	useEffect(() => {
-		if (prevStateRef.current !== stateCode) {
-			prevStateRef.current = stateCode
-			setCityId('')
-			cityNameHydratedRef.current = true
-		}
-	}, [stateCode])
+	// Feedback a215cf1a: cascade-clearing must fire ONLY on a real user change,
+	// never on seed hydration. The previous prev-ref effects couldn't tell the
+	// two apart — the one-time seed setting country/state (to the saved value)
+	// looked identical to a user change, so it wiped cityId AND latched
+	// cityNameHydratedRef=true, permanently blocking the city re-select → state
+	// & city appeared "gone after reload". Clearing now lives in the Select
+	// onValueChange handlers below (handleCountryChange / handleStateChange), so
+	// programmatic hydration setters never trigger a wipe.
+	function handleCountryChange(next: string) {
+		setCountry(next)
+		setStateCode('')
+		setCityId('')
+		cityNameHydratedRef.current = true // user navigated away from the saved city
+	}
+	function handleStateChange(next: string) {
+		setStateCode(next)
+		setCityId('')
+		cityNameHydratedRef.current = true
+	}
 
 	const selectedCity = useMemo(
 		() => cities.find((c) => String(c.id) === cityId),
@@ -124,12 +124,18 @@ export function DateTimeSection() {
 	)
 	const derivedTimezone = selectedCity?.timezone ?? ''
 
+	const utils = trpcReact.useUtils()
 	const setLocation = trpcReact.setup.setLocation.useMutation({
-		onSuccess: () => sysInfoQ.refetch(),
+		onSuccess: () => {
+			sysInfoQ.refetch()
+			// Feedback a215cf1a: refresh the saved read-back too, so re-opening the
+			// section in the same session reflects what was just saved (not the
+			// stale pre-save getLocation cache).
+			utils.setup.getLocation.invalidate()
+		},
 	})
 
 	// 24h⇄AM/PM. Seeded from the saved hour_cycle (getLocation) once it loads.
-	const utils = trpcReact.useUtils()
 	const [hourCycle, setHourCycle] = useState<HourCycle>('h23')
 	const hourCycleHydratedRef = useRef(false)
 	useEffect(() => {
@@ -198,7 +204,7 @@ export function DateTimeSection() {
 				<FieldRow
 					label='Country'
 					value={
-						<Select value={country} onValueChange={setCountry}>
+						<Select value={country} onValueChange={handleCountryChange}>
 							<SelectTrigger className='w-full max-w-[280px]' aria-label='Country'>
 								<SelectValue placeholder='Select a country' />
 							</SelectTrigger>
@@ -217,7 +223,7 @@ export function DateTimeSection() {
 					<FieldRow
 						label='State / Region'
 						value={
-							<Select value={stateCode} onValueChange={setStateCode}>
+							<Select value={stateCode} onValueChange={handleStateChange}>
 								<SelectTrigger className='w-full max-w-[280px]' aria-label='State'>
 									<SelectValue placeholder='Select a state' />
 								</SelectTrigger>

@@ -21,8 +21,8 @@ export function FeaturedHero({ apps }: FeaturedHeroProps) {
   const cat = CATEGORIES[app.category];
   const visual = appVisual(app.id, app.name);
 
+  // Security (feedback 42ed3227): no token in link hrefs — cookie carries it.
   const params = new URLSearchParams();
-  if (token) params.set('token', token);
   if (instanceName) params.set('instance', instanceName);
   const qs = params.toString();
   const href = `/store/${app.id}${qs ? `?${qs}` : ''}`;

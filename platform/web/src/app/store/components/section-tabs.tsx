@@ -39,8 +39,9 @@ export function SectionTabs() {
     // On a detail page (or any /store/* sub-route) — navigate back to
     // /store with a section hint. The list page consumes ?section=...
     // on mount (see store-provider) and applies it as initial state.
+    // Security (feedback 42ed3227): no token in the URL — cookie carries it
+    // (also keeps the api-key out of browser history).
     const params = new URLSearchParams();
-    if (token) params.set('token', token);
     if (instanceName) params.set('instance', instanceName);
     params.set('section', section);
     router.push(`/store?${params.toString()}`);

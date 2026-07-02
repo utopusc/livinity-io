@@ -1,4 +1,4 @@
-import {useCallback} from 'react'
+import {useCallback, useState} from 'react'
 
 import {toast} from '@/components/ui/toast'
 import {trpcReact} from '@/trpc/trpc'
@@ -28,7 +28,16 @@ export function useSoftwareUpdate() {
 	const currentVersion = osVersionQ.data
 	const latestVersion = latestVersionQ.data
 
+	// Feedback a180731e: the GitHub check often resolves in <100ms (cached), so
+	// isRefetching flips true→false in a flash and the spinner just twitches.
+	// Hold a manual "checking" window for a minimum ~1.6s so the spin reads as a
+	// smooth, deliberate action.
+	const [minChecking, setMinChecking] = useState(false)
+	const MIN_CHECK_MS = 1600
+
 	const checkLatest = useCallback(async () => {
+		setMinChecking(true)
+		const floor = new Promise((r) => setTimeout(r, MIN_CHECK_MS))
 		try {
 			utils.system.checkUpdate.invalidate()
 			const latestVersion = await utils.system.checkUpdate.fetch()
@@ -38,13 +47,16 @@ export function useSoftwareUpdate() {
 			}
 		} catch (error) {
 			toast.error(t('software-update.failed-to-check'))
+		} finally {
+			await floor
+			setMinChecking(false)
 		}
 	}, [utils.system.checkUpdate])
 
 	let state: UpdateState = 'initial'
 	if (latestVersionQ.isLoading) {
 		state = 'initial'
-	} else if (latestVersionQ.isRefetching) {
+	} else if (latestVersionQ.isRefetching || minChecking) {
 		state = 'checking'
 	} else if (latestVersionQ.error) {
 		state = 'initial'

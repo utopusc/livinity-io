@@ -292,6 +292,33 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   else
     log "Rebrand: AionUi/aionui strings already replaced (or absent); skipping sed pass"
   fi
+
+  # Feedback 6967932c — the AionUi "About" panel ships upstream social links
+  # (iOfficeAI's GitHub + Twitter/X) baked into the bundle. Left untouched they
+  # point Liv AI users at the upstream author's accounts (the operator saw the
+  # X link go to "someone unrelated"). Rewrite the known upstream social URLs
+  # to Livinity's. Idempotent + grep-gated so it no-ops gracefully when the
+  # bundle changes or the strings are already replaced (same discipline as the
+  # rebrand pass above). NOTE: this targets the upstream iOfficeAI URLs
+  # specifically; if a future AionUi build changes the About-panel host or the
+  # official Livinity X handle differs, update SOCIAL_* below.
+  SOCIAL_TARGET="$(readlink -f "${CURRENT_LINK}")/static"
+  SOCIAL_PRE_HITS="$(grep -ril 'github.com/iOfficeAI\|github.com/office-sec\|twitter.com/AionUi\|x.com/AionUi\|twitter.com/iOfficeAI\|x.com/iOfficeAI' "${SOCIAL_TARGET}" --include='*.html' --include='*.js' 2>/dev/null | wc -l)"
+  if [[ "${SOCIAL_PRE_HITS}" -gt 0 ]]; then
+    log "Rebrand(social): rewriting AionUi upstream social links -> Livinity on ${SOCIAL_PRE_HITS} files"
+    find "${SOCIAL_TARGET}" \( -name '*.html' -o -name '*.js' \) ! -name 'liv-240-*' ! -name 'liv-mcp-*' \
+         -exec sed -i \
+           -e 's#https\?://github.com/iOfficeAI/AionUi#https://github.com/utopusc/livinity-io#g' \
+           -e 's#https\?://github.com/iOfficeAI#https://github.com/utopusc/livinity-io#g' \
+           -e 's#https\?://github.com/office-sec[A-Za-z0-9/_-]*#https://github.com/utopusc/livinity-io#g' \
+           -e 's#https\?://\(twitter\|x\).com/AionUi#https://livinity.io#g' \
+           -e 's#https\?://\(twitter\|x\).com/iOfficeAI#https://livinity.io#g' {} +
+    # ^ X/Twitter → livinity.io as a SAFE fallback (never a stranger's account).
+    #   Replace with the official Livinity X handle once confirmed by the operator.
+    log "Rebrand(social): sed pass complete"
+  else
+    log "Rebrand(social): no upstream social links found (already rewritten or bundle changed); skipping"
+  fi
 else
   log "Rebrand: WARN ${REBRAND_TARGET} missing; skipping rebrand step"
 fi

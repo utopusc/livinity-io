@@ -1,7 +1,7 @@
 import {useState} from 'react'
 import {Trans} from 'react-i18next/TransWithoutContext'
 import {RiAlarmWarningFill} from 'react-icons/ri'
-import {Link, useNavigate} from 'react-router-dom'
+import {useNavigate} from 'react-router-dom'
 
 import {ErrorAlert} from '@/components/ui/alert'
 import {links} from '@/constants/links'
@@ -24,7 +24,11 @@ export function ContactSupportLink({className}: {className?: string}) {
 			<Trans
 				i18nKey='settings.contact-support'
 				components={{
-					linked: <Link to={links.support} className={linkClass} target='_blank' />,
+					// Feedback 90358f61: MUST be a plain <a>, not a react-router
+						// <Link>. <Link to="https://…"> is treated as an in-app route
+						// (/https://…) → the SPA navigates to a dead path and the panel
+						// goes blank ("button disappears after clicking around").
+						linked: <a href={links.support} className={linkClass} target='_blank' rel='noopener noreferrer' />,
 				}}
 			/>
 		</p>

@@ -72,8 +72,11 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Security (feedback 42ed3227): NEVER put the api-key token in link hrefs —
+  // it shows in the browser status bar on hover + leaks via Referer. The token
+  // is persisted in the `liv_store_token` cookie (middleware) and read back by
+  // store-provider on navigation, so internal links only need `instance`.
   const params = new URLSearchParams();
-  if (token) params.set('token', token);
   if (instanceName) params.set('instance', instanceName);
   const qs = params.toString();
 

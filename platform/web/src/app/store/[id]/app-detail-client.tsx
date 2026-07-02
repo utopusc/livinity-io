@@ -104,8 +104,8 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
   const defaultCreds = isEmbedded ? getAppDefaultCreds(appId) : undefined;
 
   // qs for back-link to /store with section preserved
+  // Security (feedback 42ed3227): no token in link hrefs — cookie carries it.
   const backParams = new URLSearchParams();
-  if (token) backParams.set('token', token);
   if (instanceName) backParams.set('instance', instanceName);
   if (app?.section) backParams.set('section', app.section);
   const backHref = `/store?${backParams.toString()}`;
