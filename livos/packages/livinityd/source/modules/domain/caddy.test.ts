@@ -1700,7 +1700,9 @@ describe('generateFullCaddyfile — Phase 258-02 WS-B public-access carve-out', 
 \t\t}
 \t}
 \treverse_proxy 127.0.0.1:${port} {
-${bearerLines}\t\tflush_interval -1
+${bearerLines}\t\theader_down -X-Frame-Options
+\t\theader_down -Content-Security-Policy
+\t\tflush_interval -1
 \t\ttransport http {
 \t\t\tversions 1.1
 \t\t}

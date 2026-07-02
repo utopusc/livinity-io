@@ -43,6 +43,21 @@ const WS_TRANSPORT_BODY = `\t\tflush_interval -1
  * generateHybridCaddyfile which adopted four-space indentation as their
  * convention in Phase 104.
  */
+// Installed apps render INSIDE the LivOS desktop as cross-subdomain iframes
+// (app at `<slug>-<user>.livinity.io`, shell at `<user>.livinity.io` = a
+// DIFFERENT origin). Most self-hosted apps ship `X-Frame-Options: SAMEORIGIN`
+// (DokuWiki, Redmine, RedisInsight, …) and/or a `frame-ancestors` CSP, which
+// makes the browser REFUSE to render them in that iframe → the operator sees a
+// blank white window + a "Refused to display … in a frame" console error. The
+// AionUi blocks already strip these; the generic app-subdomain proxy did NOT,
+// so EVERY framed app opened white. Strip both on the app reverse_proxy so the
+// shell can embed it. (Removing a response CSP only relaxes browser
+// restrictions — it never breaks the app's own asset loading.)
+const FRAME_EMBED_STRIP = `\t\theader_down -X-Frame-Options
+\t\theader_down -Content-Security-Policy`
+const FRAME_EMBED_STRIP_LOCAL = `        header_down -X-Frame-Options
+        header_down -Content-Security-Policy`
+
 const WS_TRANSPORT_BODY_LOCAL = `        flush_interval -1
         transport http {
             versions 1.1
@@ -964,7 +979,8 @@ ${WS_TRANSPORT_BODY}
 \t\t}
 \t}
 \treverse_proxy 127.0.0.1:${sub.port} {
-${safeBearer ? `\t\theader_up Authorization "Bearer ${safeBearer}"\n\t\theader_up Host 127.0.0.1:${sub.port}\n\t\theader_up Origin http://127.0.0.1:${sub.port}\n` : ''}${WS_TRANSPORT_BODY}
+${safeBearer ? `\t\theader_up Authorization "Bearer ${safeBearer}"\n\t\theader_up Host 127.0.0.1:${sub.port}\n\t\theader_up Origin http://127.0.0.1:${sub.port}\n` : ''}${FRAME_EMBED_STRIP}
+${WS_TRANSPORT_BODY}
 \t}`
 
 			// Phase 259 — the UNGATED SSO landing carve-out. /__livos_auth must reach
@@ -1000,6 +1016,7 @@ ${WS_TRANSPORT_BODY}
 \thandle {
 ${PUBLIC_HEADER_STRIP}
 \t\treverse_proxy 127.0.0.1:${sub.port} {
+${FRAME_EMBED_STRIP}
 ${WS_TRANSPORT_BODY}
 \t\t}
 \t}
@@ -1016,6 +1033,7 @@ ${WS_TRANSPORT_BODY}
 					publicBlocks.push(`\thandle ${prefix}* {
 ${PUBLIC_HEADER_STRIP}
 \t\treverse_proxy 127.0.0.1:${sub.port} {
+${FRAME_EMBED_STRIP}
 ${WS_TRANSPORT_BODY}
 \t\t}
 \t}`)
@@ -1185,6 +1203,7 @@ ${WS_TRANSPORT_BODY_LOCAL}
         dns cloudflare {env.CLOUDFLARE_API_TOKEN}
     }
     reverse_proxy 127.0.0.1:${sub.port} {
+${FRAME_EMBED_STRIP_LOCAL}
 ${WS_TRANSPORT_BODY_LOCAL}
     }
 }`)
