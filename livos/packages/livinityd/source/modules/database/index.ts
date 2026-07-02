@@ -418,9 +418,19 @@ export async function createUserAppInstance(data: {
 	volumePath: string
 }): Promise<UserAppInstance | null> {
 	if (!pool) return null
+	// CRITICAL (2026-07-02): status MUST be set to 'running' on the FRESH INSERT,
+	// not only in the ON CONFLICT (re-install) branch. buildCaddyConfigFromState
+	// emits a Caddy block ONLY for instances with status='running'
+	// (caddy-state.ts:114). The INSERT column list previously omitted `status`,
+	// so a FIRST-TIME per-user install took the column default (not 'running')
+	// → no Caddy block was emitted → Caddy returned an empty 200 for the app's
+	// host → the app opened as a blank white window. It only started working
+	// after a SECOND install (which hit ON CONFLICT DO UPDATE SET status='running').
+	// This is why freshly-installed apps were white while a previously-installed
+	// app (e.g. n8n) worked. Set status explicitly on insert.
 	const {rows} = await pool.query(
-		`INSERT INTO user_app_instances (user_id, app_id, subdomain, container_name, port, volume_path)
-		 VALUES ($1, $2, $3, $4, $5, $6)
+		`INSERT INTO user_app_instances (user_id, app_id, subdomain, container_name, port, volume_path, status)
+		 VALUES ($1, $2, $3, $4, $5, $6, 'running')
 		 ON CONFLICT (user_id, app_id) DO UPDATE SET
 			subdomain = EXCLUDED.subdomain,
 			container_name = EXCLUDED.container_name,

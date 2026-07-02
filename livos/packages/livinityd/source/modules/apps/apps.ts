@@ -1893,6 +1893,23 @@ export default class Apps {
 					[name, userId, appSlug],
 				)
 				if (existing.length > 0) {
+					// Self-heal (2026-07-02): the container IS running (it appears in
+					// `docker ps`), so force the row's status to 'running'. Rows written
+					// by the pre-fix createUserAppInstance INSERT omitted `status`, so on
+					// boxes whose column default is not 'running' they landed a non-running
+					// status → buildCaddyConfigFromState (caddy-state.ts:114) skipped them →
+					// NO Caddy block was emitted → the app served an empty 200 and opened as
+					// a blank white window. This UPDATE repairs those existing rows on the
+					// next boot (which an update triggers), so the operator does NOT have to
+					// reinstall. Safe: only ever sets 'running' for a confirmed-running
+					// container.
+					await pool
+						.query(
+							`UPDATE user_app_instances SET status = 'running'
+							 WHERE (container_name = $1 OR (user_id = $2 AND app_id = $3)) AND status <> 'running'`,
+							[name, userId, appSlug],
+						)
+						.catch((err) => this.logger.error(`[recon] status self-heal failed for ${name}`, err))
 					skipped++
 					continue
 				}
