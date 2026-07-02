@@ -38,6 +38,24 @@ function StoreProviderInner({
         })()
       : null);
   const instanceName = searchParams.get('instance');
+
+  // Security (feedback 42ed3227): the token rides in the iframe's first-load URL
+  // (?token=liv_k_…) to bootstrap the `liv_store_token` cookie. But that means
+  // the PAGE's own URL contains the key — so hovering ANY relative link, even a
+  // bare `href="#"` (the profile avatar), makes Chrome show the full current URL
+  // *including the token* in the status bar. Removing the token from link hrefs
+  // is not enough while it lingers in the address bar. Once the cookie is set
+  // (middleware did this on the same first response), strip `token` from the URL
+  // via replaceState so no hover — and no browser-history entry — ever exposes
+  // it. Auth continues via the cookie + the in-memory `token` captured above.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('token')) {
+      url.searchParams.delete('token');
+      window.history.replaceState(window.history.state, '', url.toString());
+    }
+  }, []);
   // Section hint via URL — set by SectionTabs when navigating from a
   // detail page back to /store. Only read once at mount; subsequent
   // changes happen through setSelectedSection.
