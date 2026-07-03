@@ -123,33 +123,46 @@ export default class App {
 		// manifest.port is the HOST port. Container internal port may differ.
 		if (manifest.port) {
 			const serviceNames = Object.keys(compose.services!)
-			const mainServiceName = serviceNames.find(name =>
-				name === this.id || name === 'server' || name === 'app' || name === 'web'
-			) || serviceNames.find(name =>
-				// Skip known infrastructure services (DinD, sidecar proxies, etc.)
-				!['docker', 'dind', 'tor', 'proxy', 'sidecar', 'init'].includes(name)
-			) || serviceNames[0]
 
-			if (mainServiceName && compose.services![mainServiceName]) {
-				const service = compose.services![mainServiceName]
-				if (!service.ports) {
-					service.ports = []
-				}
+			// Hermes incident (2026-07-02): if ANY service already publishes
+			// manifest.port as a host port, the compose already owns the routing
+			// port — do NOT force-add another mapping. Previously the name
+			// heuristic picked the wrong service on multi-service catalog apps
+			// (hermes-agent-with-webui: services [hermes-agent, hermes-webui] —
+			// no name matched, so [first non-infra] = hermes-agent), saw it had
+			// no ports, and force-added 127.0.0.1:42050:42050 onto the AGENT
+			// while hermes-webui already declared 42050:8787. Both then raced
+			// for host 42050; the agent won the bind and the subdomain routed to
+			// the agent gateway instead of the web UI → 502.
+			const anyServicePublishesManifestPort = serviceNames.some((name) => {
+				const ports = (compose.services![name]?.ports ?? []) as unknown[]
+				return ports.some((p) => String(p).includes(`${manifest.port}:`))
+			})
+			if (anyServicePublishesManifestPort) {
+				this.logger.log(`Port ${manifest.port} already published by the compose for ${this.id} — skipping force-add`)
+			} else {
+				// Catalog-imported manifests carry the authoritative main service
+				// (manifest.mainService, written by the store importer). Prefer it;
+				// fall back to the legacy name heuristic.
+				const declaredMain = (manifest as {mainService?: string}).mainService
+				const mainServiceName = (declaredMain && compose.services![declaredMain] ? declaredMain : undefined)
+					|| serviceNames.find(name =>
+						name === this.id || name === 'server' || name === 'app' || name === 'web'
+					) || serviceNames.find(name =>
+						// Skip known infrastructure services (DinD, sidecar proxies, etc.)
+						!['docker', 'dind', 'tor', 'proxy', 'sidecar', 'init'].includes(name)
+					) || serviceNames[0]
 
-				// Check if compose already has a mapping for manifest.port as host port
-				// (builtin compose definitions set the correct host:container mapping)
-				const hasHostPort = (service.ports as string[]).some(p => {
-					const portStr = p.toString()
-					return portStr.includes(`${manifest.port}:`)
-				})
-
-				if (!hasHostPort) {
-					// No existing mapping — add manifest.port:manifest.port (legacy behavior)
+				if (mainServiceName && compose.services![mainServiceName]) {
+					const service = compose.services![mainServiceName]
+					if (!service.ports) {
+						service.ports = []
+					}
+					// No existing mapping anywhere — add manifest.port:manifest.port
+					// (legacy umbrel-style semantics: container listens on manifest.port).
 					const portMapping = `127.0.0.1:${manifest.port}:${manifest.port}`
 					service.ports.push(portMapping)
-					this.logger.log(`Exposed port ${manifest.port}:${manifest.port} for ${this.id}`)
-				} else {
-					this.logger.log(`Port ${manifest.port} already mapped for ${this.id}`)
+					this.logger.log(`Exposed port ${manifest.port}:${manifest.port} for ${this.id} (service ${mainServiceName})`)
 				}
 			}
 		}

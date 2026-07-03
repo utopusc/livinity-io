@@ -1387,6 +1387,14 @@ export default class Apps {
 				// the nested manifest blob.
 				requiresAiProvider: data.requiresAiProvider ?? data.manifest?.requiresAiProvider ?? undefined,
 				requiresLocalAiClis: data.requiresLocalAiClis ?? data.manifest?.requiresLocalAiClis ?? undefined,
+				// Hermes incident (2026-07-02): thread the store importer's
+				// authoritative main-service + internal-port metadata through to the
+				// installed manifest. Without these, both install paths fall back to
+				// name heuristics / "manifest.port is internal" assumptions, which
+				// break multi-service catalog apps (wrong service published / proxy
+				// to a container port nothing listens on → 502).
+				mainService: data.manifest?.mainService ?? undefined,
+				internalPort: data.manifest?.internalPort ?? undefined,
 				// Phase 262-05 (LIVOS-057): the platform path threaded
 				// requiresLocalAiClis but DROPPED neverPublic — a platform app whose
 				// ONLY forbidden signal is neverPublic could be made public against
@@ -2408,11 +2416,25 @@ export default class Apps {
 			.replace(/\$\{DEVICE_HOSTNAME\}/g, hostname())
 		const composeData = (await import('js-yaml')).default.load(compose) as any
 
-		// Detect internal port — prefer manifest.port (the web-accessible port)
-		// Compose may only list peripheral ports (e.g., discovery), so manifest is authoritative
-		const mainServiceName = Object.keys(composeData.services || {})[0]
-		let internalPort: number = manifest.port || 8080
-		if (!manifest.port && mainServiceName && composeData.services[mainServiceName]) {
+		// Hermes incident (2026-07-02) — main-service + internal-port detection.
+		// The old logic blindly took services[0] as main and treated manifest.port
+		// as the INTERNAL port. Both are wrong for multi-service catalog apps:
+		// hermes-agent-with-webui's services are [hermes-agent, hermes-webui] (the
+		// UI is NOT first) and manifest.port (42050) is the HOST port — the UI
+		// listens on 8787 inside. That produced a mapping to a container port
+		// nothing listens on → 502 behind the gate.
+		// Priority now: (1) manifest.mainService / manifest.internalPort — written
+		// by the store importer, authoritative; (2) the container side of the main
+		// service's OWN host mapping in the compose; (3) legacy umbrel semantics
+		// (manifest.port IS the internal port); (4) 8080.
+		const svcNames = Object.keys(composeData.services || {})
+		const declaredMain = (manifest as {mainService?: string}).mainService
+		const mainServiceName = (declaredMain && composeData.services?.[declaredMain] ? declaredMain : undefined)
+			|| svcNames.find((n) => n === appId || n === 'server' || n === 'app' || n === 'web')
+			|| svcNames.find((n) => !['docker', 'dind', 'tor', 'proxy', 'sidecar', 'init'].includes(n))
+			|| svcNames[0]
+		let internalPort: number = Number((manifest as {internalPort?: number}).internalPort) || 0
+		if (!internalPort && mainServiceName && composeData.services[mainServiceName]) {
 			const service = composeData.services[mainServiceName]
 			if (service.ports && Array.isArray(service.ports)) {
 				for (const p of service.ports) {
@@ -2424,10 +2446,11 @@ export default class Apps {
 					}
 				}
 			}
-			if (internalPort === 8080 && service.expose && Array.isArray(service.expose)) {
+			if (!internalPort && service.expose && Array.isArray(service.expose)) {
 				internalPort = parseInt(service.expose[0].toString(), 10)
 			}
 		}
+		if (!internalPort) internalPort = manifest.port || 8080
 
 		// Patch all services with per-user container names and volumes
 		for (const serviceName of Object.keys(composeData.services || {})) {
@@ -2478,7 +2501,17 @@ export default class Apps {
 		// No-op when manifest.requiresAiProvider is absent or false.
 		injectAiProviderConfig(composeData, userId, manifest)
 
-		// Set the host port mapping on the main service
+		// Set the host port mapping on the main service — and STRIP host ports
+		// from every other service. A per-user instance is only reachable via its
+		// allocated port; sidecar host publishes from the catalog compose (e.g. a
+		// second service declaring the catalog's fixed 42xxx port) would race
+		// other instances/services for the host port (the hermes 42050 collision
+		// class). Inter-service traffic rides the docker network by name and
+		// needs no host publish.
+		for (const svcName of Object.keys(composeData.services || {})) {
+			if (svcName === mainServiceName) continue
+			if (composeData.services[svcName]?.ports) delete composeData.services[svcName].ports
+		}
 		if (mainServiceName && composeData.services[mainServiceName]) {
 			const service = composeData.services[mainServiceName]
 			service.ports = [`127.0.0.1:${port}:${internalPort}`]
