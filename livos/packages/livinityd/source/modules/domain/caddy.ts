@@ -1268,10 +1268,39 @@ ${WS_TRANSPORT_BODY}
  * the box, never a new way for dev environments to fail.
  */
 export async function writeCaddyfile(content: string): Promise<void> {
+	// PRIME DIRECTIVE (2026-07-02 box incident): this function must NEVER be
+	// less reliable than the legacy direct write it replaced. On the real box
+	// only the Caddyfile FILE is chowned to the service user
+	// (deploy-livinityd.sh:2437) — /etc/caddy the DIRECTORY stays root-owned.
+	// The legacy code truncate-wrote the existing file (file perms suffice);
+	// the v45.09 staging created a NEW `.fut` file (needs DIRECTORY write) →
+	// EACCES → writeCaddyfile threw → the boot regen swallowed it "(non-fatal)"
+	// → the Caddyfile froze at its last pre-v45.09 write and every newly
+	// installed app served an empty 200 (blank white window). So: staging +
+	// validate + .bak are best-effort ENHANCEMENTS; on ANY staging failure fall
+	// back to the direct write.
 	const fut = `${CADDYFILE_PATH}.fut`
-	await writeFile(fut, content, 'utf-8')
+	let staged = false
 	try {
-		await execAsync(`caddy validate --config ${fut}`)
+		await writeFile(fut, content, 'utf-8')
+		staged = true
+	} catch (stageErr) {
+		console.warn(
+			`[caddy] cannot stage ${fut} (directory not writable by the service user?) — falling back to legacy direct write`,
+			stageErr,
+		)
+	}
+	if (!staged) {
+		// Legacy path: truncate-write the existing (service-user-owned) file.
+		// `caddy reload` self-validates before applying, so a bad config still
+		// cannot take down the live proxy (R5 verdict on the original F7).
+		await writeFile(CADDYFILE_PATH, content, 'utf-8')
+		return
+	}
+	try {
+		// --adapter caddyfile: never depend on filename-based format detection
+		// for the staged file.
+		await execAsync(`caddy validate --config ${fut} --adapter caddyfile`)
 	} catch (error) {
 		const message = String((error as Error)?.message ?? error)
 		const binaryMissing = /ENOENT|not found|not recognized/i.test(message)
@@ -1284,7 +1313,15 @@ export async function writeCaddyfile(content: string): Promise<void> {
 	if (await fse.pathExists(CADDYFILE_PATH)) {
 		await fse.copy(CADDYFILE_PATH, `${CADDYFILE_PATH}.bak`, {overwrite: true}).catch(() => {})
 	}
-	await fse.move(fut, CADDYFILE_PATH, {overwrite: true})
+	try {
+		await fse.move(fut, CADDYFILE_PATH, {overwrite: true})
+	} catch (moveErr) {
+		// rename() also needs directory write. The content is already validated —
+		// degrade to the direct truncate-write and clean up the staging file.
+		console.warn('[caddy] atomic rename failed — falling back to direct write of the validated config', moveErr)
+		await writeFile(CADDYFILE_PATH, content, 'utf-8')
+		await fse.remove(fut).catch(() => {})
+	}
 }
 
 /**
