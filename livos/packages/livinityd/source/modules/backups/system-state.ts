@@ -32,6 +32,23 @@ export interface SystemStateLogger {
 	error: (message: string, error?: unknown) => void
 }
 
+/**
+ * Positive selection of what a backup includes, chosen by the operator in
+ * Settings › Backups. Files + bind-mount app data are ALWAYS in the snapshot
+ * (they ARE the dataDirectory); these govern the extra out-of-tree captures.
+ */
+export interface BackupScope {
+	/** livos Postgres DB — users, app instances, subdomain routing, AND Liv's memory. */
+	systemDatabase: boolean
+	/** /opt/liv-assistant/data — Liv AI chat history + skills. */
+	livAssistantData: boolean
+}
+
+export const DEFAULT_BACKUP_SCOPE: BackupScope = {
+	systemDatabase: true,
+	livAssistantData: true,
+}
+
 function systemStateDir(dataDirectory: string): string {
 	return path.join(dataDirectory, SYSTEM_STATE_DIRNAME)
 }
@@ -41,13 +58,21 @@ function systemStateDir(dataDirectory: string): string {
  * Writes the DB dump + AionUi data tar under `${dataDirectory}/system-state/`
  * (overwritten each backup — Kopia dedups, so no unbounded growth).
  */
-export async function captureSystemState(dataDirectory: string, logger: SystemStateLogger): Promise<void> {
+export async function captureSystemState(
+	dataDirectory: string,
+	logger: SystemStateLogger,
+	scope: BackupScope = DEFAULT_BACKUP_SCOPE,
+): Promise<void> {
 	const outDir = systemStateDir(dataDirectory)
 	await fse.mkdirp(outDir).catch(() => {})
 
 	// 1. Postgres — the biggest gap (Liv's memory + instance/routing records).
 	const databaseUrl = process.env.DATABASE_URL
-	if (databaseUrl) {
+	if (!scope.systemDatabase) {
+		// Operator opted out — remove any stale dump so the snapshot reflects the choice.
+		await fse.remove(path.join(outDir, DB_DUMP_FILE)).catch(() => {})
+		logger.log('[system-state] DB capture disabled by backup scope — skipping')
+	} else if (databaseUrl) {
 		const dumpTmp = path.join(outDir, `${DB_DUMP_FILE}.tmp`)
 		const dumpFinal = path.join(outDir, DB_DUMP_FILE)
 		try {
@@ -65,7 +90,10 @@ export async function captureSystemState(dataDirectory: string, logger: SystemSt
 	}
 
 	// 2. AionUi (Liv AI chat) data — history + skills, kept outside dataDirectory.
-	if (await fse.pathExists(LIV_ASSISTANT_DATA_DIR).catch(() => false)) {
+	if (!scope.livAssistantData) {
+		await fse.remove(path.join(outDir, LIV_ASSISTANT_TAR_FILE)).catch(() => {})
+		logger.log('[system-state] Liv AI data capture disabled by backup scope — skipping')
+	} else if (await fse.pathExists(LIV_ASSISTANT_DATA_DIR).catch(() => false)) {
 		const tarTmp = path.join(outDir, `${LIV_ASSISTANT_TAR_FILE}.tmp`)
 		const tarFinal = path.join(outDir, LIV_ASSISTANT_TAR_FILE)
 		try {

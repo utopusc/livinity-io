@@ -341,6 +341,11 @@ type StoreSchema = {
 			lastBackup?: number
 		}[]
 		ignore: string[]
+		// Backup-completeness P2 — which out-of-tree stores the snapshot includes.
+		scope?: {
+			systemDatabase: boolean
+			livAssistantData: boolean
+		}
 	}
 }
 

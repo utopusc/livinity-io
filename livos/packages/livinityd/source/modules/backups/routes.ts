@@ -63,6 +63,21 @@ export default router({
 	// Get progress of backup operations
 	backupProgress: privateProcedure.query(async ({ctx}) => ctx.livinityd.backups.backupsInProgress),
 
+	// Get the backup scope (which out-of-tree stores to include).
+	// ctx.livinityd! — privateProcedure guarantees it at runtime; the `!` keeps
+	// these two new handlers off the router's known ctx-partial tsc baseline.
+	getBackupScope: privateProcedure.query(async ({ctx}) => ctx.livinityd!.backups.getBackupScope()),
+
+	// Set the backup scope
+	setBackupScope: privateProcedure
+		.input(
+			z.object({
+				systemDatabase: z.boolean().optional(),
+				livAssistantData: z.boolean().optional(),
+			}),
+		)
+		.mutation(async ({ctx, input}) => ctx.livinityd!.backups.setBackupScope(input)),
+
 	// Get ignored paths
 	getIgnoredPaths: privateProcedure.query(async ({ctx}) => ctx.livinityd.backups.getIgnoredPaths()),
 

@@ -8,7 +8,7 @@ import pQueue from 'p-queue'
 import prettyBytes from 'pretty-bytes'
 
 import randomToken from '../../modules/utilities/random-token.js'
-import {captureSystemState} from './system-state.js'
+import {captureSystemState, DEFAULT_BACKUP_SCOPE, type BackupScope} from './system-state.js'
 import {copyWithProgress} from '../utilities/copy-with-progress.js'
 
 // TODO: These should be refactored into proper livinityd modules
@@ -507,10 +507,15 @@ export default class Backups {
 		// records — and /opt/liv-assistant/data) INTO dataDirectory so THIS
 		// snapshot becomes a complete restore point, not just files. Best-effort:
 		// a capture failure must never abort the file snapshot below.
-		await captureSystemState(this.#livinityd.dataDirectory, {
-			log: (m) => this.logger.log(m),
-			error: (m, e) => this.logger.error(m, e as Error),
-		}).catch((error) => this.logger.error('[system-state] capture threw (non-fatal)', error))
+		const backupScope = await this.getBackupScope().catch(() => DEFAULT_BACKUP_SCOPE)
+		await captureSystemState(
+			this.#livinityd.dataDirectory,
+			{
+				log: (m) => this.logger.log(m),
+				error: (m, e) => this.logger.error(m, e as Error),
+			},
+			backupScope,
+		).catch((error) => this.logger.error('[system-state] capture threw (non-fatal)', error))
 
 		// Initialize progress tracking
 		const backupProgress: BackupProgress = {repositoryId, percent: 0}
@@ -558,6 +563,26 @@ export default class Backups {
 			this.backupsInProgress = this.backupsInProgress.filter((progress) => progress !== backupProgress)
 			this.#livinityd.eventBus.emit('backups:backup-progress', this.backupsInProgress)
 		}
+	}
+
+	// ── Backup scope (what to include) ──────────────────────────────────
+	// Positive selection of the OUT-OF-TREE stores folded into the snapshot by
+	// system-state.ts. Files + bind-mount app data are ALWAYS included (they ARE
+	// the dataDirectory snapshot; use exclusions to skip pieces). These toggles
+	// govern the extra captures. Default ON so a fresh box is fully covered.
+	async getBackupScope(): Promise<BackupScope> {
+		const stored = (await this.#livinityd.store.get('backups.scope')) as Partial<BackupScope> | undefined
+		return {...DEFAULT_BACKUP_SCOPE, ...(stored ?? {})}
+	}
+
+	async setBackupScope(scope: Partial<BackupScope>): Promise<BackupScope> {
+		let next: BackupScope = DEFAULT_BACKUP_SCOPE
+		await this.#livinityd.store.getWriteLock(async ({set}) => {
+			const current = await this.getBackupScope()
+			next = {...current, ...scope}
+			await set('backups.scope', next)
+		})
+		return next
 	}
 
 	// Get ignored paths

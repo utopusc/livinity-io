@@ -5,6 +5,7 @@ import {useNavigate} from 'react-router-dom'
 
 import {ImmersiveDialogSeparator} from '@/components/ui/immersive-dialog'
 import {BackupDeviceIcon} from '@/features/backups/components/backup-device-icon'
+import {BackupScope} from '@/features/backups/components/backup-scope'
 import {BackupsExclusions} from '@/features/backups/components/backups-exclusions'
 import {
 	useBackupProgress,
@@ -111,6 +112,10 @@ export function BackupsConfigureWizard() {
 						onAddExternal={goToSetupExternal}
 						onAddLivinityPrivateCloud={goToSetupLivinityPrivateCloud}
 					/>
+
+					<div className='h-2' />
+					{/* What's included — the positive scope selector (P2) */}
+					<BackupScope showTitle />
 
 					<div className='h-2' />
 					{/* Global Backups Exclusions */}
