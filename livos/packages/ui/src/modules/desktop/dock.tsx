@@ -21,7 +21,9 @@ import {useLaunchApp} from '@/hooks/use-launch-app'
 import {useLaunchWebApp} from '@/hooks/use-launch-webapp'
 import {OPENUI_APP_ID_PREFIX, OPENUI_WMCLASS_PREFIX, useLaunchNativeApp} from '@/modules/dock/use-launch-native-app'
 import {openCommandPalette} from '@/components/cmdk'
+import {useDialogOpenProps} from '@/utils/dialog'
 import {DockItem} from './dock-item'
+import {FeedbackDialog} from './feedback-dialog'
 import {LogoutDialog} from './logout-dialog'
 import {WINDOWED_SYSTEM_ROUTES} from './system-windowed-routes'
 import {DockPin, dockPinKey, useDockPins} from './use-dock-pins'
@@ -78,6 +80,9 @@ type OpenWindowFn = (
 export function Dock() {
 	const {pathname} = useLocation()
 	const {addLinkSearchParams} = useQueryParams()
+	// Feedback 90358f61 — drive the global feedback dialog off ?dialog=feedback so
+	// Settings' "Contact Support" can open the in-app Report-a-Problem channel.
+	const feedbackDialogProps = useDialogOpenProps('feedback')
 	const mouseX = useMotionValue(Infinity)
 	const settingsNotificationCount = useSettingsNotificationCount()
 	const isMobile = useIsMobile()
@@ -195,6 +200,10 @@ export function Dock() {
 				/>
 			</motion.div>
 			<LogoutDialog />
+			{/* Feedback 90358f61 — global mount so "Contact Support" in Settings can
+			    open the in-app Report-a-Problem dialog via ?dialog=feedback (the
+			    top-bar Bug button keeps its own local instance). */}
+			<FeedbackDialog {...feedbackDialogProps} />
 		</>
 	)
 }

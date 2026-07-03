@@ -302,22 +302,39 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   # rebrand pass above). NOTE: this targets the upstream iOfficeAI URLs
   # specifically; if a future AionUi build changes the About-panel host or the
   # official Livinity X handle differs, update SOCIAL_* below.
+  # The REAL upstream URLs (verified 2026-07-02 against iOfficeAI/AionUi source,
+  # AboutModalContent.tsx linkItems + the GitHub icon button):
+  #   https://github.com/iOfficeAI/AionUi          (GitHub icon)
+  #   https://github.com/iOfficeAI/AionUi/wiki      (Documentation)
+  #   https://github.com/iOfficeAI/AionUi/releases  (Releases/Version)
+  #   https://x.com/WailiVery                       (X — the AionUi author's
+  #                                                  PERSONAL account: this is the
+  #                                                  "redirects to someone unrelated"
+  #                                                  the operator reported)
+  #   https://www.aionui.com                        (Website)
+  # NOTE: the general rebrand sed above runs FIRST and mangles these in place
+  #   (AionUi -> "Liv AI", aionui -> livai), so by the time this pass runs the
+  #   bundle may hold `github.com/iOfficeAI/Liv AI/wiki` and `www.livai.com`.
+  #   The patterns below match BOTH the pristine and the mangled forms, and the
+  #   [^"'] path-consume swallows the whole path (incl. the injected space) up to
+  #   the JS string delimiter, so every GitHub link lands on the clean repo root.
+  #   Earlier attempt failed because it guessed x.com/AionUi etc. — none of which
+  #   exist; the real X handle is WailiVery.
   SOCIAL_TARGET="$(readlink -f "${CURRENT_LINK}")/static"
-  SOCIAL_PRE_HITS="$(grep -ril 'github.com/iOfficeAI\|github.com/office-sec\|twitter.com/AionUi\|x.com/AionUi\|twitter.com/iOfficeAI\|x.com/iOfficeAI' "${SOCIAL_TARGET}" --include='*.html' --include='*.js' 2>/dev/null | wc -l)"
+  SOCIAL_PRE_HITS="$(grep -ril 'github.com/iOfficeAI\|x.com/WailiVery\|aionui.com\|livai.com' "${SOCIAL_TARGET}" --include='*.html' --include='*.js' 2>/dev/null | wc -l)"
   if [[ "${SOCIAL_PRE_HITS}" -gt 0 ]]; then
-    log "Rebrand(social): rewriting AionUi upstream social links -> Livinity on ${SOCIAL_PRE_HITS} files"
+    log "Rebrand(social): rewriting AionUi upstream About-panel links -> Livinity on ${SOCIAL_PRE_HITS} files"
     find "${SOCIAL_TARGET}" \( -name '*.html' -o -name '*.js' \) ! -name 'liv-240-*' ! -name 'liv-mcp-*' \
          -exec sed -i \
-           -e 's#https\?://github.com/iOfficeAI/AionUi#https://github.com/utopusc/livinity-io#g' \
-           -e 's#https\?://github.com/iOfficeAI#https://github.com/utopusc/livinity-io#g' \
-           -e 's#https\?://github.com/office-sec[A-Za-z0-9/_-]*#https://github.com/utopusc/livinity-io#g' \
-           -e 's#https\?://\(twitter\|x\).com/AionUi#https://livinity.io#g' \
-           -e 's#https\?://\(twitter\|x\).com/iOfficeAI#https://livinity.io#g' {} +
-    # ^ X/Twitter → livinity.io as a SAFE fallback (never a stranger's account).
-    #   Replace with the official Livinity X handle once confirmed by the operator.
+           -e 's#https\?://github.com/iOfficeAI[^"'\'']*#https://github.com/utopusc/livinity-io#g' \
+           -e 's#https\?://x.com/WailiVery#https://livinity.io#g' \
+           -e 's#https\?://\(www\.\)\?aionui\.com#https://livinity.io#g' \
+           -e 's#https\?://\(www\.\)\?livai\.com#https://livinity.io#g' {} +
+    # ^ X/Website → livinity.io as a SAFE destination (never a stranger's account).
+    #   Swap in the official Livinity X handle here once the operator confirms one.
     log "Rebrand(social): sed pass complete"
   else
-    log "Rebrand(social): no upstream social links found (already rewritten or bundle changed); skipping"
+    log "Rebrand(social): no upstream About-panel links found (already rewritten or bundle changed); skipping"
   fi
 else
   log "Rebrand: WARN ${REBRAND_TARGET} missing; skipping rebrand step"

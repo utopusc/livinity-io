@@ -1,12 +1,11 @@
 import {useState} from 'react'
 import {Trans} from 'react-i18next/TransWithoutContext'
 import {RiAlarmWarningFill} from 'react-icons/ri'
-import {useNavigate} from 'react-router-dom'
+import {Link, useNavigate} from 'react-router-dom'
 
 import {ErrorAlert} from '@/components/ui/alert'
-import {links} from '@/constants/links'
 import {cn} from '@/shadcn-lib/utils'
-import {afterDelayedClose} from '@/utils/dialog'
+import {afterDelayedClose, useLinkToDialog} from '@/utils/dialog'
 import {linkClass} from '@/utils/element-classes'
 import {t} from '@/utils/i18n'
 import {tw} from '@/utils/tw'
@@ -19,16 +18,20 @@ export const cardSecondaryValueClass = cn(cardSecondaryValueBaseClass, tw`trunca
 export const cardErrorClass = cn(cardSecondaryValueBaseClass, tw`animate-pulse leading-snug text-destructive2-lightest`)
 
 export function ContactSupportLink({className}: {className?: string}) {
+	// Feedback 90358f61: the previous targets (livinity.com/support, then a
+	// mailto:) did nothing useful inside the desktop iframe — no external page
+	// existed and mailto has no handler, so it read as "not working", and the
+	// earlier react-router <Link to="https://…"> also blanked the panel. Point
+	// "Contact Support" at the in-app Report-a-Problem dialog (the actual working
+	// support channel — the same one this feedback was filed through) via the
+	// global ?dialog=feedback route mounted in the dock.
+	const linkToDialog = useLinkToDialog()
 	return (
 		<p className={cn('mx-auto text-caption font-normal text-text-secondary', className)}>
 			<Trans
 				i18nKey='settings.contact-support'
 				components={{
-					// Feedback 90358f61: MUST be a plain <a>, not a react-router
-						// <Link>. <Link to="https://…"> is treated as an in-app route
-						// (/https://…) → the SPA navigates to a dead path and the panel
-						// goes blank ("button disappears after clicking around").
-						linked: <a href={links.support} className={linkClass} target='_blank' rel='noopener noreferrer' />,
+					linked: <Link to={linkToDialog('feedback')} className={linkClass} />,
 				}}
 			/>
 		</p>
