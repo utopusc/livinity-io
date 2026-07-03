@@ -8,6 +8,7 @@ import pQueue from 'p-queue'
 import prettyBytes from 'pretty-bytes'
 
 import randomToken from '../../modules/utilities/random-token.js'
+import {captureSystemState} from './system-state.js'
 import {copyWithProgress} from '../utilities/copy-with-progress.js'
 
 // TODO: These should be refactored into proper livinityd modules
@@ -500,6 +501,16 @@ export default class Backups {
 		// Ensure we have the latest ignore file before backing up
 		this.logger.verbose(`Ensuring ignore file is up to date`)
 		await this.createIgnoreFile()
+
+		// Backup-completeness (2026-07-03): fold the box's out-of-tree state
+		// (the livos Postgres DB — incl. Liv's memory + app-instance/routing
+		// records — and /opt/liv-assistant/data) INTO dataDirectory so THIS
+		// snapshot becomes a complete restore point, not just files. Best-effort:
+		// a capture failure must never abort the file snapshot below.
+		await captureSystemState(this.#livinityd.dataDirectory, {
+			log: (m) => this.logger.log(m),
+			error: (m, e) => this.logger.error(m, e as Error),
+		}).catch((error) => this.logger.error('[system-state] capture threw (non-fatal)', error))
 
 		// Initialize progress tracking
 		const backupProgress: BackupProgress = {repositoryId, percent: 0}

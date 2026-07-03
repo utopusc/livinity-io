@@ -7,6 +7,7 @@ import fse from 'fs-extra'
 const packageJson = (await import('../package.json', {assert: {type: 'json'}})).default
 
 import {BACKUP_RESTORE_FIRST_START_FLAG} from './constants.js'
+import {restoreSystemState} from './modules/backups/system-state.js'
 import createLogger, {type LogLevel} from './modules/utilities/logger.js'
 import FileStore from './modules/utilities/file-store.js'
 import Migration from './modules/startup-migrations/index.js'
@@ -507,6 +508,20 @@ export default class Livinityd {
 
 		// Detect first boot after a backup restore (we run after migrations move 'import' into dataDirectory)
 		await this.setBackupRestoreFirstStartFlag()
+
+		// Backup-completeness (2026-07-03): on the first boot after a restore,
+		// recover the out-of-tree state the snapshot folded into dataDirectory
+		// (the livos Postgres DB — Liv's memory + app-instance/routing records —
+		// and /opt/liv-assistant/data). MUST run here: after the restore flag is
+		// set, but BEFORE apps/routing init below, so the DB records exist before
+		// the apps reconcile + Caddy regen. Non-fatal: a restore hiccup must not
+		// block boot (the box still comes up, just with less recovered state).
+		if (this.isBackupRestoreFirstStart) {
+			await restoreSystemState(this.dataDirectory, {
+				log: (m: string) => this.logger.log(m),
+				error: (m: string, e?: unknown) => this.logger.error(m, e as Error),
+			}).catch((error) => this.logger.error('[system-state] restore threw (non-fatal)', error))
+		}
 
 		// Override hostname in development when set
 		const developmentHostname = await this.store.get('development.hostname')
