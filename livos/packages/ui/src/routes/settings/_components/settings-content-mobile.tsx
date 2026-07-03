@@ -131,15 +131,14 @@ export function SettingsContentMobile() {
 					description={t('2fa-description')}
 					onClick={() => navigate('2fa')}
 				/>
-				{/* HIDDEN 2026-06-21 (operator: backup çalışmıyor → gizle). Re-enable
-				    by un-commenting once the Backups feature works. Migration below is
-				    a separate row and stays visible. */}
-				{/* <ListRowMobile
+				{/* RE-ENABLED 2026-07-03 — the Backups feature now works (Kopia +
+				    restore wizard + DB/Liv-memory capture + scope selector). */}
+				<ListRowMobile
 					icon={TbHistory}
 					title={t('backups')}
 					description={t('backups-description')}
 					onClick={() => navigate('backups')}
-				/> */}
+				/>
 				<ListRowMobile
 					icon={TbArrowBigRightLines}
 					title={t('migration-assistant')}

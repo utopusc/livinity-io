@@ -188,12 +188,12 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'date-time',        group: 'system', icon: TbClock,           label: 'Date & Time',       description: 'Time zone & language',                    adminOnly: true},
 	{id: 'storage',          group: 'system', icon: TbDeviceSdCard,    label: 'Storage',           description: 'USB drives, network shares & sharing',    adminOnly: true},
 	{id: 'security-sessions', group: 'system', icon: TbShieldLock,     label: 'Security & Sessions', description: 'Banned IPs, access & sign-out',         adminOnly: true},
-	// HIDDEN 2026-06-21 (operator: "ayarlardaki backup çalışmıyor, gizle") — the
-	// Backups settings tab is hidden until the feature works. The BackupsSection
-	// component + `case 'backups'` below are kept intact, so re-listing it later is
-	// just un-commenting this one line. (NOTE: on desktop this tab also hosted the
-	// Migration sub-tab; mobile keeps Migration as its own separate row.)
-	// {id: 'backups',          group: 'system', icon: TbDatabase,        label: 'Backups',           description: 'Backup, restore & migration',             adminOnly: true},
+	// RE-ENABLED 2026-07-03 — hidden 2026-06-21 ("ayarlardaki backup çalışmıyor,
+	// gizle") until the feature worked. It now does: Kopia repos + restore wizard,
+	// plus the backup-completeness work (Postgres DB incl. Liv's memory + Liv AI
+	// data folded into the snapshot, and a Settings scope selector). (On desktop
+	// this tab also hosts the Migration sub-tab; mobile keeps Migration separate.)
+	{id: 'backups',          group: 'system', icon: TbDatabase,        label: 'Backups',           description: 'Backup, restore & migration',             adminOnly: true},
 	{id: 'domains', group: 'system', icon: TbWorld, label: 'Domains', description: 'Subdomains & DNS usage', adminOnly: true},
 	{id: 'software-update',  group: 'system', icon: TbDownload,        label: 'Software Update',   description: 'Apply updates & view deploy history',     adminOnly: true},
 	// ── FOOTER ────────────────────────────────────────────────────────
