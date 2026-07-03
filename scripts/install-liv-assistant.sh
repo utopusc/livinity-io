@@ -320,21 +320,53 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   #   the JS string delimiter, so every GitHub link lands on the clean repo root.
   #   Earlier attempt failed because it guessed x.com/AionUi etc. — none of which
   #   exist; the real X handle is WailiVery.
+  # Per-link targets (operator request 2026-07-02):
+  #   Help Documentation (…/wiki)      -> https://livinity.io/docs
+  #   Update Log         (…/releases)  -> github.com/utopusc/livinity-io/releases
+  #   GitHub icon        (bare repo)   -> github.com/utopusc/livinity-io
+  #   Contact Me         (x.com/WailiVery) -> mailto:support@livinity.io
+  #   Official Website   (aionui.com)  -> https://livinity.io
+  # Order matters: the /wiki and /releases suffixes MUST be rewritten before the
+  # bare-repo catch-all (otherwise the catch-all eats them). Each pattern matches
+  # BOTH the pristine `AionUi` and the rebrand-mangled `Liv AI` (with a space)
+  # middle segment via [^"']* up to the JS string delimiter.
+  SOCIAL_SED=(
+    -e 's#https\?://github.com/iOfficeAI/[^"'\'']*wiki#https://livinity.io/docs#g'
+    -e 's#https\?://github.com/iOfficeAI/[^"'\'']*releases#https://github.com/utopusc/livinity-io/releases#g'
+    -e 's#https\?://github.com/iOfficeAI[^"'\'']*#https://github.com/utopusc/livinity-io#g'
+    -e 's#https\?://x.com/WailiVery#mailto:support@livinity.io#g'
+    -e 's#https\?://\(www\.\)\?aionui\.com#https://livinity.io#g'
+    -e 's#https\?://\(www\.\)\?livai\.com#https://livinity.io#g'
+  )
   SOCIAL_TARGET="$(readlink -f "${CURRENT_LINK}")/static"
+  # Plain (uncompressed) .html/.js assets.
   SOCIAL_PRE_HITS="$(grep -ril 'github.com/iOfficeAI\|x.com/WailiVery\|aionui.com\|livai.com' "${SOCIAL_TARGET}" --include='*.html' --include='*.js' 2>/dev/null | wc -l)"
   if [[ "${SOCIAL_PRE_HITS}" -gt 0 ]]; then
-    log "Rebrand(social): rewriting AionUi upstream About-panel links -> Livinity on ${SOCIAL_PRE_HITS} files"
+    log "Rebrand(social): rewriting AionUi About-panel links -> Livinity on ${SOCIAL_PRE_HITS} plain files"
     find "${SOCIAL_TARGET}" \( -name '*.html' -o -name '*.js' \) ! -name 'liv-240-*' ! -name 'liv-mcp-*' \
-         -exec sed -i \
-           -e 's#https\?://github.com/iOfficeAI[^"'\'']*#https://github.com/utopusc/livinity-io#g' \
-           -e 's#https\?://x.com/WailiVery#https://livinity.io#g' \
-           -e 's#https\?://\(www\.\)\?aionui\.com#https://livinity.io#g' \
-           -e 's#https\?://\(www\.\)\?livai\.com#https://livinity.io#g' {} +
-    # ^ X/Website → livinity.io as a SAFE destination (never a stranger's account).
-    #   Swap in the official Livinity X handle here once the operator confirms one.
-    log "Rebrand(social): sed pass complete"
+         -exec sed -i "${SOCIAL_SED[@]}" {} +
+    log "Rebrand(social): plain pass complete"
   else
-    log "Rebrand(social): no upstream About-panel links found (already rewritten or bundle changed); skipping"
+    log "Rebrand(social): no plain About-panel links found"
+  fi
+  # GZIP pass — Vite/webpack builds commonly ship pre-compressed *.js.gz / *.html.gz
+  # that the reverse proxy serves directly; a sed over *.js alone would MISS them,
+  # leaving the panel unchanged (the likely reason earlier passes had no visible
+  # effect). Decompress -> sed -> recompress in place, preserving mtime ordering.
+  GZ_HITS=0
+  while IFS= read -r -d '' gz; do
+    plain="${gz%.gz}"
+    if gunzip -c "${gz}" 2>/dev/null | grep -qE 'github.com/iOfficeAI|x.com/WailiVery|aionui.com|livai.com'; then
+      tmp="$(mktemp)"
+      gunzip -c "${gz}" > "${tmp}" 2>/dev/null || { rm -f "${tmp}"; continue; }
+      sed -i "${SOCIAL_SED[@]}" "${tmp}"
+      gzip -9 -c "${tmp}" > "${gz}" 2>/dev/null || true
+      rm -f "${tmp}"
+      GZ_HITS=$((GZ_HITS + 1))
+    fi
+  done < <(find "${SOCIAL_TARGET}" \( -name '*.js.gz' -o -name '*.html.gz' \) -print0 2>/dev/null)
+  if [[ "${GZ_HITS}" -gt 0 ]]; then
+    log "Rebrand(social): rewrote ${GZ_HITS} pre-compressed (.gz) About-panel bundle(s)"
   fi
 else
   log "Rebrand: WARN ${REBRAND_TARGET} missing; skipping rebrand step"
