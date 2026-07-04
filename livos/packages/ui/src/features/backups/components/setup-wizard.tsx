@@ -52,15 +52,21 @@ import {Input, PasswordInput} from '@/shadcn-components/ui/input'
 // Types & Schema
 // ---------------------------------------------
 
-const encryptionSchema = z
-	.object({
-		password: z.string().min(8, {message: t('backups.password-minimum-length')}),
-		confirm: z.string(),
-	})
-	.refine((d) => d.password === d.confirm, {
-		message: t('backups.passwords-do-not-match'),
-		path: ['confirm'],
-	})
+// Keep the plain ZodObject separate from the refined schema. `.partial()` (used
+// by the relaxed wizard-step schema below) only exists on ZodObject, NOT on the
+// ZodEffects that `.refine()` returns — calling `encryptionSchema.partial()` on
+// the refined value threw `X.partial is not a function` and crashed the whole
+// Set-up wizard ("Something went wrong"). This was latent while the Backups tab
+// was hidden; re-enabling the tab surfaced it.
+const encryptionObjectSchema = z.object({
+	password: z.string().min(8, {message: t('backups.password-minimum-length')}),
+	confirm: z.string(),
+})
+
+const encryptionSchema = encryptionObjectSchema.refine((d) => d.password === d.confirm, {
+	message: t('backups.passwords-do-not-match'),
+	path: ['confirm'],
+})
 
 const destinationSchema = z.discriminatedUnion('type', [
 	z.object({
@@ -86,7 +92,7 @@ type FormValues = z.infer<typeof formSchema>
 const wizardStepSchema = z.object({
 	destination: destinationSchema,
 	folder: z.string().optional(),
-	encryption: encryptionSchema.partial(),
+	encryption: encryptionObjectSchema.partial(),
 })
 
 // ---------------------------------------------
