@@ -636,7 +636,7 @@ function DestinationStep({
 							/>
 						</p>
 						<Button asChild className='mt-4 px-4' variant='primary'>
-							<a href='https://link.livinity.com/private-cloud' target='_blank' rel='noopener noreferrer'>
+							<a href='https://livinity.io' target='_blank' rel='noopener noreferrer'>
 								<TbExternalLink className='size-4' />
 								{t('backups-setup-livinity-private-cloud-cta-link')}
 							</a>
