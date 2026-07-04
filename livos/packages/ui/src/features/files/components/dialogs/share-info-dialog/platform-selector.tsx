@@ -1,9 +1,10 @@
 import {ChevronDown} from 'lucide-react'
+import type {ComponentType} from 'react'
 
 import iOsIcon from '@/features/files/assets/sharing-info-platforms/ios.png'
 import macOsIcon from '@/features/files/assets/sharing-info-platforms/macos.png'
 import windowsIcon from '@/features/files/assets/sharing-info-platforms/windows.png'
-import livinityDeviceIconActive from '@/features/files/assets/livinity-device-icon-active.png'
+import LivinityLogo from '@/assets/livinity-logo'
 import {Button} from '@/shadcn-components/ui/button'
 import {
 	DropdownMenu,
@@ -16,15 +17,24 @@ import {t} from '@/utils/i18n'
 export type Platform = {
 	id: 'macos' | 'ios' | 'windows' | 'livos'
 	name: string
-	icon: string
+	// Genuine OS logos stay raster (string src); the Livinity device uses the brand SVG.
+	icon: string | ComponentType<{className?: string}>
 }
 
 export const platforms: Platform[] = [
 	{id: 'macos', name: 'macOS', icon: macOsIcon},
 	{id: 'windows', name: 'Windows', icon: windowsIcon},
 	{id: 'ios', name: 'iOS', icon: iOsIcon},
-	{id: 'livos', name: 'Another Livinity', icon: livinityDeviceIconActive},
+	{id: 'livos', name: 'Another Livinity', icon: LivinityLogo},
 ]
+
+function PlatformIcon({platform, className}: {platform: Platform; className?: string}) {
+	if (typeof platform.icon === 'string') {
+		return <img src={platform.icon} alt={platform.name} className={className} />
+	}
+	const Icon = platform.icon
+	return <Icon className={className} />
+}
 
 interface PlatformSelectorProps {
 	selectedPlatform: Platform
@@ -38,7 +48,7 @@ export function PlatformSelector({selectedPlatform, onPlatformChange}: PlatformS
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button variant='default' className='flex items-center gap-2'>
-						<img src={selectedPlatform.icon} alt={selectedPlatform.name} className='h-5 w-5' />
+						<PlatformIcon platform={selectedPlatform} className='h-5 w-5' />
 						<span>{selectedPlatform.name}</span>
 						<ChevronDown className='h-3 w-3' />
 					</Button>
@@ -50,7 +60,7 @@ export function PlatformSelector({selectedPlatform, onPlatformChange}: PlatformS
 							className='flex items-center gap-2'
 							onClick={() => onPlatformChange(platform)}
 						>
-							<img src={platform.icon} alt={platform.name} className='h-5 w-5' />
+							<PlatformIcon platform={platform} className='h-5 w-5' />
 							<span>{platform.name}</span>
 						</DropdownMenuItem>
 					))}

@@ -6,14 +6,13 @@ import {useEffect, useMemo, useState} from 'react'
 import {FormProvider, useForm, useFormContext, type Resolver, type SubmitHandler} from 'react-hook-form'
 import {Trans} from 'react-i18next/TransWithoutContext'
 import {FaRegSave} from 'react-icons/fa'
-import {TbExternalLink, TbPassword, TbShoppingBag} from 'react-icons/tb'
+import {TbCloudLock, TbExternalLink, TbPassword, TbShoppingBag} from 'react-icons/tb'
 import {useNavigate} from 'react-router-dom'
 import {useCopyToClipboard} from 'react-use'
 import {z} from 'zod'
 
 import {ErrorAlert, WarningAlert} from '@/components/ui/alert'
 import {ImmersiveDialogSeparator} from '@/components/ui/immersive-dialog'
-import livinityPrivateCloudIcon from '@/features/backups/assets/livinity-private-cloud-icon.png'
 import {BackupDeviceIcon} from '@/features/backups/components/backup-device-icon'
 import {BackupsExclusions} from '@/features/backups/components/backups-exclusions'
 import {AlreadyConfiguredModal} from '@/features/backups/components/modals/already-configured-modal'
@@ -622,11 +621,10 @@ function DestinationStep({
 						<h2 className='mb-0 text-2xl text-text-primary'>{t('backups-setup-livinity-private-cloud')}</h2>
 						<span className='mt-0  text-sm text-text-primary'>{t('backups-setup-livinity-private-cloud-subtitle')}</span>
 					</div>
-					<img
-						src={livinityPrivateCloudIcon}
-						alt={t('backups-setup-livinity-private-cloud')}
-						className='w-24'
-						draggable={false}
+					<TbCloudLock
+						aria-label={t('backups-setup-livinity-private-cloud')}
+						className='size-24 text-brand'
+						strokeWidth={1.5}
 					/>
 					<div className='flex flex-col items-center justify-center gap-2'>
 						<p className='max-w-md text-center text-sm text-text-primary'>
