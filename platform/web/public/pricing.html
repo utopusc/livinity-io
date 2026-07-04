@@ -29,7 +29,7 @@
       body { background: var(--bg); color: var(--fg); font-family: "Geist", -apple-system, sans-serif; }
       body.dark { background: #050507; color: #f5f5f7; }
 
-      .install-shell { max-width: 720px; margin: 0 auto; padding: 32px 28px 80px; }
+      .install-shell { max-width: 940px; margin: 0 auto; padding: 32px 28px 80px; }
       .install-nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; margin-bottom: 12px; }
       .install-nav .brand { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg); text-decoration: none; }
       .install-nav .right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
@@ -56,6 +56,14 @@
       .interval-toggle button.active { background: var(--fg); color: var(--bg); }
       .interval-toggle button .save { font-family: var(--font-mono); font-size: 11px; color: var(--accent-green); margin-left: 6px; }
       .interval-toggle button.active .save { color: inherit; opacity: 0.75; }
+
+      /* Plan cards — Pro + Free side by side */
+      .plans-row { display: flex; gap: 20px; align-items: stretch; max-width: 900px; margin: 0 auto; }
+      .plans-row .plan-card { flex: 1 1 0; max-width: none; margin: 0; display: flex; flex-direction: column; }
+      .plans-row .plan-card .cta-btn, .plans-row .plan-card .fine-print { margin-top: auto; }
+      .plans-row .plan-card .fine-print { margin-top: 16px; }
+      .self-pill { display: inline-block; padding: 4px 11px; border-radius: 999px; background: var(--card-bg-2); border: 1px solid var(--dash-line-strong); color: var(--fg-mute); font-size: 11.5px; font-family: var(--font-mono); letter-spacing: 0.06em; }
+      @media (max-width: 760px) { .plans-row { flex-direction: column; max-width: 480px; } }
 
       /* Plan card */
       .plan-card { max-width: 480px; margin: 0 auto; background: var(--card-bg); border: 1px solid var(--dash-line); border-radius: 22px; padding: 32px; box-shadow: var(--card-shadow); }
@@ -95,6 +103,15 @@
         "Liv AI assistant built in",
         "Custom domains (up to 3)",
         "Remote access from anywhere",
+      ];
+
+      const FREE_FEATURES = [
+        "Apps at app-you.yourdomain.com",
+        "Your own domain + your own Cloudflare",
+        "App Store: self-host 200+ apps with one click",
+        "Liv AI assistant built in",
+        "Runs on your own hardware",
+        "No card, no subscription — ever",
       ];
 
       function App() {
@@ -182,7 +199,7 @@
             <header className="install-hero">
               <span className="step-pill">Pricing</span>
               <h1>Simple <em>pricing.</em></h1>
-              <p>Try Livinity Pro free for 3 days. Cancel anytime during the trial — you won't be charged.</p>
+              <p>Start with the managed cloud, or self-host free with your own domain and Cloudflare.</p>
             </header>
 
             <div className="interval-toggle">
@@ -194,6 +211,7 @@
               </div>
             </div>
 
+            <div className="plans-row">
             <section className="plan-card">
               <div className="plan-head">
                 <span className="name">Livinity Pro</span>
@@ -223,6 +241,33 @@
                 <br />Cancel anytime from your dashboard
               </p>
             </section>
+
+              <section className="plan-card free">
+                <div className="plan-head">
+                  <span className="name">Free</span>
+                  <span className="self-pill">Self-host</span>
+                </div>
+
+                <div className="plan-price">
+                  <span className="amount">$0</span>
+                  <span className="per">/forever</span>
+                </div>
+                <div className="plan-price-note">Bring your own domain + Cloudflare</div>
+
+                <ul className="feat-list">
+                  {FREE_FEATURES.map((f) => (
+                    <li key={f}><span className="tick">✓</span>{f}</li>
+                  ))}
+                </ul>
+
+                <a href="/register?plan=free" className="h-btn cta-btn">Choose Free</a>
+
+                <p className="fine-print">
+                  No card, no subscription · Needs your own domain
+                  <br />and a free Cloudflare account
+                </p>
+              </section>
+            </div>
           </div>
         );
       }
