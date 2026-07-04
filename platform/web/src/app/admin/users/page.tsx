@@ -143,6 +143,7 @@ export default function AdminUsersPage() {
                         <StatusBadge
                           status={u.subscription_status}
                           legacyFree={u.legacy_free}
+                          freeByod={u.free_byod}
                           revoked={u.suspended}
                         />
                         {isComp ? <span className="badge badge-green">Comp</span> : null}

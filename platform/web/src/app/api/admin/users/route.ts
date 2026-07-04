@@ -6,7 +6,7 @@ const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 const UNDEFINED_COLUMN = '42703';
 
-type PlanLabel = 'Legacy' | 'Comp' | 'Pro' | 'Trial' | 'Past due' | 'Canceled' | 'Suspended' | 'None';
+type PlanLabel = 'Legacy' | 'Free' | 'Comp' | 'Pro' | 'Trial' | 'Past due' | 'Canceled' | 'Suspended' | 'None';
 
 interface UserListRow {
   id: string;
@@ -18,6 +18,7 @@ interface UserListRow {
   last_seen_at: string | null;
   subscription_status: string | null;
   legacy_free: boolean | null;
+  free_byod: boolean | null;
   suspended_at: string | null;
   comp_until: string | null;
 }
@@ -29,6 +30,7 @@ interface UserListRow {
 function computePlanLabel(row: {
   suspended_at: string | null;
   legacy_free: boolean | null;
+  free_byod: boolean | null;
   subscription_status: string | null;
   comp_until: string | null;
 }): PlanLabel {
@@ -37,6 +39,9 @@ function computePlanLabel(row: {
   // above Legacy/Trial/Pro. Absent column → comp_until null → skipped.
   if (row.comp_until && new Date(row.comp_until).getTime() > Date.now()) return 'Comp';
   if (row.legacy_free) return 'Legacy';
+  // Free BYO-domain tier — user chose Free (no Stripe sub). Above the stripe
+  // switch (a free_byod account has null subscription_status → would show None).
+  if (row.free_byod) return 'Free';
   switch (row.subscription_status) {
     case 'active': return 'Pro';
     case 'trialing': return 'Trial';
@@ -71,7 +76,7 @@ export async function GET(req: NextRequest) {
   async function runList(includeComp: boolean) {
     const compCol = includeComp ? 'comp_until' : 'NULL::timestamptz AS comp_until';
     const baseSelect = `SELECT id, username, email, is_admin, email_verified, created_at,
-                               last_seen_at, subscription_status, legacy_free, suspended_at, ${compCol}
+                               last_seen_at, subscription_status, legacy_free, free_byod, suspended_at, ${compCol}
                           FROM users ${whereSql}
                           ORDER BY created_at DESC
                           LIMIT $${hasQuery ? 2 : 1} OFFSET $${hasQuery ? 3 : 2}`;

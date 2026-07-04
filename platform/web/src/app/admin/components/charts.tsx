@@ -300,10 +300,11 @@ export function StatusBar({ segments }: StatusBarProps) {
 export type StatusBadgeProps = {
   status: string | null;
   legacyFree?: boolean;
+  freeByod?: boolean;
   revoked?: boolean;
 };
 
-export function StatusBadge({ status, legacyFree, revoked }: StatusBadgeProps) {
+export function StatusBadge({ status, legacyFree, freeByod, revoked }: StatusBadgeProps) {
   if (revoked) return <span className="badge badge-red">Revoked</span>;
   switch (status) {
     case 'active':
@@ -316,6 +317,8 @@ export function StatusBadge({ status, legacyFree, revoked }: StatusBadgeProps) {
       return <span className="badge badge-mute">Canceled</span>;
     default:
       if (legacyFree) return <span className="badge badge-blue">Legacy</span>;
+      // Free BYO-domain tier — the user chose Free (vs picking nothing = None).
+      if (freeByod) return <span className="badge badge-green">Free</span>;
       return <span className="badge badge-mute">None</span>;
   }
 }

@@ -318,6 +318,7 @@ export type AdminUserRow = {
   // AUM additions (list view surfaces billing state inline)
   subscription_status: string | null;
   legacy_free: boolean;
+  free_byod: boolean;
   suspended: boolean;
   plan_label: string;
 };
