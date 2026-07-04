@@ -272,7 +272,25 @@ const Paths = () => (
       <p className="lede" style={{marginTop: 16, maxWidth: "56ch"}}>
         Your own Cloud AI Computer with your subdomain, a secure tunnel, 200+ apps, and Liv built in. Try it free for three days.
       </p>
-      <div className="paths one">
+      <div className="paths two">
+        <div className="path-card">
+          <span className="ribbon">Free</span>
+          <h4>Free — self-host</h4>
+          <div className="price">$0<em> /forever</em></div>
+          <p className="dim" style={{fontSize: 15}}>Bring your own domain + Cloudflare. No card, no subscription — ever.</p>
+          <ul>
+            <li>Apps at <em>app-you</em>.yourdomain.com</li>
+            <li>Your own domain + your own Cloudflare</li>
+            <li>App Store: 200+ apps, one-click install</li>
+            <li>Liv AI assistant built in, bring your own keys</li>
+            <li>Runs on your own hardware</li>
+            <li>No card, no subscription — ever</li>
+          </ul>
+          <a className="btn btn-ghost cta" href="/register?plan=free&mode=signup">Choose Free <Icon name="arrow-right" size={14}/></a>
+          <p className="dim" style={{fontSize: 13, marginTop: 16, textAlign: "center"}}>
+            Needs your own domain and a free Cloudflare account.
+          </p>
+        </div>
         <div className="path-card feat">
           <span className="ribbon">Livinity Pro</span>
           <h4>Livinity Pro</h4>

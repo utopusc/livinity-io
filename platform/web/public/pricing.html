@@ -212,6 +212,32 @@
             </div>
 
             <div className="plans-row">
+              <section className="plan-card free">
+                <div className="plan-head">
+                  <span className="name">Free</span>
+                  <span className="self-pill">Self-host</span>
+                </div>
+
+                <div className="plan-price">
+                  <span className="amount">$0</span>
+                  <span className="per">/forever</span>
+                </div>
+                <div className="plan-price-note">Bring your own domain + Cloudflare</div>
+
+                <ul className="feat-list">
+                  {FREE_FEATURES.map((f) => (
+                    <li key={f}><span className="tick">✓</span>{f}</li>
+                  ))}
+                </ul>
+
+                <a href="/register?plan=free&mode=signup" className="h-btn cta-btn">Choose Free</a>
+
+                <p className="fine-print">
+                  No card, no subscription · Needs your own domain
+                  <br />and a free Cloudflare account
+                </p>
+              </section>
+
             <section className="plan-card">
               <div className="plan-head">
                 <span className="name">Livinity Pro</span>
@@ -241,32 +267,6 @@
                 <br />Cancel anytime from your dashboard
               </p>
             </section>
-
-              <section className="plan-card free">
-                <div className="plan-head">
-                  <span className="name">Free</span>
-                  <span className="self-pill">Self-host</span>
-                </div>
-
-                <div className="plan-price">
-                  <span className="amount">$0</span>
-                  <span className="per">/forever</span>
-                </div>
-                <div className="plan-price-note">Bring your own domain + Cloudflare</div>
-
-                <ul className="feat-list">
-                  {FREE_FEATURES.map((f) => (
-                    <li key={f}><span className="tick">✓</span>{f}</li>
-                  ))}
-                </ul>
-
-                <a href="/register?plan=free" className="h-btn cta-btn">Choose Free</a>
-
-                <p className="fine-print">
-                  No card, no subscription · Needs your own domain
-                  <br />and a free Cloudflare account
-                </p>
-              </section>
             </div>
           </div>
         );

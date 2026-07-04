@@ -14,11 +14,25 @@ export async function GET(req: NextRequest) {
   }
 
   // Phase 213: enrich with is_admin so client-side admin gates can route on it.
-  const adminResult = await pool.query<{ is_admin: boolean }>(
-    'SELECT is_admin FROM users WHERE id = $1 LIMIT 1',
-    [user.userId],
-  );
-  const is_admin = adminResult.rows[0]?.is_admin === true;
+  // Also surface free_byod so the post-signup flow can route a free-tier user
+  // to their setup screen (/dashboard/install) instead of /pricing.
+  let is_admin = false;
+  let free_byod = false;
+  try {
+    const r = await pool.query<{ is_admin: boolean; free_byod: boolean }>(
+      'SELECT is_admin, free_byod FROM users WHERE id = $1 LIMIT 1',
+      [user.userId],
+    );
+    is_admin = r.rows[0]?.is_admin === true;
+    free_byod = r.rows[0]?.free_byod === true;
+  } catch {
+    // free_byod column may be absent on an un-migrated DB — never break /me.
+    const r = await pool.query<{ is_admin: boolean }>(
+      'SELECT is_admin FROM users WHERE id = $1 LIMIT 1',
+      [user.userId],
+    );
+    is_admin = r.rows[0]?.is_admin === true;
+  }
 
-  return NextResponse.json({ user: { ...user, is_admin } });
+  return NextResponse.json({ user: { ...user, is_admin, free_byod } });
 }

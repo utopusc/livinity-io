@@ -1104,6 +1104,25 @@
           catch (e) { return false; }
         });
 
+        // Already signed in? Don't show the auth form — send them to the
+        // dashboard (e.g. a logged-in user clicking "Choose Free" on /pricing).
+        // Free-vs-paid setup lives on the dashboard; here we just get them off
+        // the auth page instead of stranding them on a sign-up form.
+        useEffect(() => {
+          let cancelled = false;
+          (async () => {
+            try {
+              const me = await fetch("/api/auth/me", { credentials: "same-origin" });
+              if (!me.ok || cancelled) return;
+              const data = await me.json();
+              if (data && data.user) {
+                window.location.replace(data.user.username ? "/dashboard" : "/username");
+              }
+            } catch (e) {}
+          })();
+          return () => { cancelled = true; };
+        }, []);
+
         useEffect(() => {
           if (typeof window === "undefined") return;
           const newUrl = mode === "signup" ? "/register" : "/login";

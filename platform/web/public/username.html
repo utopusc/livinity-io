@@ -89,6 +89,10 @@
         const [error, setError] = useState(null);
         const debounceRef = useRef(null);
         const seqRef = useRef(0);
+        // Free-tier (free_byod) users skip /pricing and go straight to their
+        // setup screen (/dashboard/install); paid-intent users go to /pricing.
+        const freeByodRef = useRef(false);
+        const afterUsername = () => (freeByodRef.current ? "/dashboard/install" : "/pricing");
 
         useEffect(() => {
           try {
@@ -105,7 +109,8 @@
               if (!res.ok) { window.location.href = "/login"; return; }
               const data = await res.json();
               if (!data.user) { window.location.href = "/login"; return; }
-              if (data.user.username) { window.location.replace("/pricing"); return; }
+              freeByodRef.current = data.user.free_byod === true;
+              if (data.user.username) { window.location.replace(afterUsername()); return; }
               setPhase("ready");
             } catch (e) {
               window.location.href = "/login";
@@ -153,10 +158,10 @@
             });
             const data = await res.json().catch(() => ({}));
             if (res.ok && data.ok) {
-              window.location.href = "/pricing";
+              window.location.href = afterUsername();
               return;
             }
-            if (data.code === "already_set") { window.location.href = "/pricing"; return; }
+            if (data.code === "already_set") { window.location.href = afterUsername(); return; }
             setError(data.error || "Couldn't claim that username. Try another.");
             setSubmitting(false);
           } catch (err) {
