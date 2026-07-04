@@ -67,6 +67,28 @@ export async function ensureProvisionedByCustomerId(customerId: string): Promise
     }
     username = user.username;
 
+    // Belt-and-suspenders (invariant: NEVER provision platform-managed DNS for a
+    // free BYOD account — they run their own Cloudflare). A free_byod account has
+    // no stripe_customer_id, so it never even matches the SELECT above; this guard
+    // only fires if one somehow acquired a customer id. DEFENSIVE: a missing
+    // free_byod column (pre-migration) or any query error is treated as false, so
+    // a PAID user is NEVER skipped — the paid provisioning path stays unchanged.
+    let isFreeByod = false;
+    try {
+      const fb = await client.query<{ free_byod: boolean | null }>(
+        'SELECT free_byod FROM users WHERE id = $1',
+        [user.id],
+      );
+      isFreeByod = !!fb.rows[0]?.free_byod;
+    } catch {
+      isFreeByod = false;
+    }
+    if (isFreeByod) {
+      await client.query('COMMIT');
+      console.info(`[provision] skipping platform CF provision for free_byod user ${user.username} (BYO Cloudflare)`);
+      return;
+    }
+
     // External CF calls happen while the row lock is held so a concurrent
     // provisioner blocks until we commit/rollback (bounded by CF request
     // timeouts) — guarantees exactly one tunnel per user.

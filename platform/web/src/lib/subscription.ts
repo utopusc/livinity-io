@@ -33,6 +33,10 @@ interface UserBillingRow {
   legacy_free: boolean | null;
   suspended_at?: Date | null;
   comp_until?: Date | null;
+  // Free BYOD tier (own domain + own Cloudflare). Undefined when the column
+  // doesn't exist yet (42703 fallback path) → treated as false (no free access
+  // until the migration lands — the safe direction).
+  free_byod?: boolean | null;
 }
 
 export async function getSubscriptionStatus(userId: string): Promise<SubscriptionStatus> {
@@ -46,12 +50,16 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
   let res;
   try {
     res = await pool.query<UserBillingRow>(
-      `SELECT subscription_status, current_period_end, cancel_at_period_end, past_due_since, legacy_free, suspended_at, comp_until
+      `SELECT subscription_status, current_period_end, cancel_at_period_end, past_due_since, legacy_free, suspended_at, comp_until, free_byod
          FROM users WHERE id = $1`,
       [userId],
     );
   } catch (err) {
     if ((err as { code?: string })?.code === '42703') {
+      // One of the optional columns (comp_until / free_byod) doesn't exist yet
+      // — the operator may run those ALTERs after this deploys. Retry with ONLY
+      // the guaranteed columns; the absent ones are treated as null/false (no
+      // comp grant, no free_byod → the safe direction, never a false grant).
       res = await pool.query<UserBillingRow>(
         `SELECT subscription_status, current_period_end, cancel_at_period_end, past_due_since, legacy_free, suspended_at
            FROM users WHERE id = $1`,
@@ -62,15 +70,23 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
     }
   }
 
-  if (res.rows.length === 0) {
+  return decideSubscriptionAccess(res.rows[0], new Date());
+}
+
+/**
+ * Pure decision core of getSubscriptionStatus — extracted so the access rules
+ * (suspended > legacy_free > free_byod > comp > stripe state) are unit-testable
+ * without a DB. Behavior-preserving: getSubscriptionStatus does the query and
+ * delegates here. `row` is undefined when the user isn't found.
+ */
+export function decideSubscriptionAccess(row: UserBillingRow | undefined, now: Date): SubscriptionStatus {
+  if (!row) {
     return {
       active: false, plan: 'inactive', stripeStatus: null, currentPeriodEnd: null,
       cancelAtPeriodEnd: false, legacyFree: false, reason: 'user_not_found',
     };
   }
 
-  const row = res.rows[0];
-  const now = new Date();
   const status = row.subscription_status;
   const currentPeriodEnd = row.current_period_end;
   const cancelAtPeriodEnd = !!row.cancel_at_period_end;
@@ -95,6 +111,16 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
   // Grandfathered legacy accounts always have access.
   if (legacyFree) {
     return { active: true, plan: 'free', stripeStatus: status, currentPeriodEnd, cancelAtPeriodEnd, legacyFree: true };
+  }
+
+  // Free BYOD tier — own domain + own Cloudflare. Entitled to key issuance +
+  // market/catalog (active=true, plan='free') but NOT platform-managed DNS: the
+  // box provisions its own subdomains, and this account never has a Stripe
+  // customer id so ensureProvisionedByCustomerId is never triggered for it. Below
+  // the suspended check (a suspended free_byod user stays blocked). free_byod is
+  // undefined when the column doesn't exist yet → falsy → this branch skipped.
+  if (row.free_byod) {
+    return { active: true, plan: 'free', stripeStatus: status, currentPeriodEnd, cancelAtPeriodEnd, legacyFree: false };
   }
 
   // Time-boxed admin comp grant: while comp_until is in the future the user has
