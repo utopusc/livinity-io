@@ -516,6 +516,7 @@
           }
           case "active":   return { label: "Active", cls: "ok" };
           case "past_due": return { label: "Past due", cls: "warn" };
+          case "free":     return { label: "Free", cls: "ok" };
           default:         return { label: "No subscription", cls: "warn" };
         }
       }
@@ -811,7 +812,7 @@
                           <div className="p-row">
                             <span className="lbl">Plan</span>
                             <span className="val">
-                              {b && b.legacyFree ? "Legacy (free)" : "Livinity Pro"}
+                              {b && b.legacyFree ? "Legacy (free)" : (b && b.plan === "free") ? "Free" : "Livinity Pro"}
                               <span className={"pill " + (badge.cls || "ok")}>{badge.label}</span>
                             </span>
                             <span/>
@@ -846,17 +847,21 @@
                             <span className="val">
                               {b && b.legacyFree
                                 ? <span className="sub">You're on a grandfathered free plan — nothing to manage.</span>
-                                : hasSub
-                                  ? <span className="sub">Update card, view & download invoices, or cancel anytime.</span>
-                                  : <span className="sub">Start your 3-day free trial to activate your server.</span>}
+                                : (b && b.plan === "free")
+                                  ? <span className="sub">You're on the free plan — you bring your own domain + Cloudflare. Upgrade to Pro anytime for a managed livinity.io subdomain.</span>
+                                  : hasSub
+                                    ? <span className="sub">Update card, view & download invoices, or cancel anytime.</span>
+                                    : <span className="sub">Start your 3-day free trial to activate your server.</span>}
                             </span>
                             {b && b.legacyFree
                               ? <span/>
-                              : hasSub
-                                ? <button className="p-btn solid" onClick={openPortal} disabled={portalLoading}>
-                                    {portalLoading ? "Opening…" : "Manage billing"}
-                                  </button>
-                                : <a className="p-btn solid" href="/pricing">Start free trial</a>}
+                              : (b && b.plan === "free")
+                                ? <a className="p-btn solid" href="/pricing">Upgrade to Pro</a>
+                                : hasSub
+                                  ? <button className="p-btn solid" onClick={openPortal} disabled={portalLoading}>
+                                      {portalLoading ? "Opening…" : "Manage billing"}
+                                    </button>
+                                  : <a className="p-btn solid" href="/pricing">Start free trial</a>}
                           </div>
                         </div>
                       );

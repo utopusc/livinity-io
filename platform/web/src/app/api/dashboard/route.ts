@@ -238,16 +238,27 @@ export async function POST(req: NextRequest) {
       [user.userId, keyHash, prefix],
     );
 
+    // free_byod = a free account that brings its OWN domain + Cloudflare. The
+    // user's CF tokens must go straight onto their box in the install command and
+    // must NEVER touch this server, so we do NOT assemble the command here — we
+    // just flag `byod` so dashboard-install.html renders the client-side builder.
+    // (A grandfathered legacy_free account is plan:'free' too but legacyFree:true;
+    // it keeps the managed .livinity.io one-liner below.)
+    const byod = access.plan === 'free' && !access.legacyFree;
+
     return NextResponse.json({
       success: true,
       apiKey: rawKey, // Displayed ONCE, never again
       prefix,
       username: user.username,
+      plan: access.plan,
+      byod,
       // Plan 145-02: shortest aesthetic form. install.sh's parse-cli accepts
       // a bare `liv_k_*` positional and auto-resolves subdomain from /api/me/profile
       // (Phase 145-01). -fsSL is the conventional curl flag set: -f fail on HTTP
       // error (don't pipe a 4xx body to bash), -s silent, -S still show errors, -L
-      // follow redirects.
+      // follow redirects. (For byod the client rebuilds the command from apiKey +
+      // the user's own domain/CF tokens; this Pro one-liner is ignored there.)
       installCommand: `curl -fsSL https://livinity.io/install.sh | sudo bash -s ${rawKey}`,
     });
   }

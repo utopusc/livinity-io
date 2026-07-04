@@ -73,6 +73,14 @@
 
       .warn-card { background: rgba(217,119,6,0.06); border: 1px solid rgba(217,119,6,0.25); border-radius: 12px; padding: 12px 14px; font-size: 12.5px; color: var(--accent-amber); margin-bottom: 14px; line-height: 1.5; }
 
+      /* Free (BYO domain + Cloudflare) input fields */
+      .byod-field { margin-bottom: 14px; }
+      .byod-field label { display: block; font-size: 12px; font-family: var(--font-mono); color: var(--fg-mute); margin-bottom: 6px; }
+      .byod-field label .hint { color: var(--fg-faint); text-transform: none; }
+      .byod-field input { width: 100%; box-sizing: border-box; background: var(--card-bg-2); border: 1px solid var(--dash-line); border-radius: 10px; padding: 11px 13px; font-family: var(--font-mono); font-size: 12.5px; color: var(--fg); transition: border-color 0.15s ease; }
+      .byod-field input:focus { outline: none; border-color: var(--dash-line-strong); }
+      .byod-field input::placeholder { color: var(--fg-faint); }
+
       .nav-row { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; padding: 0 4px; }
       .nav-row .right { display: flex; gap: 10px; }
 
@@ -103,6 +111,14 @@
         const [authLoading, setAuthLoading] = useState(true);
         const [gen, setGen] = useState({ status: "idle" });
 
+        // Free (BYO domain + Cloudflare) tier: the user supplies their own domain
+        // + CF tokens here, and the install command is assembled in the browser —
+        // the CF tokens NEVER get POSTed to livinity.io.
+        const [byod, setByod] = useState(false);
+        const [byodDomain, setByodDomain] = useState("");
+        const [cfApiToken, setCfApiToken] = useState("");
+        const [cfTunnelToken, setCfTunnelToken] = useState("");
+
         // Bootstrap auth + immediately mint API key in one mount-time flow.
         useEffect(() => {
           (async () => {
@@ -126,6 +142,11 @@
               // install command the user already pasted onto their Mini PC.
               const dashRes = await fetch("/api/dashboard", { credentials: "same-origin" });
               let dashData = await dashRes.json().catch(() => ({}));
+
+              // Free BYO-domain account? (plan 'free' AND not a grandfathered
+              // legacy_free — the latter keeps the managed .livinity.io flow.)
+              const isByod = !!(dashData && dashData.billing && dashData.billing.plan === "free" && !dashData.billing.legacyFree);
+              setByod(isByod);
 
               // Billing gate: minting requires an active trial/subscription.
               // Fresh from Stripe Checkout (?checkout=success) the webhook can
@@ -225,6 +246,16 @@
 
         const username = gen.username || user.username;
 
+        // BYOD command is assembled entirely client-side from the minted key +
+        // the user's own domain/CF tokens (typed below) — nothing here is POSTed.
+        const byodCmd =
+          "curl -fsSL https://livinity.io/install.sh | sudo bash -s -- \\\n" +
+          "  --api-key " + (gen.apiKey || "liv_k_YOURKEY") + " \\\n" +
+          "  --domain " + (byodDomain.trim() || "<your-domain>") + " \\\n" +
+          "  --cf-token " + (cfApiToken.trim() || "<your-cloudflare-api-token>") + " \\\n" +
+          "  --cf-tunnel-token " + (cfTunnelToken.trim() || "<your-cloudflare-tunnel-token>");
+        const byodReady = !!(byodDomain.trim() && cfApiToken.trim() && cfTunnelToken.trim());
+
         return (
           <div className="install-shell">
             <nav className="install-nav">
@@ -239,7 +270,7 @@
             <header className="install-hero">
               <span className="step-pill">Install</span>
               <h1>Set up <em>your first LivOS.</em></h1>
-              <p>Here's your one-line install command. Paste it on the machine you want to host your server.</p>
+              <p>{byod ? "Add your domain and Cloudflare details below, then paste the command on the machine you want to host your server." : "Here's your one-line install command. Paste it on the machine you want to host your server."}</p>
             </header>
 
             {!user.emailVerified && (
@@ -283,15 +314,61 @@
                     ⚠ If you still have the install command saved, just paste it on your server — it stays valid. If you lost it, click <strong>Regenerate</strong> to mint a fresh command (the old key will be invalidated, so any machine using it will disconnect).
                   </div>
 
-                  <div className="url-preview" style={{ marginBottom: 14 }}>
-                    Your URL: <code>{"https://" + (gen.username || user.username) + ".livinity.io"}</code>
-                  </div>
+                  {byod ? (
+                    <div className="url-preview" style={{ marginBottom: 14 }}>
+                      Runs on <code>your own domain</code> — click Regenerate to rebuild the command with your Cloudflare details.
+                    </div>
+                  ) : (
+                    <div className="url-preview" style={{ marginBottom: 14 }}>
+                      Your URL: <code>{"https://" + (gen.username || user.username) + ".livinity.io"}</code>
+                    </div>
+                  )}
 
                   <button className="h-btn solid" onClick={handleRegenerate}>Regenerate install command</button>
                 </div>
               )}
 
-              {gen.status === "ready" && gen.installCommand && (
+              {gen.status === "ready" && byod && (
+                <div>
+                  <h2>Your install command</h2>
+                  <p className="sub">Enter your own domain and Cloudflare details — the command builds below. Your Cloudflare tokens stay in this browser and are never sent to Livinity.</p>
+
+                  <div className="warn-card">
+                    ⚠ Your API key is shown only once. If you lose it, click <strong>Regenerate</strong> below to mint a new one (the old key will be invalidated).
+                  </div>
+
+                  <div className="byod-field">
+                    <label>Your domain <span className="hint">— e.g. you.yourdomain.com</span></label>
+                    <input type="text" value={byodDomain} onChange={(e) => setByodDomain(e.target.value)} placeholder="you.yourdomain.com" autoComplete="off" spellCheck={false} />
+                  </div>
+                  <div className="byod-field">
+                    <label>Cloudflare API token <span className="hint">— scoped Zone:DNS:Edit</span></label>
+                    <input type="password" value={cfApiToken} onChange={(e) => setCfApiToken(e.target.value)} placeholder="your Cloudflare API token" autoComplete="off" spellCheck={false} />
+                  </div>
+                  <div className="byod-field">
+                    <label>Cloudflare Tunnel token <span className="hint">— from Zero Trust › Tunnels</span></label>
+                    <input type="password" value={cfTunnelToken} onChange={(e) => setCfTunnelToken(e.target.value)} placeholder="your Cloudflare Tunnel connector token" autoComplete="off" spellCheck={false} />
+                  </div>
+
+                  <div className="cmd-box" style={{ marginBottom: 10, whiteSpace: "pre-wrap" }}>
+                    <button className="copy h-btn solid" onClick={() => copyText(byodCmd)} disabled={!byodReady}>{byodReady ? "Copy" : "Fill in"}</button>
+                    <code>{byodCmd}</code>
+                  </div>
+                  {!byodReady && (
+                    <p className="availability" style={{ marginBottom: 18 }}>Fill in all three fields above to complete the command.</p>
+                  )}
+
+                  <h2 style={{ marginBottom: 12 }}>Set up Cloudflare (one time)</h2>
+                  <ol className="next-list">
+                    <li><span className="n">1</span><span>In Cloudflare, add your domain as a zone (Websites → Add a site) and point its nameservers to Cloudflare.</span></li>
+                    <li><span className="n">2</span><span>Open <strong>Zero Trust → Networks → Tunnels</strong>, create a tunnel, and copy its <strong>connector token</strong> → paste it as the <em>Tunnel token</em> above.</span></li>
+                    <li><span className="n">3</span><span>Create an <strong>API token</strong> (My Profile → API Tokens) scoped <strong>Zone:DNS:Edit</strong> for your zone → paste it as the <em>API token</em> above.</span></li>
+                    <li><span className="n">4</span><span>Paste the command on a fresh Ubuntu 24.04 / Debian 12 server. Apps install at <code style={{ fontFamily: "var(--font-mono)" }}>app-you.yourdomain.com</code>.</span></li>
+                  </ol>
+                </div>
+              )}
+
+              {gen.status === "ready" && !byod && gen.installCommand && (
                 <div>
                   <h2>Run install command</h2>
                   <p className="sub">Paste this on a fresh Ubuntu 24.04 / Debian 12 server. Install provisions Docker, Caddy, PostgreSQL, Redis, and livinityd in one shot (~5–8 min).</p>

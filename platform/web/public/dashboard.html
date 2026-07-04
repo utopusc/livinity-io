@@ -777,6 +777,7 @@
             case "trialing": { const d = billDaysLeft(billing.currentPeriodEnd); return { label: d != null ? ("Trial · " + d + "d left") : "Trial", tone: BADGE_TONE.green }; }
             case "active":   return { label: "Active", tone: BADGE_TONE.green };
             case "past_due": return { label: "Past due", tone: BADGE_TONE.red };
+            case "free":     return { label: "Free", tone: BADGE_TONE.green };
             default:         return { label: "No subscription", tone: BADGE_TONE.amber };
           }
         })();
