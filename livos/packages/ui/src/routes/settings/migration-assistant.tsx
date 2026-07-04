@@ -1,5 +1,6 @@
 import {useEffect, useState} from 'react'
 import {RiAlertFill} from 'react-icons/ri'
+import {useNavigate} from 'react-router-dom'
 import {TbAlertTriangleFilled, TbArrowBadgeRight, TbLock, TbPower, TbUsb} from 'react-icons/tb'
 
 import {ErrorAlert} from '@/components/ui/alert'
@@ -16,6 +17,7 @@ import {useSettingsDialogProps} from '@/routes/settings/_components/shared'
 import {
 	AlertDialog,
 	AlertDialogAction,
+	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -30,6 +32,7 @@ const title = t('migration-assistant')
 
 export default function MigrationAssistantDialog() {
 	const dialogProps = useSettingsDialogProps()
+	const navigate = useNavigate()
 
 	// NOTE: tRPC endpoint name kept as-is (backend API)
 	const isLivinityHomeQ = trpcReact.migration.isLivinityHome.useQuery()
@@ -39,6 +42,12 @@ export default function MigrationAssistantDialog() {
 	if (isLivinityHomeQ.isLoading) return null
 
 	if (!isLivinityHome) {
+		// De-Umbrel P2 (2026-07-03): the device-to-device Migration Assistant is a
+		// Livinity Home (dedicated hardware) feature. On a self-hosted box it used
+		// to dead-end at an "unsupported device" alert. But Backups → Restore
+		// already IS the move-to-a-new-box path here (restore from another
+		// Livinity / NAS / external drive), so point the user there instead of a
+		// dead end. Home-device behavior below is unchanged.
 		return (
 			<AlertDialog {...dialogProps}>
 				<AlertDialogContent>
@@ -49,10 +58,21 @@ export default function MigrationAssistantDialog() {
 						<MigrateImage />
 					</div>
 					<AlertDialogDescription className='text-center'>
-						{t('migration-assistant-unsupported-device-description')}
+						{t('migration-assistant.self-host-description', {
+							defaultValue:
+								'The device-to-device Migration Assistant is for Livinity Home hardware. On this server, a backup is your migration: set one up, then Restore it on a new box from another Livinity, a NAS, or an external drive — everything, including Liv’s memory, comes back.',
+						})}
 					</AlertDialogDescription>
 					<AlertDialogFooter>
-						<AlertDialogAction onClick={() => dialogProps.onOpenChange(false)}>{t('ok')}</AlertDialogAction>
+						<AlertDialogAction
+							onClick={() => {
+								dialogProps.onOpenChange(false)
+								navigate('/settings/backups')
+							}}
+						>
+							{t('migration-assistant.open-backups', {defaultValue: 'Open Backups & Restore'})}
+						</AlertDialogAction>
+						<AlertDialogCancel onClick={() => dialogProps.onOpenChange(false)}>{t('cancel')}</AlertDialogCancel>
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
