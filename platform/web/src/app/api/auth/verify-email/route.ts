@@ -49,17 +49,30 @@ export async function POST(req: NextRequest) {
     // ── Primary path: pending registration → create the user. ────────────────
     // Phase 274: pending rows no longer carry a username — the user is created
     // username-less and picks one in /username after this step.
-    const pending = await pool.query<{
-      id: string;
-      email: string;
-      password_hash: string;
-    }>(
-      `SELECT id, email, password_hash
-         FROM pending_registrations
-        WHERE verification_token = $1 AND verification_expires > NOW()
-        LIMIT 1`,
-      [token],
-    );
+    // Read the pending row + the free-BYOD intent (migration 0027). If that
+    // column isn't migrated yet (42703), fall back to the pre-feature SELECT and
+    // treat the signup as a normal (free_byod=false) account — the safe direction.
+    let pending: {
+      rows: Array<{ id: string; email: string; password_hash: string; free_byod?: boolean }>;
+    };
+    try {
+      pending = await pool.query(
+        `SELECT id, email, password_hash, free_byod
+           FROM pending_registrations
+          WHERE verification_token = $1 AND verification_expires > NOW()
+          LIMIT 1`,
+        [token],
+      );
+    } catch (err) {
+      if ((err as { code?: string })?.code !== '42703') throw err;
+      pending = await pool.query(
+        `SELECT id, email, password_hash
+           FROM pending_registrations
+          WHERE verification_token = $1 AND verification_expires > NOW()
+          LIMIT 1`,
+        [token],
+      );
+    }
 
     if (pending.rows.length > 0) {
       const p = pending.rows[0];
@@ -96,6 +109,9 @@ export async function POST(req: NextRequest) {
             email: normalizedEmail,
             passwordHash: p.password_hash,
             emailVerified: true,
+            // Carry the free-BYOD tier choice from the pending row (defaults to
+            // false when the column is absent or the signup was normal/paid).
+            freeByod: p.free_byod === true,
           },
           client,
         );

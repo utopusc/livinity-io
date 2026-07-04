@@ -33,6 +33,13 @@ export interface CreateUserParams {
   passwordHash: string | null;
   /** TRUE for both flows (email-verified link / provider-verified OAuth). */
   emailVerified: boolean;
+  /**
+   * TRUE only for the free bring-your-own-domain tier (signup via
+   * /register?plan=free). Defaults to FALSE, so every normal (paid/OAuth) signup
+   * lands free_byod=false — identical to the pre-feature behavior. The column
+   * exists as of migration 0026; this INSERT assumes it is applied.
+   */
+  freeByod?: boolean;
 }
 
 /**
@@ -45,10 +52,10 @@ export async function createUser(
   executor: Pool | PoolClient = pool,
 ): Promise<string> {
   const result = await executor.query<{ id: string }>(
-    `INSERT INTO users (username, email, password_hash, email_verified)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO users (username, email, password_hash, email_verified, free_byod)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING id`,
-    [params.username, params.email, params.passwordHash, params.emailVerified],
+    [params.username, params.email, params.passwordHash, params.emailVerified, params.freeByod ?? false],
   );
   return result.rows[0].id;
 }

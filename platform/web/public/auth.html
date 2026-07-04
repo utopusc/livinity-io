@@ -838,7 +838,7 @@
       };
 
       /* Classic form (split + centered variants share this) */
-      const ClassicForm = ({ mode, setMode }) => {
+      const ClassicForm = ({ mode, setMode, freePlan }) => {
         const [email, setEmail] = useState("");
         const [pw, setPw] = useState("");
         // Phase 274: signup no longer asks for a username (picked later in
@@ -869,6 +869,9 @@
           try {
             const url = mode === "signup" ? "/api/auth/register" : "/api/auth/login";
             const body = { email, password: pw };
+            // Free BYO-domain tier: forward the intent so the account lands
+            // free_byod=true. Only sent on signup + when arriving via ?plan=free.
+            if (mode === "signup" && freePlan) body.plan = "free";
             const res = await fetch(url, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -917,6 +920,13 @@
             </p>
 
             <ModeTabs mode={mode} setMode={setMode}/>
+
+            {mode === "signup" && freePlan && (
+              <div style={{ display: "flex", alignItems: "center", gap: 9, margin: "2px 0 16px", padding: "10px 13px", borderRadius: 11, background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.22)", fontSize: 13, lineHeight: 1.4, color: "var(--fg)", fontWeight: 500 }}>
+                <span style={{ width: 7, height: 7, borderRadius: 999, background: "#16a34a", flexShrink: 0 }}/>
+                Free plan — you'll bring your own domain + Cloudflare
+              </div>
+            )}
 
             <div className="field-group">
               <Field label="Email" type="email" placeholder="you@livinity.io" value={email} onChange={setEmail}/>
@@ -1086,6 +1096,14 @@
 
         const [mode, setMode] = useState(() => getInitialMode(t.mode || "signin"));
 
+        // /register?plan=free (the "Choose Free" card on /pricing) opts this signup
+        // into the free BYO-domain tier. Capture it ONCE at mount — the mode effect
+        // below replaceState()s the URL to /register and drops the query string.
+        const [freePlan] = useState(() => {
+          try { return new URL(window.location.href).searchParams.get("plan") === "free"; }
+          catch (e) { return false; }
+        });
+
         useEffect(() => {
           if (typeof window === "undefined") return;
           const newUrl = mode === "signup" ? "/register" : "/login";
@@ -1139,7 +1157,7 @@
               <main className="auth-form-side">
                 <div className="form-stage">
                   <div className="mini-mark"/>
-                  <ClassicForm mode={mode} setMode={setMode}/>
+                  <ClassicForm mode={mode} setMode={setMode} freePlan={freePlan}/>
                 </div>
 
                 <div className="form-bottom">
