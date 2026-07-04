@@ -7,7 +7,9 @@
 // 104-09 invariants we read:
 //   - Redis key `livos:account:api_key_path` → absolute path to the secret file
 //   - File is mode 0600, owned by root, inside /etc/livos/secrets/api-key
-//   - Content is a single line: `liv_k_<base64url ~24 chars>`
+//   - Content is a single line: `liv_k_<nanoid(20)>` (minted at
+//     platform/web api/dashboard/route.ts as `liv_k_${nanoid(20)}` — NOT
+//     base64url / crypto.randomBytes; the 14-char prefix is stored in plaintext)
 //
 // SECURITY: this module NEVER returns the raw key on its happy-path API
 // boundary outside the heartbeat sender's HTTP-header injection. The

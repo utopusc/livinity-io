@@ -1486,14 +1486,17 @@ export default class Apps {
 	}
 
 	// ─── Phase 140 plan 140-08 — CF-for-SaaS subdomain provisioning ──
-	// Calls Server5's POST/DELETE /api/me/app-subdomain endpoints (shipped in
-	// 140-05) so that installing/uninstalling an app on the home LivOS box
-	// triggers Cloudflare DNS + Tunnel ingress creation/removal at the edge.
+	// (Server5 was retired — these helpers now call the PLATFORM Next.js app at
+	// livinity.io: POST/DELETE /api/me/app-subdomain, which holds the sole CF API
+	// token and makes the real Cloudflare DNS + Tunnel-ingress calls.) So
+	// installing/uninstalling an app on the home LivOS box triggers Cloudflare
+	// DNS + Tunnel ingress creation/removal at the edge. On a FREE (BYO-domain)
+	// box the provisionAppSubdomain branch above handles this locally instead.
 	//
-	// Both calls are best-effort: on failure (Server5 unreachable, missing
+	// Both calls are best-effort: on failure (platform unreachable, missing
 	// api-key, missing platform url, network error) we log + continue. The
 	// existing install/uninstall flow must succeed without these calls for
-	// local-lan users and air-gapped deployments.
+	// self-hosted users and air-gapped deployments.
 	//
 	// Deviation (Rule 3): plan 140-08 prescribed a new `server5-client.ts`
 	// abstraction. Skipped — two helpers reusing the same Redis-keyed fetch

@@ -132,7 +132,7 @@ Sign up at **[livinity.io](https://livinity.io)** — one plan, **Livinity Pro**
 
 ### Option B — Self-host (free, this repo)
 
-One line, on any Linux box with `systemd`. Grab your install key from **[livinity.io/dashboard/install](https://livinity.io/dashboard/install)** (it provisions your subdomain + secure tunnel automatically), then:
+One line, on any Linux box with `systemd`. Grab your install key from **[livinity.io/dashboard/install](https://livinity.io/dashboard/install)** — your `name.livinity.io` subdomain + secure Cloudflare tunnel are provisioned when you sign up; the key authenticates the box, unlocks the app store, and adopts your already-provisioned subdomain. Then:
 
 ```bash
 curl -fsSL https://livinity.io/install.sh | sudo bash -s -- --api-key liv_k_YOURKEY
@@ -148,7 +148,11 @@ less livos-install.sh                    # read it first
 sudo bash livos-install.sh --api-key liv_k_YOURKEY
 ```
 
-> **Fully independent?** You don't need a Livinity account to self-host. Use your own domain in your own Cloudflare account: create a Cloudflare tunnel, then pass `--domain <your-domain> --cf-tunnel-token <token>` instead of `--api-key`. You wire each app's public hostname in the Cloudflare dashboard yourself (the keyless path doesn't auto-provision subdomains). Liv still works with your own Claude/Gemini keys.
+> **Bring your own domain (free).** Two ways to self-host on your own domain in your own Cloudflare account:
+> - **Fully keyless (works today):** create a Cloudflare tunnel and pass `--domain <your-domain> --cf-tunnel-token <token>` (no `--api-key`). You wire each app's public hostname in the Cloudflare dashboard yourself — this path doesn't auto-provision subdomains, and the app store needs a key.
+> - **Managed on your own domain (free tier, rolling out):** keep a free Livinity account for the app store + Liv, and add your own domain + Cloudflare API token — `--api-key liv_k_… --domain <you>.yourdomain.com --cf-tunnel-token <connector> --cf-token <cf-api-token>`. The box then provisions each app's subdomain (`<app>-<you>.yourdomain.com`) automatically on **your** Cloudflare zone, the same way Pro does on `livinity.io`. No payment; you bring the domain + Cloudflare account.
+>
+> Liv always works with your own Claude/Gemini keys.
 
 ### System requirements
 
