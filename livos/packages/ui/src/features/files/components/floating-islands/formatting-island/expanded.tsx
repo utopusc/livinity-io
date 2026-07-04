@@ -1,6 +1,6 @@
 import {motion} from 'framer-motion'
 
-import externalStorageIcon from '@/features/files/assets/external-storage-icon.png'
+import {TbDeviceUsb} from 'react-icons/tb'
 import {formatFilesystemSize} from '@/features/files/utils/format-filesystem-size'
 import {ScrollArea} from '@/shadcn-components/ui/scroll-area'
 import {t} from '@/utils/i18n'
@@ -117,7 +117,7 @@ export function ExpandedContent({devices}: {devices: FormattingDevice[]}) {
 								delay: 0.25,
 							}}
 						>
-							<img src={externalStorageIcon} alt='External Storage' className='size-11' draggable={false} />
+							<TbDeviceUsb aria-label='External Storage' className='size-11' />
 						</motion.div>
 					</motion.div>
 				</motion.div>
@@ -140,7 +140,7 @@ export function ExpandedContent({devices}: {devices: FormattingDevice[]}) {
 				<div className='space-y-3'>
 					{devices.map((device) => (
 						<div key={device.id} className='flex items-center gap-3'>
-							<img src={externalStorageIcon} alt='External Storage' className='size-7 shrink-0' draggable={false} />
+							<TbDeviceUsb aria-label='External Storage' className='size-7 shrink-0' />
 							<div className='min-w-0 flex-1'>
 								<div className='flex items-center justify-between text-xs text-text-secondary'>
 									<span className='truncate'>{device.name}</span>

@@ -1,7 +1,7 @@
 import {useNavigate} from 'react-router-dom'
 
 import {CmdkSearchProviderProps} from '@/components/cmdk-providers'
-import backupsIcon from '@/features/backups/assets/backups-icon.png'
+import {TbDatabase} from 'react-icons/tb'
 import {useBackups} from '@/features/backups/hooks/use-backups'
 import {CommandItem} from '@/shadcn-components/ui/command'
 import {t} from '@/utils/i18n'
@@ -23,7 +23,7 @@ export const BackupsCmdkSearchProvider: React.FC<CmdkSearchProviderProps> = ({cl
 	// Render the appropriate command item
 	return (
 		<CommandItem
-			icon={<img src={backupsIcon} alt='Backups' className='size-full' />}
+			icon={<TbDatabase aria-label='Backups' className='size-full' />}
 			value='backup-settings'
 			onSelect={handleSelect}
 		>

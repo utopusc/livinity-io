@@ -3,7 +3,7 @@ import {useMemo} from 'react'
 import {FaPlus} from 'react-icons/fa6'
 import {useNavigate as useReactRouterNavigate} from 'react-router-dom'
 
-import networkIcon from '@/features/files/assets/network-icon.png'
+import {TbNetwork} from 'react-icons/tb'
 import {Droppable} from '@/features/files/components/shared/drag-and-drop'
 import {SidebarNetworkShareItem} from '@/features/files/components/sidebar/sidebar-network-share-item'
 import {NETWORK_STORAGE_PATH} from '@/features/files/constants'
@@ -103,7 +103,7 @@ function NetworkRootItem() {
 					isActive ? selectedClass : 'text-text-secondary transition-colors group-hover:bg-surface-1 group-hover:text-text-primary',
 				)}
 			>
-				<img src={networkIcon} alt='' className='h-5 w-auto flex-shrink-0' />
+				<TbNetwork aria-hidden className='h-5 w-auto flex-shrink-0' />
 				<span className='min-w-0 overflow-hidden text-ellipsis whitespace-nowrap'>
 					{t('files-sidebar.network-sidebar')}
 				</span>

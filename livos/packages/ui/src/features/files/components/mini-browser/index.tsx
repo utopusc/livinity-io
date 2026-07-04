@@ -4,8 +4,7 @@ import {toast} from 'sonner'
 
 import {BACKUP_FILE_NAME} from '@/features/backups/utils/filepath-helpers'
 import {EmptyFolderIcon} from '@/features/files/assets/empty-folder-icon'
-import externalStorageIcon from '@/features/files/assets/external-storage-icon.png'
-import activeNasIcon from '@/features/files/assets/nas-icon-active.png'
+import {TbDeviceUsb, TbServer2} from 'react-icons/tb'
 import {FileItemIcon} from '@/features/files/components/shared/file-item-icon'
 import {useListDirectory} from '@/features/files/hooks/use-list-directory'
 import type {FileSystemItem} from '@/features/files/types'
@@ -255,13 +254,10 @@ function Tree({
 
 	const EmptyIcon = useMemo(() => {
 		if (initialPath.startsWith('/Network'))
-			return (props: {className?: string}) => (
-				<img src={activeNasIcon} alt={t('nas')} className={props.className} draggable={false} />
-			)
+			return (props: {className?: string}) => <TbServer2 aria-label={t('nas')} className={props.className} />
 		if (initialPath.startsWith('/External'))
-			return (props: {className?: string}) => (
-				<img src={externalStorageIcon} alt={t('external-drive')} className={props.className} draggable={false} />
-			)
+			return (props: {className?: string}) => <TbDeviceUsb aria-label={t('external-drive')} className={props.className} />
+
 		return EmptyFolderIcon
 	}, [initialPath])
 

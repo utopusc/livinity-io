@@ -3,7 +3,7 @@ import {useEffect, useState} from 'react'
 import {RiErrorWarningFill} from 'react-icons/ri'
 
 import {ErrorAlert} from '@/components/ui/alert'
-import externalStorageIcon from '@/features/files/assets/external-storage-icon.png'
+import {TbDeviceUsb} from 'react-icons/tb'
 import {useExternalStorage} from '@/features/files/hooks/use-external-storage'
 import {
 	AlertDialog,
@@ -125,12 +125,7 @@ export default function FormatDriveDialog({forcedDeviceId, onForcedClose}: Forma
 				<AlertDialogHeader className='max-sm:py-0'>
 					<div className='flex flex-row items-center gap-5 sm:flex-col sm:items-start sm:gap-4'>
 						<div className='relative shrink-0'>
-							<img
-								src={externalStorageIcon}
-								alt={t('external-drive')}
-								className='size-14 opacity-90'
-								draggable={false}
-							/>
+							<TbDeviceUsb aria-label={t('external-drive')} className='size-14 opacity-90' />
 							{requiresFormat && (
 								<div className='absolute -right-2 -top-2 flex size-7 items-center justify-center rounded-full bg-[#FF9500]'>
 									<RiErrorWarningFill className='size-6 text-black' />

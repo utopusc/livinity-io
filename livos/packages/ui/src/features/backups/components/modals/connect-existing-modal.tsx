@@ -1,7 +1,7 @@
 // Modal shown when a backup repository is detected at the selected location but
 // is not yet connected to this Livinity. Prompts for the encryption password and
 // provides Connect/Cancel actions.
-import backupsIcon from '@/features/backups/assets/backups-icon.png'
+import {TbDatabase} from 'react-icons/tb'
 import {Button} from '@/shadcn-components/ui/button'
 import {
 	Dialog,
@@ -35,12 +35,7 @@ export function ConnectExistingModal({
 		<Dialog open={open} onOpenChange={(v) => (!v ? onClose() : null)}>
 			<DialogContent className='flex flex-col items-center text-center'>
 				<DialogHeader className='items-center text-center'>
-					<img
-						src={backupsIcon}
-						alt={t('files-type.livinity-backup')}
-						className='mb-2 size-10 opacity-80'
-						draggable={false}
-					/>
+					<TbDatabase aria-label={t('files-type.livinity-backup')} className='mb-2 size-10 text-brand opacity-80' />
 					<DialogTitle>{t('backups.modals.connect-existing.title')}</DialogTitle>
 					<DialogDescription>{t('backups.modals.connect-existing.description')}</DialogDescription>
 				</DialogHeader>

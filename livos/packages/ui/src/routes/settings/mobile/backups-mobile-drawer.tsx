@@ -1,11 +1,9 @@
 import {ChevronDown, Loader2} from 'lucide-react'
 import {useCallback} from 'react'
 import {FaRegSave} from 'react-icons/fa'
-import {TbHistory, TbSettings} from 'react-icons/tb'
+import {TbDatabase, TbHistory, TbSettings} from 'react-icons/tb'
 import {useNavigate} from 'react-router-dom'
 
-import {FadeInImg} from '@/components/ui/fade-in-img'
-import backupsIcon from '@/features/backups/assets/backups-icon.png'
 import {useBackups} from '@/features/backups/hooks/use-backups'
 import {systemAppsKeyed} from '@/providers/apps'
 import {useWindowManagerOptional} from '@/providers/window-manager'
@@ -52,7 +50,7 @@ export function BackupsMobileDrawer() {
 			<DrawerContent>
 				<DrawerHeader className='flex flex-col items-center text-center'>
 					<div className='py-5'>
-						<FadeInImg src={backupsIcon} width={67} height={67} alt='' />
+						<TbDatabase className='text-brand' style={{width: 67, height: 67}} aria-hidden />
 					</div>
 					<DrawerTitle>{t('backups')}</DrawerTitle>
 					<DrawerDescription>{t('backups-description')}</DrawerDescription>

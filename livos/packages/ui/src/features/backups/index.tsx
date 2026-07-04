@@ -1,8 +1,7 @@
 import {Route, Routes, useNavigate} from 'react-router-dom'
 
-import {FadeInImg} from '@/components/ui/fade-in-img'
+import {TbDatabase} from 'react-icons/tb'
 import {ImmersiveDialog, ImmersiveDialogSplitContent} from '@/components/ui/immersive-dialog'
-import backupsIcon from '@/features/backups/assets/backups-icon.png'
 import {BackupsConfigureWizard} from '@/features/backups/components/configure-wizard'
 import {BackupsRestoreWizard} from '@/features/backups/components/restore-wizard'
 import {BackupsSetupWizard} from '@/features/backups/components/setup-wizard'
@@ -45,7 +44,7 @@ function SplitDialog({
 function SplitLeftContent({titleKey = 'backup'}: {titleKey?: string}) {
 	return (
 		<div className='flex flex-col items-center'>
-			<FadeInImg src={backupsIcon} width={67} height={67} alt='' />
+			<TbDatabase className='text-brand' style={{width: 67, height: 67}} aria-hidden />
 			<div className='mt-2.5 px-2 text-center text-15 font-medium'>{t(titleKey)}</div>
 			<div className='text-13 opacity-40'>{t('livinity')}</div>
 		</div>

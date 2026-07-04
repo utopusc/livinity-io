@@ -4,7 +4,7 @@ import {useState} from 'react'
 import {Trans} from 'react-i18next/TransWithoutContext'
 import {FaPlus} from 'react-icons/fa6'
 
-import networkIcon from '@/features/files/assets/network-icon.png'
+import {TbNetwork} from 'react-icons/tb'
 import {InlineCopyableField} from '@/features/files/components/dialogs/share-info-dialog/platform-instructions/inline-copyable-field'
 import {
 	InstructionContainer,
@@ -28,7 +28,7 @@ export function LivOSInstructions({username, password, sharename}: Props) {
 						i18nKey='files-share.instructions.livos.open-and-click'
 						components={{
 							plus: <FaPlus className='inline-block size-3 align-middle' />,
-							deviceIcon: <img src={networkIcon} alt='' className='inline-block h-4 w-auto align-middle' />,
+							deviceIcon: <TbNetwork aria-hidden className='inline-block h-4 w-auto align-middle' />,
 						}}
 						values={{deviceLabel: t('files-sidebar.network-sidebar')}}
 					/>

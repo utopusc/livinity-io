@@ -1,18 +1,14 @@
 import React, {useEffect, useState} from 'react'
 import {BsTrash2} from 'react-icons/bs'
 import {IoPlay} from 'react-icons/io5'
+import {TbDatabase, TbDeviceUsb, TbNetwork, TbServer2} from 'react-icons/tb'
 
-import backupsIcon from '@/features/backups/assets/backups-icon.png'
+import LivinityLogo from '@/assets/livinity-logo'
 import {AppsIcon} from '@/features/files/assets/apps-icon'
-import externalStorageIcon from '@/features/files/assets/external-storage-icon.png'
 import {HomeIcon} from '@/features/files/assets/home-icon'
-import activeNasIcon from '@/features/files/assets/nas-icon-active.png'
-import nasIconInactive from '@/features/files/assets/nas-icon-inactive.png'
-import networkIcon from '@/features/files/assets/network-icon.png'
 import {RecentsIcon} from '@/features/files/assets/recents-icon'
 import {SharedFolderBadge} from '@/features/files/assets/shared-folder-badge'
-import livinityDeviceActive from '@/features/files/assets/livinity-device-icon-active.png'
-import livinityDeviceInactive from '@/features/files/assets/livinity-device-icon-inactive.png'
+import {cn} from '@/shadcn-lib/utils'
 import {AnimatedFolderIcon} from '@/features/files/components/shared/file-item-icon/animated-folder-icon'
 import {
 	DocumentsIcon,
@@ -77,7 +73,7 @@ export const FileItemIcon = ({item, onlySVG, className, useAnimatedIcon = false,
 
 	// External storage icon if the user directly navigates to livinity.local/files/External
 	if (item.type === 'directory' && isDirectoryAnExternalDrivePartition(item.path)) {
-		return <img src={externalStorageIcon} alt={t('external-drive')} className={className} draggable={false} />
+		return <TbDeviceUsb aria-label={t('external-drive')} className={className} />
 	}
 
 	// Network share icon when browsing /Network
@@ -86,17 +82,17 @@ export const FileItemIcon = ({item, onlySVG, className, useAnimatedIcon = false,
 	}
 
 	if (item.type === 'directory' && item.name === 'Livinity Backup.backup') {
-		return <img src={backupsIcon} alt='Livinity Backup' className={className} draggable={false} />
+		return <TbDatabase aria-label='Livinity Backup' className={className} />
 	}
 
 	// External storage for sidebar and pathbar
 	if (item.type === 'external-storage') {
-		return <img src={externalStorageIcon} alt={t('external-drive')} className={className} draggable={false} />
+		return <TbDeviceUsb aria-label={t('external-drive')} className={className} />
 	}
 
 	// Network root for sidebar and pathbar
 	if (item.type === 'network-root') {
-		return <img src={networkIcon} alt='Network' className={className + 'w-auto'} draggable={false} />
+		return <TbNetwork aria-label='Network' className={className} />
 	}
 
 	// Network share for sidebar and pathbar
@@ -322,27 +318,18 @@ const NetworkDeviceIcon = ({path, className}: {path: string; className?: string}
 
 	const isMounted = doesHostHaveMountedShares(path)
 
-	// While detecting, show generic NAS icon
+	// While detecting, show generic NAS/server icon
 	if (isLoading) {
-		return (
-			<img src={isMounted ? activeNasIcon : nasIconInactive} alt='Network' className={className} draggable={false} />
-		)
+		return <TbServer2 aria-label='Network' className={cn(className, !isMounted && 'opacity-40')} />
 	}
 
 	// Show appropriate icon based on device type and mount status
 	if (deviceType === 'livinity') {
-		return (
-			<img
-				src={isMounted ? livinityDeviceActive : livinityDeviceInactive}
-				alt='Livinity'
-				className={className}
-				draggable={false}
-			/>
-		)
+		return <LivinityLogo aria-label='Livinity' className={cn(className, !isMounted && 'opacity-40')} />
 	}
 
-	// Default to generic NAS icon
-	return <img src={isMounted ? activeNasIcon : nasIconInactive} alt='NAS' className={className} draggable={false} />
+	// Default to generic NAS/server icon
+	return <TbServer2 aria-label='NAS' className={cn(className, !isMounted && 'opacity-40')} />
 }
 
 // Helper function to extract app ID from both normal and rewind paths
