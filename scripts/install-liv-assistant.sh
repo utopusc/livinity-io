@@ -368,6 +368,57 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   if [[ "${GZ_HITS}" -gt 0 ]]; then
     log "Rebrand(social): rewrote ${GZ_HITS} pre-compressed (.gz) About-panel bundle(s)"
   fi
+  # COMPRESSED-TWIN NEUTRALIZATION (2026-07-04) — the gzip pass above only handles
+  # *.gz, but this Vite bundle also ships Brotli *.br twins, and the aionui-web
+  # static server serves whichever the browser's Accept-Encoding prefers (usually
+  # br). So even a correct .gz rewrite is invisible if the browser gets the
+  # untouched .br — the real reason the About links kept coming back. Codec-agnostic
+  # fix: any compressed twin (.gz OR .br) that STILL carries an upstream About URL
+  # is DELETED, provided its plain sibling exists (and we make sure that sibling is
+  # clean). The static server then falls back to the already-rewritten plain file.
+  # No brotli-recompress needed; never touches a lone compressed file.
+  TWIN_DROPPED=0
+  while IFS= read -r -d '' comp; do
+    plain="${comp%.*}"                       # strip .gz / .br
+    [[ -f "${plain}" ]] || continue          # never delete a compressed-only asset
+    stale=0
+    case "${comp}" in
+      *.gz) gunzip -c "${comp}" 2>/dev/null | grep -qE 'github.com/iOfficeAI|x.com/WailiVery|aionui.com|livai.com' && stale=1 ;;
+      *.br)
+        if command -v brotli >/dev/null 2>&1; then
+          brotli -dc "${comp}" 2>/dev/null | grep -qE 'github.com/iOfficeAI|x.com/WailiVery|aionui.com|livai.com' && stale=1
+        else
+          # Can't inspect .br without the brotli CLI. Fall back to the plain twin:
+          # if the plain file is clean, the .br is by definition stale (pre-rewrite).
+          grep -qE 'github.com/iOfficeAI|x.com/WailiVery|aionui.com|livai.com' "${plain}" 2>/dev/null || stale=1
+        fi
+        ;;
+    esac
+    if [[ "${stale}" -eq 1 ]]; then
+      # Make sure the plain sibling the server will now serve is actually rewritten.
+      sed -i "${SOCIAL_SED[@]}" "${plain}" 2>/dev/null || true
+      rm -f "${comp}" && TWIN_DROPPED=$((TWIN_DROPPED + 1))
+    fi
+  done < <(find "${SOCIAL_TARGET}" \( -name '*.js.gz' -o -name '*.html.gz' -o -name '*.js.br' -o -name '*.html.br' \) -print0 2>/dev/null)
+  if [[ "${TWIN_DROPPED}" -gt 0 ]]; then
+    log "Rebrand(social): dropped ${TWIN_DROPPED} stale compressed twin(s) (.gz/.br) so the rewritten plain bundle is served"
+  fi
+  # VERIFICATION — decompress-aware final scan; logs a definitive verdict so a
+  # future run's log tells us at a glance whether any upstream link survives.
+  REMAIN=0
+  while IFS= read -r -d '' f; do
+    case "${f}" in
+      *.gz) body="$(gunzip -c "${f}" 2>/dev/null)" ;;
+      *.br) command -v brotli >/dev/null 2>&1 && body="$(brotli -dc "${f}" 2>/dev/null)" || body="" ;;
+      *)    body="$(cat "${f}" 2>/dev/null)" ;;
+    esac
+    printf '%s' "${body}" | grep -qE 'github.com/iOfficeAI|x.com/WailiVery|aionui.com|livai.com' && REMAIN=$((REMAIN + 1))
+  done < <(find "${SOCIAL_TARGET}" \( -name '*.js' -o -name '*.html' -o -name '*.js.gz' -o -name '*.html.gz' -o -name '*.js.br' -o -name '*.html.br' \) -print0 2>/dev/null)
+  if [[ "${REMAIN}" -eq 0 ]]; then
+    log "Rebrand(social): VERIFIED — no upstream About links remain in the served bundle"
+  else
+    log "Rebrand(social): WARN — ${REMAIN} file(s) still carry an upstream About link (brotli CLI missing?)"
+  fi
 else
   log "Rebrand: WARN ${REBRAND_TARGET} missing; skipping rebrand step"
 fi
