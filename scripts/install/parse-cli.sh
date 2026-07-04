@@ -132,14 +132,19 @@ Tunnel-transport flags (portal mode — Phase 134, updated Phase 140+142):
                            Pass --api-key from your livinity.io dashboard —
                            token is fetched automatically.
 
-Legacy CF DNS flags (back-compat only — no longer used by portal):
-  --cf-token TOKEN         Pre-Phase-134 CF API token for DNS-01 wildcard
-                           cert issuance. Ignored by portal mode (CF Tunnel
-                           handles cert + DNS server-side).
-  --cf-zone-id ZONE_ID     Pre-Phase-134 CF zone ID for direct-LAN A-record.
-                           Ignored by portal mode.
+Bring-your-own-Cloudflare (FREE self-host — own domain, own CF account):
+  --cf-token TOKEN         Your Cloudflare API token (scoped Zone:DNS:Edit).
+                           Combine with --domain <your-fqdn> +
+                           --cf-tunnel-token <your-connector> + --api-key to run
+                           the SAME managed experience as Pro on YOUR OWN
+                           domain: livinityd provisions each app's subdomain
+                           (<app>-<user>.<yourdomain>) locally on your zone.
+                           Omit it (PRO) and DNS stays Livinity-managed via
+                           --api-key.
+  --cf-zone-id ZONE_ID     Optional explicit CF zone ID (else auto-discovered
+                           from --domain). Back-compat: pre-Phase-134 direct-LAN.
 
-Marketplace API key (optional, works in all modes):
+Marketplace API key (works in all modes; required for the app store/catalog):
   --api-key KEY            LivOS marketplace API key (liv_k_...). Saved to
                            /etc/livos/secrets/api-key (mode 0600) for future
                            marketplace integration. Refuses keys not prefixed

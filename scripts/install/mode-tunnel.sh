@@ -522,6 +522,32 @@ _write_api_key_secret_if_provided() {
     set_livos_redis_key "livos:account:api_key_path" "$secret_file"
 }
 
+# FREE tier (BYO domain + BYO Cloudflare) — when the operator supplies their own
+# Cloudflare API token via --cf-token (LIVOS_CF_TOKEN), persist it so livinityd
+# can provision per-app subdomains LOCALLY on the operator's own zone (parity
+# with the platform's managed flow, only the token source differs). Written in
+# env-file format (CLOUDFLARE_API_TOKEN=...) to match writeCfTokenSecret's
+# on-disk contract (hybrid-provision.ts HYBRID_TOKEN_SECRET_PATH). No-op when
+# --cf-token is not set (PRO boxes: DNS stays platform-managed via --api-key).
+_write_cf_api_token_secret_if_provided() {
+    if [[ -z "${LIVOS_CF_TOKEN:-}" ]]; then
+        return 0
+    fi
+    step "Saving Cloudflare API token (BYO-domain per-app DNS)"
+
+    local secret_dir="/etc/livos/secrets"
+    local secret_file="${secret_dir}/cf-token"
+    mkdir -p "$secret_dir"
+    chmod 0700 "$secret_dir"
+    # CF-01 invariant: token flows env-var -> file via redirection, never argv.
+    umask 0077
+    printf 'CLOUDFLARE_API_TOKEN=%s\n' "$LIVOS_CF_TOKEN" > "$secret_file"
+    chmod 0600 "$secret_file"
+    ok "Cloudflare API token written to ${secret_file} (0600)"
+
+    set_livos_redis_key "livos:domain:cf_api_token_secret_ref" "$secret_file"
+}
+
 # Public entry point (called by scripts/install.sh case dispatch).
 # Plan 140-07: _fetch_cf_tunnel_token_from_api runs FIRST (so the rest of the
 # pipeline sees LIVOS_CF_TUNNEL_TOKEN populated whether the operator passed it
@@ -534,4 +560,5 @@ install_mode_tunnel() {
     _configure_caddy_for_tunnel
     _persist_tunnel_mode_redis
     _write_api_key_secret_if_provided
+    _write_cf_api_token_secret_if_provided
 }
