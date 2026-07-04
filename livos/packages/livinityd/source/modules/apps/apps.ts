@@ -29,6 +29,14 @@ import {
 } from './inject-local-ai-clis.js'
 import {startCredEgressProxyIfNeeded} from './cred-egress-proxy.js'
 import {sanitizeNonBuiltinCompose, ComposeRejected} from './compose-sanitizer.js'
+import {
+	decodeTunnelToken,
+	discoverZoneId,
+	parseCfApiTokenSecret,
+	provisionAppSubdomainLocal,
+	deprovisionAppSubdomainLocal,
+	type LocalCfConfig,
+} from './cf-local.js'
 import {assertInstallAllowed, InstallForbidden} from './install-admin-gate.js'
 import {effectivePublicAccess, isPublicForbidden, type PublicForbiddenSignals} from './public-forbidden.js'
 import type {PublicAccessConfig, PublicAccessInstallSetting} from './public-access.js'
@@ -69,6 +77,15 @@ const REDIS_SUBDOMAINS_KEY = 'livos:domain:subdomains'
 // can never emit a public block regardless of this stored value (T-258C-03).
 const REDIS_PUBLIC_ACCESS_PREFIX = 'livos:apps:public-access:'
 const REDIS_PLATFORM_API_KEY = 'livos:platform:api_key'
+// FREE tier (BYO domain + BYO Cloudflare) — Redis refs the install script writes
+// (mode-tunnel.sh) when the operator supplies --cf-token. Their presence is the
+// discriminator that routes DNS provisioning to the box-side local Cloudflare
+// client (cf-local.ts) on the operator's OWN zone instead of the platform. A PRO
+// box never has these → the platform path is unchanged (fall-through).
+const REDIS_CF_API_TOKEN_REF = 'livos:domain:cf_api_token_secret_ref'
+const REDIS_CF_TUNNEL_TOKEN_REF = 'livos:domain:cf_tunnel_token_secret_ref'
+const REDIS_TUNNEL_DOMAIN = 'livos:domain:tunnel_domain'
+const REDIS_CF_ZONE_ID = 'livos:domain:cf_zone_id'
 // Phase 210 Bug C: this constant was referenced by reportInstallEvent() but
 // never declared; tsx hides the bug as a runtime ReferenceError caught by the
 // surrounding try/catch, silently dropping every install/uninstall event.
@@ -1485,14 +1502,76 @@ export default class Apps {
 	// f3538e1d811992b782a9bb057d1b7f0a0189f95f preserved.
 
 	/**
-	 * Provision a Cloudflare subdomain for an installed app via Server5.
-	 * Returns the assigned subdomain + URL on success, null on any failure
-	 * (best-effort — caller MUST tolerate null and continue install).
+	 * FREE tier — load the box-side Cloudflare config (operator's own token +
+	 * domain) if this box was installed with --cf-token. Returns null on a PRO
+	 * box (no local CF secrets) or on any missing/malformed piece, in which case
+	 * the caller falls through to the platform-managed path (Pro untouched).
+	 *
+	 * Zone id is discovered once from the operator's apex and cached in Redis so
+	 * every install doesn't re-probe the CF /zones endpoint.
+	 */
+	private async loadLocalCfConfig(): Promise<LocalCfConfig | null> {
+		try {
+			const [apiTokenRef, tunnelTokenRef, apex] = await Promise.all([
+				this.#livinityd.ai.redis.get(REDIS_CF_API_TOKEN_REF),
+				this.#livinityd.ai.redis.get(REDIS_CF_TUNNEL_TOKEN_REF),
+				this.#livinityd.ai.redis.get(REDIS_TUNNEL_DOMAIN),
+			])
+			if (!apiTokenRef || !tunnelTokenRef || !apex) return null
+
+			const [apiTokenRaw, tunnelTokenRaw] = await Promise.all([
+				fse.readFile(apiTokenRef, 'utf8').catch(() => ''),
+				fse.readFile(tunnelTokenRef, 'utf8').catch(() => ''),
+			])
+			const apiToken = parseCfApiTokenSecret(apiTokenRaw)
+			const decoded = decodeTunnelToken(tunnelTokenRaw)
+			if (!apiToken || !decoded) return null
+
+			let zoneId = await this.#livinityd.ai.redis.get(REDIS_CF_ZONE_ID).catch(() => null)
+			if (!zoneId) {
+				zoneId = await discoverZoneId(apiToken, apex)
+				if (!zoneId) {
+					this.logger.error(`FREE tier: could not discover a Cloudflare zone for apex '${apex}' — check the API token scope + that the zone exists`)
+					return null
+				}
+				await this.#livinityd.ai.redis.set(REDIS_CF_ZONE_ID, zoneId).catch(() => {})
+			}
+
+			return {apiToken, accountId: decoded.accountId, tunnelId: decoded.tunnelId, zoneId, apex}
+		} catch (error) {
+			this.logger.error('FREE tier: failed to load local Cloudflare config', error)
+			return null
+		}
+	}
+
+	/**
+	 * Provision a Cloudflare subdomain for an installed app.
+	 * FREE tier (own domain + own CF token): provisioned box-side on the
+	 * operator's own zone. PRO tier (no local CF secrets): provisioned via the
+	 * platform (livinity.io). Returns the assigned subdomain + URL on success,
+	 * null on any failure (best-effort — caller MUST tolerate null and continue).
 	 */
 	private async provisionAppSubdomain(
 		appId: string,
 		port: number,
 	): Promise<{subdomain: string; url: string; ready?: boolean; readyAt?: number} | null> {
+		// FREE tier branch — BEFORE the platform api-key gate. A box with its own
+		// CF token provisions locally on the operator's zone; Pro boxes (no local
+		// secrets) fall through to the unchanged platform path below.
+		const localCf = await this.loadLocalCfConfig()
+		if (localCf) {
+			try {
+				const result = await provisionAppSubdomainLocal(localCf, appId)
+				this.logger.log(`FREE tier: provisioned ${result.host} for ${appId} on the operator's own Cloudflare zone`)
+				// DNS is created synchronously + proxied (CF-proxied propagation ~1-5s),
+				// so mark ready so the UI/Caddy adopt the canonical host immediately.
+				return {subdomain: result.subdomain, url: result.url, ready: true}
+			} catch (error) {
+				this.logger.error(`FREE tier: local CF provisioning failed for ${appId}`, error)
+				return null
+			}
+		}
+
 		try {
 			const apiKey = await this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY)
 			if (!apiKey) {
@@ -1538,6 +1617,20 @@ export default class Apps {
 	 * are logged and swallowed so the local uninstall always proceeds.
 	 */
 	private async deprovisionAppSubdomain(appId: string): Promise<void> {
+		// FREE tier branch — mirror provisionAppSubdomain. Removing the CNAME +
+		// tunnel ingress on the operator's own zone (cf-saas :753 parity) so a
+		// free-tier uninstall never orphans DNS. Pro boxes fall through.
+		const localCf = await this.loadLocalCfConfig()
+		if (localCf) {
+			try {
+				await deprovisionAppSubdomainLocal(localCf, appId)
+				this.logger.log(`FREE tier: deprovisioned ${appId} from the operator's own Cloudflare zone`)
+			} catch (error) {
+				this.logger.error(`FREE tier: local CF deprovisioning failed for ${appId} (non-fatal)`, error)
+			}
+			return
+		}
+
 		try {
 			const apiKey = await this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY)
 			if (!apiKey) {
