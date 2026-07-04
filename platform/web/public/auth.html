@@ -1104,10 +1104,11 @@
           catch (e) { return false; }
         });
 
-        // Already signed in? Don't show the auth form — send them to the
-        // dashboard (e.g. a logged-in user clicking "Choose Free" on /pricing).
-        // Free-vs-paid setup lives on the dashboard; here we just get them off
-        // the auth page instead of stranding them on a sign-up form.
+        // Already signed in? Don't show the auth form.
+        // - arriving via "Choose Free" (?plan=free): opt the account into the free
+        //   BYO tier (no-op for a paying subscriber) and go to the setup screen.
+        // - otherwise: go to the dashboard.
+        // A logged-in user is never stranded on a sign-up form.
         useEffect(() => {
           let cancelled = false;
           (async () => {
@@ -1115,9 +1116,16 @@
               const me = await fetch("/api/auth/me", { credentials: "same-origin" });
               if (!me.ok || cancelled) return;
               const data = await me.json();
-              if (data && data.user) {
-                window.location.replace(data.user.username ? "/dashboard" : "/username");
+              if (!data || !data.user || cancelled) return;
+              if (!data.user.username) { window.location.replace("/username"); return; }
+              if (freePlan) {
+                if (!data.user.free_byod) {
+                  try { await fetch("/api/me/choose-free", { method: "POST", credentials: "same-origin" }); } catch (e) {}
+                }
+                window.location.replace("/dashboard/install");
+                return;
               }
+              window.location.replace("/dashboard");
             } catch (e) {}
           })();
           return () => { cancelled = true; };
