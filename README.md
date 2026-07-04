@@ -148,7 +148,7 @@ less livos-install.sh                    # read it first
 sudo bash livos-install.sh --api-key liv_k_YOURKEY
 ```
 
-> **Fully independent?** You don't need a Livinity account to self-host — pass your own `--subdomain <name>` and `--cf-tunnel-token <token>` instead of `--api-key`. Liv still works with your own Claude/Gemini keys.
+> **Fully independent?** You don't need a Livinity account to self-host. Use your own domain in your own Cloudflare account: create a Cloudflare tunnel, then pass `--domain <your-domain> --cf-tunnel-token <token>` instead of `--api-key`. You wire each app's public hostname in the Cloudflare dashboard yourself (the keyless path doesn't auto-provision subdomains). Liv still works with your own Claude/Gemini keys.
 
 ### System requirements
 
