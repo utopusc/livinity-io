@@ -1810,6 +1810,31 @@ _dld_seed_domain_config() {
         return 0
     fi
 
+    # Fix (2026-07-05): the boot drain (drain-install-pending-redis.ts) applies
+    # queued seeds with SETNX, so a REINSTALL over a box that previously used a
+    # DIFFERENT --domain leaves livos:domain:tunnel_domain pinned to the OLD apex
+    # (the new queued value is skipped as "already present"). cf-local.ts (FREE
+    # tier) reads tunnel_domain as the APEX for per-app subdomain provisioning →
+    # it then discovers the WRONG (old) Cloudflare zone and every app fails. The
+    # domain:config force-update above (Bug #14/#17) handles the sibling key for
+    # exactly this case; keep tunnel_domain in lock-step. Conservative: only touch
+    # it when the operator explicitly passed --domain AND the stored value EXISTS
+    # and DIFFERS (a stale reinstall). Fresh installs (no tunnel_domain yet) fall
+    # through to the drain; local-lan/cloud (no tunnel_domain key) are untouched;
+    # runtime edits to a MATCHING domain are preserved.
+    if [[ -n "${LIVOS_DOMAIN:-}" ]]; then
+        local existing_tunnel_domain
+        existing_tunnel_domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:tunnel_domain 2>/dev/null || echo "")
+        if [[ -n "$existing_tunnel_domain" && "$existing_tunnel_domain" != "$domain" ]]; then
+            if redis-cli -a "$redis_pass" --no-auth-warning SET livos:domain:tunnel_domain "$domain" >/dev/null 2>&1; then
+                # Zone id is derived from the apex — a stale one would point at the old
+                # zone; clear it so cf-local re-discovers against the new apex.
+                redis-cli -a "$redis_pass" --no-auth-warning DEL livos:domain:cf_zone_id >/dev/null 2>&1 || true
+                warn "Reinstall over different domain: force-updated livos:domain:tunnel_domain '${existing_tunnel_domain}' → '${domain}' + cleared stale cf_zone_id (cf-local uses tunnel_domain as the apex)"
+            fi
+        fi
+    fi
+
     ok "Seeded livos:domain:config domain=${domain} active=true source=install-112"
 }
 
@@ -2573,7 +2598,65 @@ _dld_fix_permissions() {
         chown -R "${livos_user}:${livos_user}" /var/lib/livos 2>/dev/null || true
     fi
 
+    # FREE tier (BYO Cloudflare) — the CF secrets under /etc/livos/secrets are
+    # written root:root by mode-tunnel.sh BEFORE this desktop user exists, and the
+    # dir is 0700 root:root. livinityd runs as ${livos_user} (Phase 192-02), so
+    # loadLocalCfConfig()'s readFile() silently EACCESed (its .catch(()=>'') → null)
+    # → per-app subdomain provisioning on the operator's own zone NEVER fired.
+    # Make the dir traversable by the desktop user's group + hand it the two CF
+    # token files. The api-key file stays root:root (livinityd reads it from
+    # Redis/.env, not disk). GUARDED on a CF token existing → a PRO box (no
+    # --cf-token / --cf-tunnel-token) keeps /etc/livos/secrets exactly as-is (0700
+    # root) — this branch never runs there.
+    if [[ "$livos_user" != "root" && ( -f /etc/livos/secrets/cf-token || -f /etc/livos/secrets/cf-tunnel-token ) ]]; then
+        chgrp "$livos_user" /etc/livos/secrets 2>/dev/null && chmod 0750 /etc/livos/secrets 2>/dev/null || true
+        local _cf_secret
+        for _cf_secret in /etc/livos/secrets/cf-token /etc/livos/secrets/cf-tunnel-token; do
+            if [[ -f "$_cf_secret" ]]; then
+                chown "${livos_user}:${livos_user}" "$_cf_secret" 2>/dev/null || true
+                chmod 0600 "$_cf_secret" 2>/dev/null || true
+            fi
+        done
+        ok "FREE tier: CF secrets readable by desktop user '${livos_user}' (/etc/livos/secrets 0750 grp + cf-token/cf-tunnel-token chowned)"
+    fi
+
+    # The runtime Caddy regenerator (Apps#rebuildCaddyFromState, non-root livinityd)
+    # stages /etc/caddy/Caddyfile.fut then atomically renames it — that needs WRITE
+    # on the /etc/caddy DIR, which is root:root 0755 by default → EACCES → it falls
+    # back to a NON-atomic direct write every regen. Give the desktop user's group
+    # write on the dir so the atomic path works. Safe for PRO too (the desktop user
+    # already owns/writes the Caddyfile via the fallback).
+    if [[ "$livos_user" != "root" && -d /etc/caddy ]]; then
+        chgrp "$livos_user" /etc/caddy 2>/dev/null && chmod 0775 /etc/caddy 2>/dev/null || true
+        [[ -f /etc/caddy/Caddyfile ]] && chown "${livos_user}:${livos_user}" /etc/caddy/Caddyfile 2>/dev/null || true
+    fi
+
     ok "Permissions fixed (owner=${livos_user})"
+}
+
+# ── Flatpak runtime — native/Flathub app installs ──────────────────────────
+# The fresh curl|install.sh path never installed flatpak (only update.sh did,
+# at update.sh:2530), so `apps.native.installFlathub` 404'd with "Flatpak
+# runtime is not installed yet — click Update on the box" on a brand-new box.
+# livinityd's capability probe is just `flatpak --version`==0
+# (native-installer.ts). Install the runtime + add the flathub remote as the
+# desktop user (--user scope, matching update.sh). Non-fatal end-to-end — a
+# flatpak failure never blocks the deploy. Benefits PRO + FREE identically.
+_dld_install_flatpak() {
+    step "Flatpak runtime (native/Flathub app installs)"
+    if command -v flatpak >/dev/null 2>&1; then
+        ok "flatpak already installed: $(flatpak --version 2>/dev/null)"
+    else
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq flatpak \
+            2>&1 | tail -3 || warn "flatpak install failed (non-fatal; Flathub uploads will report runtime not installed)"
+    fi
+    local desktop_user="${_DLD_DESKTOP_USER:-}"
+    if command -v flatpak >/dev/null 2>&1 && [[ -n "$desktop_user" && "$desktop_user" != "root" ]]; then
+        sudo -u "$desktop_user" flatpak remote-add --if-not-exists --user \
+            flathub https://dl.flathub.org/repo/flathub.flatpakrepo \
+            >/dev/null 2>&1 || warn "flathub --user remote-add failed for ${desktop_user} (non-fatal)"
+        ok "Flatpak ready (flathub --user remote for ${desktop_user})"
+    fi
 }
 
 # ── 8b'. Phase 192-02 — bruce-user ownership flip + sudoers install ─────────
@@ -2918,6 +3001,7 @@ deploy_livinityd() {
     _dld_clone_source
     _dld_install_streaming_packages       # 105-02 G2 — streaming apt + ydotoold unit
     _dld_install_google_chrome            # 106 Bug #9 — google-chrome-stable (WebApp Launcher blocker)
+    _dld_install_flatpak                  # Flatpak runtime for native/Flathub apps (fresh-install gap: only update.sh installed it)
     _dld_generate_jwt_secret              # 105-01: moved earlier — secrets BEFORE pnpm install per CONTEXT pipeline order
     _dld_write_env_file                   # 105-01: moved earlier
     _dld_seed_mcp_servers                 # Phase 109 — auto-seed liv:mcp:config (sequential-thinking + luse)

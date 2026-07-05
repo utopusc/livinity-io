@@ -38,7 +38,12 @@ export async function pollContainerHealth(containerName: string, opts: PollOptio
 		try {
 			// execa `$` arg-arrays (no shell:true) — containerName is a single arg
 			;({stdout: status} = await $`docker inspect -f {{.State.Status}} ${containerName}`)
-			;({stdout: health} = await $`docker inspect -f {{.State.Health.Status}} ${containerName}`)
+			// A container WITHOUT a healthcheck has no `.State.Health`, so this template
+			// errors ("map has no entry for key Health") on modern docker (29.x). Swallow
+			// it → health='' → classifyInspect treats it as 'ready'. Without the `.catch`
+			// the whole try aborted, wedging the poll to its 120s timeout + a false
+			// 'unhealthy' for every healthcheck-less app (duplicati, etc.).
+			;({stdout: health} = await $`docker inspect -f {{.State.Health.Status}} ${containerName}`.catch(() => ({stdout: ''})))
 		} catch {
 			// container does not exist yet (compose still scheduling) → treat as pending
 			opts.logger?.log(`[health] inspect not ready for ${containerName} yet`)
