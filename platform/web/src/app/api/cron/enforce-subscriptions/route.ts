@@ -16,9 +16,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getSubscriptionStatus } from '@/lib/subscription';
 import { reconcileStaleLive } from '@/lib/stripe-sync';
-import { PAST_DUE_GRACE_DAYS } from '@/lib/stripe';
+import { stripe, PAST_DUE_GRACE_DAYS } from '@/lib/stripe';
 import { revokeUserAccess, restoreUserAccess } from '@/lib/billing-enforcement';
 import { sendAccessPausedEmail } from '@/lib/email';
+import { opsAlertThrottled } from '@/lib/ops-alert';
+import { rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -207,6 +209,37 @@ export async function GET(req: NextRequest) {
     if ((err as { code?: string })?.code !== '42P01') {
       console.error('[billing-enforce] rate_limits cleanup failed:', err);
     }
+  }
+
+  // ── Watchdog: the Stripe webhook endpoint must exist AND be enabled ──────
+  // The exact June-12→July-6 '26 outage mode: Stripe auto-disabled the
+  // endpoint after a 500-streak and nothing noticed for 3+ weeks (a disabled
+  // endpoint receives NOTHING — no failures to see on our side). Deterministic
+  // check straight from the Stripe API, gated to ~1 call/hour via rate_limits
+  // (this cron runs every 15 min); the alert itself is throttled to 1/day.
+  // Best-effort: a watchdog failure must never fail the sweep.
+  try {
+    const gate = await rateLimit('webhook-endpoint-check', 1, 3600);
+    if (gate.allowed) {
+      const expectedUrl = `${(process.env.NEXT_PUBLIC_BASE_URL || 'https://livinity.io').replace(/\/$/, '')}/api/webhooks/stripe`;
+      // limit 100 (API max) + normalize BOTH sides so a trailing slash or case
+      // difference on the Stripe-side URL can't produce a false MISSING alert.
+      const norm = (u: string) => u.replace(/\/+$/, '').toLowerCase();
+      const endpoints = await stripe.webhookEndpoints.list({ limit: 100 });
+      const ep = endpoints.data.find((e) => norm(e.url) === norm(expectedUrl));
+      if (!ep || ep.status === 'disabled') {
+        const state = !ep ? 'MISSING' : 'DISABLED';
+        await opsAlertThrottled(
+          'webhook-endpoint-down',
+          86400,
+          `Stripe webhook endpoint is ${state} — billing events are NOT flowing`,
+          `<p style="color:#555;line-height:1.6;">The webhook endpoint <code>${expectedUrl}</code> is <strong>${state}</strong> in Stripe. No subscription events reach the platform while it is down — statuses will go stale (the cron's reconcile pass limits the damage, but delivery must be restored).</p>
+           <p style="color:#555;line-height:1.6;">Fix: Stripe Dashboard (live mode) → Workbench → Webhooks → ${!ep ? `create the endpoint with URL <code>${expectedUrl}</code>, subscribe checkout.session.completed, customer.subscription.{created,updated,deleted,trial_will_end}, invoice.{paid,payment_failed}, then put its signing secret in Vercel STRIPE_WEBHOOK_SECRET and redeploy` : 'open the endpoint and re-enable it'}. See platform/web/STRIPE-WEBHOOK-RUNBOOK.md.</p>`,
+        );
+      }
+    }
+  } catch (err) {
+    console.error('[billing-enforce] webhook-endpoint watchdog failed:', err);
   }
 
   console.info(
