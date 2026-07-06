@@ -161,6 +161,16 @@
       }
       .hero-url .copy-btn:hover { color: var(--fg); }
 
+      /* Copy feedback — confirmed animated "Copied" state on the button itself */
+      .copy-btn { display: inline-flex; align-items: center; gap: 6px; }
+      .copy-btn .cico { display: inline-flex; width: 13px; height: 13px; flex-shrink: 0; }
+      .copy-btn .cico svg { display: block; }
+      .copy-btn.is-copied, .copy-btn.is-copied:hover { background: var(--accent-green, #16a34a); border-color: var(--accent-green, #16a34a); color: #fff; opacity: 1; }
+      .copy-btn.icon-only.is-copied, .copy-btn.icon-only.is-copied:hover { background: transparent; border-color: transparent; color: var(--accent-green, #16a34a); }
+      @keyframes copyPop { 0% { transform: scale(0.5); opacity: 0; } 60% { transform: scale(1.18); } 100% { transform: scale(1); opacity: 1; } }
+      .copy-btn.is-copied .cico { animation: copyPop 0.28s ease; }
+      @media (prefers-reduced-motion: reduce) { .copy-btn.is-copied .cico { animation: none; } }
+
       .hero-cta-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
       .h-btn {
         font-size: 14px; padding: 12px 22px;
@@ -544,6 +554,47 @@
         );
       };
 
+      // Copies to the clipboard, returning true only on success (so the button
+      // can show a confirmed state). Falls back to execCommand when the async
+      // Clipboard API is unavailable / blocked (non-secure context).
+      async function copyClip(s) {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(s); return true; }
+        } catch (e) {}
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = s; ta.setAttribute("readonly", "");
+          ta.style.position = "fixed"; ta.style.top = "-1000px"; ta.style.opacity = "0";
+          document.body.appendChild(ta); ta.select();
+          const ok = document.execCommand("copy");
+          document.body.removeChild(ta);
+          return ok;
+        } catch (e) { return false; }
+      }
+      const ClipIcon = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>);
+      const CheckIcon = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>);
+      // Copy button with a visible "Copied" confirmation (green + a checkmark
+      // that pops in), reset after ~1.8s. iconOnly renders just the icon.
+      function CopyButton(props) {
+        const [copied, setCopied] = useState(false);
+        const timerRef = useRef(null);
+        useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+        async function onCopy() {
+          const ok = await copyClip(props.text);
+          if (!ok) return;
+          setCopied(true);
+          if (timerRef.current) clearTimeout(timerRef.current);
+          timerRef.current = setTimeout(() => setCopied(false), 1800);
+        }
+        const cls = "copy-btn" + (props.iconOnly ? " icon-only" : "") + (props.className ? " " + props.className : "") + (copied ? " is-copied" : "");
+        return (
+          <button type="button" className={cls} onClick={onCopy} disabled={props.disabled} aria-label={props.ariaLabel} aria-live="polite">
+            <span className="cico">{copied ? <CheckIcon/> : <ClipIcon/>}</span>
+            {!props.iconOnly && <span>{copied ? "Copied" : (props.label || "Copy")}</span>}
+          </button>
+        );
+      }
+
       function App() {
         const [tweaks, setTweaks] = useState({ theme: "light" });
         const setTweak = (k, v) => setTweaks(t => ({ ...t, [k]: v }));
@@ -686,11 +737,6 @@
           finally { setKeyGen(false); }
         }, [keyGen]);
 
-        const copy = useCallback(async (text) => {
-          try { await navigator.clipboard.writeText(text); showToast("Copied"); }
-          catch { showToast("Copy failed"); }
-        }, []);
-
         /* Domains */
         const [domainInput, setDomainInput] = useState("");
         const [addingDomain, setAddingDomain] = useState(false);
@@ -815,7 +861,7 @@
                         <>
                           <div className="hero-url">
                             <span>{url}</span>
-                            <button className="copy-btn" onClick={() => copy("https://" + url)} aria-label="Copy URL"><Ic.copy/></button>
+                            <CopyButton text={"https://" + url} iconOnly ariaLabel="Copy URL" />
                           </div>
                           <div className="hero-cta-row">
                             <a className="h-btn solid" href={"https://" + url} target="_blank" rel="noreferrer">
@@ -1037,8 +1083,8 @@
                     </>
                   )}
                   <div className="km-actions">
-                    <button className="h-btn" onClick={() => copy(newKey)}>Copy key</button>
-                    {installCmd && <button className="h-btn" onClick={() => copy(installCmd)}>Copy command</button>}
+                    <CopyButton text={newKey} className="h-btn" label="Copy key" />
+                    {installCmd && <CopyButton text={installCmd} className="h-btn" label="Copy command" />}
                     <button className="h-btn solid" onClick={() => { setNewKey(null); setInstallCmd(null); }}>I've saved it</button>
                   </div>
                 </div>
