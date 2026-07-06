@@ -6,7 +6,7 @@ const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 const UNDEFINED_COLUMN = '42703';
 
-type PlanLabel = 'Legacy' | 'Free' | 'Comp' | 'Pro' | 'Trial' | 'Past due' | 'Canceled' | 'Suspended' | 'None';
+type PlanLabel = 'Legacy' | 'Free' | 'Comp' | 'Pro' | 'Trial' | 'Expired' | 'Past due' | 'Canceled' | 'Suspended' | 'None';
 
 interface UserListRow {
   id: string;
@@ -17,6 +17,7 @@ interface UserListRow {
   created_at: string;
   last_seen_at: string | null;
   subscription_status: string | null;
+  current_period_end: string | null;
   legacy_free: boolean | null;
   free_byod: boolean | null;
   suspended_at: string | null;
@@ -32,6 +33,7 @@ function computePlanLabel(row: {
   legacy_free: boolean | null;
   free_byod: boolean | null;
   subscription_status: string | null;
+  current_period_end: string | null;
   comp_until: string | null;
 }): PlanLabel {
   if (row.suspended_at) return 'Suspended';
@@ -42,9 +44,15 @@ function computePlanLabel(row: {
   // Free BYO-domain tier — user chose Free (no Stripe sub). Above the stripe
   // switch (a free_byod account has null subscription_status → would show None).
   if (row.free_byod) return 'Free';
+  // PERIOD-AWARE: the raw column freezes at 'trialing'/'active' when the Stripe
+  // webhook misses the transition (July '26 incident: 5 ended trials rendered
+  // as "Trial" here for days). Never present a live label past its own period
+  // end — show the honest 'Expired' until a Stripe reconcile rewrites the row.
+  const periodPassed =
+    !!row.current_period_end && new Date(row.current_period_end).getTime() < Date.now();
   switch (row.subscription_status) {
-    case 'active': return 'Pro';
-    case 'trialing': return 'Trial';
+    case 'active': return periodPassed ? 'Expired' : 'Pro';
+    case 'trialing': return periodPassed ? 'Expired' : 'Trial';
     case 'past_due': return 'Past due';
     case 'canceled': return 'Canceled';
     default: return 'None';
@@ -76,7 +84,7 @@ export async function GET(req: NextRequest) {
   async function runList(includeComp: boolean) {
     const compCol = includeComp ? 'comp_until' : 'NULL::timestamptz AS comp_until';
     const baseSelect = `SELECT id, username, email, is_admin, email_verified, created_at,
-                               last_seen_at, subscription_status, legacy_free, free_byod, suspended_at, ${compCol}
+                               last_seen_at, subscription_status, current_period_end, legacy_free, free_byod, suspended_at, ${compCol}
                           FROM users ${whereSql}
                           ORDER BY created_at DESC
                           LIMIT $${hasQuery ? 2 : 1} OFFSET $${hasQuery ? 3 : 2}`;

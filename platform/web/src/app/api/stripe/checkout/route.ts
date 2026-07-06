@@ -42,16 +42,30 @@ export async function POST(req: NextRequest) {
     stripe_customer_id: string | null;
     subscription_status: string | null;
     has_used_trial: boolean | null;
+    current_period_end: Date | null;
   }>(
-    'SELECT stripe_customer_id, subscription_status, has_used_trial FROM users WHERE id = $1',
+    'SELECT stripe_customer_id, subscription_status, has_used_trial, current_period_end FROM users WHERE id = $1',
     [session.userId],
   );
   if (existing.rows.length === 0) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
   const row = existing.rows[0];
+  // PERIOD-AWARE gate: the raw column can be a stale 'trialing'/'active' when
+  // the webhook missed the trial's end (that froze 5 users into a 409 loop —
+  // checkout said "already subscribed" while the dashboard said "expired", so
+  // they could never pay again). Only 409 straight away when the stored live
+  // status is still within its own period; past_due keeps the hard 409 (the
+  // portal, not a second subscription, is the fix for a failing payment). A
+  // live-but-EXPIRED row falls through to the Stripe self-heal below, which
+  // 409s if Stripe says the sub is genuinely still live and otherwise lets the
+  // user start a fresh checkout.
   if (isLiveStatus(row.subscription_status)) {
-    return NextResponse.json({ error: 'already_subscribed' }, { status: 409 });
+    const periodCurrent =
+      !row.current_period_end || row.current_period_end.getTime() > Date.now();
+    if (row.subscription_status === 'past_due' || periodCurrent) {
+      return NextResponse.json({ error: 'already_subscribed' }, { status: 409 });
+    }
   }
 
   try {
@@ -59,15 +73,33 @@ export async function POST(req: NextRequest) {
     // Stripe customer exists — ask Stripe directly before creating a second
     // subscription for the same customer.
     if (row.stripe_customer_id) {
-      const subs = await stripe.subscriptions.list({
-        customer: row.stripe_customer_id,
-        status: 'all',
-        limit: 5,
-      });
-      const live = subs.data.find((s) => isLiveStatus(s.status));
-      if (live) {
-        await mirrorSubscription(live);
-        return NextResponse.json({ error: 'already_subscribed' }, { status: 409 });
+      let subs = null;
+      try {
+        subs = await stripe.subscriptions.list({
+          customer: row.stripe_customer_id,
+          status: 'all',
+          limit: 5,
+        });
+      } catch (err) {
+        // The stored customer no longer exists in Stripe (deleted in the
+        // dashboard / cleaned up). Without this, checkout is a PERMANENT 502
+        // dead-end for a user actively trying to pay: the dead id fails here
+        // and again at sessions.create, and the get-or-create branch below
+        // never runs because the stale id is non-null. Treat it as "no
+        // customer": fall through to create a fresh one. Trial eligibility is
+        // unaffected — has_used_trial/used_trials deny a second trial anyway.
+        if ((err as { code?: string })?.code !== 'resource_missing') throw err;
+        console.warn(
+          `[stripe-checkout] stored customer ${row.stripe_customer_id} missing in Stripe — recreating for user ${session.userId}`,
+        );
+        row.stripe_customer_id = null;
+      }
+      if (subs) {
+        const live = subs.data.find((s) => isLiveStatus(s.status));
+        if (live) {
+          await mirrorSubscription(live);
+          return NextResponse.json({ error: 'already_subscribed' }, { status: 409 });
+        }
       }
     }
 

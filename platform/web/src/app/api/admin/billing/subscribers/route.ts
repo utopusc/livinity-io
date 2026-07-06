@@ -26,11 +26,15 @@ function clampLimit(raw: string | null, def: number): number {
 
 function planLabel(row: SubscriberRow): string {
   if (row.legacy_free) return 'Legacy free';
+  // PERIOD-AWARE: a stored live status past its own period end is a stale
+  // webhook-loss artifact — label it honestly instead of Pro/Trial.
+  const periodPassed =
+    !!row.current_period_end && new Date(row.current_period_end).getTime() < Date.now();
   switch (row.subscription_status) {
     case 'active':
-      return 'Pro';
+      return periodPassed ? 'Expired' : 'Pro';
     case 'trialing':
-      return 'Trial';
+      return periodPassed ? 'Expired' : 'Trial';
     case 'past_due':
       return 'Past due';
     case 'canceled':
@@ -102,7 +106,9 @@ export async function GET(req: NextRequest) {
     current_period_end: r.current_period_end,
     past_due_since: r.past_due_since,
     access_revoked_at: r.access_revoked_at,
-    mrr_usd: r.subscription_status === 'active' ? MONTHLY_PRICE_USD : 0,
+    // Only count CURRENT actives toward MRR — an expired-period 'active' row is
+    // a stale mirror, not revenue.
+    mrr_usd: planLabel(r) === 'Pro' ? MONTHLY_PRICE_USD : 0,
     created_at: r.created_at,
     has_tunnel: r.has_tunnel,
   }));

@@ -15,6 +15,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getSubscriptionStatus } from '@/lib/subscription';
+import { reconcileStaleLive } from '@/lib/stripe-sync';
+import { PAST_DUE_GRACE_DAYS } from '@/lib/stripe';
 import { revokeUserAccess, restoreUserAccess } from '@/lib/billing-enforcement';
 import { sendAccessPausedEmail } from '@/lib/email';
 
@@ -45,7 +47,63 @@ export async function GET(req: NextRequest) {
 
   const revoked: string[] = [];
   const restored: string[] = [];
+  const reconciled: string[] = [];
   const errors: string[] = [];
+
+  // ── Pass 0: reconcile STALE-LIVE rows from Stripe BEFORE any revoke ──────
+  // A stored trialing/active whose period has passed (or past_due past grace)
+  // is a webhook-loss symptom: the truth lives in Stripe. Healing FIRST means
+  // (a) a trial that CONVERTED to paid gets mirrored 'active' + a fresh period
+  // instead of being revoked as "expired" in the same sweep, and (b) genuinely
+  // ended subs get an honest 'canceled' so admin surfaces stop saying Trial.
+  // Runs regardless of access_revoked_at (already-revoked rows need the label
+  // heal too — and a mirrored 'active' then gets restored by pass 2 below).
+  // LIMIT bounds Stripe API usage per sweep; the 15-min cadence drains any
+  // backlog quickly. reconcileStaleLive never downgrades on Stripe errors.
+  try {
+    // The past_due arm excludes already-revoked rows: a mirrored past_due stays
+    // past_due (Stripe dunning runs for weeks) so those rows never leave the
+    // stale set — including them would churn a Stripe call every sweep and
+    // permanently occupy LIMIT slots. Stale trialing/active rows self-limit
+    // (one heal → mirrored or downgraded → out of the set), so they stay in
+    // even when revoked (they still need the label heal).
+    const stale = await pool.query<{ id: string; username: string }>(
+      `SELECT id, username
+         FROM users
+        WHERE (subscription_status IN ('trialing', 'active')
+               AND current_period_end IS NOT NULL AND current_period_end < NOW())
+           OR (subscription_status = 'past_due'
+               AND past_due_since IS NOT NULL
+               AND past_due_since < NOW() - make_interval(days => ${PAST_DUE_GRACE_DAYS})
+               AND access_revoked_at IS NULL)
+        ORDER BY current_period_end ASC NULLS LAST
+        LIMIT 25`,
+    );
+    // Time budget: pass 0 must never starve the revoke/restore passes out of
+    // the route's maxDuration — the 15-min cadence drains any remainder.
+    const pass0Deadline = Date.now() + 20_000;
+    for (const user of stale.rows) {
+      if (Date.now() > pass0Deadline) {
+        errors.push('reconcile:budget');
+        break;
+      }
+      try {
+        const outcome = await reconcileStaleLive(user.id);
+        if (outcome === 'mirrored' || outcome === 'downgraded') {
+          reconciled.push(`${user.username}:${outcome}`);
+        } else if (outcome === 'error') {
+          errors.push(`reconcile:${user.username}`);
+        }
+      } catch (err) {
+        console.error(`[billing-enforce] stale-live reconcile failed for ${user.username}:`, err);
+        errors.push(`reconcile:${user.username}`);
+      }
+    }
+  } catch (err) {
+    // Pass 0 is best-effort — a failure here must not stop revoke/restore.
+    console.error('[billing-enforce] stale-live sweep failed:', err);
+    errors.push('reconcile:sweep');
+  }
 
   // ── Pass 1: revoke lapsed users ──────────────────────────────────────────
   const candidates = await pool.query<CandidateRow>(
@@ -152,10 +210,11 @@ export async function GET(req: NextRequest) {
   }
 
   console.info(
-    `[billing-enforce] sweep done: checked=${candidates.rows.length} revoked=${revoked.length} restored=${restored.length} errors=${errors.length}`,
+    `[billing-enforce] sweep done: checked=${candidates.rows.length} reconciled=${reconciled.length} revoked=${revoked.length} restored=${restored.length} errors=${errors.length}`,
   );
   return NextResponse.json({
     checked: candidates.rows.length,
+    reconciled,
     revoked,
     restored,
     errors,

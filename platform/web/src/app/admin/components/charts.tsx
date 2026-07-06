@@ -302,10 +302,17 @@ export type StatusBadgeProps = {
   legacyFree?: boolean;
   freeByod?: boolean;
   revoked?: boolean;
+  /** Stored live status whose own period end has passed (stale raw column —
+   *  the webhook missed the transition). Renders an honest "Expired" instead
+   *  of a live-looking Pro/Trial. Callers derive it from current_period_end. */
+  expired?: boolean;
 };
 
-export function StatusBadge({ status, legacyFree, freeByod, revoked }: StatusBadgeProps) {
+export function StatusBadge({ status, legacyFree, freeByod, revoked, expired }: StatusBadgeProps) {
   if (revoked) return <span className="badge badge-red">Revoked</span>;
+  if (expired && (status === 'trialing' || status === 'active')) {
+    return <span className="badge badge-mute">Expired</span>;
+  }
   switch (status) {
     case 'active':
       return <span className="badge badge-green">Pro</span>;

@@ -43,14 +43,18 @@ export async function GET(req: NextRequest) {
        (SELECT COUNT(*) FROM users WHERE created_at >= date_trunc('day', NOW()))::text AS signups_today,
        (SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '7 days')::text AS signups_7d,
        (SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '30 days')::text AS signups_30d,
-       (SELECT COUNT(*) FROM users WHERE subscription_status = 'trialing')::text AS subs_trialing,
-       (SELECT COUNT(*) FROM users WHERE subscription_status = 'active')::text AS subs_active,
+       (SELECT COUNT(*) FROM users WHERE subscription_status = 'trialing'
+          AND (current_period_end IS NULL OR current_period_end > NOW()))::text AS subs_trialing,
+       (SELECT COUNT(*) FROM users WHERE subscription_status = 'active'
+          AND (current_period_end IS NULL OR current_period_end > NOW()))::text AS subs_active,
        (SELECT COUNT(*) FROM users WHERE subscription_status = 'past_due')::text AS subs_past_due,
        (SELECT COUNT(*) FROM users WHERE subscription_status = 'canceled')::text AS subs_canceled,
-       (SELECT COUNT(*) FROM users WHERE cancel_at_period_end = true AND subscription_status IN ('active', 'trialing'))::text AS subs_cancelling,
+       (SELECT COUNT(*) FROM users WHERE cancel_at_period_end = true AND subscription_status IN ('active', 'trialing')
+          AND (current_period_end IS NULL OR current_period_end > NOW()))::text AS subs_cancelling,
        (SELECT COUNT(*) FROM users WHERE legacy_free = true)::text AS legacy_free_count,
        (SELECT COUNT(*) FROM users WHERE access_revoked_at IS NOT NULL)::text AS revoked_count,
-       (SELECT COUNT(*) FROM users WHERE subscription_status = 'trialing' AND current_period_end < NOW() + INTERVAL '3 days')::text AS trials_ending_3d,
+       (SELECT COUNT(*) FROM users WHERE subscription_status = 'trialing'
+          AND current_period_end > NOW() AND current_period_end < NOW() + INTERVAL '3 days')::text AS trials_ending_3d,
        (SELECT COUNT(*) FROM users WHERE cf_provisioned_at IS NOT NULL)::text AS provisioned_total,
        (SELECT COALESCE(SUM(bytes_in + bytes_out), 0) FROM bandwidth_usage WHERE period_month = to_char(NOW(), 'YYYY-MM'))::text AS bandwidth_this_month_bytes,
        (SELECT COUNT(*) FROM install_history WHERE action = 'install' AND created_at > NOW() - INTERVAL '24 hours')::text AS installs_24h,

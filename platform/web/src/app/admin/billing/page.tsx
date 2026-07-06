@@ -159,6 +159,7 @@ export default function AdminBillingPage() {
                             status={s.subscription_status}
                             legacyFree={s.legacy_free}
                             revoked={s.access_revoked_at != null}
+                            expired={s.plan_label === 'Expired'}
                           />
                         </td>
                         <td>

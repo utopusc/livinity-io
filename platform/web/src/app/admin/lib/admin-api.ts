@@ -317,6 +317,7 @@ export type AdminUserRow = {
   last_seen_at: string | null;
   // AUM additions (list view surfaces billing state inline)
   subscription_status: string | null;
+  current_period_end: string | null;
   legacy_free: boolean;
   free_byod: boolean;
   suspended: boolean;
@@ -509,6 +510,10 @@ export type AdminActionName =
   | 'restore'
   | 'cancel_subscription'
   | 'resume_subscription'
+  // Read-only Stripe → DB heal: mirrors the customer's true subscription state
+  // (fixes rows a missed webhook left stale, e.g. an ended trial stuck at
+  // 'trialing'). Safe on already-canceled subs — no Stripe mutation issued.
+  | 'sync_stripe'
   | 'make_admin'
   | 'remove_admin'
   | 'verify_email'

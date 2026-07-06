@@ -6,7 +6,7 @@
 // (sub.items.data[0]), not the subscription object.
 import type Stripe from 'stripe';
 import pool from '@/lib/db';
-import { stripe } from '@/lib/stripe';
+import { stripe, PAST_DUE_GRACE_DAYS } from '@/lib/stripe';
 import { restoreUserAccess, revokeUserAccess } from '@/lib/billing-enforcement';
 import { hasActiveAccess } from '@/lib/subscription';
 import { sendAccessPausedEmail } from '@/lib/email';
@@ -216,7 +216,20 @@ export async function reconcileFromStripe(userId: string): Promise<string | null
   const customerId = row.rows[0]?.stripe_customer_id;
   if (!customerId) return null;
 
-  const list = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 10 });
+  let list;
+  try {
+    // limit 100 (not 10): the conservative stale-live downgrade treats "no real
+    // sub in this list" as definitive, so the page must be big enough that a
+    // pile of canceled/phantom rows can never hide an older live subscription.
+    list = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 100 });
+  } catch (err) {
+    // The customer was deleted in Stripe (e.g. cleaned up in the dashboard).
+    // That is a DEFINITIVE "no subscriptions exist" answer, not a transient
+    // failure — return null so stale-live callers may downgrade. Any other
+    // Stripe error rethrows (callers must NOT treat an outage as "no subs").
+    if ((err as { code?: string })?.code === 'resource_missing') return null;
+    throw err;
+  }
   // Ignore abandoned-checkout phantoms — they are not real subscriptions and
   // must not pollute the user's billing state or burn their trial eligibility.
   const real = list.data.filter((s) => !PHANTOM_STATUSES.includes(s.status));
@@ -225,6 +238,92 @@ export async function reconcileFromStripe(userId: string): Promise<string | null
 
   await mirrorSubscription(best);
   return best.status;
+}
+
+// ── Stale-live healing ───────────────────────────────────────────────────────
+// The webhook is the primary writer of subscription_status, but when it is
+// down/misconfigured a row mirrored to a LIVE status (trialing/active/past_due)
+// freezes: the dashboard reconcile used to skip all live statuses, the cron
+// never rewrites the column, and checkout 409s before its self-heal. "Stale
+// live" = the stored status still claims live but its own clock has run out —
+// the one state we can detect locally and MUST re-check against Stripe.
+
+/** Row shape needed to decide staleness (subset of users). */
+export interface StaleCheckRow {
+  subscription_status: string | null;
+  current_period_end: Date | null;
+  past_due_since: Date | null;
+}
+
+/**
+ * Pure: does this stored billing state claim "live" past its own deadline?
+ *   - trialing/active with current_period_end in the past
+ *   - past_due whose grace window (PAST_DUE_GRACE_DAYS) has fully elapsed
+ * A live status with NO period end is NOT considered stale here — there is no
+ * local deadline to compare against (mirrorSubscription always writes one).
+ */
+export function isStoredStale(row: StaleCheckRow, now: Date): boolean {
+  const s = row.subscription_status;
+  if (s === 'trialing' || s === 'active') {
+    return !!row.current_period_end && row.current_period_end.getTime() < now.getTime();
+  }
+  if (s === 'past_due') {
+    const graceMs = PAST_DUE_GRACE_DAYS * 24 * 60 * 60 * 1000;
+    return !!row.past_due_since && now.getTime() - row.past_due_since.getTime() > graceMs;
+  }
+  return false;
+}
+
+export type StaleLiveOutcome = 'not_stale' | 'mirrored' | 'downgraded' | 'error';
+
+/**
+ * Heal one user's stale-live row from Stripe (the source of truth).
+ *   - not stale → no-op.
+ *   - Stripe has a real subscription → mirror it (status/period rewritten).
+ *   - Stripe answers definitively with NO real subscription (none listed, all
+ *     phantoms, or the customer itself was deleted) → conservative downgrade to
+ *     'canceled', guarded by re-checking the staleness predicate in the UPDATE
+ *     itself so a concurrent webhook/reconcile mirror is never clobbered.
+ *   - Stripe unreachable → 'error', row untouched (next sweep retries).
+ * Callers: the enforce cron (pass 0, BEFORE any revoke decision) and the
+ * dashboard's maybeReconcileBilling.
+ */
+export async function reconcileStaleLive(userId: string): Promise<StaleLiveOutcome> {
+  const res = await pool.query<StaleCheckRow>(
+    'SELECT subscription_status, current_period_end, past_due_since FROM users WHERE id = $1',
+    [userId],
+  );
+  const row = res.rows[0];
+  if (!row || !isStoredStale(row, new Date())) return 'not_stale';
+
+  let status: string | null;
+  try {
+    status = await reconcileFromStripe(userId);
+  } catch (err) {
+    console.error('[stripe-sync] stale-live reconcile failed for', userId, err);
+    return 'error';
+  }
+  if (status !== null) return 'mirrored';
+
+  // Stripe answered and has no real subscription for this user — the stored
+  // live status is fiction. Downgrade to 'canceled' (truthful: nothing is
+  // live; also unblocks the dashboard reconcile's isLiveStatus gate so any
+  // future divergence self-corrects). The WHERE re-checks staleness so this
+  // can never race a fresher mirror.
+  await pool.query(
+    `UPDATE users
+        SET subscription_status = 'canceled', past_due_since = NULL
+      WHERE id = $1
+        AND (
+              (subscription_status IN ('trialing', 'active')
+               AND current_period_end IS NOT NULL AND current_period_end < NOW())
+           OR (subscription_status = 'past_due'
+               AND past_due_since IS NOT NULL
+               AND past_due_since < NOW() - make_interval(days => $2))
+        )`,
+    [userId, PAST_DUE_GRACE_DAYS],
+  );
+  return 'downgraded';
 }
 
 // ── Shared, bounded reconcile throttle (used by dashboard + billing/sync) ────
@@ -244,6 +343,28 @@ export async function reconcileThrottled(userId: string, minIntervalMs: number):
   }
   await reconcileFromStripe(userId);
   return true;
+}
+
+/**
+ * Throttled stale-live heal for request-path callers (the dashboard's 10s
+ * poll). Shares the reconcile timestamp map: a stale row that does NOT heal
+ * (Stripe outage, or a chronically-stale past_due still in Stripe dunning)
+ * must cost at most one Stripe round-trip per interval per user — not one per
+ * poll. Best-effort like everything here: the cron sweep is the backstop.
+ */
+export async function reconcileStaleLiveThrottled(
+  userId: string,
+  minIntervalMs: number,
+): Promise<StaleLiveOutcome | 'throttled'> {
+  const now = Date.now();
+  const last = reconcileAt.get(userId) ?? 0;
+  if (now - last < minIntervalMs) return 'throttled';
+  reconcileAt.set(userId, now);
+  if (reconcileAt.size > RECONCILE_MAP_CAP) {
+    const oldest = reconcileAt.keys().next().value;
+    if (oldest !== undefined) reconcileAt.delete(oldest);
+  }
+  return reconcileStaleLive(userId);
 }
 
 /** Does this Stripe status count as a live/recent subscription? */

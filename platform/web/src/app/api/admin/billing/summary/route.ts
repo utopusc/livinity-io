@@ -18,15 +18,21 @@ export async function GET(req: NextRequest) {
     revoked: string;
     cancelling: string;
   }>(
+    // PERIOD-AWARE live buckets: a stored trialing/active whose period end has
+    // passed is a stale webhook-loss artifact, not a live subscriber — it must
+    // not inflate trial/paying counts (or the MRR derived from "active").
     `SELECT
-       (SELECT COUNT(*) FROM users WHERE subscription_status = 'trialing')::text AS trialing,
-       (SELECT COUNT(*) FROM users WHERE subscription_status = 'active')::text AS active,
+       (SELECT COUNT(*) FROM users WHERE subscription_status = 'trialing'
+          AND (current_period_end IS NULL OR current_period_end > NOW()))::text AS trialing,
+       (SELECT COUNT(*) FROM users WHERE subscription_status = 'active'
+          AND (current_period_end IS NULL OR current_period_end > NOW()))::text AS active,
        (SELECT COUNT(*) FROM users WHERE subscription_status = 'past_due')::text AS past_due,
        (SELECT COUNT(*) FROM users WHERE subscription_status = 'canceled')::text AS canceled,
        (SELECT COUNT(*) FROM users WHERE subscription_status IS NULL AND legacy_free = false)::text AS inactive,
        (SELECT COUNT(*) FROM users WHERE legacy_free = true)::text AS legacy_free,
        (SELECT COUNT(*) FROM users WHERE access_revoked_at IS NOT NULL)::text AS revoked,
-       (SELECT COUNT(*) FROM users WHERE cancel_at_period_end = true AND subscription_status IN ('active', 'trialing'))::text AS cancelling
+       (SELECT COUNT(*) FROM users WHERE cancel_at_period_end = true AND subscription_status IN ('active', 'trialing')
+          AND (current_period_end IS NULL OR current_period_end > NOW()))::text AS cancelling
     `,
   );
 
@@ -43,6 +49,7 @@ export async function GET(req: NextRequest) {
      FROM users
      WHERE subscription_status = 'trialing'
        AND current_period_end IS NOT NULL
+       AND current_period_end > NOW()
        AND current_period_end < NOW() + INTERVAL '7 days'
      ORDER BY current_period_end ASC
      LIMIT 50`,

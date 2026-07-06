@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import pool from '@/lib/db';
 import { getSession, SESSION_COOKIE_NAME } from '@/lib/auth';
 import { getSubscriptionStatus } from '@/lib/subscription';
-import { reconcileThrottled, isLiveStatus } from '@/lib/stripe-sync';
+import { reconcileThrottled, reconcileStaleLiveThrottled, isLiveStatus, isStoredStale } from '@/lib/stripe-sync';
 import { getSupabaseService, presenceChannelName } from '@/lib/supabase-server';
 import { getMonthlyUsage } from '@/lib/bandwidth';
 import { bandwidthLimitFor } from '@/lib/plan';
@@ -14,18 +14,45 @@ import { bandwidthLimitFor } from '@/lib/plan';
 // Throttled per-user (shared bounded map) so the dashboard's 10s poll doesn't
 // hammer the Stripe API.
 const RECONCILE_THROTTLE_MS = 30_000;
+// Stale-live healing doesn't need request-level freshness — the cron re-checks
+// every 15 min; this only makes an open dashboard heal a bit sooner.
+const STALE_RECONCILE_THROTTLE_MS = 5 * 60_000;
 
 async function maybeReconcileBilling(userId: string): Promise<void> {
-  const row = await pool.query<{ stripe_customer_id: string | null; subscription_status: string | null; legacy_free: boolean | null }>(
-    'SELECT stripe_customer_id, subscription_status, legacy_free FROM users WHERE id = $1',
+  const row = await pool.query<{
+    stripe_customer_id: string | null;
+    subscription_status: string | null;
+    legacy_free: boolean | null;
+    current_period_end: Date | null;
+    past_due_since: Date | null;
+  }>(
+    'SELECT stripe_customer_id, subscription_status, legacy_free, current_period_end, past_due_since FROM users WHERE id = $1',
     [userId],
   );
   const u = row.rows[0];
-  // Only reconcile the "subscribed in Stripe but not mirrored here" window:
-  // a customer exists, the account isn't grandfathered, and we have no live
-  // status. Once mirrored to trialing/active this stops firing.
   if (!u || u.legacy_free || !u.stripe_customer_id) return;
-  if (isLiveStatus(u.subscription_status)) return;
+  // Reconcile in two windows:
+  //   1. "subscribed in Stripe but not mirrored here" — no live status stored.
+  //   2. STALE-LIVE — the stored status claims trialing/active/past_due but its
+  //      own clock ran out (trial ended, grace elapsed). With the webhook down
+  //      nothing else ever rewrites the column (that freeze stranded 5 users at
+  //      'trialing' in July '26), so the dashboard load must re-ask Stripe.
+  // A CURRENT live status still skips — no Stripe traffic on the happy path.
+  if (isLiveStatus(u.subscription_status)) {
+    if (!isStoredStale(u, new Date())) return;
+    // Stale-live needs the mirror-or-downgrade variant: if Stripe has NO real
+    // subscription left, plain reconcile writes nothing and the row would stay
+    // frozen. THROTTLED (5 min): a row that stays stale after a heal attempt
+    // (Stripe outage, or a past_due still in Stripe dunning where the mirror
+    // legitimately re-writes past_due) must not turn the 10s dashboard poll
+    // into a Stripe hot loop — the 15-min cron sweep is the backstop anyway.
+    try {
+      await reconcileStaleLiveThrottled(userId, STALE_RECONCILE_THROTTLE_MS);
+    } catch (err) {
+      console.error('[dashboard] stale-live reconcile failed for', userId, err);
+    }
+    return;
+  }
 
   try {
     await reconcileThrottled(userId, RECONCILE_THROTTLE_MS);

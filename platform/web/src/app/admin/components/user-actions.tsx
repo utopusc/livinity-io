@@ -242,6 +242,25 @@ export function UserActions({ user, currentAdminId, onChanged }: UserActionsProp
         </div>
       </div>
 
+      {/* BILLING SYNC — read-only Stripe → DB heal. Shown for anyone with a
+          Stripe customer: fixes rows a missed webhook left stale (e.g. an
+          ended trial frozen at 'trialing'), where cancel/resume would 502. */}
+      {user.stripe_customer_id ? (
+        <div className="ua-section">
+          <div className="ua-section-label">Billing sync</div>
+          <div className="ua-actions">
+            <button
+              type="button"
+              className="btn ghost sm"
+              disabled={disabled}
+              onClick={() => void run('sync_stripe')}
+            >
+              Sync from Stripe
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {/* SUBSCRIPTION — Stripe cancel/resume */}
       {user.stripe_subscription_id ? (
         <div className="ua-section">
@@ -441,6 +460,8 @@ function labelFor(action: AdminActionName): string {
       return 'Subscription cancelled';
     case 'resume_subscription':
       return 'Subscription resumed';
+    case 'sync_stripe':
+      return 'Synced from Stripe';
     case 'make_admin':
       return 'Made admin';
     case 'remove_admin':

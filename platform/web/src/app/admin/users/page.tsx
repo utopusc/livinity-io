@@ -145,6 +145,7 @@ export default function AdminUsersPage() {
                           legacyFree={u.legacy_free}
                           freeByod={u.free_byod}
                           revoked={u.suspended}
+                          expired={u.plan_label === 'Expired'}
                         />
                         {isComp ? <span className="badge badge-green">Comp</span> : null}
                       </span>

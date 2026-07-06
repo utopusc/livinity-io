@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
 import { requireAdmin } from '@/lib/auth-admin';
 import { logAdminAction } from '@/lib/admin-actions';
@@ -8,9 +7,9 @@ import {
   restoreUserAccess,
   type EnforceableUser,
 } from '@/lib/billing-enforcement';
-import { deprovisionUser } from '@/lib/cf-saas';
+import { deleteUserAccount, StripeCancelFailedError, DeletionDbFailedError } from '@/lib/user-deletion';
 import { stripe } from '@/lib/stripe';
-import { syncSubscription } from '@/lib/stripe-sync';
+import { syncSubscription, reconcileFromStripe, reconcileStaleLive } from '@/lib/stripe-sync';
 import { hasActiveAccess } from '@/lib/subscription';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -40,6 +39,7 @@ interface TargetUser {
   legacy_free: boolean | null;
   subscription_status: string | null;
   access_revoked_at: Date | null;
+  stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   cf_tunnel_id: string | null;
   cf_dns_record_id_apex: string | null;
@@ -53,8 +53,8 @@ interface TargetUser {
  */
 async function loadTargetUser(id: string): Promise<TargetUser | null> {
   const baseCols = `id, username, email, is_admin, email_verified, legacy_free,
-                    subscription_status, access_revoked_at, stripe_subscription_id,
-                    cf_tunnel_id, cf_dns_record_id_apex`;
+                    subscription_status, access_revoked_at, stripe_customer_id,
+                    stripe_subscription_id, cf_tunnel_id, cf_dns_record_id_apex`;
   try {
     const res = await pool.query<TargetUser>(
       `SELECT ${baseCols}, suspended_at FROM users WHERE id = $1 LIMIT 1`,
@@ -234,6 +234,46 @@ export async function POST(req: NextRequest, ctxParam: RouteContext) {
       }
 
       // ── Stripe subscription lifecycle ────────────────────────────────────
+      case 'sync_stripe': {
+        // Pull the user's TRUE billing state straight from Stripe and mirror
+        // it — the admin-side heal for rows a missed webhook left stale (e.g.
+        // 'trialing' frozen past its period end). Read-only against Stripe:
+        // no cancel/update is issued, so unlike cancel/resume this can never
+        // 502 on an already-canceled subscription.
+        try {
+          const status = await reconcileFromStripe(user.id);
+          if (status === null) {
+            // Stripe has no real subscription for this customer. If the stored
+            // row still claims a live one past its own deadline, downgrade it
+            // honestly; otherwise this is a no-op. 'error' means Stripe was
+            // unreachable mid-heal — surface it, don't report a clean sync.
+            const outcome = await reconcileStaleLive(user.id);
+            if (outcome === 'error') {
+              return NextResponse.json(
+                { error: 'Stripe sync failed (see logs)' },
+                { status: 502 },
+              );
+            }
+          }
+        } catch (err) {
+          console.error('[admin-actions] sync_stripe failed:', err);
+          return NextResponse.json(
+            { error: 'Stripe sync failed (see logs)' },
+            { status: 502 },
+          );
+        }
+        const fresh = await pool.query<{ subscription_status: string | null }>(
+          'SELECT subscription_status FROM users WHERE id = $1',
+          [user.id],
+        );
+        const freshStatus = fresh.rows[0]?.subscription_status ?? null;
+        await audit('sync_stripe', {
+          before: user.subscription_status,
+          after: freshStatus,
+        });
+        return NextResponse.json({ ok: true, subscription_status: freshStatus });
+      }
+
       case 'cancel_subscription': {
         const subId = user.stripe_subscription_id;
         if (!subId) {
@@ -404,63 +444,62 @@ export async function POST(req: NextRequest, ctxParam: RouteContext) {
           );
         }
 
-        // Log BEFORE the row is gone — admin_actions has no FK to users, but the
-        // target_username is the durable record once the user row disappears.
-        await audit('delete_user', {
-          username: user.username,
-          email: user.email,
-          had_tunnel: user.cf_tunnel_id !== null,
-        });
-
-        // (1) Best-effort Cloudflare teardown — only if the user has a tunnel.
-        if (user.cf_tunnel_id) {
-          try {
-            const appRecs = await pool.query<{ cf_dns_record_id: string }>(
-              'SELECT cf_dns_record_id FROM user_app_subdomains WHERE user_id = $1',
-              [user.id],
-            );
-            await deprovisionUser({
-              tunnel_id: user.cf_tunnel_id,
-              username: user.username,
-              apex_dns_record_id: user.cf_dns_record_id_apex ?? '',
-              app_dns_record_ids: appRecs.rows
-                .map((r) => r.cf_dns_record_id)
-                .filter((v): v is string => !!v),
-            });
-          } catch (err) {
-            console.error('[admin-actions] delete_user CF teardown failed (continuing):', err);
-          }
-        }
-
-        // (2) Best-effort Stripe cancel.
-        if (user.stripe_subscription_id) {
-          await stripe.subscriptions
-            .cancel(user.stripe_subscription_id)
-            .catch((err) =>
-              console.error('[admin-actions] delete_user Stripe cancel failed (continuing):', err),
-            );
-        }
-
-        // (3) + (4) DB teardown in a transaction: devices is FK RESTRICT so it
-        // must be deleted first; the users DELETE then CASCADEs the rest.
-        const client: PoolClient = await pool.connect();
+        // Shared hardened teardown (lib/user-deletion): Stripe cancel-all keyed
+        // on the CUSTOMER (never the possibly-stale stripe_subscription_id
+        // mirror) and FAIL-CLOSED — if Stripe cancellation fails, the user is
+        // NOT deleted, because a deleted row with a live subscription is an
+        // invisible perpetual charge (zombie billing).
+        let canceledSubs = 0;
         try {
-          await client.query('BEGIN');
-          await client.query('DELETE FROM devices WHERE user_id = $1', [user.id]);
-          await client.query('DELETE FROM users WHERE id = $1', [user.id]);
-          await client.query('COMMIT');
+          const result = await deleteUserAccount({
+            id: user.id,
+            username: user.username,
+            stripe_customer_id: user.stripe_customer_id,
+            cf_tunnel_id: user.cf_tunnel_id,
+            cf_dns_record_id_apex: user.cf_dns_record_id_apex,
+          });
+          canceledSubs = result.canceledSubs;
         } catch (err) {
-          await client.query('ROLLBACK').catch(() => {});
+          if (err instanceof StripeCancelFailedError) {
+            console.error('[admin-actions] delete_user Stripe cancel failed — user NOT deleted:', err);
+            return NextResponse.json(
+              { error: 'Stripe cancel failed — user NOT deleted. Retry, or cancel the subscription in Stripe first.' },
+              { status: 502 },
+            );
+          }
+          if (err instanceof DeletionDbFailedError) {
+            // Stripe subs are already canceled but the row survived — leave a
+            // DURABLE trace of the partial state, then let the admin retry
+            // (the retry's cancel pass is a no-op on canceled subs).
+            console.error('[admin-actions] delete_user PARTIAL — subs canceled, DB delete failed:', err);
+            await audit('delete_user_partial', {
+              username: user.username,
+              canceled_subs: err.canceledSubs,
+              note: 'Stripe subs canceled but DB delete failed — retry the delete',
+            });
+            return NextResponse.json(
+              { error: 'Subscriptions were canceled but the delete failed — retry to finish.' },
+              { status: 500 },
+            );
+          }
           console.error('[admin-actions] delete_user DB teardown failed:', err);
           return NextResponse.json(
             { error: 'Delete failed (see logs)' },
             { status: 500 },
           );
-        } finally {
-          client.release();
         }
 
-        return NextResponse.json({ ok: true, deleted: true });
+        // Audit AFTER the teardown so a fail-closed abort never logs a
+        // deletion that didn't happen (admin_actions has no FK to users, so
+        // writing after the row is gone is fine — target_username endures).
+        await audit('delete_user', {
+          username: user.username,
+          email: user.email,
+          had_tunnel: user.cf_tunnel_id !== null,
+          canceled_subs: canceledSubs,
+        });
+
+        return NextResponse.json({ ok: true, deleted: true, canceled_subs: canceledSubs });
       }
 
       default:

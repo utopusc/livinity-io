@@ -64,6 +64,8 @@ function humanizeAction(action: string): string {
       return 'Cancelled subscription';
     case 'resume_subscription':
       return 'Resumed subscription';
+    case 'sync_stripe':
+      return 'Synced from Stripe';
     case 'make_admin':
       return 'Made admin';
     case 'remove_admin':
@@ -205,6 +207,11 @@ export default function AdminUserDetailPage() {
   const compUntilMs = u?.comp_until ? new Date(u.comp_until).getTime() : NaN;
   const compActive = !Number.isNaN(compUntilMs) && compUntilMs > Date.now();
 
+  // Stale-live guard: a stored trialing/active whose own period end has passed
+  // (webhook-loss artifact) must render "Expired", not a live-looking badge.
+  const billingExpired =
+    !!u?.current_period_end && new Date(u.current_period_end).getTime() < Date.now();
+
   return (
     <AdminShell>
       <div className="admin-page">
@@ -235,6 +242,7 @@ export default function AdminUserDetailPage() {
                       status={u.subscription_status}
                       legacyFree={u.legacy_free}
                       revoked={u.access_revoked_at != null}
+                      expired={billingExpired}
                     />
                     {isOnline(u.last_seen_at) ? (
                       <span className="badge badge-green">Online</span>
@@ -265,6 +273,7 @@ export default function AdminUserDetailPage() {
                   status={u.subscription_status}
                   legacyFree={u.legacy_free}
                   revoked={u.access_revoked_at != null}
+                  expired={billingExpired}
                 />
               </KV>
               <KV label="Comp (time-boxed)">
