@@ -298,7 +298,8 @@ const Paths = () => (
           <p className="dim" style={{fontSize: 15}}>Or $69.99/year. 3-day free trial. Cancel anytime during the trial and you're never charged.</p>
           <ul>
             <li>Your own <em>name</em>.livinity.io subdomain</li>
-            <li>Managed secure tunnel, no port forwarding</li>
+            <li>Managed secure tunnel — no open ports, home IP hidden</li>
+            <li>DDoS & botnet protection at Cloudflare's edge</li>
             <li>App Store: 200+ apps, one-click install</li>
             <li>Liv AI assistant built in, bring your own keys</li>
             <li>Remote access from anywhere</li>

@@ -15,6 +15,7 @@ have actually seen, with the exact recovery steps.
 | Handler | `src/app/api/webhooks/stripe/route.ts` (nodejs runtime, raw-body signature verification) |
 | Idempotency | `stripe_events` table — one row per event id. Success rows persist; **failure rows persist too** (`failed_at` + `error`, migration 0028) and are re-claimable so Stripe's redelivery reprocesses them. 90-day cleanup in the enforce cron. |
 | Watchdog | `enforce-subscriptions` cron checks the endpoint exists + is enabled (~1/hour) and emails `OPS_ALERT_EMAIL` (max 1/day) if not. Signature failures and handler failures also alert (max 1/hour each). |
+| DNS path | `livinity.io` apex is **DNS-only (grey-cloud) straight to Vercel** (verified 2026-07-07: `Server: Vercel`, no `cf-ray`), so Cloudflare zone WAF/bot/SBFM settings can never touch webhook traffic. If the apex is ever flipped to proxied (orange-cloud), FIRST add a WAF custom rule that skips managed rules + SBFM for `uri.path eq "/api/webhooks/stripe"`, or deliveries can silently break again. |
 
 ## Health checks (fastest first)
 
