@@ -640,7 +640,7 @@
         // Sync active section to scroll position
         useEffect(() => {
           if (loading) return;
-          const ids = ["account", "billing", "create-computer", "security", "danger"];
+          const ids = ["account", "billing", "security", "danger"];
           const onScroll = () => {
             for (const id of ids) {
               const el = document.getElementById(id);
@@ -758,7 +758,6 @@
         const sections = [
           { id: "account",         label: "Account" },
           { id: "billing",         label: "Billing" },
-          { id: "create-computer", label: "Create computer" },
           { id: "security",        label: "Security" },
           { id: "danger",          label: "Danger zone" },
         ];
@@ -827,9 +826,7 @@
                       </div>
                       <div className="p-row">
                         <span className="lbl">Computer URL</span>
-                        <span className="val mono">{computerUrl}
-                          <span className="sub">manage custom domains in <a href="/dashboard" style={{ color: "var(--fg)" }}>dashboard</a></span>
-                        </span>
+                        <span className="val mono">{computerUrl}</span>
                         <CopyButton text={"https://" + computerUrl} className="p-btn" label="Copy" />
                       </div>
                     </div>
@@ -911,7 +908,8 @@
                     })()}
                   </section>
 
-                  {/* ============ Create computer (Coming soon) ============ */}
+                  {/* ============ Create computer — hidden until the cloud offering goes live ============ */}
+                  {false && (
                   <section className="p-section" id="create-computer">
                     <div className="p-section-head">
                       <div className="p-section-eyebrow">03 · Create your computer</div>
@@ -977,11 +975,12 @@
                       {currency !== "EUR" && <><br/><span style={{ fontSize: 11, color: "var(--fg-faint)", fontFamily: "var(--mono)" }}>{currency} prices approximate · billed in EUR</span></>}
                     </p>
                   </section>
+                  )}
 
                   {/* ============ Security ============ */}
                   <section className="p-section" id="security">
                     <div className="p-section-head">
-                      <div className="p-section-eyebrow">04 · Security</div>
+                      <div className="p-section-eyebrow">03 · Security</div>
                       <h2 className="p-section-title">Keys and <em>sessions.</em></h2>
                     </div>
                     <div className="p-card">
@@ -1025,7 +1024,7 @@
                   {/* ============ Danger zone ============ */}
                   <section className="p-section" id="danger">
                     <div className="p-section-head">
-                      <div className="p-section-eyebrow">05 · Danger zone</div>
+                      <div className="p-section-eyebrow">04 · Danger zone</div>
                       <h2 className="p-section-title">Things that <em>can't be undone.</em></h2>
                     </div>
                     <div className="p-card">

@@ -1,10 +1,10 @@
 User-agent: *
 Allow: /
-Allow: /customize.html
 Allow: /store
 Allow: /download
 
 Disallow: /api/
+Disallow: /customize
 Disallow: /dashboard
 Disallow: /profile
 Disallow: /login

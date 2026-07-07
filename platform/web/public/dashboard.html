@@ -961,7 +961,8 @@
                       </div>
                     )}
 
-                    {/* Cloud plans (Coming soon) */}
+                    {/* Cloud plans — hidden until the cloud offering goes live */}
+                    {false && (
                     <div className="b-card span-6">
                       <div className="b-head">
                         <span className="b-title">Cloud plans <span className="cs-badge-inline">Coming soon</span></span>
@@ -1008,6 +1009,7 @@
                         <a className="h-btn" href="/#install">Self-host guide</a>
                       </div>
                     </div>
+                    )}
 
                   </div>
                 </>
@@ -1018,7 +1020,6 @@
                   <h1 className="empty-title">Let's <em>connect your computer.</em></h1>
                   <p className="empty-sub">
                     Three quick steps: verify your email, generate an API key, run the install command on your hardware.
-                    You'll be online in under two minutes.
                   </p>
 
                   <div className="empty-steps">

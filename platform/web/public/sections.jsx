@@ -227,10 +227,10 @@ const Install = () => (
           <div className="col" style={{gap: 20}}>
             <span className="eyebrow">Self-host.</span>
             <h2 className="h2" style={{maxWidth: "20ch"}}>
-              Your own computer, ready in about 10 minutes.
+              Your own computer, one line away.
             </h2>
             <p className="lede">
-              One line on any Linux box. The installer brings up Docker, your apps, and a secure tunnel, then you sign in at your own address. No cloud bill, no lock-in.
+              Run the installer on any Linux box and sign in at your own address. No cloud bill, no lock-in.
             </p>
             <div className="row" style={{marginTop: 8}}>
               <a className="btn btn-primary" href="/login">Sign in to Livinity</a>
@@ -252,7 +252,7 @@ const Install = () => (
               <div className="com">  ↳ provisioning Docker · Caddy · Postgres…</div>
               <div className="com">  ↳ installing LivOS & 200+ apps… <span className="ok">done</span></div>
               <div className="com">  ↳ securing tunnel… <span className="ok">done</span></div>
-              <div className="com">  ↳ waking Liv… <span className="ok">ready</span> <span className="com">(~10 min)</span></div>
+              <div className="com">  ↳ waking Liv… <span className="ok">ready</span></div>
               <div style={{marginTop: 10}}><span className="prompt">→</span> open <span style={{color: "#fff"}}>your-name.livinity.io</span> <span className="cur"></span></div>
             </div>
           </div>
@@ -267,23 +267,23 @@ const Paths = () => (
     <div className="container">
       <span className="eyebrow">Pricing.</span>
       <h2 className="h2" style={{marginTop: 16, maxWidth: "22ch"}}>
-        One plan. Everything included.
+        Two plans. Both self-hosted.
       </h2>
       <p className="lede" style={{marginTop: 16, maxWidth: "56ch"}}>
-        Your own Cloud AI Computer with your subdomain, a secure tunnel, 200+ apps, and Liv built in. Try it free for three days.
+        Either way, LivOS runs on your own hardware — 200+ apps, a secure tunnel, and Liv built in. The difference is the address: bring your own domain on Free, or get a managed <em>name</em>.livinity.io with Pro.
       </p>
       <div className="paths two">
         <div className="path-card">
           <span className="ribbon">Free</span>
-          <h4>Free — self-host</h4>
+          <h4>Free — bring your own domain</h4>
           <div className="price">$0<em> /forever</em></div>
-          <p className="dim" style={{fontSize: 15}}>Bring your own domain + Cloudflare. No card, no subscription — ever.</p>
+          <p className="dim" style={{fontSize: 15}}>The complete LivOS on your own hardware — you connect it with your domain and Cloudflare.</p>
           <ul>
             <li>Apps at <em>app-you</em>.yourdomain.com</li>
             <li>Your own domain + your own Cloudflare</li>
             <li>App Store: 200+ apps, one-click install</li>
             <li>Liv AI assistant built in, bring your own keys</li>
-            <li>Runs on your own hardware</li>
+            <li>Same self-hosted LivOS as Pro</li>
             <li>No card, no subscription — ever</li>
           </ul>
           <a className="btn btn-ghost cta" href="/register?plan=free&mode=signup">Choose Free <Icon name="arrow-right" size={14}/></a>
@@ -298,15 +298,15 @@ const Paths = () => (
           <p className="dim" style={{fontSize: 15}}>Or $69.99/year. 3-day free trial. Cancel anytime during the trial and you're never charged.</p>
           <ul>
             <li>Your own <em>name</em>.livinity.io subdomain</li>
-            <li>Secure Cloudflare tunnel, no port forwarding</li>
+            <li>Managed secure tunnel, no port forwarding</li>
             <li>App Store: 200+ apps, one-click install</li>
             <li>Liv AI assistant built in, bring your own keys</li>
-            <li>Custom domains (up to 3) & remote access</li>
-            <li>One-line self-host on your own hardware</li>
+            <li>Remote access from anywhere</li>
+            <li>No domain or Cloudflare setup needed</li>
           </ul>
           <a className="btn btn-primary cta" href="/pricing">Start 3-day free trial <Icon name="arrow-right" size={14}/></a>
           <p className="dim" style={{fontSize: 13, marginTop: 16, textAlign: "center"}}>
-            Prefer to run it yourself? Livinity is open-source, so you can <a href="#install">self-host for free</a>.
+            Pro is <a href="#install">self-hosted</a> too — same OS on your hardware, we run the address and tunnel for you.
           </p>
         </div>
       </div>
@@ -315,12 +315,12 @@ const Paths = () => (
 );
 
 const FAQ_ITEMS = [
-  {q: "What is a Cloud AI Computer?", a: "A full computer (operating system, apps, and assistant) that lives in the cloud and opens in your browser. No installs, no setup, no devices to worry about. Sign in and your computer is right there."},
-  {q: "Is my data really mine?", a: "Yes. Everything Liv learns about you, every file, every chat, is encrypted and stored in your computer's space. Open source means anyone can verify there's no telemetry. You can move it to your own hardware whenever you like."},
+  {q: "What is a Cloud AI Computer?", a: "A full computer (operating system, apps, and assistant) that runs on your own hardware and opens in your browser, anywhere. Behind a secure tunnel, it becomes your own cloud. Sign in and your computer is right there."},
+  {q: "Is my data really mine?", a: "Yes. Everything Liv learns about you, every file, every chat, is encrypted and stored in your computer's space. Open source means anyone can verify there's no telemetry. And it all lives on your own hardware from day one."},
   {q: "Which AI does Liv use?", a: "Bring your own. Liv works with Claude, Gemini, and local models. You choose. We never charge you for tokens, and the keys are yours."},
   {q: "Can I use Livinity on my phone?", a: "Open it in any browser. Liv remembers your conversation between every screen: phone, laptop, tablet, IDE."},
-  {q: "Do I have to be technical?", a: "No. The Cloud plan is one sign-in away. If you can use a website, you can use Livinity. Builders get an open API on top."},
-  {q: "What if I want to leave?", a: "Export everything. Move to your own machine. Livinity is open source, so the door is always unlocked."},
+  {q: "Do I have to be technical?", a: "No. One command on any Linux box and the installer does the rest. If you can use a website, you can use Livinity. Builders get an open API on top."},
+  {q: "What if I want to leave?", a: "Export everything and take it anywhere. It was on your own machine all along. Livinity is open source, so the door is always unlocked."},
 ];
 
 const FAQ = () => {
