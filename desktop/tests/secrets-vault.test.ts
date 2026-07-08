@@ -123,4 +123,36 @@ describe('secrets-vault', () => {
 
     renameSpy.mockRestore();
   });
+
+  it('serializes concurrent vaultSet calls (read,write,read,write — never interleaved reads) so neither update is lost (WR-01)', async () => {
+    const events: string[] = [];
+    const realReadFile = fs.readFile.bind(fs);
+    const realWriteFile = fs.writeFile.bind(fs);
+
+    const readSpy = vi
+      .spyOn(fs, 'readFile')
+      .mockImplementation(async (...args: Parameters<typeof fs.readFile>) => {
+        events.push('read');
+        return (realReadFile as any)(...args);
+      });
+    const writeSpy = vi
+      .spyOn(fs, 'writeFile')
+      .mockImplementation(async (...args: Parameters<typeof fs.writeFile>) => {
+        events.push('write');
+        return (realWriteFile as any)(...args);
+      });
+
+    await Promise.all([vaultSet('session', 'value-1'), vaultSet('apiKey', 'value-2')]);
+
+    readSpy.mockRestore();
+    writeSpy.mockRestore();
+
+    // Without withVaultLock, both calls' reads happen back-to-back before
+    // either write lands (['read','read',...]) and the second write clobbers
+    // the first's update. With the lock, each call's full read-modify-write
+    // cycle completes before the next one starts.
+    expect(events).toEqual(['read', 'write', 'read', 'write']);
+    expect(await vaultGet('session')).toBe('value-1');
+    expect(await vaultGet('apiKey')).toBe('value-2');
+  });
 });

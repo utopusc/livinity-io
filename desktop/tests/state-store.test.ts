@@ -9,7 +9,7 @@ vi.mock('electron', () => ({
   app: { getPath: () => currentStateDir },
 }));
 
-import { writeState, readState } from '../src/main/storage/state-store';
+import { writeState, readState, patchState } from '../src/main/storage/state-store';
 import { StateSchema } from '../shared/ipc-contract';
 
 describe('state-store', () => {
@@ -72,5 +72,45 @@ describe('state-store', () => {
     expect(fieldNames).not.toContain('session');
     expect(fieldNames).not.toContain('apiKey');
     expect(fieldNames).not.toContain('token');
+  });
+
+  it('serializes concurrent patchState calls (read,write,read,write — never interleaved reads) so neither patch is lost (WR-01)', async () => {
+    await writeState({ version: 1, currentStep: 'start' });
+
+    const events: string[] = [];
+    const realReadFile = fsPromises.readFile.bind(fsPromises);
+    const realWriteFile = fsPromises.writeFile.bind(fsPromises);
+
+    const readSpy = vi
+      .spyOn(fsPromises, 'readFile')
+      .mockImplementation(async (...args: Parameters<typeof fsPromises.readFile>) => {
+        events.push('read');
+        return (realReadFile as any)(...args);
+      });
+    const writeSpy = vi
+      .spyOn(fsPromises, 'writeFile')
+      .mockImplementation(async (...args: Parameters<typeof fsPromises.writeFile>) => {
+        events.push('write');
+        return (realWriteFile as any)(...args);
+      });
+
+    await Promise.all([
+      patchState({ currentStep: 'wsl-enable' }),
+      patchState({ domainLabel: 'liv' }),
+    ]);
+
+    readSpy.mockRestore();
+    writeSpy.mockRestore();
+
+    // Without withStateLock, both calls' reads happen back-to-back before
+    // either write lands (['read','read',...]) and the second write clobbers
+    // the first's patch. With the lock, each call's full read-modify-write
+    // cycle completes before the next one starts.
+    expect(events).toEqual(['read', 'write', 'read', 'write']);
+    expect(await readState()).toEqual({
+      version: 1,
+      currentStep: 'wsl-enable',
+      domainLabel: 'liv',
+    });
   });
 });

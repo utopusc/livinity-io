@@ -22,21 +22,41 @@ export function isVaultAvailable(): boolean {
   return safeStorage.isEncryptionAvailable();
 }
 
+// Serializes vaultSet's read-modify-write cycle: ipcMain.handle does not
+// serialize concurrent invocations of the same channel, so two overlapping
+// `vault:set` calls could otherwise race (second call's read happening before
+// the first call's write lands) and silently lose one of the two updates
+// (WR-01). A simple in-process promise-chain mutex is enough for this
+// single-process app.
+let vaultWriteQueue: Promise<unknown> = Promise.resolve();
+function withVaultLock<T>(fn: () => Promise<T>): Promise<T> {
+  const result = vaultWriteQueue.then(fn, fn);
+  vaultWriteQueue = result.then(
+    () => undefined,
+    () => undefined
+  );
+  return result;
+}
+
 /**
  * Encrypts `value` with safeStorage (DPAPI) and persists ONLY the resulting
  * base64 ciphertext, via the shared atomic tmp-write + rename-with-retry
  * helper (atomic-write.ts) — a crash mid-write leaves either the old valid
  * vault.bin or the new valid vault.bin, never a torn file that silently wipes
- * every previously stored secret. Throws `VAULT_UNAVAILABLE` when OS
+ * every previously stored secret. The whole read-modify-write cycle is
+ * serialized per-process (`withVaultLock`) so two overlapping calls can never
+ * race and drop one of the writes. Throws `VAULT_UNAVAILABLE` when OS
  * encryption isn't available — never falls back to writing plaintext.
  */
 export async function vaultSet(key: VaultKey, value: string): Promise<void> {
-  if (!safeStorage.isEncryptionAvailable()) {
-    throw new Error('VAULT_UNAVAILABLE');
-  }
-  const existing = await vaultReadAll();
-  existing[key] = safeStorage.encryptString(value).toString('base64');
-  await atomicWriteFile(vaultPath(), JSON.stringify(existing));
+  return withVaultLock(async () => {
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error('VAULT_UNAVAILABLE');
+    }
+    const existing = await vaultReadAll();
+    existing[key] = safeStorage.encryptString(value).toString('base64');
+    await atomicWriteFile(vaultPath(), JSON.stringify(existing));
+  });
 }
 
 /**

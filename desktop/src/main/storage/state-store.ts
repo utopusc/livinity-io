@@ -45,15 +45,35 @@ export async function readState(): Promise<State | null> {
   }
 }
 
+// Serializes patchState's read-modify-write cycle: ipcMain.handle does not
+// serialize concurrent invocations of the same channel, so two overlapping
+// `state:set` calls could otherwise race (second call's read happening before
+// the first call's write lands) and silently lose one of the two updates
+// (WR-01). A simple in-process promise-chain mutex is enough for this
+// single-process app.
+let stateWriteQueue: Promise<unknown> = Promise.resolve();
+function withStateLock<T>(fn: () => Promise<T>): Promise<T> {
+  const result = stateWriteQueue.then(fn, fn);
+  stateWriteQueue = result.then(
+    () => undefined,
+    () => undefined
+  );
+  return result;
+}
+
 /**
  * Reads the current state (or `DEFAULT_STATE` if absent/corrupt), merges
  * `patch` over it, persists the result, and returns the merged state. This is
  * what the IPC `state:set` handler calls (Plan 03) — it never touches the
- * file I/O directly.
+ * file I/O directly. The whole read-modify-write cycle is serialized
+ * per-process (`withStateLock`) so two overlapping calls can never race and
+ * drop one of the writes.
  */
 export async function patchState(patch: Partial<State>): Promise<State> {
-  const current = (await readState()) ?? DEFAULT_STATE;
-  const merged = { ...current, ...patch } as State;
-  await writeState(merged);
-  return merged;
+  return withStateLock(async () => {
+    const current = (await readState()) ?? DEFAULT_STATE;
+    const merged = { ...current, ...patch } as State;
+    await writeState(merged);
+    return merged;
+  });
 }
