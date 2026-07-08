@@ -12,7 +12,7 @@ vi.mock('electron-log/main', () => ({
 }));
 
 import log from 'electron-log/main';
-import { logSafe } from '../src/main/log';
+import { logSafe, redactSecretLike } from '../src/main/log';
 
 describe('logSafe', () => {
   beforeEach(() => {
@@ -41,5 +41,35 @@ describe('logSafe', () => {
   it('returns void', () => {
     const result = logSafe('event.name', { a: 1 });
     expect(result).toBeUndefined();
+  });
+});
+
+describe('redactSecretLike (WR-03)', () => {
+  it('leaves ordinary short console-message text untouched', () => {
+    expect(redactSecretLike('Failed to load resource: 404')).toBe(
+      'Failed to load resource: 404'
+    );
+  });
+
+  it('redacts a long token-shaped run of characters', () => {
+    const token = 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6';
+    const result = redactSecretLike(`leaked token: ${token}`);
+    expect(result).not.toContain(token);
+    expect(result).toContain('[redacted]');
+  });
+
+  it('redacts a base64-shaped secret with padding', () => {
+    const token = 'QWxhZGRpbjpvcGVuIHNlc2FtZSBleHRyYVBhZGRpbmdIZXJl==';
+    const result = redactSecretLike(`Authorization: Bearer ${token}`);
+    expect(result).not.toContain(token);
+  });
+
+  it('truncates an overly long message instead of writing it to disk in full', () => {
+    // Spaces break up any single run so this exercises the length cap, not
+    // the secret-like-run redaction above.
+    const huge = 'a normal log word. '.repeat(50);
+    const result = redactSecretLike(huge);
+    expect(result.length).toBeLessThan(600);
+    expect(result.endsWith('…[truncated]')).toBe(true);
   });
 });

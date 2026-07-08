@@ -15,7 +15,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { createTray, updateTrayStatus } from './tray/tray-controller';
 import { registerShellIpc } from './ipc/shell.ipc';
-import { logSafe } from './log';
+import { logSafe, redactSecretLike } from './log';
 import { CHANNELS, type Status } from '../../shared/ipc-contract';
 
 let mainWindow: BrowserWindow | null = null;
@@ -59,9 +59,14 @@ function createWindow(): void {
 
   mainWindow.webContents.on('console-message', (details) => {
     if (details.level === 'error' || details.level === 'warning') {
+      // WR-03: `details.message` is an arbitrary renderer-supplied string --
+      // it passes logSafe's scalar-only type guard but its CONTENT is not
+      // scrutinized. Scrub it through redactSecretLike before it ever reaches
+      // disk, so a future `console.error(token)` doesn't write a secret to
+      // userData/logs/main.log in plaintext.
       logSafe('renderer.console', {
         level: details.level,
-        message: details.message,
+        message: redactSecretLike(details.message),
         sourceId: details.sourceId,
         lineNumber: details.lineNumber,
       });
