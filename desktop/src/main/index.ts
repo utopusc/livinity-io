@@ -76,7 +76,13 @@ function createWindow(): void {
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../../../renderer/index.html'));
+    // WR-04: use app.getAppPath() (the project/app root) rather than a
+    // __dirname-relative dot-dot chain -- the compiled output depth
+    // (dist/main/src/main/, per tsconfig.main.json's rootDir: ".") makes a
+    // literal relative chain fragile to get right, exactly as
+    // writeSpikeMainPid's own comment below already warns against for this
+    // same reason.
+    mainWindow.loadFile(path.join(app.getAppPath(), 'dist', 'renderer', 'index.html'));
   }
 
   mainWindow.once('ready-to-show', () => {
