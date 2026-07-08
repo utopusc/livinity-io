@@ -76,7 +76,6 @@ export const CHANNELS = {
   windowHide: 'window:hide',
   appQuit: 'app:quit',
   authLogin: 'auth:login',
-  authSignInWithGoogle: 'auth:signInWithGoogle',
   authSignOut: 'auth:signOut',
   authGetRoute: 'auth:getRoute',
   authChooseFree: 'auth:chooseFree',
@@ -145,13 +144,6 @@ export const AuthLoginResultSchema = z.discriminatedUnion('ok', [
 ]);
 export type AuthLoginResult = z.infer<typeof AuthLoginResultSchema>;
 
-/** Result of `authSignInWithGoogle`. NEVER carries the session cookie value. */
-export const AuthGoogleResultSchema = z.discriminatedUnion('ok', [
-  z.object({ ok: z.literal(true), route: RouteResultSchema }),
-  z.object({ ok: z.literal(false), reason: z.enum(['oauth_blocked', 'no_cookie']) }),
-]);
-export type AuthGoogleResult = z.infer<typeof AuthGoogleResultSchema>;
-
 /** Result of `authChooseFree`. */
 export const ChooseFreeResultSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), route: RouteResultSchema }),
@@ -205,7 +197,6 @@ export type Account = z.infer<typeof AccountSchema>;
  */
 export interface AuthApi {
   authLogin(email: string, password: string): Promise<AuthLoginResult>;
-  authSignInWithGoogle(): Promise<AuthGoogleResult>;
   authSignOut(): Promise<{ ok: true }>;
   authGetRoute(): Promise<RouteResult>;
   authChooseFree(): Promise<ChooseFreeResult>;
