@@ -12,7 +12,8 @@
     "start": "electron .",
     "package": "npm run build && electron-builder --win",
     "test": "vitest run",
-    "test:quick": "vitest run --reporter=dot"
+    "test:quick": "vitest run --reporter=dot",
+    "smoke:oauth": "electron scripts/oauth-smoke.cjs"
   },
   "dependencies": {
     "electron-log": "^5.4.4",
