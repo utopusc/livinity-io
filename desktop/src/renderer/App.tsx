@@ -58,35 +58,61 @@ export default function App() {
   }
 
   return (
-    <div style={{ fontFamily: 'sans-serif', padding: 16, color: '#1f2937' }}>
-      <h1>Livinity Desktop -- Debug Shell</h1>
-      <p>
-        Tray status: <strong>{status}</strong>
-      </p>
-      <p>
-        Persisted currentStep on load: <strong>{currentStep || '(none yet)'}</strong>
-      </p>
+    <div className="shell">
+      <header className="shell-header">
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true" />
+          <div className="brand-text">
+            <span className="brand-name">Livinity Desktop</span>
+            <span className="brand-tag">Debug Shell</span>
+          </div>
+        </div>
+        <div className={`status-badge status-${status}`}>
+          <span className="status-dot" />
+          {labelFor(status)}
+        </div>
+      </header>
 
-      <section style={{ marginTop: 16 }}>
-        <h2>Simulate status (tray color)</h2>
-        {STATUSES.map((s) => (
-          <button key={s} onClick={() => handleSimulate(s)} style={{ marginRight: 8 }}>
-            Simulate: {labelFor(s)}
+      <div className="shell-body">
+        <section className="card">
+          <div className="card-row">
+            <span className="card-label">Persisted currentStep on load</span>
+            <code className="value-chip">{currentStep || '(none yet)'}</code>
+          </div>
+        </section>
+
+        <section className="card">
+          <h2 className="card-title">Simulate status (tray color)</h2>
+          <div className="btn-row">
+            {STATUSES.map((s) => (
+              <button
+                key={s}
+                className={`btn status-${s}${status === s ? ' active' : ''}`}
+                onClick={() => handleSimulate(s)}
+              >
+                <span className="dot" />
+                Simulate: {labelFor(s)}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="card">
+          <h2 className="card-title">Vault self-test</h2>
+          <button className="btn btn-primary" onClick={handleVaultTest}>
+            Vault self-test
           </button>
-        ))}
-      </section>
+          {vaultMessage && <p className="result-line">{vaultMessage}</p>}
+        </section>
 
-      <section style={{ marginTop: 16 }}>
-        <h2>Vault self-test</h2>
-        <button onClick={handleVaultTest}>Vault self-test</button>
-        <p>{vaultMessage}</p>
-      </section>
-
-      <section style={{ marginTop: 16 }}>
-        <h2>State self-test</h2>
-        <button onClick={handleStateTest}>State self-test</button>
-        <p>{stateMessage}</p>
-      </section>
+        <section className="card">
+          <h2 className="card-title">State self-test</h2>
+          <button className="btn btn-primary" onClick={handleStateTest}>
+            State self-test
+          </button>
+          {stateMessage && <p className="result-line">{stateMessage}</p>}
+        </section>
+      </div>
     </div>
   );
 }

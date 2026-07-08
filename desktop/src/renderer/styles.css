@@ -1,0 +1,290 @@
+/**
+ * src/renderer/styles.css
+ *
+ * Additive brand restyle of the Phase 1 debug shell. Tokens lifted from
+ * platform/web/public/styles.css's dark-mode values (body.dark rules) so
+ * this reads as Livinity: dark, calm, monochrome-first, one restrained
+ * accent used only for the live tray-status dot/badge. Functionality,
+ * section structure, and debug copy are untouched -- this file only adds
+ * classNames for existing elements in App.tsx.
+ */
+
+:root {
+  --bg: #050507;
+  --surface: #0e0e10;
+  --surface-2: #15151a;
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.22);
+
+  --fg: #f5f5f7;
+  --fg-dim: #d1d1d6;
+  --fg-mute: #a1a1a8;
+  --fg-faint: #6e6e73;
+
+  --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue',
+    system-ui, sans-serif;
+  --mono: 'SF Mono', ui-monospace, Menlo, monospace;
+
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 18px;
+
+  /* Same 4 status colors as the tray icon (tray-controller.ts COLORS) */
+  --status-installing: #eab308;
+  --status-running: #22c55e;
+  --status-stopped: #94a3b8;
+  --status-error: #ef4444;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+.shell {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0 0 28px;
+}
+
+/* ---------- Header ---------- */
+.shell-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+  -webkit-app-region: drag;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--fg);
+  position: relative;
+  flex-shrink: 0;
+}
+.brand-mark::after {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.brand-name {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+.brand-tag {
+  font-size: 11px;
+  color: var(--fg-mute);
+  font-weight: 400;
+}
+
+/* ---------- Status badge (mirrors tray colors) ---------- */
+.status-badge {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fg-faint);
+}
+.status-badge.status-installing .status-dot {
+  background: var(--status-installing);
+  box-shadow: 0 0 6px rgba(234, 179, 8, 0.6);
+}
+.status-badge.status-running .status-dot {
+  background: var(--status-running);
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+}
+.status-badge.status-stopped .status-dot {
+  background: var(--status-stopped);
+}
+.status-badge.status-error .status-dot {
+  background: var(--status-error);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
+
+/* ---------- Content ---------- */
+.shell-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
+}
+
+.card-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--fg-mute);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.card-label {
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+
+.value-chip {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 4px 9px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Buttons ---------- */
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--fg-dim);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+.btn:hover {
+  background: var(--surface-2);
+  transform: translateY(-1px);
+}
+
+.btn-primary {
+  background: var(--fg);
+  color: #050507;
+  border-color: transparent;
+}
+.btn-primary:hover {
+  opacity: 0.88;
+  background: var(--fg);
+}
+
+.btn.status-installing.active {
+  background: var(--status-installing);
+  border-color: transparent;
+  color: #1a1300;
+}
+.btn.status-running.active {
+  background: var(--status-running);
+  border-color: transparent;
+  color: #04170a;
+}
+.btn.status-stopped.active {
+  background: var(--status-stopped);
+  border-color: transparent;
+  color: #0c1420;
+}
+.btn.status-error.active {
+  background: var(--status-error);
+  border-color: transparent;
+  color: #200404;
+}
+.btn .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+}
+
+.result-line {
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--fg-mute);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+  word-break: break-word;
+}
