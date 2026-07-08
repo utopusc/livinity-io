@@ -5,7 +5,7 @@ vi.mock('../../src/main/log', () => ({
 }));
 
 import { extractSessionCookie, PLATFORM_URL } from '../../src/main/platform/http-client';
-import { login, getMe, getDashboard } from '../../src/main/platform/auth-client';
+import { login, getMe, getDashboard, chooseFree, mintKey, probeKey } from '../../src/main/platform/auth-client';
 
 /** Builds a minimal Response-shaped mock: .json() + .ok/.status + headers.getSetCookie(). */
 function mockResponse(status: number, body: unknown, setCookie: string[] = []): Response {
@@ -176,6 +176,152 @@ describe('auth-client', () => {
       const result = await getDashboard('SESS48');
 
       expect(result).toEqual({ ok: false, networkError: true });
+    });
+  });
+
+  describe('chooseFree', () => {
+    it('returns { ok:true, free_byod:true } on 200 success', async () => {
+      fetchMock.mockResolvedValueOnce(mockResponse(200, { ok: true, free_byod: true }));
+
+      const result = await chooseFree('SESS48');
+
+      expect(result).toEqual({ ok: true, free_byod: true });
+    });
+
+    it('returns { ok:false, reason:"has_paid_plan" } on the 200 guard shape (never downgrades a payer)', async () => {
+      fetchMock.mockResolvedValueOnce(
+        mockResponse(200, { ok: false, reason: 'has_paid_plan', free_byod: false })
+      );
+
+      const result = await chooseFree('SESS48');
+
+      expect(result).toEqual({ ok: false, reason: 'has_paid_plan' });
+    });
+
+    it('returns { ok:false, reason:"not_signed_in" } on 401', async () => {
+      fetchMock.mockResolvedValueOnce(mockResponse(401, { ok: false, error: 'Not signed in' }));
+
+      const result = await chooseFree('bad-session');
+
+      expect(result).toEqual({ ok: false, reason: 'not_signed_in' });
+    });
+
+    it('returns { ok:false, reason:"unavailable" } on 503', async () => {
+      fetchMock.mockResolvedValueOnce(
+        mockResponse(503, { ok: false, error: 'Free tier not available yet' })
+      );
+
+      const result = await chooseFree('SESS48');
+
+      expect(result).toEqual({ ok: false, reason: 'unavailable' });
+    });
+  });
+
+  describe('mintKey', () => {
+    it('sends POST /api/dashboard with body { action } and returns { ok:true, apiKey, prefix } on 200', async () => {
+      fetchMock.mockResolvedValueOnce(
+        mockResponse(200, { success: true, apiKey: 'liv_k_abcdefghij1234567890', prefix: 'liv_k_ab' })
+      );
+
+      const result = await mintKey('SESS48', 'generate-key');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://livinity.io/api/dashboard',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ action: 'generate-key' }),
+        })
+      );
+      expect(result).toEqual({
+        ok: true,
+        apiKey: 'liv_k_abcdefghij1234567890',
+        prefix: 'liv_k_ab',
+      });
+    });
+
+    it('returns { ok:false, reason:"email_unverified" } on the 403 unverified-email message', async () => {
+      fetchMock.mockResolvedValueOnce(
+        mockResponse(403, { error: 'Please verify your email before generating an API key' })
+      );
+
+      const result = await mintKey('SESS48', 'generate-key');
+
+      expect(result).toEqual({ ok: false, reason: 'email_unverified' });
+    });
+
+    it('returns { ok:false, reason:"subscription_required" } on the 403 subscription_required error code', async () => {
+      fetchMock.mockResolvedValueOnce(
+        mockResponse(403, { error: 'subscription_required', reason: 'inactive' })
+      );
+
+      const result = await mintKey('SESS48', 'regenerate-key');
+
+      expect(result).toEqual({ ok: false, reason: 'subscription_required' });
+    });
+
+    it('returns { ok:false, reason:"unauthorized" } on 401', async () => {
+      fetchMock.mockResolvedValueOnce(mockResponse(401, { error: 'Unauthorized' }));
+
+      const result = await mintKey('bad-session', 'generate-key');
+
+      expect(result).toEqual({ ok: false, reason: 'unauthorized' });
+    });
+
+    it('rejects any action string outside the "generate-key"|"regenerate-key" literal union at runtime (defense in depth for the destructive mint call) without ever calling fetch', async () => {
+      const result = await mintKey('SESS48', 'delete-key' as unknown as 'generate-key');
+
+      expect(result).toEqual({ ok: false, reason: 'unauthorized' });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('probeKey', () => {
+    it('attaches header X-Api-Key: <key> and returns { ok:true } on 200', async () => {
+      fetchMock.mockResolvedValueOnce(mockResponse(200, { username: 'alice', email: 'a@b.co' }));
+
+      const result = await probeKey('liv_k_abc');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://livinity.io/api/me/profile',
+        expect.objectContaining({
+          headers: expect.objectContaining({ 'X-Api-Key': 'liv_k_abc' }),
+        })
+      );
+      expect(result).toEqual({ ok: true });
+    });
+
+    it('returns { ok:false, reason:"invalid" } on 401', async () => {
+      fetchMock.mockResolvedValueOnce(mockResponse(401, { error: 'Invalid API key' }));
+
+      const result = await probeKey('liv_k_bad');
+
+      expect(result).toEqual({ ok: false, reason: 'invalid' });
+    });
+
+    it('returns { ok:false, reason:"inactive" } on 402 (valid key, no active entitlement — treated as rejection)', async () => {
+      fetchMock.mockResolvedValueOnce(
+        mockResponse(402, { error: 'Subscription required', code: 'SUBSCRIPTION_REQUIRED' })
+      );
+
+      const result = await probeKey('liv_k_valid_but_inactive');
+
+      expect(result).toEqual({ ok: false, reason: 'inactive' });
+    });
+
+    it('returns { ok:false, reason:"not_found" } on 404', async () => {
+      fetchMock.mockResolvedValueOnce(mockResponse(404, { error: 'User not found' }));
+
+      const result = await probeKey('liv_k_orphaned');
+
+      expect(result).toEqual({ ok: false, reason: 'not_found' });
+    });
+
+    it('returns { ok:false, reason:"network" } when fetch() rejects', async () => {
+      fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
+
+      const result = await probeKey('liv_k_abc');
+
+      expect(result).toEqual({ ok: false, reason: 'network' });
     });
   });
 });
