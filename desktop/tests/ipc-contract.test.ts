@@ -9,6 +9,8 @@ import {
   RouteResultSchema,
   KeyActionSchema,
   AccountSchema,
+  DeviceLoginUpdateSchema,
+  AuthStartDeviceLoginResultSchema,
 } from '../shared/ipc-contract';
 
 describe('VaultKeySchema', () => {
@@ -115,6 +117,12 @@ describe('CHANNELS', () => {
     expect(CHANNELS.authGetAccount).toBe('auth:getAccount');
     expect(CHANNELS.authOpenExternal).toBe('auth:openExternal');
   });
+
+  it('defines the 3 device-flow channels (device-flow pivot, D-16/D-18)', () => {
+    expect(CHANNELS.authStartDeviceLogin).toBe('auth:startDeviceLogin');
+    expect(CHANNELS.authCancelDeviceLogin).toBe('auth:cancelDeviceLogin');
+    expect(CHANNELS.authDeviceLoginUpdate).toBe('auth:deviceLoginUpdate');
+  });
 });
 
 describe('RouteResultSchema (discriminated union)', () => {
@@ -165,5 +173,68 @@ describe('AccountSchema (.strict() leak guard)', () => {
       apiKey: 'liv_k_leaked',
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('DeviceLoginUpdateSchema (discriminated union, device-flow pivot)', () => {
+  it('accepts every phase variant', () => {
+    expect(DeviceLoginUpdateSchema.safeParse({ phase: 'waiting' }).success).toBe(true);
+    expect(
+      DeviceLoginUpdateSchema.safeParse({
+        phase: 'approved',
+        route: { kind: 'byod-wizard' },
+        account: { email: 'a@b.co', username: null },
+      }).success
+    ).toBe(true);
+    expect(DeviceLoginUpdateSchema.safeParse({ phase: 'expired' }).success).toBe(true);
+    expect(DeviceLoginUpdateSchema.safeParse({ phase: 'error', reason: 'network' }).success).toBe(true);
+    expect(
+      DeviceLoginUpdateSchema.safeParse({ phase: 'error', reason: 'exchange_failed' }).success
+    ).toBe(true);
+    expect(
+      DeviceLoginUpdateSchema.safeParse({ phase: 'error', reason: 'session_revoked' }).success
+    ).toBe(true);
+    expect(
+      DeviceLoginUpdateSchema.safeParse({ phase: 'error', reason: 'already_exchanged' }).success
+    ).toBe(true);
+    expect(DeviceLoginUpdateSchema.safeParse({ phase: 'error', reason: 'unknown' }).success).toBe(true);
+    expect(DeviceLoginUpdateSchema.safeParse({ phase: 'cancelled' }).success).toBe(true);
+  });
+
+  it('rejects an unknown phase', () => {
+    expect(DeviceLoginUpdateSchema.safeParse({ phase: 'bogus' }).success).toBe(false);
+  });
+
+  it('rejects an error phase with an unrecognized reason', () => {
+    expect(DeviceLoginUpdateSchema.safeParse({ phase: 'error', reason: 'bogus' }).success).toBe(false);
+  });
+
+  it('REJECTS an approved phase whose account carries an extra leaked field (strict guard via AccountSchema)', () => {
+    const result = DeviceLoginUpdateSchema.safeParse({
+      phase: 'approved',
+      route: { kind: 'byod-wizard' },
+      account: { email: 'a@b.co', username: null, apiKey: 'liv_k_leaked' },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('AuthStartDeviceLoginResultSchema (discriminated union)', () => {
+  it('accepts the ok:true variant', () => {
+    expect(
+      AuthStartDeviceLoginResultSchema.safeParse({ ok: true, userCode: 'ABCD-2345', expiresInMs: 900000 })
+        .success
+    ).toBe(true);
+  });
+
+  it('accepts the ok:false variants', () => {
+    expect(AuthStartDeviceLoginResultSchema.safeParse({ ok: false, reason: 'network' }).success).toBe(true);
+    expect(
+      AuthStartDeviceLoginResultSchema.safeParse({ ok: false, reason: 'already_running' }).success
+    ).toBe(true);
+  });
+
+  it('rejects an unrecognized ok:false reason', () => {
+    expect(AuthStartDeviceLoginResultSchema.safeParse({ ok: false, reason: 'bogus' }).success).toBe(false);
   });
 });
