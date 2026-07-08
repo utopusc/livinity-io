@@ -17,6 +17,7 @@ import Login from './screens/Login';
 import AccountChip from './components/AccountChip';
 import Routing from './screens/Routing';
 import NoEntitlement from './screens/NoEntitlement';
+import KeyChoice from './screens/KeyChoice';
 
 const STATUSES: Status[] = ['installing', 'running', 'stopped', 'error'];
 
@@ -186,14 +187,8 @@ export default function App() {
 
         {screen === 'no-entitlement' && <NoEntitlement onRouted={mapRouteToScreen} />}
 
-        {/* Key-choice screen is still a placeholder here -- wired to its real
-            component later in this same plan (Task 3). Kept minimal so this
-            router compiles and the screen-state machine is exercisable in
-            the meantime. */}
         {screen === 'key-choice' && (
-          <section className="card">
-            <span className="card-label">Key-choice screen (Plan 06)</span>
-          </section>
+          <KeyChoice onProceed={() => setScreen(pendingWizard)} />
         )}
 
         {WIZARD_SCREENS.includes(screen) && (
