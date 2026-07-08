@@ -16,6 +16,7 @@ import type { Status, RouteResult } from '../../shared/ipc-contract';
 import Login from './screens/Login';
 import AccountChip from './components/AccountChip';
 import Routing from './screens/Routing';
+import NoEntitlement from './screens/NoEntitlement';
 
 const STATUSES: Status[] = ['installing', 'running', 'stopped', 'error'];
 
@@ -183,16 +184,12 @@ export default function App() {
 
         {screen === 'routing' && <Routing error={routeError} onRetry={handleRoutingRetry} />}
 
-        {/* No-entitlement/key-choice screens are still placeholders here --
-            wired to their real components later in this same plan (Tasks 2
-            and 3). Kept minimal so this router compiles and the
-            screen-state machine is exercisable in the meantime. */}
-        {screen === 'no-entitlement' && (
-          <section className="card">
-            <span className="card-label">No-entitlement screen (Plan 06)</span>
-          </section>
-        )}
+        {screen === 'no-entitlement' && <NoEntitlement onRouted={mapRouteToScreen} />}
 
+        {/* Key-choice screen is still a placeholder here -- wired to its real
+            component later in this same plan (Task 3). Kept minimal so this
+            router compiles and the screen-state machine is exercisable in
+            the meantime. */}
         {screen === 'key-choice' && (
           <section className="card">
             <span className="card-label">Key-choice screen (Plan 06)</span>
