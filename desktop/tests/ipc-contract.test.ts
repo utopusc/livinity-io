@@ -6,6 +6,9 @@ import {
   VaultGetResultSchema,
   StateSchema,
   CHANNELS,
+  RouteResultSchema,
+  KeyActionSchema,
+  AccountSchema,
 } from '../shared/ipc-contract';
 
 describe('VaultKeySchema', () => {
@@ -98,5 +101,69 @@ describe('CHANNELS', () => {
     expect(CHANNELS.windowMinimize).toBe('window:minimize');
     expect(CHANNELS.windowHide).toBe('window:hide');
     expect(CHANNELS.appQuit).toBe('app:quit');
+  });
+
+  it('defines the 10 Phase-2 auth channels', () => {
+    expect(CHANNELS.authLogin).toBe('auth:login');
+    expect(CHANNELS.authSignInWithGoogle).toBe('auth:signInWithGoogle');
+    expect(CHANNELS.authSignOut).toBe('auth:signOut');
+    expect(CHANNELS.authGetRoute).toBe('auth:getRoute');
+    expect(CHANNELS.authChooseFree).toBe('auth:chooseFree');
+    expect(CHANNELS.authGetKeyAction).toBe('auth:getKeyAction');
+    expect(CHANNELS.authProbeKey).toBe('auth:probeKey');
+    expect(CHANNELS.authRegenerateKey).toBe('auth:regenerateKey');
+    expect(CHANNELS.authGetAccount).toBe('auth:getAccount');
+    expect(CHANNELS.authOpenExternal).toBe('auth:openExternal');
+  });
+});
+
+describe('RouteResultSchema (discriminated union)', () => {
+  it('accepts every routing kind', () => {
+    expect(RouteResultSchema.safeParse({ kind: 'login' }).success).toBe(true);
+    expect(RouteResultSchema.safeParse({ kind: 'login', expired: true }).success).toBe(true);
+    expect(RouteResultSchema.safeParse({ kind: 'byod-wizard' }).success).toBe(true);
+    expect(RouteResultSchema.safeParse({ kind: 'pro-wizard' }).success).toBe(true);
+    expect(RouteResultSchema.safeParse({ kind: 'legacy-free-wizard' }).success).toBe(true);
+    expect(RouteResultSchema.safeParse({ kind: 'no-entitlement' }).success).toBe(true);
+    expect(RouteResultSchema.safeParse({ kind: 'error', reason: 'network' }).success).toBe(true);
+    expect(RouteResultSchema.safeParse({ kind: 'error', reason: 'server' }).success).toBe(true);
+  });
+
+  it('rejects an unknown kind', () => {
+    expect(RouteResultSchema.safeParse({ kind: 'bogus' }).success).toBe(false);
+  });
+
+  it('rejects an error kind with an unrecognized reason', () => {
+    expect(RouteResultSchema.safeParse({ kind: 'error', reason: 'bogus' }).success).toBe(false);
+  });
+});
+
+describe('KeyActionSchema', () => {
+  it('accepts the 4 vault-vs-platform key-state values', () => {
+    expect(KeyActionSchema.safeParse('mint').success).toBe(true);
+    expect(KeyActionSchema.safeParse('choice-screen').success).toBe(true);
+    expect(KeyActionSchema.safeParse('use-cached').success).toBe(true);
+    expect(KeyActionSchema.safeParse('stale-reprompt').success).toBe(true);
+  });
+
+  it('rejects an unknown value', () => {
+    expect(KeyActionSchema.safeParse('regenerate').success).toBe(false);
+    expect(KeyActionSchema.safeParse('').success).toBe(false);
+  });
+});
+
+describe('AccountSchema (.strict() leak guard)', () => {
+  it('accepts safe account fields', () => {
+    expect(AccountSchema.safeParse({ email: 'a@b.com', username: null }).success).toBe(true);
+    expect(AccountSchema.safeParse({ email: 'a@b.com', username: 'bruce' }).success).toBe(true);
+  });
+
+  it('REJECTS an object carrying an extra apiKey field (strict leak guard)', () => {
+    const result = AccountSchema.safeParse({
+      email: 'a@b.com',
+      username: null,
+      apiKey: 'liv_k_leaked',
+    });
+    expect(result.success).toBe(false);
   });
 });

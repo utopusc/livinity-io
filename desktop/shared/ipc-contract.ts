@@ -75,6 +75,16 @@ export const CHANNELS = {
   windowMinimize: 'window:minimize',
   windowHide: 'window:hide',
   appQuit: 'app:quit',
+  authLogin: 'auth:login',
+  authSignInWithGoogle: 'auth:signInWithGoogle',
+  authSignOut: 'auth:signOut',
+  authGetRoute: 'auth:getRoute',
+  authChooseFree: 'auth:chooseFree',
+  authGetKeyAction: 'auth:getKeyAction',
+  authProbeKey: 'auth:probeKey',
+  authRegenerateKey: 'auth:regenerateKey',
+  authGetAccount: 'auth:getAccount',
+  authOpenExternal: 'auth:openExternal',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -98,6 +108,115 @@ export interface ShellApi {
   minimize(): void;
   hide(): void;
   quit(): void;
+}
+
+// ---------------------------------------------------------------------------
+// Auth / platform routing (Phase 2)
+// ---------------------------------------------------------------------------
+
+/**
+ * The tier-routing decision, computed by decideRoute (main, pure) for the
+ * non-login cases and by session-manager for the `login` case. This is what
+ * the renderer switches on to pick a screen — never a raw HTTP status.
+ */
+export const RouteResultSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('login'), expired: z.boolean().optional() }),
+  z.object({ kind: z.literal('byod-wizard') }),
+  z.object({ kind: z.literal('pro-wizard') }),
+  z.object({ kind: z.literal('legacy-free-wizard') }),
+  z.object({ kind: z.literal('no-entitlement') }),
+  z.object({ kind: z.literal('error'), reason: z.enum(['network', 'server']) }),
+]);
+export type RouteResult = z.infer<typeof RouteResultSchema>;
+
+/** The 4 outcomes of the vault-vs-platform key-state matrix (decideKeyAction, AUTH-06). */
+export const KeyActionSchema = z.enum(['mint', 'choice-screen', 'use-cached', 'stale-reprompt']);
+export type KeyAction = z.infer<typeof KeyActionSchema>;
+
+/** Result of `authLogin`. NEVER carries the session cookie value — only the routing outcome. */
+export const AuthLoginResultSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), route: RouteResultSchema }),
+  z.object({
+    ok: z.literal(false),
+    status: z.number(),
+    error: z.string(),
+    retryAfterMs: z.number().optional(),
+  }),
+]);
+export type AuthLoginResult = z.infer<typeof AuthLoginResultSchema>;
+
+/** Result of `authSignInWithGoogle`. NEVER carries the session cookie value. */
+export const AuthGoogleResultSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), route: RouteResultSchema }),
+  z.object({ ok: z.literal(false), reason: z.enum(['oauth_blocked', 'no_cookie']) }),
+]);
+export type AuthGoogleResult = z.infer<typeof AuthGoogleResultSchema>;
+
+/** Result of `authChooseFree`. */
+export const ChooseFreeResultSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), route: RouteResultSchema }),
+  z.object({ ok: z.literal(false), reason: z.enum(['has_paid_plan', 'not_signed_in', 'unavailable']) }),
+]);
+export type ChooseFreeResult = z.infer<typeof ChooseFreeResultSchema>;
+
+/** Result of `authGetKeyAction`. `prefix` is a display prefix ONLY, never the full key. */
+export const KeyActionResultSchema = z.object({
+  action: KeyActionSchema,
+  prefix: z.string().nullable().optional(),
+});
+export type KeyActionResult = z.infer<typeof KeyActionResultSchema>;
+
+/** Result of `authProbeKey` (X-API-Key live validation, D-14). NEVER echoes the probed key back. */
+export const ProbeKeyResultSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true) }),
+  z.object({ ok: z.literal(false), reason: z.enum(['invalid', 'inactive', 'not_found', 'network']) }),
+]);
+export type ProbeKeyResult = z.infer<typeof ProbeKeyResultSchema>;
+
+/**
+ * Result of `authRegenerateKey`. DESTRUCTIVE — only `prefix` crosses the
+ * boundary on success, never the full `liv_k_...` value.
+ */
+export const RegenerateKeyResultSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), prefix: z.string() }),
+  z.object({
+    ok: z.literal(false),
+    reason: z.enum(['email_unverified', 'subscription_required', 'network', 'failed']),
+  }),
+]);
+export type RegenerateKeyResult = z.infer<typeof RegenerateKeyResultSchema>;
+
+/**
+ * Safe account fields for the header chip. `.strict()` so an accidental extra
+ * field (e.g. a raw `apiKey` or `sessionValue` slipping in upstream) is
+ * REJECTED at parse time instead of silently passed through — a schema-level
+ * leak guard, not just a convention.
+ */
+export const AccountSchema = z
+  .object({ email: z.string(), username: z.string().nullable() })
+  .strict();
+export type Account = z.infer<typeof AccountSchema>;
+
+/**
+ * AuthApi — the auth/platform-routing sibling of ShellApi. Same IPC-boundary
+ * invariant as the vault: no method here ever returns a raw session cookie or
+ * a full `liv_k_` key value — only booleans, prefixes, routing decisions, and
+ * user-safe account fields (email/username) cross this boundary.
+ */
+export interface AuthApi {
+  authLogin(email: string, password: string): Promise<AuthLoginResult>;
+  authSignInWithGoogle(): Promise<AuthGoogleResult>;
+  authSignOut(): Promise<{ ok: true }>;
+  authGetRoute(): Promise<RouteResult>;
+  authChooseFree(): Promise<ChooseFreeResult>;
+  /** Resolves the liv_k_ key state (mint invisibly / prompt / use cached). Never returns the key value. */
+  authGetKeyAction(): Promise<KeyActionResult>;
+  authProbeKey(key: string): Promise<ProbeKeyResult>;
+  /** Destructive — reachable ONLY from the KeyChoice screen's confirmed path. */
+  authRegenerateKey(): Promise<RegenerateKeyResult>;
+  /** Safe account fields for the header chip. Never the cookie/key. */
+  authGetAccount(): Promise<Account | null>;
+  authOpenExternal(target: 'reset-password' | 'pricing'): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
