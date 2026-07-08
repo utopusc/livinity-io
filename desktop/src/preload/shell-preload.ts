@@ -39,11 +39,16 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 import type { IpcRendererEvent } from 'electron';
-import type { ShellApi, DevSpikeApi, Status } from '../../shared/ipc-contract';
+import type { ShellApi, DevSpikeApi, AuthApi, Status } from '../../shared/ipc-contract';
 
 // Mirrors shared/ipc-contract.ts CHANNELS exactly — duplicated here because a
 // sandboxed preload cannot require() that (or any) local project file. Kept
 // in sync by tests/shell-preload.test.ts.
+//
+// Phase 2 (auth): 9 auth:* channels. `authSignInWithGoogle` is deliberately
+// NOT present — that channel was removed from the canonical CHANNELS export
+// (device-flow pivot, D-16/D-18); the device-flow channels that replace it
+// land in Plan 02-09.
 const CHANNELS = {
   vaultSet: 'vault:set',
   vaultHas: 'vault:has',
@@ -54,6 +59,15 @@ const CHANNELS = {
   windowMinimize: 'window:minimize',
   windowHide: 'window:hide',
   appQuit: 'app:quit',
+  authLogin: 'auth:login',
+  authSignOut: 'auth:signOut',
+  authGetRoute: 'auth:getRoute',
+  authChooseFree: 'auth:chooseFree',
+  authGetKeyAction: 'auth:getKeyAction',
+  authProbeKey: 'auth:probeKey',
+  authRegenerateKey: 'auth:regenerateKey',
+  authGetAccount: 'auth:getAccount',
+  authOpenExternal: 'auth:openExternal',
 } as const;
 
 // DEV-ONLY spike channels (Plan 04) — local literals for the same sandbox
@@ -64,7 +78,7 @@ const DEV_CHANNELS = {
   devUpdateSim: 'dev:updateSim',
 } as const;
 
-const api: ShellApi & DevSpikeApi = {
+const api: ShellApi & DevSpikeApi & AuthApi = {
   vaultSet: (key, value) => ipcRenderer.invoke(CHANNELS.vaultSet, { key, value }),
   vaultHas: (key) => ipcRenderer.invoke(CHANNELS.vaultHas, { key }),
   getState: () => ipcRenderer.invoke(CHANNELS.stateGet),
@@ -92,6 +106,17 @@ const api: ShellApi & DevSpikeApi = {
   // DEV-ONLY spike triggers (Plan 04) — main-side handlers gated !app.isPackaged.
   devSpawnHolderA: () => ipcRenderer.invoke(DEV_CHANNELS.devSpawnHolderA),
   devUpdateSim: () => ipcRenderer.invoke(DEV_CHANNELS.devUpdateSim),
+  // Phase 2 (auth) — 9 one-line invoke wrappers. No embedded-Google-window
+  // sign-in method: that channel no longer exists (device-flow pivot, D-16/D-18).
+  authLogin: (email, password) => ipcRenderer.invoke(CHANNELS.authLogin, { email, password }),
+  authSignOut: () => ipcRenderer.invoke(CHANNELS.authSignOut),
+  authGetRoute: () => ipcRenderer.invoke(CHANNELS.authGetRoute),
+  authChooseFree: () => ipcRenderer.invoke(CHANNELS.authChooseFree),
+  authGetKeyAction: () => ipcRenderer.invoke(CHANNELS.authGetKeyAction),
+  authProbeKey: (key) => ipcRenderer.invoke(CHANNELS.authProbeKey, { key }),
+  authRegenerateKey: () => ipcRenderer.invoke(CHANNELS.authRegenerateKey),
+  authGetAccount: () => ipcRenderer.invoke(CHANNELS.authGetAccount),
+  authOpenExternal: (target) => ipcRenderer.invoke(CHANNELS.authOpenExternal, { target }),
 };
 
 contextBridge.exposeInMainWorld('api', api);

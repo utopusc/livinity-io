@@ -114,6 +114,61 @@ describe('shell-preload channel wiring (drift guard vs. shared/ipc-contract.ts)'
   });
 });
 
+describe('shell-preload Phase-2 auth channel wiring (drift guard vs. shared/ipc-contract.ts)', () => {
+  beforeEach(() => {
+    invokeMock.mockClear();
+  });
+
+  it('authLogin invokes the canonical auth:login channel with { email, password }', async () => {
+    await getExposedApi()!.authLogin('a@b.co', 'pw');
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.authLogin, { email: 'a@b.co', password: 'pw' });
+  });
+
+  it('authSignOut invokes the canonical auth:signOut channel with no payload', async () => {
+    await getExposedApi()!.authSignOut();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.authSignOut);
+  });
+
+  it('authGetRoute invokes the canonical auth:getRoute channel with no payload', async () => {
+    await getExposedApi()!.authGetRoute();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.authGetRoute);
+  });
+
+  it('authChooseFree invokes the canonical auth:chooseFree channel with no payload', async () => {
+    await getExposedApi()!.authChooseFree();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.authChooseFree);
+  });
+
+  it('authGetKeyAction invokes the canonical auth:getKeyAction channel with no payload', async () => {
+    await getExposedApi()!.authGetKeyAction();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.authGetKeyAction);
+  });
+
+  it('authProbeKey invokes the canonical auth:probeKey channel with { key }', async () => {
+    await getExposedApi()!.authProbeKey('liv_k_pasted');
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.authProbeKey, { key: 'liv_k_pasted' });
+  });
+
+  it('authRegenerateKey invokes the canonical auth:regenerateKey channel with no payload', async () => {
+    await getExposedApi()!.authRegenerateKey();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.authRegenerateKey);
+  });
+
+  it('authGetAccount invokes the canonical auth:getAccount channel with no payload', async () => {
+    await getExposedApi()!.authGetAccount();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.authGetAccount);
+  });
+
+  it('authOpenExternal invokes the canonical auth:openExternal channel with { target }', async () => {
+    await getExposedApi()!.authOpenExternal('reset-password');
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.authOpenExternal, { target: 'reset-password' });
+  });
+
+  it('does NOT expose an authSignInWithGoogle method (removed — device-flow pivot, D-16/D-18)', () => {
+    expect((getExposedApi() as Record<string, unknown>).authSignInWithGoogle).toBeUndefined();
+  });
+});
+
 describe('shell-preload DEV-ONLY spike channels (Plan 04 drift guard vs. shell.ipc.ts)', () => {
   // The dev spike channels are deliberately NOT part of the production
   // CHANNELS object (Plan 03 decision), so the canonical source to guard
