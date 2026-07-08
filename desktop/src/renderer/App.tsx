@@ -35,7 +35,8 @@ export default function App() {
 
   useEffect(() => {
     window.api.getState().then((s) => setCurrentStep(s.currentStep));
-    window.api.onStatusChanged((s) => setStatus(s));
+    const unsubscribe = window.api.onStatusChanged((s) => setStatus(s));
+    return unsubscribe;
   }, []);
 
   async function handleSimulate(s: Status): Promise<void> {

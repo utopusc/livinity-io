@@ -38,6 +38,7 @@
  */
 
 import { contextBridge, ipcRenderer } from 'electron';
+import type { IpcRendererEvent } from 'electron';
 import type { ShellApi, DevSpikeApi, Status } from '../../shared/ipc-contract';
 
 // Mirrors shared/ipc-contract.ts CHANNELS exactly — duplicated here because a
@@ -70,7 +71,14 @@ const api: ShellApi & DevSpikeApi = {
   setState: (patch) => ipcRenderer.invoke(CHANNELS.stateSet, patch),
   simulateStatus: (status) => ipcRenderer.invoke(CHANNELS.statusSimulate, status),
   onStatusChanged: (cb: (status: Status) => void) => {
-    ipcRenderer.on(CHANNELS.statusChanged, (_event, status: Status) => cb(status));
+    // IN-06: keep a reference to the exact listener so it can be removed —
+    // returning an unsubscribe function lets callers (e.g. a React effect)
+    // avoid accumulating duplicate listeners across remounts/HMR.
+    const listener = (_event: IpcRendererEvent, status: Status) => cb(status);
+    ipcRenderer.on(CHANNELS.statusChanged, listener);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.statusChanged, listener);
+    };
   },
   minimize: () => {
     void ipcRenderer.invoke(CHANNELS.windowMinimize);

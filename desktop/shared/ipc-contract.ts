@@ -88,7 +88,13 @@ export interface ShellApi {
   getState(): Promise<State>;
   setState(patch: Partial<State>): Promise<State>;
   simulateStatus(status: Status): Promise<void>;
-  onStatusChanged(cb: (status: Status) => void): void;
+  /**
+   * Subscribes `cb` to status-changed pushes and returns an unsubscribe
+   * function. Callers (e.g. a React effect) MUST call the returned function
+   * on cleanup to avoid accumulating duplicate listeners across remounts/HMR
+   * (IN-06).
+   */
+  onStatusChanged(cb: (status: Status) => void): () => void;
   minimize(): void;
   hide(): void;
   quit(): void;

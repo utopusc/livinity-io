@@ -17,11 +17,12 @@ import { join } from 'node:path';
 // import of shell-preload below) — a plain `let` here would throw a TDZ
 // ReferenceError because ES module imports execute before any of THIS
 // module's own top-level statements, regardless of source order.
-const { invokeMock, onMock, getExposedApi, setExposedApi } = vi.hoisted(() => {
+const { invokeMock, onMock, removeListenerMock, getExposedApi, setExposedApi } = vi.hoisted(() => {
   let exposedApi: Record<string, (...args: unknown[]) => unknown> | undefined;
   return {
     invokeMock: vi.fn().mockResolvedValue(undefined),
     onMock: vi.fn(),
+    removeListenerMock: vi.fn(),
     getExposedApi: () => exposedApi,
     setExposedApi: (api: Record<string, (...args: unknown[]) => unknown>) => {
       exposedApi = api;
@@ -38,6 +39,7 @@ vi.mock('electron', () => ({
   ipcRenderer: {
     invoke: (...args: unknown[]) => invokeMock(...args),
     on: (...args: unknown[]) => onMock(...args),
+    removeListener: (...args: unknown[]) => removeListenerMock(...args),
   },
 }));
 
@@ -48,6 +50,7 @@ describe('shell-preload channel wiring (drift guard vs. shared/ipc-contract.ts)'
   beforeEach(() => {
     invokeMock.mockClear();
     onMock.mockClear();
+    removeListenerMock.mockClear();
   });
 
   it('exposes an api object on the main world via contextBridge', () => {
@@ -83,6 +86,16 @@ describe('shell-preload channel wiring (drift guard vs. shared/ipc-contract.ts)'
     const cb = vi.fn();
     getExposedApi()!.onStatusChanged(cb);
     expect(onMock).toHaveBeenCalledWith(CHANNELS.statusChanged, expect.any(Function));
+  });
+
+  it('onStatusChanged returns an unsubscribe function that removes the exact listener (IN-06)', () => {
+    const cb = vi.fn();
+    const unsubscribe = getExposedApi()!.onStatusChanged(cb) as () => void;
+    expect(typeof unsubscribe).toBe('function');
+
+    const registeredListener = onMock.mock.calls[0][1];
+    unsubscribe();
+    expect(removeListenerMock).toHaveBeenCalledWith(CHANNELS.statusChanged, registeredListener);
   });
 
   it('minimize invokes the canonical window:minimize channel', () => {
