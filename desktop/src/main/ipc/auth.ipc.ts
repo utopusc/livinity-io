@@ -65,67 +65,90 @@ export function registerAuthIpc(_deps: AuthIpcDeps): void {
       return { ok: false, status: 400, error: 'Invalid request' };
     }
 
-    // NEVER log parsed.data.email / parsed.data.password.
-    const result = await login(parsed.data.email, parsed.data.password);
+    try {
+      // NEVER log parsed.data.email / parsed.data.password.
+      const result = await login(parsed.data.email, parsed.data.password);
 
-    if (result.ok) {
-      loginFailures = 0;
-      if (result.sessionValue) {
-        await vaultSet('session', result.sessionValue);
+      if (result.ok) {
+        loginFailures = 0;
+        if (result.sessionValue) {
+          await vaultSet('session', result.sessionValue);
+        }
+        logSafe('auth.login', { ok: true });
+        return { ok: true, route: await validateSession() };
       }
-      logSafe('auth.login', { ok: true });
-      return { ok: true, route: await validateSession() };
-    }
 
-    loginFailures++;
-    const retryMs = nextBackoffMs(loginFailures);
-    if (retryMs > 0) {
-      throttleUntil = Date.now() + retryMs;
-    }
-    logSafe('auth.login', { ok: false });
+      loginFailures++;
+      const retryMs = nextBackoffMs(loginFailures);
+      if (retryMs > 0) {
+        throttleUntil = Date.now() + retryMs;
+      }
+      logSafe('auth.login', { ok: false });
 
-    if ('networkError' in result) {
+      if ('networkError' in result) {
+        return {
+          ok: false,
+          status: 0,
+          error: 'network',
+          retryAfterMs: retryMs || undefined,
+        };
+      }
       return {
         ok: false,
-        status: 0,
-        error: 'network',
+        status: result.status,
+        error: result.error,
         retryAfterMs: retryMs || undefined,
       };
+    } catch {
+      // Never let an exception (e.g. VAULT_UNAVAILABLE from vaultSet) cross
+      // the IPC boundary as an unhandled rejection (T-02-09).
+      logSafe('auth.login', { exception: true });
+      return { ok: false, status: 500, error: 'internal_error' };
     }
-    return {
-      ok: false,
-      status: result.status,
-      error: result.error,
-      retryAfterMs: retryMs || undefined,
-    };
   });
 
   ipcMain.handle(CHANNELS.authSignOut, async (_event, raw: unknown) => {
     NoPayloadSchema.safeParse(raw);
-    await signOut();
+    try {
+      await signOut();
+    } catch {
+      logSafe('auth.signOut', { exception: true });
+    }
+    // AuthApi.authSignOut's return type is `{ ok: true }` only — best-effort
+    // sign-out is still reported ok so the renderer always returns to login.
     return { ok: true };
   });
 
   ipcMain.handle(CHANNELS.authGetRoute, async (_event, raw: unknown) => {
     NoPayloadSchema.safeParse(raw);
-    return validateSession();
+    try {
+      return await validateSession();
+    } catch {
+      logSafe('auth.getRoute', { exception: true });
+      return { kind: 'error' as const, reason: 'network' as const };
+    }
   });
 
   ipcMain.handle(CHANNELS.authChooseFree, async (_event, raw: unknown) => {
     NoPayloadSchema.safeParse(raw);
-    const sessionValue = await vaultGet('session');
-    if (!sessionValue) {
-      return { ok: false, reason: 'not_signed_in' as const };
-    }
+    try {
+      const sessionValue = await vaultGet('session');
+      if (!sessionValue) {
+        return { ok: false, reason: 'not_signed_in' as const };
+      }
 
-    const result = await chooseFree(sessionValue);
-    if (result.ok) {
-      return { ok: true, route: await validateSession() };
-    }
-    if ('networkError' in result) {
+      const result = await chooseFree(sessionValue);
+      if (result.ok) {
+        return { ok: true, route: await validateSession() };
+      }
+      if ('networkError' in result) {
+        return { ok: false, reason: 'unavailable' as const };
+      }
+      return { ok: false, reason: result.reason };
+    } catch {
+      logSafe('auth.chooseFree', { exception: true });
       return { ok: false, reason: 'unavailable' as const };
     }
-    return { ok: false, reason: result.reason };
   });
 
   // AUTH-06 safety: decideKeyAction MUST run before any mintKey call. The
@@ -134,43 +157,48 @@ export function registerAuthIpc(_deps: AuthIpcDeps): void {
   // below).
   ipcMain.handle(CHANNELS.authGetKeyAction, async (_event, raw: unknown) => {
     NoPayloadSchema.safeParse(raw);
-    const sessionValue = await vaultGet('session');
-    if (!sessionValue) {
-      return { action: 'choice-screen' as const };
-    }
-
-    const vaultHasKey = await vaultHas('apiKey');
-    const dash = await getDashboard(sessionValue);
-
-    // Dashboard-failure guard FIRST — before any property access on dash and
-    // before decideKeyAction/mintKey are ever reached. A network/5xx failure
-    // must not be treated as "no key" or trigger an invisible mint.
-    if (!dash.ok) {
-      logSafe('auth.getKeyAction', { dashboardFailed: true });
-      return { action: 'choice-screen' as const };
-    }
-
-    const action = decideKeyAction(vaultHasKey, dash.apiKey.hasKey);
-
-    if (action === 'mint') {
-      const mintResult = await mintKey(sessionValue, 'generate-key');
-      if (!mintResult.ok) {
-        logSafe('auth.getKeyAction', { mintFailed: true });
+    try {
+      const sessionValue = await vaultGet('session');
+      if (!sessionValue) {
         return { action: 'choice-screen' as const };
       }
-      await vaultSet('apiKey', mintResult.apiKey);
-      logSafe('auth.getKeyAction', { action: 'mint' });
-      return { action: 'use-cached' as const, prefix: mintResult.prefix };
-    }
 
-    if (action === 'stale-reprompt') {
-      await vaultDelete('apiKey');
-      logSafe('auth.getKeyAction', { action: 'stale-reprompt' });
+      const vaultHasKey = await vaultHas('apiKey');
+      const dash = await getDashboard(sessionValue);
+
+      // Dashboard-failure guard FIRST — before any property access on dash
+      // and before decideKeyAction/mintKey are ever reached. A network/5xx
+      // failure must not be treated as "no key" or trigger an invisible mint.
+      if (!dash.ok) {
+        logSafe('auth.getKeyAction', { dashboardFailed: true });
+        return { action: 'choice-screen' as const };
+      }
+
+      const action = decideKeyAction(vaultHasKey, dash.apiKey.hasKey);
+
+      if (action === 'mint') {
+        const mintResult = await mintKey(sessionValue, 'generate-key');
+        if (!mintResult.ok) {
+          logSafe('auth.getKeyAction', { mintFailed: true });
+          return { action: 'choice-screen' as const };
+        }
+        await vaultSet('apiKey', mintResult.apiKey);
+        logSafe('auth.getKeyAction', { action: 'mint' });
+        return { action: 'use-cached' as const, prefix: mintResult.prefix };
+      }
+
+      if (action === 'stale-reprompt') {
+        await vaultDelete('apiKey');
+        logSafe('auth.getKeyAction', { action: 'stale-reprompt' });
+        return { action: 'choice-screen' as const };
+      }
+
+      logSafe('auth.getKeyAction', { action });
+      return { action };
+    } catch {
+      logSafe('auth.getKeyAction', { exception: true });
       return { action: 'choice-screen' as const };
     }
-
-    logSafe('auth.getKeyAction', { action });
-    return { action };
   });
 
   ipcMain.handle(CHANNELS.authProbeKey, async (_event, raw: unknown) => {
@@ -179,50 +207,65 @@ export function registerAuthIpc(_deps: AuthIpcDeps): void {
       return { ok: false, reason: 'invalid' as const };
     }
 
-    const result = await probeKey(parsed.data.key);
-    if (result.ok) {
-      await vaultSet('apiKey', parsed.data.key);
-      logSafe('auth.probeKey', { ok: true });
-      return { ok: true };
+    try {
+      const result = await probeKey(parsed.data.key);
+      if (result.ok) {
+        await vaultSet('apiKey', parsed.data.key);
+        logSafe('auth.probeKey', { ok: true });
+        return { ok: true };
+      }
+      logSafe('auth.probeKey', { ok: false });
+      return { ok: false, reason: result.reason };
+    } catch {
+      logSafe('auth.probeKey', { exception: true });
+      return { ok: false, reason: 'network' as const };
     }
-    logSafe('auth.probeKey', { ok: false });
-    return { ok: false, reason: result.reason };
   });
 
   // The ONLY place in this file that sends the destructive replace-action —
   // reachable only from the KeyChoice screen's explicit confirmed path.
   ipcMain.handle(CHANNELS.authRegenerateKey, async (_event, raw: unknown) => {
     NoPayloadSchema.safeParse(raw);
-    const sessionValue = await vaultGet('session');
-    if (!sessionValue) {
+    try {
+      const sessionValue = await vaultGet('session');
+      if (!sessionValue) {
+        return { ok: false, reason: 'failed' as const };
+      }
+
+      const result = await mintKey(sessionValue, 'regenerate-key');
+      if (result.ok) {
+        await vaultSet('apiKey', result.apiKey);
+        logSafe('auth.regenerateKey', { ok: true });
+        return { ok: true, prefix: result.prefix };
+      }
+
+      logSafe('auth.regenerateKey', { ok: false });
+      if ('networkError' in result) {
+        return { ok: false, reason: 'network' as const };
+      }
+      if (result.reason === 'email_unverified' || result.reason === 'subscription_required') {
+        return { ok: false, reason: result.reason };
+      }
+      return { ok: false, reason: 'failed' as const };
+    } catch {
+      logSafe('auth.regenerateKey', { exception: true });
       return { ok: false, reason: 'failed' as const };
     }
-
-    const result = await mintKey(sessionValue, 'regenerate-key');
-    if (result.ok) {
-      await vaultSet('apiKey', result.apiKey);
-      logSafe('auth.regenerateKey', { ok: true });
-      return { ok: true, prefix: result.prefix };
-    }
-
-    logSafe('auth.regenerateKey', { ok: false });
-    if ('networkError' in result) {
-      return { ok: false, reason: 'network' as const };
-    }
-    if (result.reason === 'email_unverified' || result.reason === 'subscription_required') {
-      return { ok: false, reason: result.reason };
-    }
-    return { ok: false, reason: 'failed' as const };
   });
 
   ipcMain.handle(CHANNELS.authGetAccount, async (_event, raw: unknown) => {
     NoPayloadSchema.safeParse(raw);
-    const sessionValue = await vaultGet('session');
-    if (!sessionValue) return null;
+    try {
+      const sessionValue = await vaultGet('session');
+      if (!sessionValue) return null;
 
-    const me = await getMe(sessionValue);
-    if (!me.ok) return null;
-    return { email: me.user.email, username: me.user.username };
+      const me = await getMe(sessionValue);
+      if (!me.ok) return null;
+      return { email: me.user.email, username: me.user.username };
+    } catch {
+      logSafe('auth.getAccount', { exception: true });
+      return null;
+    }
   });
 
   ipcMain.handle(CHANNELS.authOpenExternal, async (_event, raw: unknown) => {
@@ -231,6 +274,10 @@ export function registerAuthIpc(_deps: AuthIpcDeps): void {
 
     const url = parsed.data.target === 'reset-password' ? RESET_PASSWORD_URL : PRICING_URL;
     logSafe('auth.openExternal', { target: parsed.data.target });
-    await shell.openExternal(url);
+    try {
+      await shell.openExternal(url);
+    } catch {
+      logSafe('auth.openExternal', { exception: true });
+    }
   });
 }

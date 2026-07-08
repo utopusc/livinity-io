@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 
 /**
  * auth.ipc.test.ts mocks every service registerAuthIpc composes (session-
@@ -86,6 +86,26 @@ const vaultDeleteMock = vi.mocked(vaultDelete);
 describe('auth.ipc', () => {
   beforeAll(() => {
     registerAuthIpc({ getMainWindow: () => null });
+  });
+
+  // Reset call-history on every SERVICE mock between tests (never the
+  // handleMock/handlers map — the registration from beforeAll must persist
+  // for the whole suite). Without this, e.g. the "mint" test's mintKey call
+  // would still show up in a later test's `.not.toHaveBeenCalled()` check.
+  beforeEach(() => {
+    loginMock.mockClear();
+    getMeMock.mockClear();
+    getDashboardMock.mockClear();
+    chooseFreeMock.mockClear();
+    mintKeyMock.mockClear();
+    probeKeyMock.mockClear();
+    decideKeyActionMock.mockClear();
+    validateSessionMock.mockClear();
+    signOutMock.mockClear();
+    vaultGetMock.mockClear();
+    vaultSetMock.mockClear();
+    vaultHasMock.mockClear();
+    vaultDeleteMock.mockClear();
   });
 
   describe('auth:signInWithGoogle (severed — device-flow pivot, D-16/D-18)', () => {
@@ -359,6 +379,97 @@ describe('auth.ipc', () => {
         },
       });
       expect(await handler({})).toEqual({ email: 'a@b.co', username: 'bruce' });
+    });
+  });
+
+  describe('exception safety (T-02-09: no handler lets an exception cross the IPC boundary)', () => {
+    it('auth:login survives vaultSet throwing (e.g. VAULT_UNAVAILABLE) and returns a safe error, never rejects', async () => {
+      const handler = getHandler(CHANNELS.authLogin)!;
+      loginMock.mockResolvedValueOnce({
+        ok: true,
+        sessionValue: 'sess-1',
+        user: { id: 'u1', username: null, email: 'a@b.co', emailVerified: true },
+      });
+      vaultSetMock.mockRejectedValueOnce(new Error('VAULT_UNAVAILABLE'));
+
+      await expect(handler({}, { email: 'a@b.co', password: 'pw' })).resolves.toMatchObject({
+        ok: false,
+        status: 500,
+      });
+    });
+
+    it('auth:signOut survives session-manager.signOut() throwing and still returns { ok: true }', async () => {
+      const handler = getHandler(CHANNELS.authSignOut)!;
+      signOutMock.mockRejectedValueOnce(new Error('fs failure'));
+
+      await expect(handler({})).resolves.toEqual({ ok: true });
+    });
+
+    it('auth:getRoute survives validateSession() throwing and returns a retryable error', async () => {
+      const handler = getHandler(CHANNELS.authGetRoute)!;
+      validateSessionMock.mockRejectedValueOnce(new Error('boom'));
+
+      await expect(handler({})).resolves.toEqual({ kind: 'error', reason: 'network' });
+    });
+
+    it('auth:chooseFree survives chooseFree() throwing and returns { ok:false, reason:"unavailable" }', async () => {
+      const handler = getHandler(CHANNELS.authChooseFree)!;
+      vaultGetMock.mockResolvedValueOnce('sess-1');
+      chooseFreeMock.mockRejectedValueOnce(new Error('boom'));
+
+      await expect(handler({})).resolves.toEqual({ ok: false, reason: 'unavailable' });
+    });
+
+    it('auth:getKeyAction survives vaultSet throwing during the mint path and returns { action:"choice-screen" }', async () => {
+      const handler = getHandler(CHANNELS.authGetKeyAction)!;
+      vaultGetMock.mockResolvedValueOnce('sess-1');
+      vaultHasMock.mockResolvedValueOnce(false);
+      getDashboardMock.mockResolvedValueOnce({
+        ok: true,
+        billing: { active: true, plan: 'free', status: null, legacyFree: false, reason: null },
+        apiKey: { hasKey: false, prefix: null },
+        server: { online: false, url: '', provisioned: false },
+      });
+      decideKeyActionMock.mockReturnValueOnce('mint');
+      mintKeyMock.mockResolvedValueOnce({ ok: true, apiKey: 'liv_k_x', prefix: 'liv_k_x' });
+      vaultSetMock.mockRejectedValueOnce(new Error('VAULT_UNAVAILABLE'));
+
+      await expect(handler({})).resolves.toEqual({ action: 'choice-screen' });
+    });
+
+    it('auth:probeKey survives vaultSet throwing after a valid probe and returns { ok:false, reason:"network" }', async () => {
+      const handler = getHandler(CHANNELS.authProbeKey)!;
+      probeKeyMock.mockResolvedValueOnce({ ok: true });
+      vaultSetMock.mockRejectedValueOnce(new Error('VAULT_UNAVAILABLE'));
+
+      await expect(handler({}, { key: 'liv_k_pasted' })).resolves.toEqual({
+        ok: false,
+        reason: 'network',
+      });
+    });
+
+    it('auth:regenerateKey survives vaultSet throwing and returns { ok:false, reason:"failed" }', async () => {
+      const handler = getHandler(CHANNELS.authRegenerateKey)!;
+      vaultGetMock.mockResolvedValueOnce('sess-1');
+      mintKeyMock.mockResolvedValueOnce({ ok: true, apiKey: 'liv_k_new', prefix: 'liv_k_new' });
+      vaultSetMock.mockRejectedValueOnce(new Error('VAULT_UNAVAILABLE'));
+
+      await expect(handler({})).resolves.toEqual({ ok: false, reason: 'failed' });
+    });
+
+    it('auth:getAccount survives getMe() throwing and returns null', async () => {
+      const handler = getHandler(CHANNELS.authGetAccount)!;
+      vaultGetMock.mockResolvedValueOnce('sess-1');
+      getMeMock.mockRejectedValueOnce(new Error('boom'));
+
+      await expect(handler({})).resolves.toBe(null);
+    });
+
+    it('auth:openExternal survives shell.openExternal() throwing and never rejects', async () => {
+      const handler = getHandler(CHANNELS.authOpenExternal)!;
+      openExternalMock.mockRejectedValueOnce(new Error('boom'));
+
+      await expect(handler({}, { target: 'pricing' })).resolves.toBeUndefined();
     });
   });
 });
