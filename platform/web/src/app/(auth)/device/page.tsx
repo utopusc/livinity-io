@@ -21,17 +21,32 @@ export default function DeviceApprovePage() {
   } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Prefill the code from ?code= (deep-link from the desktop app), if present.
+  // Prefill only — never auto-submit; the user still clicks "Approve Device"
+  // (keeps the human-in-the-loop approval intact).
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get('code');
+    if (raw) {
+      let v = raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+      if (v.length > 4) v = v.slice(0, 4) + '-' + v.slice(4);
+      setCode(v);
+    }
+  }, []);
+
   // Check authentication on mount
   useEffect(() => {
     async function checkAuth() {
+      // Preserve ?code= across the /login redirect bounce so a not-yet-signed-in
+      // user lands back on a prefilled /device page instead of a bare one (D-17b).
+      const back = '/device' + window.location.search;
       try {
         const res = await fetch('/api/auth/me');
         if (!res.ok) {
-          router.push('/login?redirect=/device');
+          router.push('/login?redirect=' + encodeURIComponent(back));
           return;
         }
       } catch {
-        router.push('/login?redirect=/device');
+        router.push('/login?redirect=' + encodeURIComponent(back));
         return;
       }
       setCheckingAuth(false);
