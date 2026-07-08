@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
 }));
 
 import { safeStorage } from 'electron';
-import { vaultSet, vaultGet, vaultHas } from '../src/main/storage/secrets-vault';
+import { vaultSet, vaultGet, vaultHas, vaultDelete } from '../src/main/storage/secrets-vault';
 
 describe('secrets-vault', () => {
   beforeEach(async () => {
@@ -154,6 +154,17 @@ describe('secrets-vault', () => {
     expect(events).toEqual(['read', 'write', 'read', 'write']);
     expect(await vaultGet('session')).toBe('value-1');
     expect(await vaultGet('apiKey')).toBe('value-2');
+  });
+
+  it('vaultDelete removes only the target key, leaving a different key set alongside untouched', async () => {
+    await vaultSet('session', 'session-value');
+    await vaultSet('apiKey', 'key-value');
+
+    await vaultDelete('session');
+
+    expect(await vaultHas('session')).toBe(false);
+    expect(await vaultHas('apiKey')).toBe(true);
+    expect(await vaultGet('apiKey')).toBe('key-value');
   });
 
   it('removes the orphaned .tmp file when the rename ultimately fails (IN-03)', async () => {
