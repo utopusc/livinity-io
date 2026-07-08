@@ -45,6 +45,29 @@ function createWindow(): void {
     },
   });
 
+  // DIAGNOSTICS (hardening): a preload script that throws an unhandled
+  // exception aborts silently from the user's perspective — the renderer
+  // loads, window.api is never exposed, and React throws on its first
+  // window.api.* call, producing a blank/white window with no visible error.
+  // Wiring these two webContents events to logSafe makes that failure mode
+  // diagnosable from userData/logs/main.log instead of a mystery white
+  // screen (this is exactly how the zod-in-sandboxed-preload bug below was
+  // confirmed).
+  mainWindow.webContents.on('preload-error', (_event, preloadPath, error) => {
+    logSafe('preload.error', { preloadPath, message: String(error?.message ?? error) });
+  });
+
+  mainWindow.webContents.on('console-message', (details) => {
+    if (details.level === 'error' || details.level === 'warning') {
+      logSafe('renderer.console', {
+        level: details.level,
+        message: details.message,
+        sourceId: details.sourceId,
+        lineNumber: details.lineNumber,
+      });
+    }
+  });
+
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
   } else {
