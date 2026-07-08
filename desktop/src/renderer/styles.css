@@ -508,3 +508,21 @@ button {
   font-size: 14px;
   color: var(--fg-dim);
 }
+
+/* ---------- Neutral pulsing dot (Routing/tier-detection wait state) ----------
+   Modifier on .status-dot: overrides the color to a neutral --fg-mute (never
+   a status color, per D-09/UI-SPEC Screen 6) and adds the pulse the base
+   .status-dot never needed for its static tray-mirroring use. ---------- */
+.status-dot-pulse {
+  background: var(--fg-mute);
+  animation: status-dot-pulse 1.6s ease-in-out infinite;
+}
+@keyframes status-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}

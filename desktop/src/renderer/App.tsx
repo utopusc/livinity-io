@@ -11,10 +11,11 @@
  * `ShellApi & DevSpikeApi & AuthApi`) -- no per-file `declare global` here.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Status, RouteResult } from '../../shared/ipc-contract';
 import Login from './screens/Login';
 import AccountChip from './components/AccountChip';
+import Routing from './screens/Routing';
 
 const STATUSES: Status[] = ['installing', 'running', 'stopped', 'error'];
 
@@ -23,7 +24,6 @@ function labelFor(status: Status): string {
 }
 
 type Screen =
-  | 'loading'
   | 'login'
   | 'routing'
   | 'no-entitlement'
@@ -32,11 +32,29 @@ type Screen =
   | 'pro-wizard'
   | 'legacy-free-wizard';
 
+const WIZARD_SCREENS: Screen[] = ['byod-wizard', 'pro-wizard', 'legacy-free-wizard'];
+
+/** UI-SPEC Screen 7 -- neutral badge text, no color-coding by tier. */
+function planBadgeText(screen: Screen): string {
+  if (screen === 'byod-wizard') return 'Free · your own domain';
+  if (screen === 'legacy-free-wizard') return 'Free · managed';
+  return 'Pro'; // pro-wizard
+}
+
 export default function App() {
   // ---- Screen router state (Phase 2) ----
-  const [screen, setScreen] = useState<Screen>('loading');
+  // Initial mount and the between-request tier-detection wait both render
+  // through 'routing' (Routing.tsx) -- there is no separate 'loading' state.
+  const [screen, setScreen] = useState<Screen>('routing');
   const [loginExpired, setLoginExpired] = useState(false);
   const [routeError, setRouteError] = useState(false);
+  // The wizard screen a key-choice detour should return to once the key is
+  // resolved (paste-validated or regenerate-confirmed) -- set right before
+  // switching to 'key-choice' so KeyChoice's onProceed knows where to land.
+  const [pendingWizard, setPendingWizard] = useState<Screen>('byod-wizard');
+  // Guards the entitled-branch key-resolution check against re-firing on
+  // every render of the same wizard screen (only re-armed on a fresh login).
+  const keyResolvedRef = useRef(false);
 
   // ---- Phase 1 debug shell state (dev-gated below) ----
   const [status, setStatus] = useState<Status>('stopped');
@@ -47,6 +65,9 @@ export default function App() {
 
   function mapRouteToScreen(route: RouteResult): void {
     if (route.kind === 'login') {
+      // A fresh login re-arms the key-resolution guard -- a different
+      // account/session may have a different key state.
+      keyResolvedRef.current = false;
       setLoginExpired(route.expired ?? false);
       setRouteError(false);
       setScreen('login');
@@ -66,6 +87,29 @@ export default function App() {
   useEffect(() => {
     window.api.authGetRoute().then(mapRouteToScreen);
   }, []);
+
+  function handleRoutingRetry(): void {
+    setRouteError(false);
+    window.api.authGetRoute().then(mapRouteToScreen);
+  }
+
+  // Key-resolution step (AUTH-06): entering ANY entitled wizard branch
+  // resolves the liv_k_ key exactly once per entry. 'mint'/'use-cached' are
+  // already resolved/stored main-side -- stay on the wizard placeholder.
+  // 'choice-screen'/'stale-reprompt' detour to KeyChoice, remembering which
+  // wizard to return to.
+  useEffect(() => {
+    if (!WIZARD_SCREENS.includes(screen) || keyResolvedRef.current) return;
+    keyResolvedRef.current = true;
+    window.api.authGetKeyAction().then((result) => {
+      if (result.action === 'choice-screen' || result.action === 'stale-reprompt') {
+        setPendingWizard(screen);
+        setScreen('key-choice');
+      }
+      // 'mint' | 'use-cached': the wizard placeholder already showing is the
+      // correct destination -- nothing further to do here.
+    });
+  }, [screen]);
 
   useEffect(() => {
     window.api.getState().then((s) => setCurrentStep(s.currentStep));
@@ -112,8 +156,10 @@ export default function App() {
     }
   }
 
-  // Signed-in for header purposes = any screen past login/loading.
-  const authenticated = screen !== 'login' && screen !== 'loading';
+  // Signed-in for header purposes = every screen except Login (UI-SPEC
+  // Screen 5 notes: Routing/no-entitlement/key-choice/wizard all share the
+  // account-chip header treatment once a session is being resolved).
+  const authenticated = screen !== 'login';
 
   return (
     <div className="shell">
@@ -135,29 +181,12 @@ export default function App() {
       <div className="shell-body">
         {screen === 'login' && <Login onRouted={mapRouteToScreen} expired={loginExpired} />}
 
-        {screen === 'loading' && (
-          <section className="card">
-            <div className="card-row">
-              <span className="status-dot" />
-              <span className="card-label">Checking your account…</span>
-            </div>
-          </section>
-        )}
+        {screen === 'routing' && <Routing error={routeError} onRetry={handleRoutingRetry} />}
 
-        {/* Routing/no-entitlement/key-choice/wizard screens are placeholders
-            here -- Plan 06 builds their real content. Kept minimal so this
-            router compiles and the screen-state machine is exercisable. */}
-        {screen === 'routing' && (
-          <section className="card">
-            <div className="card-row">
-              <span className="status-dot" />
-              <span className="card-label">
-                {routeError ? 'Routing error (Plan 06)' : 'Routing (Plan 06)'}
-              </span>
-            </div>
-          </section>
-        )}
-
+        {/* No-entitlement/key-choice screens are still placeholders here --
+            wired to their real components later in this same plan (Tasks 2
+            and 3). Kept minimal so this router compiles and the
+            screen-state machine is exercisable in the meantime. */}
         {screen === 'no-entitlement' && (
           <section className="card">
             <span className="card-label">No-entitlement screen (Plan 06)</span>
@@ -170,11 +199,15 @@ export default function App() {
           </section>
         )}
 
-        {(screen === 'byod-wizard' ||
-          screen === 'pro-wizard' ||
-          screen === 'legacy-free-wizard') && (
+        {WIZARD_SCREENS.includes(screen) && (
           <section className="card">
-            <span className="card-label">Wizard entry ({screen}) placeholder (Plan 06)</span>
+            <div className="card-row" style={{ justifyContent: 'flex-start', gap: 12 }}>
+              <h1 className="heading">You're signed in — let's get you set up</h1>
+              <span className="plan-badge">{planBadgeText(screen)}</span>
+            </div>
+            <p className="note-line" style={{ marginTop: 16 }}>
+              Setup wizard continues in the next step.
+            </p>
           </section>
         )}
 
