@@ -13,51 +13,21 @@ import { app } from 'electron';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { StateSchema, type State } from '../../../shared/ipc-contract';
+import { atomicWriteFile } from './atomic-write';
 
 const statePath = () => path.join(app.getPath('userData'), 'state.json');
 
 const DEFAULT_STATE: State = { version: 1, currentStep: 'start' };
 
-/** True for the Windows-specific transient rename failures worth retrying. */
-function isRetryableRenameError(err: unknown): boolean {
-  const code = (err as NodeJS.ErrnoException)?.code;
-  return code === 'EPERM' || code === 'EBUSY';
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
- * Renames `from` to `to`, retrying on a transient Windows EPERM/EBUSY (e.g. an
- * AV scanner or a second process momentarily holding a handle on the target).
- * Non-retryable errors, and the final attempt's error, are rethrown.
- */
-async function renameWithRetry(from: string, to: string, attempts = 3): Promise<void> {
-  const backoffMs = [50, 100];
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    try {
-      await fs.rename(from, to);
-      return;
-    } catch (err) {
-      const isLastAttempt = attempt === attempts - 1;
-      if (isLastAttempt || !isRetryableRenameError(err)) throw err;
-      await delay(backoffMs[attempt] ?? 100);
-    }
-  }
-}
-
-/**
- * Validates `state` against the shared schema, writes it to a `.tmp` file,
- * then atomically renames it into place — a crash mid-write leaves either the
- * old valid file or the new valid file, never a torn file.
+ * Validates `state` against the shared schema, then persists it via the
+ * shared atomic tmp-write + rename-with-retry helper (atomic-write.ts) — a
+ * crash mid-write leaves either the old valid file or the new valid file,
+ * never a torn file.
  */
 export async function writeState(state: State): Promise<void> {
   const validated = StateSchema.parse(state);
-  const target = statePath();
-  const tmp = target + '.tmp';
-  await fs.writeFile(tmp, JSON.stringify(validated, null, 2), 'utf8');
-  await renameWithRetry(tmp, target);
+  await atomicWriteFile(statePath(), JSON.stringify(validated, null, 2));
 }
 
 /**

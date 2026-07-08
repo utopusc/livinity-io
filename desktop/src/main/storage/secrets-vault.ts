@@ -13,6 +13,7 @@ import { app, safeStorage } from 'electron';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { VaultKey } from '../../../shared/ipc-contract';
+import { atomicWriteFile } from './atomic-write';
 
 const vaultPath = () => path.join(app.getPath('userData'), 'vault.bin');
 
@@ -23,8 +24,11 @@ export function isVaultAvailable(): boolean {
 
 /**
  * Encrypts `value` with safeStorage (DPAPI) and persists ONLY the resulting
- * base64 ciphertext. Throws `VAULT_UNAVAILABLE` when OS encryption isn't
- * available — never falls back to writing plaintext.
+ * base64 ciphertext, via the shared atomic tmp-write + rename-with-retry
+ * helper (atomic-write.ts) — a crash mid-write leaves either the old valid
+ * vault.bin or the new valid vault.bin, never a torn file that silently wipes
+ * every previously stored secret. Throws `VAULT_UNAVAILABLE` when OS
+ * encryption isn't available — never falls back to writing plaintext.
  */
 export async function vaultSet(key: VaultKey, value: string): Promise<void> {
   if (!safeStorage.isEncryptionAvailable()) {
@@ -32,7 +36,7 @@ export async function vaultSet(key: VaultKey, value: string): Promise<void> {
   }
   const existing = await vaultReadAll();
   existing[key] = safeStorage.encryptString(value).toString('base64');
-  await fs.writeFile(vaultPath(), JSON.stringify(existing), 'utf8');
+  await atomicWriteFile(vaultPath(), JSON.stringify(existing));
 }
 
 /**

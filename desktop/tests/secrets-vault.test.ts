@@ -83,4 +83,44 @@ describe('secrets-vault', () => {
     expect(await vaultHas('cfToken')).toBe(false);
     expect(safeStorage.decryptString).not.toHaveBeenCalled();
   });
+
+  it('writes via a .tmp file + atomic rename, never a direct write to vault.bin (CR-01)', async () => {
+    const writeFileSpy = vi.spyOn(fs, 'writeFile');
+    const renameSpy = vi.spyOn(fs, 'rename');
+
+    await vaultSet('session', 'secret-abc');
+
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      path.join(currentVaultDir, 'vault.bin.tmp'),
+      expect.any(String),
+      'utf8'
+    );
+    expect(renameSpy).toHaveBeenCalledWith(
+      path.join(currentVaultDir, 'vault.bin.tmp'),
+      path.join(currentVaultDir, 'vault.bin')
+    );
+
+    writeFileSpy.mockRestore();
+    renameSpy.mockRestore();
+  });
+
+  it('retries fs.rename once on a transient EPERM then succeeds (atomic rename survives a transient lock)', async () => {
+    const realRename = fs.rename.bind(fs);
+    let calls = 0;
+    const renameSpy = vi.spyOn(fs, 'rename').mockImplementation(async (from: any, to: any) => {
+      calls++;
+      if (calls === 1) {
+        const err: any = new Error('EPERM: operation not permitted, rename');
+        err.code = 'EPERM';
+        throw err;
+      }
+      return realRename(from, to);
+    });
+
+    await vaultSet('session', 'secret-after-retry');
+    expect(calls).toBeGreaterThanOrEqual(2);
+    expect(await vaultGet('session')).toBe('secret-after-retry');
+
+    renameSpy.mockRestore();
+  });
 });
