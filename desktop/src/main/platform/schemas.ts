@@ -95,3 +95,41 @@ export const ProfileProbeResponseSchema = z.object({
   email: z.string(),
 });
 export type ProfileProbeResponse = z.infer<typeof ProfileProbeResponseSchema>;
+
+/**
+ * `POST /api/device/register` 200 body (device-flow pivot, D-16/D-18,
+ * 02-RESEARCH.md ADDENDUM §1). The authorization_pending/expired_token error
+ * shapes from the sibling `/api/device/token` endpoint are read as raw JSON
+ * in device-client.ts, not schema-validated here — they carry only a literal
+ * `error` string, not a stable response contract worth a dedicated schema.
+ */
+export const DeviceRegisterResponseSchema = z.object({
+  device_code: z.string(),
+  user_code: z.string(),
+  verification_uri: z.string(),
+  expires_in: z.number(),
+  interval: z.number(),
+});
+export type DeviceRegisterResponse = z.infer<typeof DeviceRegisterResponseSchema>;
+
+/** `POST /api/device/token` 200 body only (ADDENDUM §1). `relay_url` is present but unused (Pitfall 6). */
+export const DeviceTokenResponseSchema = z.object({
+  access_token: z.string(),
+  token_type: z.string(),
+  expires_in: z.number(),
+  relay_url: z.string().optional(),
+});
+export type DeviceTokenResponse = z.infer<typeof DeviceTokenResponseSchema>;
+
+/** `POST /api/device/exchange` 200 body (Plan 02-08, ADDENDUM §4 — local-commit-only until deployed). */
+export const DeviceExchangeResponseSchema = z.object({
+  success: z.literal(true),
+  session_token: z.string(),
+  user: z.object({
+    id: z.string(),
+    username: z.string().nullable(),
+    email: z.string(),
+    emailVerified: z.boolean(),
+  }),
+});
+export type DeviceExchangeResponse = z.infer<typeof DeviceExchangeResponseSchema>;

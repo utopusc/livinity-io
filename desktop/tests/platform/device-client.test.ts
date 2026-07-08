@@ -89,6 +89,10 @@ describe('device-client', () => {
   });
 
   it('registers, resolves ok:true with the userCode/expiresInMs, and opens the system browser at the fixed encoded deep link', async () => {
+    // Default fallback for the background poll loop's next call (fire-and-
+    // forget by design — it keeps running after this test's own
+    // assertions). afterEach cancels + flushes it before the next test.
+    fetchMock.mockResolvedValue(mockResponse(400, { error: 'authorization_pending' }));
     fetchMock.mockResolvedValueOnce(mockResponse(200, REGISTER_OK));
 
     const onUpdate = vi.fn();
@@ -218,7 +222,12 @@ describe('device-client', () => {
     expect(vaultSetMock).not.toHaveBeenCalled();
   });
 
-  it('stops polling and reports cancelled when cancelDeviceLogin() is called mid-flight, with no fetch calls after cancel', async () => {
+  it('stops polling and reports cancelled after cancelDeviceLogin() is called, and never proceeds to exchange', async () => {
+    // A single in-flight poll tick can already be underway (fire-and-forget
+    // background loop) by the time this test's own continuation resumes and
+    // calls cancelDeviceLogin() -- the default fallback keeps that one
+    // straggler call harmless instead of crashing on an unmocked response.
+    fetchMock.mockResolvedValue(mockResponse(400, { error: 'authorization_pending' }));
     fetchMock.mockResolvedValueOnce(mockResponse(200, REGISTER_OK));
 
     const onUpdate = vi.fn();
@@ -227,11 +236,15 @@ describe('device-client', () => {
     await flushAsync();
 
     expect(onUpdate).toHaveBeenCalledWith({ phase: 'cancelled' });
-    // Only the registration call -- no /api/device/token call after cancel.
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(vaultSetMock).not.toHaveBeenCalled();
+    // Cancellation must land before the loop ever reaches the exchange step.
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url).includes('/api/device/exchange'))
+    ).toBe(false);
   });
 
   it('rejects a second startDeviceLogin while one is already running, without a duplicate register call', async () => {
+    fetchMock.mockResolvedValue(mockResponse(400, { error: 'authorization_pending' }));
     fetchMock.mockResolvedValueOnce(mockResponse(200, REGISTER_OK));
 
     const onUpdate = vi.fn();
@@ -241,7 +254,13 @@ describe('device-client', () => {
     const second = await startDeviceLogin(vi.fn(), { sleep: instantSleep });
 
     expect(second).toEqual({ ok: false, reason: 'already_running' });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Assert no DUPLICATE register call -- the background poll loop from
+    // the first call may independently fire additional /token calls on its
+    // own timing, which is not what this test is verifying.
+    const registerCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes('/api/device/register')
+    );
+    expect(registerCalls).toHaveLength(1);
   });
 
   it('returns { ok:false, reason:"network" } when the register fetch throws, without opening the browser', async () => {

@@ -84,6 +84,9 @@ export const CHANNELS = {
   authRegenerateKey: 'auth:regenerateKey',
   authGetAccount: 'auth:getAccount',
   authOpenExternal: 'auth:openExternal',
+  authStartDeviceLogin: 'auth:startDeviceLogin',
+  authCancelDeviceLogin: 'auth:cancelDeviceLogin',
+  authDeviceLoginUpdate: 'auth:deviceLoginUpdate',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -189,6 +192,37 @@ export const AccountSchema = z
   .strict();
 export type Account = z.infer<typeof AccountSchema>;
 
+// ---------------------------------------------------------------------------
+// Device-flow login (device-flow pivot, D-16/D-18) — replaces the retired
+// embedded-browser Google OAuth window (Plan 02-02 BLOCKED verdict).
+// ---------------------------------------------------------------------------
+
+/**
+ * Device-login progress, pushed main -> renderer on CHANNELS.authDeviceLoginUpdate
+ * while a device login is in flight. Same IPC-boundary invariant as the rest
+ * of this file: the device access_token and the minted session value never
+ * appear here — only the route/account fields that already cross the
+ * boundary elsewhere (RouteResultSchema, AccountSchema).
+ */
+export const DeviceLoginUpdateSchema = z.discriminatedUnion('phase', [
+  z.object({ phase: z.literal('waiting') }),
+  z.object({ phase: z.literal('approved'), route: RouteResultSchema, account: AccountSchema }),
+  z.object({ phase: z.literal('expired') }),
+  z.object({
+    phase: z.literal('error'),
+    reason: z.enum(['network', 'exchange_failed', 'session_revoked', 'already_exchanged', 'unknown']),
+  }),
+  z.object({ phase: z.literal('cancelled') }),
+]);
+export type DeviceLoginUpdate = z.infer<typeof DeviceLoginUpdateSchema>;
+
+/** Result of `startDeviceLogin`. NEVER carries the device access_token. */
+export const AuthStartDeviceLoginResultSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), userCode: z.string(), expiresInMs: z.number() }),
+  z.object({ ok: z.literal(false), reason: z.enum(['network', 'already_running']) }),
+]);
+export type AuthStartDeviceLoginResult = z.infer<typeof AuthStartDeviceLoginResultSchema>;
+
 /**
  * AuthApi — the auth/platform-routing sibling of ShellApi. Same IPC-boundary
  * invariant as the vault: no method here ever returns a raw session cookie or
@@ -208,6 +242,16 @@ export interface AuthApi {
   /** Safe account fields for the header chip. Never the cookie/key. */
   authGetAccount(): Promise<Account | null>;
   authOpenExternal(target: 'reset-password' | 'pricing'): Promise<void>;
+
+  // Device-flow login (device-flow pivot, D-16/D-18) — replaces the retired
+  // embedded-browser Google OAuth window. Never returns the device
+  // access_token or the minted session value.
+  /** Registers a device grant and opens the system browser at the fixed livinity.io/device deep link. */
+  startDeviceLogin(): Promise<AuthStartDeviceLoginResult>;
+  /** Stops the in-flight poll loop. A Cancel click is not a fault. */
+  cancelDeviceLogin(): Promise<{ ok: true }>;
+  /** Subscribes to device-login progress pushes; returns an unsubscribe function (mirrors onStatusChanged). */
+  onDeviceLoginUpdate(cb: (update: DeviceLoginUpdate) => void): () => void;
 }
 
 // ---------------------------------------------------------------------------
