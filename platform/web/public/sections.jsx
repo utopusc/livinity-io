@@ -365,11 +365,11 @@ const Footer = () => (
         </div>
         <div>
           <h6>Product</h6>
-          <a href="#">Livinity</a><a href="#">Liv</a><a href="#">Library</a><a href="#">Cloud</a><a href="#">What's new</a>
+          <a href="/">Livinity</a><a href="#liv">Liv</a><a href="#apps">Library</a><a href="/pricing">Pricing</a><a href="https://github.com/utopusc/livinity-io/releases" target="_blank" rel="noreferrer">What's new</a>
         </div>
         <div>
           <h6>Builders</h6>
-          <a href="/docs">Documentation</a><a href="#">Open API</a><a href="#">Skills</a><a href="https://github.com/utopusc/livinity-io">Source</a><a href="#">Status</a>
+          <a href="/docs">Documentation</a><a href="/developers">Open API</a><a href="/docs">Skills</a><a href="https://github.com/utopusc/livinity-io">Source</a>
         </div>
         <div>
           <h6>Company</h6>

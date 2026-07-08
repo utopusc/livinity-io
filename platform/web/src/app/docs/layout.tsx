@@ -14,6 +14,7 @@ export const metadata: Metadata = {
   title: 'Docs — Livinity',
   description:
     'Install guides, app walkthroughs, and how-tos for LivOS — your self-hosted AI server, accessible anywhere via livinity.io.',
+  alternates: { canonical: '/docs' },
 };
 
 export default async function DocsLayout({ children }: { children: ReactNode }) {

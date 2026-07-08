@@ -6,10 +6,68 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-    <title>Pricing — Livinity</title>
-    <meta name="description" content="Livinity Pro — $7.99/month or $69.99/year. Try it free for 3 days." />
+    <title>Livinity Pricing — Free Self-Hosted or Pro $7.99/mo</title>
+    <meta name="description" content="Two self-hosted plans. Free forever with your own domain and Cloudflare. Pro at $7.99/mo adds a managed livinity.io subdomain and secure tunnel — 3-day trial." />
+
+    <link rel="canonical" href="https://livinity.io/pricing" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Livinity" />
+    <meta property="og:title" content="Livinity Pricing — Free Self-Hosted or Pro $7.99/mo" />
+    <meta property="og:description" content="Two plans, both self-hosted on your own hardware. Free forever with your own domain and Cloudflare. Pro adds a managed livinity.io address and secure tunnel." />
+    <meta property="og:url" content="https://livinity.io/pricing" />
+    <meta property="og:image" content="https://livinity.io/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Livinity — Your own Cloud AI Computer" />
+    <meta property="og:locale" content="en_US" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Livinity Pricing — Free Self-Hosted or Pro $7.99/mo" />
+    <meta name="twitter:description" content="Two plans, both self-hosted on your own hardware. Free forever with your own domain and Cloudflare, or Pro with a managed livinity.io address." />
+    <meta name="twitter:image" content="https://livinity.io/og-image.png" />
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "LivOS",
+      "operatingSystem": "Linux",
+      "applicationCategory": "OperatingSystem",
+      "url": "https://livinity.io/pricing",
+      "description": "Open-source, self-hosted Cloud AI Computer. Two plans, both run on your own hardware.",
+      "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+      "publisher": { "@type": "Organization", "name": "Livinity", "url": "https://livinity.io/" },
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "Free — bring your own domain",
+          "price": "0",
+          "priceCurrency": "USD",
+          "description": "Self-hosted on your own hardware. Bring your own domain and Cloudflare. Apps at app-you.yourdomain.com. No card, no subscription."
+        },
+        {
+          "@type": "Offer",
+          "name": "Livinity Pro — monthly",
+          "price": "7.99",
+          "priceCurrency": "USD",
+          "description": "Managed name.livinity.io subdomain, managed secure tunnel (no open ports, home IP hidden), DDoS and botnet protection at Cloudflare's edge. 3-day free trial."
+        },
+        {
+          "@type": "Offer",
+          "name": "Livinity Pro — yearly",
+          "price": "69.99",
+          "priceCurrency": "USD",
+          "description": "Managed name.livinity.io subdomain, managed secure tunnel (no open ports, home IP hidden), DDoS and botnet protection at Cloudflare's edge. 3-day free trial."
+        }
+      ]
+    }
+    </script>
+
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
 
@@ -19,9 +77,9 @@
 
     <link rel="stylesheet" href="styles.css" />
 
-    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
-    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
-    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
     <style>
       :root { --dash-radius: 18px; --dash-line: rgba(0,0,0,0.07); --dash-line-strong: rgba(0,0,0,0.12); --card-bg: #ffffff; --card-bg-2: #fafafa; --card-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 24px 60px -34px rgba(0,0,0,0.18); --accent-green: #16a34a; --accent-amber: #d97706; --accent-red: #dc2626; --font-mono: "Geist Mono", ui-monospace, monospace; --font-serif: "Instrument Serif", serif; }
@@ -90,7 +148,71 @@
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- SEO / no-JS static shell — React replaces this on mount. Keep in sync with the babel block below. -->
+    <div id="root">
+      <div class="install-shell">
+        <nav class="install-nav">
+          <a href="/" class="brand">Livinity</a>
+          <div class="right">
+            <a href="/login" class="h-btn ghost">Sign in</a>
+            <a href="/register" class="h-btn">Get started</a>
+          </div>
+        </nav>
+
+        <header class="install-hero">
+          <span class="step-pill">Pricing</span>
+          <h1>Simple <em>pricing.</em></h1>
+          <p>Both plans run on your own hardware — Pro with a managed livinity.io address, Free with your own domain and Cloudflare.</p>
+        </header>
+
+        <div class="plans-row">
+          <section class="plan-card free">
+            <div class="plan-head">
+              <h2 class="name" style="margin:0">Free</h2>
+              <span class="self-pill">Your domain</span>
+            </div>
+            <div class="plan-price">
+              <span class="amount">$0</span>
+              <span class="per">/forever</span>
+            </div>
+            <div class="plan-price-note">Bring your own domain + Cloudflare</div>
+            <ul class="feat-list">
+              <li><span class="tick">✓</span>Apps at app-you.yourdomain.com</li>
+              <li><span class="tick">✓</span>Your own domain + your own Cloudflare</li>
+              <li><span class="tick">✓</span>App Store: self-host 200+ apps with one click</li>
+              <li><span class="tick">✓</span>Liv AI assistant built in</li>
+              <li><span class="tick">✓</span>Same self-hosted LivOS as Pro</li>
+              <li><span class="tick">✓</span>No card, no subscription — ever</li>
+            </ul>
+            <a href="/register?plan=free&amp;mode=signup" class="h-btn cta-btn">Choose Free</a>
+            <p class="fine-print">No card, no subscription · Needs your own domain<br>and a free Cloudflare account</p>
+          </section>
+
+          <section class="plan-card">
+            <div class="plan-head">
+              <h2 class="name" style="margin:0">Livinity Pro</h2>
+              <span class="trial-pill">3 days free</span>
+            </div>
+            <div class="plan-price">
+              <span class="amount">$7.99</span>
+              <span class="per">/month</span>
+            </div>
+            <div class="plan-price-note">Or $69.99/year — 2+ months free</div>
+            <ul class="feat-list">
+              <li><span class="tick">✓</span>Your own {username}.livinity.io subdomain</li>
+              <li><span class="tick">✓</span>Managed secure tunnel — no open ports, home IP hidden</li>
+              <li><span class="tick">✓</span>DDoS &amp; botnet protection at Cloudflare's edge</li>
+              <li><span class="tick">✓</span>No domain or Cloudflare setup needed</li>
+              <li><span class="tick">✓</span>App Store: self-host 200+ apps with one click</li>
+              <li><span class="tick">✓</span>Liv AI assistant built in</li>
+              <li><span class="tick">✓</span>Remote access from anywhere</li>
+            </ul>
+            <a href="/register" class="h-btn solid cta-btn">Start 3-day free trial</a>
+            <p class="fine-print">Card required · $7.99/month after the trial unless you cancel<br>Cancel anytime from your dashboard</p>
+          </section>
+        </div>
+      </div>
+    </div>
 
     <script type="text/babel">
       const { useState, useEffect } = React;
@@ -248,7 +370,7 @@
                 <span className="amount">{yearly ? (isEdu ? "$34.99" : "$69.99") : (isEdu ? "$3.99" : "$7.99")}</span>
                 <span className="per">/{yearly ? "year" : "month"}</span>
               </div>
-              <div className="plan-price-note">{yearly ? (isEdu ? "≈ $2.92/month — 2+ months free" : "≈ $5.83/month — 2+ months free") : " "}</div>
+              <div className="plan-price-note">{yearly ? (isEdu ? "≈ $2.92/month — 2+ months free" : "≈ $5.83/month — 2+ months free") : (isEdu ? "Or $34.99/year — 2+ months free" : "Or $69.99/year — 2+ months free")}</div>
 
               <ul className="feat-list">
                 {FEATURES.map((f) => (

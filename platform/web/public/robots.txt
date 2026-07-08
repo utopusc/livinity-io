@@ -1,9 +1,11 @@
 User-agent: *
 Allow: /
-Allow: /store
-Allow: /download
 
 Disallow: /api/
+Disallow: /admin
+Disallow: /auth/
+Disallow: /auth.html
+Disallow: /oauth-callback
 Disallow: /customize
 Disallow: /dashboard
 Disallow: /profile
@@ -11,9 +13,11 @@ Disallow: /login
 Disallow: /register
 Disallow: /forgot-password
 Disallow: /reset-password
+Disallow: /username
 Disallow: /verify
 Disallow: /device
 Disallow: /downloads/
+Disallow: /store
 Disallow: /_next/
 
 Sitemap: https://livinity.io/sitemap.xml

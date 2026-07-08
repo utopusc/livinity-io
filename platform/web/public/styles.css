@@ -1822,6 +1822,7 @@ body.dark .ribbon.ghost { background: rgba(255,255,255,0.08); color: var(--fg-di
 @media (max-width: 800px) { .paths.two { grid-template-columns: 1fr; } }
 .ribbon.ghost { background: rgba(255,255,255,0.06); color: var(--fg-dim); }
 .path-card {
+  position: relative;
   padding: 36px;
   border-radius: 22px;
   background: var(--bg-2);

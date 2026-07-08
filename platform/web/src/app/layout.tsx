@@ -3,6 +3,7 @@ import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://livinity.io'),
   title: 'Livinity — Your Personal AI Server, Accessible Anywhere',
   description:
     'Install LivOS on any machine and access it from anywhere via livinity.io. AI assistant, app store, multi-user — all self-hosted.',

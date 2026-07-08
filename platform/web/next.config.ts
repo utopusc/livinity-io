@@ -18,6 +18,26 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // SEO: canonicalize the host and the raw .html duplicates of the marketing
+  // pages. Redirects run before rewrites, so these only match external
+  // requests — the internal rewrite of /pricing → /pricing.html is untouched.
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'www.livinity.io' }],
+        destination: 'https://livinity.io/:path*',
+        permanent: true,
+      },
+      { source: '/index.html', destination: '/', permanent: true },
+      { source: '/pricing.html', destination: '/pricing', permanent: true },
+      { source: '/download.html', destination: '/download', permanent: true },
+      // The landing terminal mock (and quoted copies of it) say
+      // `curl -fsSL https://livinity.io/install | bash` — make that URL real.
+      // curl -L follows the 308 to the install.sh route handler.
+      { source: '/install', destination: '/install.sh', permanent: true },
+    ];
+  },
   // Phase 146: serve the canonical landing HTML for user-facing pages, mirroring
   // the Server5 Caddyfile static-path routing. The Next.js page files for these
   // routes (login/page.tsx, dashboard/page.tsx, etc.) become dead code post-cutover

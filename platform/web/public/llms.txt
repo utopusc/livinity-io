@@ -1,0 +1,23 @@
+# Livinity
+
+> Livinity is an open-source (AGPL-3.0), self-hosted "Cloud AI Computer": LivOS, a home server operating system you install on your own hardware with one command. It bundles a 200+ app one-click App Store, the Liv AI assistant (bring your own AI keys — Claude, Gemini, or local models), Docker built in, and secure access from any browser.
+
+Both plans are self-hosted on your own hardware. Free ($0 forever): bring your own domain and your own Cloudflare account; apps live at app-you.yourdomain.com; no card required. Pro ($7.99/month or $69.99/year, 3-day free trial): managed name.livinity.io subdomain, managed secure tunnel with no open ports and a hidden home IP, plus DDoS and botnet protection at Cloudflare's edge.
+
+Install: sign up at https://livinity.io/register, then run the one-line installer shown in your dashboard on any Linux box (the installer script lives at https://livinity.io/install.sh).
+
+## Docs
+
+- [Documentation](https://livinity.io/docs): install guides, app walkthroughs, and how-tos
+- [Developers](https://livinity.io/developers): Plugin SDK for building LivOS apps
+
+## Product
+
+- [Pricing](https://livinity.io/pricing): Free and Pro plans, both self-hosted
+- [Download](https://livinity.io/download): desktop agent for Windows, macOS, and Linux
+- [Source code](https://github.com/utopusc/livinity-io): open source, AGPL-3.0
+
+## Legal
+
+- [Terms](https://livinity.io/legal/terms)
+- [Privacy](https://livinity.io/legal/privacy)

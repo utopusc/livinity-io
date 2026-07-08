@@ -19,6 +19,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   return {
     title: `${data.article.title} — Livinity Docs`,
     description: data.article.description,
+    alternates: { canonical: `/docs/${category}/${slug}` },
     openGraph: {
       title: data.article.title,
       description: data.article.description,
