@@ -1,0 +1,17 @@
+-- 0029: devices.token_exchanged_at single-use replay guard (device-flow pivot).
+--
+-- WHY: the new POST /api/device/exchange endpoint verifies a 24h device JWT
+-- and mints a brand-new liv_session for the desktop app. The device_grants
+-- row that produced the JWT is already DELETEd at /api/device/token time
+-- (single-use for the grant), but the JWT itself is a bearer credential that
+-- remains valid for its full 24h lifetime and had NO replay guard of its own
+-- — without one, a single approval could exchange the same JWT an unbounded
+-- number of times, minting a fresh independent session on every call
+-- (ADDENDUM 2026-07-08 Pitfall 5).
+--
+-- token_exchanged_at is nullable with no default: NULL means "never
+-- exchanged". The exchange route enforces single-use via one atomic
+-- `UPDATE devices SET token_exchanged_at = NOW() WHERE device_id = $1 AND
+-- token_exchanged_at IS NULL RETURNING id` — zero rows returned means the
+-- JWT was already exchanged, and the caller returns 409 already_exchanged.
+ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS token_exchanged_at TIMESTAMPTZ;

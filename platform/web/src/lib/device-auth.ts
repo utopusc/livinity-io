@@ -177,6 +177,36 @@ export function signDeviceToken(payload: DeviceTokenPayload): string {
   });
 }
 
+export interface VerifiedDeviceToken {
+  userId: string;
+  deviceId: string;
+  deviceName: string;
+  platform: string;
+  sessionId: string;
+}
+
+/**
+ * The verify path the signDeviceToken comment mandated (264/265 follow-up).
+ * Pins { algorithms:['HS256'], audience:'livinity-device', issuer:'livinity-web' } so a
+ * forged alg=none/RS256 token, a wrong-audience token, or an expired token all THROW.
+ * Fail-closed secret via requireDeviceSecret() (L-067). Throws on any invalid input.
+ */
+export function verifyDeviceToken(token: string): VerifiedDeviceToken {
+  const secret = requireDeviceSecret();
+  const decoded = jwt.verify(token, secret, {
+    algorithms: ['HS256'],
+    audience: 'livinity-device',
+    issuer: 'livinity-web',
+  }) as jwt.JwtPayload;
+  return {
+    userId: String(decoded.userId),
+    deviceId: String(decoded.deviceId),
+    deviceName: String(decoded.deviceName),
+    platform: String(decoded.platform),
+    sessionId: String(decoded.sessionId),
+  };
+}
+
 export async function createDeviceRecord(userId: string, deviceInfo: {
   deviceName: string;
   platform: string;

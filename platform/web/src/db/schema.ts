@@ -54,6 +54,8 @@ export const devices = pgTable('devices', {
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   last_seen: timestamp('last_seen', { withTimezone: true }),
   revoked: boolean('revoked').notNull().default(false),
+  // 0029: single-use replay guard for POST /api/device/exchange. NULL = never exchanged.
+  token_exchanged_at: timestamp('token_exchanged_at', { withTimezone: true }),
 });
 
 // =========================================================================
