@@ -16,7 +16,12 @@ import { atomicWriteFile, readFileWithRetry } from './atomic-write';
 
 const statePath = () => path.join(app.getPath('userData'), 'state.json');
 
-const DEFAULT_STATE: State = { version: 1, currentStep: 'start' };
+/**
+ * The single source of truth for the initial/absent wizard state. Exported so
+ * shell.ipc.ts imports this instead of independently redeclaring an identical
+ * constant that could silently drift out of sync (IN-02).
+ */
+export const DEFAULT_STATE: State = { version: 1, currentStep: 'start' };
 
 /**
  * Validates `state` against the shared schema, then persists it via the

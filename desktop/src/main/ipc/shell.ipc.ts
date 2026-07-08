@@ -24,14 +24,12 @@ import {
   type Status,
 } from '../../../shared/ipc-contract';
 import { vaultSet, vaultHas } from '../storage/secrets-vault';
-import { readState, patchState } from '../storage/state-store';
+import { readState, patchState, DEFAULT_STATE } from '../storage/state-store';
 import { logSafe } from '../log';
 
 const VaultSetPayloadSchema = z.object({ key: VaultKeySchema, value: z.string().min(1) });
 const VaultHasPayloadSchema = z.object({ key: VaultKeySchema });
 const StatePatchSchema = StateSchema.partial();
-
-const DEFAULT_STATE = { version: 1 as const, currentStep: 'start' };
 
 export interface ShellIpcDeps {
   getMainWindow: () => BrowserWindow | null;
