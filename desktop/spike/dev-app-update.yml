@@ -1,0 +1,31 @@
+# spike/dev-app-update.yml
+#
+# Local electron-updater dev-update override so Test B's process-termination
+# path can be exercised without a real published GitHub Release (this is the
+# first phase — no release exists yet; RESEARCH.md Open Question 2).
+#
+# Intended usage (dev-only code path, NEVER wired into production main-process
+# code — this file lives only in the throwaway spike/ dir and is excluded from
+# the packaged app per electron-builder.yml's "!spike/**/*" rule):
+#
+#   import { autoUpdater } from 'electron-updater';
+#   if (!app.isPackaged) {
+#     autoUpdater.updateConfigPath = path.join(app.getAppPath(), 'spike', 'dev-app-update.yml');
+#     autoUpdater.forceDevUpdateConfig = true;
+#   }
+#   // ... after simulating an update is "available" and "downloaded":
+#   autoUpdater.quitAndInstall();
+#
+# provider/owner/repo below are placeholders — this file's only job is to let
+# electron-updater's config loader succeed in dev; Test B cares about the
+# process-termination mechanics of quitAndInstall(), not a real download.
+#
+# FALLBACK (documented in spike/README.md): if wiring a faithful
+# quitAndInstall() simulation proves impractical this early (no real
+# feed/release), `app.relaunch(); app.exit(0);` reproduces the same
+# "main process dies and is replaced" condition Test B actually cares about.
+# The verdict (SPIKE-VERDICT.md) records which method was actually used.
+
+provider: github
+owner: livinity-io
+repo: livinity-desktop
