@@ -13,8 +13,15 @@
  * value — use logSafe(event, { status }) only.
  */
 
-import { PLATFORM_URL, authedGet, safeFetch, extractSessionCookie } from './http-client';
-import { LoginResponseSchema, MeResponseSchema, DashboardResponseSchema } from './schemas';
+import { PLATFORM_URL, authedGet, authedPost, apiKeyGet, safeFetch, extractSessionCookie } from './http-client';
+import {
+  LoginResponseSchema,
+  MeResponseSchema,
+  DashboardResponseSchema,
+  ChooseFreeResponseSchema,
+  MintKeyResponseSchema,
+  ProfileProbeResponseSchema,
+} from './schemas';
 import { logSafe } from '../log';
 
 export type LoginResult =
@@ -146,4 +153,142 @@ export async function getDashboard(sessionValue: string): Promise<GetDashboardRe
     apiKey: parsed.data.apiKey,
     server: parsed.data.server,
   };
+}
+
+export type ChooseFreeResult =
+  | { ok: true; free_byod: boolean }
+  | { ok: false; reason: 'has_paid_plan' | 'not_signed_in' | 'unavailable' }
+  | { ok: false; networkError: true };
+
+/** `POST /api/me/choose-free` — activates the free tier, guarded server-side against downgrading a payer. */
+export async function chooseFree(sessionValue: string): Promise<ChooseFreeResult> {
+  const outcome = await safeFetch(() => authedPost('/api/me/choose-free', sessionValue, {}));
+  if (!outcome.ok) {
+    logSafe('auth.chooseFree', { networkError: true });
+    return { ok: false, networkError: true };
+  }
+
+  const { res } = outcome;
+
+  if (res.status === 401) {
+    logSafe('auth.chooseFree', { status: res.status });
+    return { ok: false, reason: 'not_signed_in' };
+  }
+  if (res.status === 503) {
+    logSafe('auth.chooseFree', { status: res.status });
+    return { ok: false, reason: 'unavailable' };
+  }
+
+  const body: unknown = await res.json();
+  const parsed = ChooseFreeResponseSchema.safeParse(body);
+  if (!parsed.success) {
+    logSafe('auth.chooseFree', { status: res.status, parseError: true });
+    return { ok: false, reason: 'unavailable' };
+  }
+
+  if (parsed.data.ok) {
+    logSafe('auth.chooseFree', { status: res.status });
+    return { ok: true, free_byod: Boolean(parsed.data.free_byod) };
+  }
+  logSafe('auth.chooseFree', { status: res.status });
+  return { ok: false, reason: 'has_paid_plan' };
+}
+
+/**
+ * The only two legal action strings for the destructive key-mint endpoint.
+ * `generate-key` and `regenerate-key` hit an IDENTICAL server-side
+ * `DELETE FROM api_keys ...` before inserting (02-RESEARCH.md Pitfall 1) — a
+ * wrong literal must never reach the platform. Enforced both at compile time
+ * (the parameter's literal-union type) and at runtime below, as defense in
+ * depth for the phase's single most dangerous call.
+ */
+const VALID_MINT_ACTIONS = new Set<MintKeyAction>(['generate-key', 'regenerate-key']);
+export type MintKeyAction = 'generate-key' | 'regenerate-key';
+
+export type MintKeyResult =
+  | { ok: true; apiKey: string; prefix: string }
+  | { ok: false; reason: 'email_unverified' | 'subscription_required' | 'unauthorized' }
+  | { ok: false; networkError: true };
+
+/** `POST /api/dashboard` `{action}` — mints or replaces the liv_k_ install key. */
+export async function mintKey(sessionValue: string, action: MintKeyAction): Promise<MintKeyResult> {
+  if (!VALID_MINT_ACTIONS.has(action)) {
+    logSafe('auth.mintKey', { rejectedInvalidAction: true });
+    return { ok: false, reason: 'unauthorized' };
+  }
+
+  const outcome = await safeFetch(() => authedPost('/api/dashboard', sessionValue, { action }));
+  if (!outcome.ok) {
+    logSafe('auth.mintKey', { action, networkError: true });
+    return { ok: false, networkError: true };
+  }
+
+  const { res } = outcome;
+  const body: unknown = await res.json();
+
+  if (res.status === 401) {
+    logSafe('auth.mintKey', { action, status: res.status });
+    return { ok: false, reason: 'unauthorized' };
+  }
+  if (res.status === 403) {
+    const errorBody = body as { error?: string };
+    const isEmailUnverified =
+      typeof errorBody.error === 'string' && errorBody.error.includes('verify your email');
+    const reason = isEmailUnverified ? ('email_unverified' as const) : ('subscription_required' as const);
+    logSafe('auth.mintKey', { action, status: res.status, reason });
+    return { ok: false, reason };
+  }
+
+  const parsed = MintKeyResponseSchema.safeParse(body);
+  if (!parsed.success) {
+    logSafe('auth.mintKey', { action, status: res.status, parseError: true });
+    return { ok: false, reason: 'unauthorized' };
+  }
+
+  logSafe('auth.mintKey', { action, status: res.status });
+  return { ok: true, apiKey: parsed.data.apiKey, prefix: parsed.data.prefix };
+}
+
+export type ProbeKeyResult =
+  | { ok: true }
+  | { ok: false; reason: 'invalid' | 'inactive' | 'not_found' | 'network' };
+
+/**
+ * `GET /api/me/profile` (X-Api-Key auth) — the D-14 live-validation probe for
+ * a pasted install key. Returns only `{ ok:true }` on success — never the
+ * username/email the platform sent back (schema-level leak-guard boundary).
+ * A 402 (valid key, inactive account) is treated as a rejection (Open
+ * Question 2 default).
+ */
+export async function probeKey(key: string): Promise<ProbeKeyResult> {
+  const outcome = await safeFetch(() => apiKeyGet('/api/me/profile', key));
+  if (!outcome.ok) {
+    logSafe('auth.probeKey', { networkError: true });
+    return { ok: false, reason: 'network' };
+  }
+
+  const { res } = outcome;
+
+  if (res.status === 401) {
+    logSafe('auth.probeKey', { status: res.status });
+    return { ok: false, reason: 'invalid' };
+  }
+  if (res.status === 402) {
+    logSafe('auth.probeKey', { status: res.status });
+    return { ok: false, reason: 'inactive' };
+  }
+  if (res.status === 404) {
+    logSafe('auth.probeKey', { status: res.status });
+    return { ok: false, reason: 'not_found' };
+  }
+
+  const body: unknown = await res.json();
+  const parsed = ProfileProbeResponseSchema.safeParse(body);
+  if (!parsed.success) {
+    logSafe('auth.probeKey', { status: res.status, parseError: true });
+    return { ok: false, reason: 'invalid' };
+  }
+
+  logSafe('auth.probeKey', { status: res.status });
+  return { ok: true };
 }
