@@ -1864,8 +1864,8 @@ body.dark .path-card.feat:hover {
   border-radius: 999px;
   font-weight: 500;
 }
-.path-card h4 { font-size: 22px; font-weight: 600; letter-spacing: -0.025em; }
-.path-card h4 em { font-style: normal; color: var(--fg-mute); font-weight: 600; }
+.path-card h3 { font-size: 22px; font-weight: 600; letter-spacing: -0.025em; }
+.path-card h3 em { font-style: normal; color: var(--fg-mute); font-weight: 600; }
 .path-card .price {
   font-size: 36px;
   font-weight: 600;
@@ -1911,7 +1911,7 @@ body.dark .path-card.feat:hover {
   padding-top: 4px;
   font-weight: 500;
 }
-.faq-item h5 {
+.faq-item h3 {
   font-size: 21px;
   font-weight: 500;
   letter-spacing: -0.02em;
@@ -1953,7 +1953,7 @@ body.dark .path-card.feat:hover {
   gap: 40px;
 }
 @media (max-width: 900px) { .footer-grid { grid-template-columns: 1fr 1fr; } }
-.footer h6 {
+.footer h4 {
   font-size: 13px;
   font-weight: 600;
   color: var(--fg);
@@ -1991,7 +1991,7 @@ body.dark .brandwall { opacity: 0.14; }
 body.dark .footer-base { color: var(--fg-dim); }
 body.dark .footer a { color: var(--fg-dim); }
 body.dark .footer a:hover { color: var(--fg); }
-body.dark .footer h6 { color: var(--fg); }
+body.dark .footer h4 { color: var(--fg); }
 .brandwall em { font-style: normal; font-weight: 700; }
 
 .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
@@ -2050,9 +2050,9 @@ body.dark .path-card {
   background: #131316;
   border: 1px solid var(--line);
 }
-body.dark .path-card h4,
+body.dark .path-card h3,
 body.dark .path-card .price { color: #f5f5f7; }
-body.dark .path-card h4 em,
+body.dark .path-card h3 em,
 body.dark .path-card .price em { color: #c7c7cc; }
 body.dark .path-card .dim,
 body.dark .path-card li { color: #c7c7cc; }

@@ -54,7 +54,7 @@ const Hero = () => {
       <div className="hero-top">
         <h1 className="display">
           <span className="type-line"><span className="your-reveal">Your</span> <span className="type-computer"><span className="tc-inner">computer.</span></span></span><br/>
-          <span className="everything-vid everything-reveal" aria-label="Everything">
+          <span className="everything-vid everything-reveal" role="img" aria-label="Everything">
             <span className="ev-layout" aria-hidden="true">Everything</span>
             <video className="ev-video" autoPlay muted loop playsInline preload="auto"
                    ref={el => { if (el) el.playbackRate = 1.2; }}

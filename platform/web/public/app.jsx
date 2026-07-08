@@ -69,13 +69,15 @@ const App = () => {
   return (
     <>
       <Nav />
-      <Hero />
-      <Walkthrough />
-      <DockerShowcase />
-      <AppsMarquee />
-      <Install />
-      <Paths />
-      <FAQ />
+      <main>
+        <Hero />
+        <Walkthrough />
+        <DockerShowcase />
+        <AppsMarquee />
+        <Install />
+        <Paths />
+        <FAQ />
+      </main>
       <Footer />
 
       <TweaksPanel title="Tweaks">

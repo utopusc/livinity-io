@@ -275,7 +275,7 @@ const Paths = () => (
       <div className="paths two">
         <div className="path-card">
           <span className="ribbon">Free</span>
-          <h4>Free — bring your own domain</h4>
+          <h3>Free — bring your own domain</h3>
           <div className="price">$0<em> /forever</em></div>
           <p className="dim" style={{fontSize: 15}}>The complete LivOS on your own hardware — you connect it with your domain and Cloudflare.</p>
           <ul>
@@ -293,7 +293,7 @@ const Paths = () => (
         </div>
         <div className="path-card feat">
           <span className="ribbon">Livinity Pro</span>
-          <h4>Livinity Pro</h4>
+          <h3>Livinity Pro</h3>
           <div className="price">$7.99<em> /mo</em></div>
           <p className="dim" style={{fontSize: 15}}>Or $69.99/year. 3-day free trial. Cancel anytime during the trial and you're never charged.</p>
           <ul>
@@ -336,7 +336,7 @@ const FAQ = () => {
             <div key={i} className={"faq-item" + (openIx === i ? " open" : "")} onClick={() => setOpenIx(openIx === i ? -1 : i)}>
               <div className="n">0{i+1}</div>
               <div>
-                <h5>{it.q}</h5>
+                <h3>{it.q}</h3>
                 <div className="a">{it.a}</div>
               </div>
               <div className="toggle"><Icon name="plus" size={14} stroke={2}/></div>
@@ -364,19 +364,19 @@ const Footer = () => (
           </div>
         </div>
         <div>
-          <h6>Product</h6>
+          <h4>Product</h4>
           <a href="/">Livinity</a><a href="#liv">Liv</a><a href="#apps">Library</a><a href="/pricing">Pricing</a><a href="https://github.com/utopusc/livinity-io/releases" target="_blank" rel="noreferrer">What's new</a>
         </div>
         <div>
-          <h6>Builders</h6>
+          <h4>Builders</h4>
           <a href="/docs">Documentation</a><a href="/developers">Open API</a><a href="/docs">Skills</a><a href="https://github.com/utopusc/livinity-io">Source</a>
         </div>
         <div>
-          <h6>Company</h6>
+          <h4>Company</h4>
           <a href="#">About</a><a href="#">Manifesto</a><a href="#">Security</a><a href="#">License</a><a href="#">Contact</a>
         </div>
         <div>
-          <h6>Legal</h6>
+          <h4>Legal</h4>
           <a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/acceptable-use">Acceptable Use</a><a href="/legal/cookies">Cookies</a><a href="/legal/refund">Refunds</a>
         </div>
       </div>

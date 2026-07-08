@@ -126,13 +126,18 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Cormorant+Garamond:ital,wght@0,300..700;1,300..700&family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=DM+Serif+Display:ital@0;1&family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Italiana&display=swap" rel="stylesheet" />
+    <link rel="preconnect" href="https://unpkg.com" crossorigin />
+    <!-- Fonts load async (non-render-blocking); display=swap covers the FOUT. -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Cormorant+Garamond:ital,wght@0,300..700;1,300..700&family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=DM+Serif+Display:ital@0;1&family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Italiana&display=swap" onload="this.rel='stylesheet'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Cormorant+Garamond:ital,wght@0,300..700;1,300..700&family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=DM+Serif+Display:ital@0;1&family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Italiana&display=swap" /></noscript>
 
     <link rel="stylesheet" href="styles.css" />
 
-    <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
-    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
-    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+    <!-- JSX is precompiled at build time (scripts/build-landing.mjs) — no
+         in-browser Babel. All scripts defer so the static shell paints first. -->
+    <script defer src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+    <script defer src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+    <script defer src="/landing.min.js"></script>
   </head>
   <body>
     <!-- SEO / no-JS static shell: real, visible content for crawlers (AI crawlers
@@ -157,6 +162,7 @@
         </div>
       </nav>
 
+      <main>
       <section class="section" style="text-align:center;padding-top:clamp(80px,10vw,140px);padding-bottom:clamp(56px,7vw,100px)">
         <div class="container">
           <div class="hero-top">
@@ -237,7 +243,7 @@
           <div class="paths two">
             <div class="path-card">
               <span class="ribbon">Free</span>
-              <h4>Free — bring your own domain</h4>
+              <h3>Free — bring your own domain</h3>
               <div class="price">$0<em> /forever</em></div>
               <p class="dim" style="font-size:15px">The complete LivOS on your own hardware — you connect it with your domain and Cloudflare.</p>
               <ul>
@@ -253,7 +259,7 @@
             </div>
             <div class="path-card feat">
               <span class="ribbon">Livinity Pro</span>
-              <h4>Livinity Pro</h4>
+              <h3>Livinity Pro</h3>
               <div class="price">$7.99<em> /mo</em></div>
               <p class="dim" style="font-size:15px">Or $69.99/year. 3-day free trial. Cancel anytime during the trial and you're never charged.</p>
               <ul>
@@ -280,48 +286,49 @@
             <div class="faq-item open">
               <div class="n">01</div>
               <div>
-                <h5>What is a Cloud AI Computer?</h5>
+                <h3>What is a Cloud AI Computer?</h3>
                 <div class="a">A full computer (operating system, apps, and assistant) that runs on your own hardware and opens in your browser, anywhere. Behind a secure tunnel, it becomes your own cloud. Sign in and your computer is right there.</div>
               </div>
             </div>
             <div class="faq-item">
               <div class="n">02</div>
               <div>
-                <h5>Is my data really mine?</h5>
+                <h3>Is my data really mine?</h3>
                 <div class="a">Yes. Everything Liv learns about you, every file, every chat, is encrypted and stored in your computer's space. Open source means anyone can verify there's no telemetry. And it all lives on your own hardware from day one.</div>
               </div>
             </div>
             <div class="faq-item">
               <div class="n">03</div>
               <div>
-                <h5>Which AI does Liv use?</h5>
+                <h3>Which AI does Liv use?</h3>
                 <div class="a">Bring your own. Liv works with Claude, Gemini, and local models. You choose. We never charge you for tokens, and the keys are yours.</div>
               </div>
             </div>
             <div class="faq-item">
               <div class="n">04</div>
               <div>
-                <h5>Can I use Livinity on my phone?</h5>
+                <h3>Can I use Livinity on my phone?</h3>
                 <div class="a">Open it in any browser. Liv remembers your conversation between every screen: phone, laptop, tablet, IDE.</div>
               </div>
             </div>
             <div class="faq-item">
               <div class="n">05</div>
               <div>
-                <h5>Do I have to be technical?</h5>
+                <h3>Do I have to be technical?</h3>
                 <div class="a">No. One command on any Linux box and the installer does the rest. If you can use a website, you can use Livinity. Builders get an open API on top.</div>
               </div>
             </div>
             <div class="faq-item">
               <div class="n">06</div>
               <div>
-                <h5>What if I want to leave?</h5>
+                <h3>What if I want to leave?</h3>
                 <div class="a">Export everything and take it anywhere. It was on your own machine all along. Livinity is open source, so the door is always unlocked.</div>
               </div>
             </div>
           </div>
         </div>
       </section>
+      </main>
 
       <footer class="footer">
         <div class="container">
@@ -334,19 +341,19 @@
               </div>
             </div>
             <div>
-              <h6>Product</h6>
+              <h4>Product</h4>
               <a href="/">Livinity</a><a href="#liv">Liv</a><a href="#apps">Library</a><a href="/pricing">Pricing</a><a href="https://github.com/utopusc/livinity-io/releases">What's new</a>
             </div>
             <div>
-              <h6>Builders</h6>
+              <h4>Builders</h4>
               <a href="/docs">Documentation</a><a href="/developers">Open API</a><a href="/docs">Skills</a><a href="https://github.com/utopusc/livinity-io">Source</a>
             </div>
             <div>
-              <h6>Company</h6>
+              <h4>Company</h4>
               <a href="#">About</a><a href="#">Manifesto</a><a href="#">Security</a><a href="#">License</a><a href="#">Contact</a>
             </div>
             <div>
-              <h6>Legal</h6>
+              <h4>Legal</h4>
               <a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/acceptable-use">Acceptable Use</a><a href="/legal/cookies">Cookies</a><a href="/legal/refund">Refunds</a>
             </div>
           </div>
@@ -360,11 +367,5 @@
       </footer>
     </div>
     <div class="grain" aria-hidden="true"></div>
-
-    <script type="text/babel" src="tweaks-panel.jsx"></script>
-    <script type="text/babel" src="atoms.jsx"></script>
-    <script type="text/babel" src="hero.jsx"></script>
-    <script type="text/babel" src="sections.jsx"></script>
-    <script type="text/babel" src="app.jsx"></script>
   </body>
 </html>

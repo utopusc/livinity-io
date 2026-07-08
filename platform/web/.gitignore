@@ -48,3 +48,4 @@ next-env.d.ts
 # local dev helpers (not part of the site)
 /optimize-videos.sh
 /LANDING-VIDEO-PLAN.md
+

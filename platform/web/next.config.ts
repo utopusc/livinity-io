@@ -4,6 +4,14 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // HSTS for the platform host. Deliberately NO includeSubDomains:
+        // user boxes live on *.livinity.io and must not inherit policy.
+        source: '/:path*',
+        headers: [
+          { key: 'Strict-Transport-Security', value: 'max-age=15552000' },
+        ],
+      },
+      {
         // CORS for API routes. NOTE: this is a WILDCARD (Access-Control-Allow-Origin: *),
         // NOT scoped to *.livinity.io — any origin may *call* these routes. It carries no
         // Access-Control-Allow-Credentials, so cookie-authed responses can never be read
