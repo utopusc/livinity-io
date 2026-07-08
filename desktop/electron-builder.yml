@@ -1,0 +1,12 @@
+appId: io.livinity.desktop
+productName: Livinity Desktop
+directories:
+  output: release
+files:
+  - dist/**/*
+  - "!spike/**/*"
+win:
+  target: nsis
+nsis:
+  oneClick: true
+  perMachine: false

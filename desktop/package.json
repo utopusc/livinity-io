@@ -1,0 +1,36 @@
+{
+  "name": "livinity-desktop",
+  "version": "0.1.0",
+  "description": "Livinity Desktop - GUI-only Windows installer/tray for self-hosted LivOS",
+  "main": "dist/main/index.js",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\"",
+    "dev:main": "tsc -p tsconfig.main.json --watch",
+    "dev:renderer": "vite",
+    "build": "tsc -p tsconfig.main.json && vite build",
+    "start": "electron .",
+    "package": "npm run build && electron-builder --win",
+    "test": "vitest run",
+    "test:quick": "vitest run --reporter=dot"
+  },
+  "dependencies": {
+    "electron-log": "^5.4.4",
+    "zod": "^4.4.3",
+    "execa": "^9.6.1"
+  },
+  "devDependencies": {
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3",
+    "vite": "^8.1.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "typescript": "^6.0.3",
+    "@types/node": "^26.0.0",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "vitest": "^4.1.10",
+    "concurrently": "^9.0.0"
+  }
+}
