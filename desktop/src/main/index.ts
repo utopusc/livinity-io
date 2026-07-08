@@ -15,6 +15,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { createTray, updateTrayStatus } from './tray/tray-controller';
 import { registerShellIpc } from './ipc/shell.ipc';
+import { registerAuthIpc } from './ipc/auth.ipc';
 import { logSafe, redactSecretLike } from './log';
 import { CHANNELS, type Status } from '../../shared/ipc-contract';
 
@@ -35,7 +36,7 @@ function createWindow(): void {
     minWidth: 420,
     minHeight: 500,
     frame: false,
-    backgroundColor: '#f8f9fc',
+    backgroundColor: '#050507',
     show: false,
     webPreferences: {
       preload: path.join(__dirname, '../preload/shell-preload.js'),
@@ -215,6 +216,8 @@ if (!gotLock) {
       },
       onQuit: handleQuit,
     });
+
+    registerAuthIpc({ getMainWindow });
 
     logSafe('app.ready', {});
   });
