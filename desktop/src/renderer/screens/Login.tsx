@@ -4,14 +4,15 @@
  * AUTH-01 native dark login form (email + password), D-08's self-throttle
  * countdown (display-only -- the throttle window itself is enforced main-side
  * by auth.ipc.ts's module-level state, per T-02-05), D-04's external
- * forgot-password link, and the "Continue with Google" outline button.
+ * forgot-password link, and the device-flow "Continue with Google" trigger
+ * (device-flow pivot, D-16/D-18 -- UI-SPEC Amendment 2026-07-08).
  *
- * The Google button's onClick is a PLACEHOLDER only. Per the 2026-07-08
- * UI-SPEC Amendment (D-16/D-18), the embedded-browser OAuth window is
- * retired -- the real behavior (device-flow trigger + in-card waiting state)
- * is wired into this same file by Plan 02-09, which adds new IPC methods
- * that do not exist yet at this plan's wave. This file must never reference
- * the old embedded-window flow.
+ * The retired embedded-browser OAuth window's companion copy must never
+ * reappear here -- that flow (an earlier plan's Screen 2) is dead. Clicking
+ * "Continue with Google" now registers a device grant, opens the system
+ * default browser at a fixed livinity.io deep link, and shows the code +
+ * waiting state in-card until the update subscription reports a terminal
+ * phase (approved/expired/error/cancelled).
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -29,12 +30,47 @@ export default function Login({ onRouted, expired }: LoginProps) {
   const [submitting, setSubmitting] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [device, setDevice] = useState<{ code: string } | null>(null);
+  const [deviceError, setDeviceError] = useState<'expired' | 'error' | null>(null);
 
   // Clean up the countdown interval on unmount.
   useEffect(() => {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
+  }, []);
+
+  // Subscribe to device-flow login progress (device-flow pivot, D-16/D-18).
+  // The code itself was already handed back by startDeviceLogin -- this
+  // subscription only ever needs to react to a later phase change.
+  useEffect(() => {
+    const unsub = window.api.onDeviceLoginUpdate((u) => {
+      if (u.phase === 'approved') {
+        setDevice(null);
+        setDeviceError(null);
+        onRouted(u.route);
+        return;
+      }
+      if (u.phase === 'expired') {
+        setDevice(null);
+        setDeviceError('expired');
+        return;
+      }
+      if (u.phase === 'error') {
+        setDevice(null);
+        setDeviceError('error');
+        return;
+      }
+      if (u.phase === 'cancelled') {
+        // A cancel is not a fault -- clear silently, no error copy.
+        setDevice(null);
+        setDeviceError(null);
+        return;
+      }
+      // 'waiting' -- no-op, the code is already shown in-card.
+    });
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function startCountdown(retryAfterMs: number): void {
@@ -84,8 +120,22 @@ export default function Login({ onRouted, expired }: LoginProps) {
     void window.api.authOpenExternal('reset-password');
   }
 
-  function handleGoogleClick(): void {
-    /* device-flow trigger + waiting state wired in Plan 02-09 (this file) */
+  async function handleGoogleClick(): Promise<void> {
+    setDeviceError(null);
+    const r = await window.api.startDeviceLogin();
+    if (r.ok) {
+      setDevice({ code: r.userCode });
+      return;
+    }
+    if (r.reason === 'network') {
+      setDeviceError('error');
+    }
+    // 'already_running' -- no-op, a flow is already waiting in-card.
+  }
+
+  async function handleCancelDeviceLogin(): Promise<void> {
+    await window.api.cancelDeviceLogin();
+    setDevice(null);
   }
 
   const displayError = countdown > 0 ? `Too many attempts. Try again in ${countdown}s.` : errorText;
@@ -148,18 +198,39 @@ export default function Login({ onRouted, expired }: LoginProps) {
 
       <div className="divider">or</div>
 
-      <button type="button" className="btn btn-block" onClick={handleGoogleClick}>
-        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            d="M21 12a9 9 0 1 1-3.2-6.9M21 12h-7.5"
-          />
-        </svg>
-        Continue with Google
-      </button>
+      {device ? (
+        <div aria-live="polite" aria-busy="true">
+          <div style={{ textAlign: 'center', marginBottom: 8 }}>
+            <span className="value-chip">{device.code}</span>
+          </div>
+          <p className="note-line">Approve in your browser…</p>
+          <p className="note-line">
+            We opened livinity.io in your browser — sign in there and enter this code.
+          </p>
+          <button type="button" className="btn btn-block" onClick={handleCancelDeviceLogin}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <>
+          {deviceError === 'expired' && <p className="error-line">That code expired. Try again.</p>}
+          {deviceError === 'error' && (
+            <p className="error-line">Couldn&apos;t complete Google sign-in. Please try again.</p>
+          )}
+          <button type="button" className="btn btn-block" onClick={handleGoogleClick}>
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                d="M21 12a9 9 0 1 1-3.2-6.9M21 12h-7.5"
+              />
+            </svg>
+            Continue with Google
+          </button>
+        </>
+      )}
     </section>
   );
 }
