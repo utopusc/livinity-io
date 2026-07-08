@@ -1,19 +1,19 @@
 <#
 .SYNOPSIS
-    spike/run-spike.ps1 — operator-runnable orchestration script for the
+    spike/run-spike.ps1 -- operator-runnable orchestration script for the
     holder-process survival spike (Phase 1 Plan 04).
 
 .DESCRIPTION
-    This script is documentation-grade hand-holding, not full automation —
+    This script is documentation-grade hand-holding, not full automation --
     invoking Plan 03's dev-only `dev:spawnHolderA` IPC channel and observing
     the destructive-test results both require interacting with the running
     Electron app's renderer/devtools console, which this script cannot do on
     its own. Each step below prints exactly what to do and pauses for you to
     confirm before continuing (Read-Host). Run this from
     C:\Users\hello\Desktop\Projects\contabo\livinity-io\desktop in a
-    PowerShell terminal DEDICATED to orchestration — you will need at least
+    PowerShell terminal DEDICATED to orchestration -- you will need at least
     one MORE separate terminal for `node spike/watcher.js` (it must not be a
-    child of the Electron app — see watcher.js's own file-top comment).
+    child of the Electron app -- see watcher.js's own file-top comment).
 
     See spike/README.md for the full narrative version of these steps.
 #>
@@ -30,7 +30,7 @@ function Pause-ForOperator($message) {
     Read-Host "Press Enter once done"
 }
 
-Write-Host "=== Livinity Desktop — Holder-Process Survival Spike ===" -ForegroundColor Yellow
+Write-Host "=== Livinity Desktop -- Holder-Process Survival Spike ===" -ForegroundColor Yellow
 
 # --- S1: build + start the app; read the Electron main PID ---
 Write-Host "`n[S1] Building app..."
@@ -44,7 +44,7 @@ Wait for the tray icon / debug window to appear, then come back here.
 $pidFile = Join-Path $PSScriptRoot 'electron-main.pid'
 if (-not (Test-Path $pidFile)) {
     Write-Warning "spike/electron-main.pid not found. This file is written by Plan 03's index.ts on app.ready (dev-only, gated !app.isPackaged)."
-    Write-Warning "If it is absent, the app was launched in packaged mode or Plan 03's hook did not fire — STOP and report this rather than guessing a PID."
+    Write-Warning "If it is absent, the app was launched in packaged mode or Plan 03's hook did not fire -- STOP and report this rather than guessing a PID."
     exit 1
 }
 $electronMainPid = (Get-Content $pidFile).Trim()
@@ -57,7 +57,7 @@ Trigger Candidate A via the dev-only spike surface. Any ONE of:
   (a) Click the 'Spawn holder A' button in the app's 'Spike (dev)' card, or
   (b) In the app's DevTools console (Ctrl+Shift+I), run:
           window.api.devSpawnHolderA()
-      (NOTE: 'require' does NOT exist in this console — the window runs
+      (NOTE: 'require' does NOT exist in this console -- the window runs
       sandbox:true + contextIsolation; window.api is the only bridge.), or
   (c) If the app was launched with --remote-debugging-port=9222:
           node spike/cdp-eval.js "window.api.devSpawnHolderA()"
@@ -72,8 +72,8 @@ Write-Host "`n[S2] Registering Candidate C (Scheduled Task)..."
 
 $candAPid = Join-Path $PSScriptRoot 'candidate-a.pid'
 $candCPid = Join-Path $PSScriptRoot 'candidate-c.pid'
-if (-not (Test-Path $candAPid)) { Write-Warning "candidate-a.pid still missing — confirm the dev:spawnHolderA invoke succeeded before continuing." }
-if (-not (Test-Path $candCPid)) { Write-Warning "candidate-c.pid still missing — check holder-candidate-c-register.ps1 output above." }
+if (-not (Test-Path $candAPid)) { Write-Warning "candidate-a.pid still missing -- confirm the dev:spawnHolderA invoke succeeded before continuing." }
+if (-not (Test-Path $candCPid)) { Write-Warning "candidate-c.pid still missing -- check holder-candidate-c-register.ps1 output above." }
 
 # --- S3: start the watcher (separate terminal) ---
 Pause-ForOperator @"
@@ -85,8 +85,8 @@ Confirm you see 'ALIVE' lines for both candidate-a and candidate-c in its
 output / in spike/spike-log.jsonl before continuing.
 "@
 
-# --- S4: TEST A — simulated crash ---
-Write-Host "`n[S4] TEST A — simulated crash (taskkill /T /F on Electron main PID $electronMainPid)" -ForegroundColor Yellow
+# --- S4: TEST A -- simulated crash ---
+Write-Host "`n[S4] TEST A -- simulated crash (taskkill /T /F on Electron main PID $electronMainPid)" -ForegroundColor Yellow
 Pause-ForOperator "In the watcher terminal (or a third terminal), run:  node spike/watcher.js --mark TEST_A`nThen come back here and press Enter to fire the taskkill."
 
 taskkill /PID $electronMainPid /T /F
@@ -94,9 +94,9 @@ Write-Host "taskkill fired at $(Get-Date -Format o). Watch spike-log.jsonl for t
 Start-Sleep -Seconds 30
 Write-Host "30s elapsed. Record T+0/T+5/T+30 alive/dead for each candidate from spike-log.jsonl into SPIKE-VERDICT.md."
 
-# --- S5: TEST B — update-cycle simulation ---
+# --- S5: TEST B -- update-cycle simulation ---
 Pause-ForOperator @"
-Relaunch the app now (npm start in the app terminal — or with
+Relaunch the app now (npm start in the app terminal -- or with
 --remote-debugging-port=9222 for the CDP path). If Candidate A died in
 Test A, respawn it first (S2's trigger options) so Test B measures the
 update event itself. Then:
@@ -105,7 +105,7 @@ update event itself. Then:
        - the 'Update-sim (relaunch)' button in the app's 'Spike (dev)' card
        - DevTools console:  window.api.devUpdateSim()
        - CDP:  node spike/cdp-eval.js "window.api.devUpdateSim()"
-     The main-side dev:updateSim handler runs app.relaunch(); app.exit(0) —
+     The main-side dev:updateSim handler runs app.relaunch(); app.exit(0) --
      the documented quitAndInstall() fallback (same process-death-and-replace
      semantics; record this as the Test-B method in SPIKE-VERDICT.md).
      A NEW Electron main PID appearing afterwards is EXPECTED.

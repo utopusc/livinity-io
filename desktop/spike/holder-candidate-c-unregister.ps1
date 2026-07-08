@@ -14,4 +14,4 @@ schtasks.exe /Delete /TN "LivinitySpikeHolderC" /F
 
 Write-Host "Verifying removal..."
 schtasks.exe /Query /TN "LivinitySpikeHolderC" 2>&1 | Out-Host
-Write-Host "(Expected: 'ERROR: The specified task name ... does not exist' — confirms cleanup succeeded.)"
+Write-Host "(Expected: 'ERROR: The specified task name ... does not exist' -- confirms cleanup succeeded.)"
