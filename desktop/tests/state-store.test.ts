@@ -67,6 +67,45 @@ describe('state-store', () => {
     renameSpy.mockRestore();
   });
 
+  it('retries fs.readFile once on a transient EPERM then returns the state, instead of degrading to defaults (WR-02)', async () => {
+    await writeState({ version: 1, currentStep: 'locked-then-readable' });
+
+    const realReadFile = fsPromises.readFile.bind(fsPromises);
+    let calls = 0;
+    const readSpy = vi
+      .spyOn(fsPromises, 'readFile')
+      .mockImplementation(async (...args: Parameters<typeof fsPromises.readFile>) => {
+        calls++;
+        if (calls === 1) {
+          const err: any = new Error('EPERM: operation not permitted, open');
+          err.code = 'EPERM';
+          throw err;
+        }
+        return (realReadFile as any)(...args);
+      });
+
+    expect(await readState()).toEqual({ version: 1, currentStep: 'locked-then-readable' });
+    expect(calls).toBeGreaterThanOrEqual(2);
+
+    readSpy.mockRestore();
+  });
+
+  it('does NOT retry ENOENT (file absent) — returns null on the first attempt (WR-02, unchanged first-run semantics)', async () => {
+    const realReadFile = fsPromises.readFile.bind(fsPromises);
+    let calls = 0;
+    const readSpy = vi
+      .spyOn(fsPromises, 'readFile')
+      .mockImplementation(async (...args: Parameters<typeof fsPromises.readFile>) => {
+        calls++;
+        return (realReadFile as any)(...args);
+      });
+
+    expect(await readState()).toBe(null);
+    expect(calls).toBe(1);
+
+    readSpy.mockRestore();
+  });
+
   it('the shared StateSchema has no secret-shaped fields (session/apiKey/token)', () => {
     const fieldNames = Object.keys(StateSchema.shape);
     expect(fieldNames).not.toContain('session');

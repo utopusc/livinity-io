@@ -14,8 +14,8 @@
 
 import { promises as fs } from 'node:fs';
 
-/** True for the Windows-specific transient rename failures worth retrying. */
-function isRetryableRenameError(err: unknown): boolean {
+/** True for the Windows-specific transient fs failures worth retrying (rename or read). */
+function isTransientFsError(err: unknown): boolean {
   const code = (err as NodeJS.ErrnoException)?.code;
   return code === 'EPERM' || code === 'EBUSY';
 }
@@ -37,7 +37,7 @@ export async function renameWithRetry(from: string, to: string, attempts = 3): P
       return;
     } catch (err) {
       const isLastAttempt = attempt === attempts - 1;
-      if (isLastAttempt || !isRetryableRenameError(err)) throw err;
+      if (isLastAttempt || !isTransientFsError(err)) throw err;
       await delay(backoffMs[attempt] ?? 100);
     }
   }
@@ -52,4 +52,27 @@ export async function atomicWriteFile(target: string, contents: string): Promise
   const tmp = target + '.tmp';
   await fs.writeFile(tmp, contents, 'utf8');
   await renameWithRetry(tmp, target);
+}
+
+/**
+ * Reads `target` as utf8, retrying on the same transient Windows EPERM/EBUSY
+ * class as `renameWithRetry` (e.g. an AV scanner momentarily holding a read
+ * handle on the file). `ENOENT` (file legitimately absent) and any other
+ * non-retryable error are NOT retried and are rethrown on the first attempt —
+ * callers distinguish "absent"/"corrupt" from "transiently locked" via the
+ * rethrown error's `code`, same as `renameWithRetry`'s callers do today.
+ */
+export async function readFileWithRetry(target: string, attempts = 3): Promise<string> {
+  const backoffMs = [50, 100];
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await fs.readFile(target, 'utf8');
+    } catch (err) {
+      const isLastAttempt = attempt === attempts - 1;
+      if (isLastAttempt || !isTransientFsError(err)) throw err;
+      await delay(backoffMs[attempt] ?? 100);
+    }
+  }
+  /* istanbul ignore next -- unreachable: loop above always returns or throws */
+  throw new Error('unreachable');
 }

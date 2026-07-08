@@ -10,10 +10,9 @@
  */
 
 import { app } from 'electron';
-import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { StateSchema, type State } from '../../../shared/ipc-contract';
-import { atomicWriteFile } from './atomic-write';
+import { atomicWriteFile, readFileWithRetry } from './atomic-write';
 
 const statePath = () => path.join(app.getPath('userData'), 'state.json');
 
@@ -34,10 +33,26 @@ export async function writeState(state: State): Promise<void> {
  * Reads and validates state.json. Returns `null` when the file is absent,
  * contains malformed JSON, or fails `StateSchema.safeParse` (tampered/corrupt)
  * — degrades to "absent" rather than throwing or acting on untrusted data.
+ *
+ * The read itself goes through `readFileWithRetry` (atomic-write.ts), which
+ * retries a transient Windows EPERM/EBUSY (e.g. an AV scanner momentarily
+ * holding a read handle) instead of treating it identically to "file
+ * genuinely doesn't exist yet" on the first failure (WR-02) — `patchState`
+ * merges over `DEFAULT_STATE` on a `null` return, so without this retry a
+ * transient lock could silently discard legitimate in-progress state.
+ * Corrupted-file semantics are unchanged: malformed JSON or a schema
+ * validation failure still degrades to `null` immediately, not retried.
  */
 export async function readState(): Promise<State | null> {
+  let raw: string;
   try {
-    const raw = await fs.readFile(statePath(), 'utf8');
+    raw = await readFileWithRetry(statePath());
+  } catch {
+    // ENOENT (legitimately absent) or a non-retryable/exhausted-retry error
+    // — both degrade to "absent", same as before this fix.
+    return null;
+  }
+  try {
     const parsed = StateSchema.safeParse(JSON.parse(raw));
     return parsed.success ? parsed.data : null;
   } catch {
