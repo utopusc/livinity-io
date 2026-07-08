@@ -52,19 +52,19 @@ Write-Host "Electron main PID (from spike/electron-main.pid): $electronMainPid" 
 
 # --- S2: trigger Candidate A (dev:spawnHolderA) + register Candidate C ---
 Pause-ForOperator @"
-Trigger Candidate A by invoking Plan 03's dev-only IPC channel against the
-running app. In the app's devtools console (View > Toggle Developer Tools,
-or Ctrl+Shift+I on the debug window), run:
+Trigger Candidate A via the dev-only spike surface. Any ONE of:
 
-    require('electron').ipcRenderer.invoke('dev:spawnHolderA')
+  (a) Click the 'Spawn holder A' button in the app's 'Spike (dev)' card, or
+  (b) In the app's DevTools console (Ctrl+Shift+I), run:
+          window.api.devSpawnHolderA()
+      (NOTE: 'require' does NOT exist in this console — the window runs
+      sandbox:true + contextIsolation; window.api is the only bridge.), or
+  (c) If the app was launched with --remote-debugging-port=9222:
+          node spike/cdp-eval.js "window.api.devSpawnHolderA()"
 
-(This is a raw devtools-console invocation of the 'dev:spawnHolderA' channel —
-it is NOT part of the typed window.api / ShellApi surface, since the handler
-is dev-only per Plan 03. See spike/README.md for the exact console steps if
-requireelectron is not directly accessible — a devtools Node context or the
-Electron 'run code' snippet works identically.)
-
-Confirm the console printed something and that spike/candidate-a.pid now exists.
+All three call the same dev-only 'dev:spawnHolderA' handler in main (gated
+!app.isPackaged) so the holder lands inside Electron's Job Object tree.
+Confirm spike/candidate-a.pid now exists.
 "@
 
 Write-Host "`n[S2] Registering Candidate C (Scheduled Task)..."
@@ -96,12 +96,20 @@ Write-Host "30s elapsed. Record T+0/T+5/T+30 alive/dead for each candidate from 
 
 # --- S5: TEST B — update-cycle simulation ---
 Pause-ForOperator @"
-Relaunch the app now (npm start in the app terminal).
-Wire and trigger the Test B path per spike/README.md — either:
-  (a) autoUpdater.quitAndInstall() via spike/dev-app-update.yml, or
-  (b) the fallback: app.relaunch(); app.exit(0);
-Then in the watcher terminal run:  node spike/watcher.js --mark TEST_B
-Trigger the chosen path now, then press Enter here.
+Relaunch the app now (npm start in the app terminal — or with
+--remote-debugging-port=9222 for the CDP path). If Candidate A died in
+Test A, respawn it first (S2's trigger options) so Test B measures the
+update event itself. Then:
+  1. In the watcher terminal run:  node spike/watcher.js --mark TEST_B
+  2. Trigger the update sim via ONE of:
+       - the 'Update-sim (relaunch)' button in the app's 'Spike (dev)' card
+       - DevTools console:  window.api.devUpdateSim()
+       - CDP:  node spike/cdp-eval.js "window.api.devUpdateSim()"
+     The main-side dev:updateSim handler runs app.relaunch(); app.exit(0) —
+     the documented quitAndInstall() fallback (same process-death-and-replace
+     semantics; record this as the Test-B method in SPIKE-VERDICT.md).
+     A NEW Electron main PID appearing afterwards is EXPECTED.
+Then press Enter here.
 "@
 
 Write-Host "[S5] Watch spike-log.jsonl for 30 seconds after triggering Test B." -ForegroundColor Yellow

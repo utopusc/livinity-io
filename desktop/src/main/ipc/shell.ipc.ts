@@ -92,9 +92,11 @@ export function registerShellIpc(deps: ShellIpcDeps): void {
   // DEV-ONLY (!app.isPackaged): exists solely to let Plan 04's spike trigger
   // Candidate A from inside Electron's Job Object tree (spawning from a
   // standalone terminal would invalidate that test). Never registered in a
-  // packaged build. This channel name is a literal (NOT part of the
-  // production CHANNELS object) — it is dev-only surface, intentionally kept
-  // out of shell-preload.ts's ShellApi contract. Takes no renderer-supplied
+  // packaged build. These channel names are literals (NOT part of the
+  // production CHANNELS object) — dev-only surface, typed separately as
+  // DevSpikeApi (shared/ipc-contract.ts) and exposed via the preload because
+  // the sandboxed renderer has no other reachable path to them (no `require`
+  // in the DevTools console under sandbox:true). Takes no renderer-supplied
   // payload — spawns a fixed local script path only.
   if (!app.isPackaged) {
     ipcMain.handle('dev:spawnHolderA', async () => {
@@ -102,6 +104,19 @@ export function registerShellIpc(deps: ShellIpcDeps): void {
       spawn(process.execPath, [holder], { stdio: 'ignore', windowsHide: true });
       logSafe('spike.dev-spawn-holder-a', {});
       return { ok: true };
+    });
+
+    // DEV-ONLY (!app.isPackaged): Plan 04 spike Test B — update-cycle
+    // simulation. `app.relaunch(); app.exit(0)` reproduces quitAndInstall()'s
+    // process semantics (main process dies and is replaced) minus running an
+    // installer binary — the documented fallback per the plan/RESEARCH.md Open
+    // Question 2 (no real GitHub Release exists yet to feed a faithful
+    // quitAndInstall). SPIKE-VERDICT.md records this as the Test-B method.
+    // Takes no renderer-supplied payload.
+    ipcMain.handle('dev:updateSim', async () => {
+      logSafe('spike.dev-update-sim', { method: 'app.relaunch+app.exit(0)' });
+      app.relaunch();
+      app.exit(0);
     });
   }
 }

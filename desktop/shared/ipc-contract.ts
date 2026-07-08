@@ -93,3 +93,24 @@ export interface ShellApi {
   hide(): void;
   quit(): void;
 }
+
+// ---------------------------------------------------------------------------
+// DevSpikeApi — DEV-ONLY spike surface (Phase 1 Plan 04)
+// ---------------------------------------------------------------------------
+
+/**
+ * DEV-ONLY (Plan 04 spike): typed surface for the two spike triggers. The
+ * corresponding main-process handlers (`dev:spawnHolderA`, `dev:updateSim`)
+ * are registered ONLY when `!app.isPackaged` (see shell.ipc.ts) — in a
+ * packaged build these methods reject with "No handler registered", so
+ * exposing them through the preload is inert in production. The channel
+ * names are deliberately NOT part of the production CHANNELS object above:
+ * this is throwaway research surface, kept typed here only so the sandboxed
+ * preload and the debug UI reference one contract instead of re-typing it.
+ */
+export interface DevSpikeApi {
+  /** Spawns spike/holder-candidate-a.js FROM the main process (inside Electron's Job Object tree). */
+  devSpawnHolderA(): Promise<{ ok: boolean }>;
+  /** Test B update simulation: app.relaunch() + app.exit(0) — quitAndInstall's process semantics minus the installer binary. */
+  devUpdateSim(): Promise<void>;
+}

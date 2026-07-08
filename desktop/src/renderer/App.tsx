@@ -12,11 +12,11 @@
  */
 
 import { useEffect, useState } from 'react';
-import type { ShellApi, Status } from '../../shared/ipc-contract';
+import type { ShellApi, DevSpikeApi, Status } from '../../shared/ipc-contract';
 
 declare global {
   interface Window {
-    api: ShellApi;
+    api: ShellApi & DevSpikeApi;
   }
 }
 
@@ -31,6 +31,7 @@ export default function App() {
   const [currentStep, setCurrentStep] = useState<string>('');
   const [vaultMessage, setVaultMessage] = useState<string>('');
   const [stateMessage, setStateMessage] = useState<string>('');
+  const [spikeMessage, setSpikeMessage] = useState<string>('');
 
   useEffect(() => {
     window.api.getState().then((s) => setCurrentStep(s.currentStep));
@@ -55,6 +56,25 @@ export default function App() {
     const s = await window.api.getState();
     setCurrentStep(s.currentStep);
     setStateMessage(`currentStep: ${s.currentStep}`);
+  }
+
+  // DEV-ONLY spike triggers (Plan 04) — handlers only exist when !app.isPackaged.
+  async function handleSpawnHolderA(): Promise<void> {
+    try {
+      const result = await window.api.devSpawnHolderA();
+      setSpikeMessage(`devSpawnHolderA -> ok: ${result?.ok === true}`);
+    } catch (e) {
+      setSpikeMessage(`devSpawnHolderA failed (dev-only handler): ${String(e)}`);
+    }
+  }
+
+  async function handleUpdateSim(): Promise<void> {
+    setSpikeMessage('devUpdateSim fired -- app will relaunch...');
+    try {
+      await window.api.devUpdateSim();
+    } catch {
+      // Expected: the app exits before the invoke can resolve.
+    }
   }
 
   return (
@@ -111,6 +131,19 @@ export default function App() {
             State self-test
           </button>
           {stateMessage && <p className="result-line">{stateMessage}</p>}
+        </section>
+
+        <section className="card">
+          <h2 className="card-title">Spike (dev)</h2>
+          <div className="btn-row">
+            <button className="btn btn-primary" onClick={handleSpawnHolderA}>
+              Spawn holder A
+            </button>
+            <button className="btn btn-primary" onClick={handleUpdateSim}>
+              Update-sim (relaunch)
+            </button>
+          </div>
+          {spikeMessage && <p className="result-line">{spikeMessage}</p>}
         </section>
       </div>
     </div>

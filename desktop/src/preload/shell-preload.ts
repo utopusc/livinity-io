@@ -5,9 +5,13 @@
  * method's parameters and return type reference shared/ipc-contract.ts.
  * Zero `any` (corrected vs. agent-app's fully `any`-typed bridge).
  *
- * The dev-only spike-trigger IPC handler registered in shell.ipc.ts is
- * intentionally NOT exposed here: it is throwaway research surface, not part
- * of the production ShellApi contract.
+ * DEV-ONLY spike surface (Plan 04): `devSpawnHolderA`/`devUpdateSim` ARE
+ * exposed below (typed via DevSpikeApi) because the sandboxed renderer has no
+ * other reachable path to the main-process spike handlers — with
+ * `sandbox: true` + contextIsolation the DevTools console has NO `require`,
+ * so `require('electron').ipcRenderer.invoke(...)` is impossible from the
+ * console. The main-side handlers are gated `!app.isPackaged`; in a packaged
+ * build these two methods reject with "No handler registered" (inert).
  *
  * SELF-CONTAINED BY NECESSITY (root-caused a white-screen bug — read this
  * before "cleaning up" the duplication below): this file runs inside
@@ -34,7 +38,7 @@
  */
 
 import { contextBridge, ipcRenderer } from 'electron';
-import type { ShellApi, Status } from '../../shared/ipc-contract';
+import type { ShellApi, DevSpikeApi, Status } from '../../shared/ipc-contract';
 
 // Mirrors shared/ipc-contract.ts CHANNELS exactly — duplicated here because a
 // sandboxed preload cannot require() that (or any) local project file. Kept
@@ -51,7 +55,15 @@ const CHANNELS = {
   appQuit: 'app:quit',
 } as const;
 
-const api: ShellApi = {
+// DEV-ONLY spike channels (Plan 04) — local literals for the same sandbox
+// reason as CHANNELS above; asserted against the registered handlers in
+// shell.ipc.ts by tests/shell-preload.test.ts (drift guard).
+const DEV_CHANNELS = {
+  devSpawnHolderA: 'dev:spawnHolderA',
+  devUpdateSim: 'dev:updateSim',
+} as const;
+
+const api: ShellApi & DevSpikeApi = {
   vaultSet: (key, value) => ipcRenderer.invoke(CHANNELS.vaultSet, { key, value }),
   vaultHas: (key) => ipcRenderer.invoke(CHANNELS.vaultHas, { key }),
   getState: () => ipcRenderer.invoke(CHANNELS.stateGet),
@@ -69,6 +81,9 @@ const api: ShellApi = {
   quit: () => {
     void ipcRenderer.invoke(CHANNELS.appQuit);
   },
+  // DEV-ONLY spike triggers (Plan 04) — main-side handlers gated !app.isPackaged.
+  devSpawnHolderA: () => ipcRenderer.invoke(DEV_CHANNELS.devSpawnHolderA),
+  devUpdateSim: () => ipcRenderer.invoke(DEV_CHANNELS.devUpdateSim),
 };
 
 contextBridge.exposeInMainWorld('api', api);

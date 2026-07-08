@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * shell-preload.ts must run inside Electron's sandboxed preload context,
@@ -96,5 +98,40 @@ describe('shell-preload channel wiring (drift guard vs. shared/ipc-contract.ts)'
   it('quit invokes the canonical app:quit channel', () => {
     getExposedApi()!.quit();
     expect(invokeMock).toHaveBeenCalledWith(CHANNELS.appQuit);
+  });
+});
+
+describe('shell-preload DEV-ONLY spike channels (Plan 04 drift guard vs. shell.ipc.ts)', () => {
+  // The dev spike channels are deliberately NOT part of the production
+  // CHANNELS object (Plan 03 decision), so the canonical source to guard
+  // against is the main-process registration itself: shell.ipc.ts must
+  // register a handler for the EXACT literal the preload invokes.
+  const shellIpcSource = readFileSync(
+    join(__dirname, '../src/main/ipc/shell.ipc.ts'),
+    'utf8'
+  );
+
+  beforeEach(() => {
+    invokeMock.mockClear();
+  });
+
+  it('devSpawnHolderA invokes dev:spawnHolderA, and shell.ipc.ts registers that exact handler', async () => {
+    await getExposedApi()!.devSpawnHolderA();
+    expect(invokeMock).toHaveBeenCalledWith('dev:spawnHolderA');
+    expect(shellIpcSource).toContain("ipcMain.handle('dev:spawnHolderA'");
+  });
+
+  it('devUpdateSim invokes dev:updateSim, and shell.ipc.ts registers that exact handler', async () => {
+    await getExposedApi()!.devUpdateSim();
+    expect(invokeMock).toHaveBeenCalledWith('dev:updateSim');
+    expect(shellIpcSource).toContain("ipcMain.handle('dev:updateSim'");
+  });
+
+  it('both dev handlers are gated behind !app.isPackaged in shell.ipc.ts', () => {
+    // Both registrations must appear AFTER the isPackaged gate opens.
+    const gateIndex = shellIpcSource.indexOf('if (!app.isPackaged)');
+    expect(gateIndex).toBeGreaterThan(-1);
+    expect(shellIpcSource.indexOf("ipcMain.handle('dev:spawnHolderA'")).toBeGreaterThan(gateIndex);
+    expect(shellIpcSource.indexOf("ipcMain.handle('dev:updateSim'")).toBeGreaterThan(gateIndex);
   });
 });

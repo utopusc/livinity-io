@@ -46,23 +46,29 @@ NOT create or edit that file or `index.ts`; it only reads
 
 ## How to invoke Candidate A (`dev:spawnHolderA`)
 
-With the app running in dev mode, open its devtools (View > Toggle Developer
-Tools, or `Ctrl+Shift+I` on the debug window) and in the Console run:
+IMPORTANT: the window runs `sandbox: true` + contextIsolation, so the DevTools
+console has NO `require` — `require('electron').ipcRenderer.invoke(...)` is
+NOT possible there. The dev spike triggers are instead exposed on the
+contextBridge surface as `window.api.devSpawnHolderA()` /
+`window.api.devUpdateSim()` (typed as `DevSpikeApi` in
+`shared/ipc-contract.ts`; the main-side handlers in `shell.ipc.ts` are gated
+`!app.isPackaged`). Three equivalent ways to trigger:
 
-```js
-require('electron').ipcRenderer.invoke('dev:spawnHolderA')
-```
+1. **Debug UI button** — the "Spike (dev)" card in the app window has
+   "Spawn holder A" and "Update-sim (relaunch)" buttons.
+2. **DevTools console** — open DevTools (`Ctrl+Shift+I`) and run:
+   ```js
+   window.api.devSpawnHolderA()
+   ```
+3. **CDP (no GUI needed, fully scriptable)** — launch the app with
+   `npx electron . --remote-debugging-port=9222` and run:
+   ```
+   node spike/cdp-eval.js "window.api.devSpawnHolderA()"
+   ```
 
-This calls the raw IPC channel directly — `dev:spawnHolderA` is intentionally
-NOT part of the typed `window.api` / `ShellApi` surface (it is dev-only surface
-registered by Plan 03's `shell.ipc.ts`, gated `!app.isPackaged`). If
-`require` is not reachable from the console context in your Electron/devtools
-version, the equivalent is any snippet that calls
-`ipcRenderer.invoke('dev:spawnHolderA')` from a context with `ipcRenderer`
-available (e.g. a temporary button wired in the debug UI, or the Electron
-DevTools "Console" context switched to the preload/main world). The handler
-takes no payload and spawns `spike/holder-candidate-a.js` from the main
-process — that is the exact condition under test (see above).
+All three paths call the same dev-only IPC handler, which spawns
+`spike/holder-candidate-a.js` from the main process — that is the exact
+condition under test (see above).
 
 ## Running the spike
 
@@ -80,13 +86,20 @@ hand:
    `taskkill /PID <electron-main-pid> /T /F` (the `/T` kills the whole tree —
    the harshest test). Watch `spike-log.jsonl` for 30s. Record alive/dead for
    each candidate at T+0/T+5/T+30.
-5. Relaunch the app (`npm start` again). **Test B (update sim):**
-   `node spike/watcher.js --mark TEST_B`, then trigger either:
-   - the intended method: a dev-only code path setting
-     `autoUpdater.updateConfigPath = spike/dev-app-update.yml` and calling
-     `autoUpdater.quitAndInstall()`, or
-   - the acceptable fallback: `app.relaunch(); app.exit(0);` — reproduces the
-     same "main process dies and is replaced" condition Test B cares about.
+5. Relaunch the app (`npm start` again — or with the debug port for the CDP
+   path). If Candidate A died in Test A, respawn it (via any of the three
+   trigger paths above) so Test B measures the update event itself, not a
+   leftover corpse. **Test B (update sim):**
+   `node spike/watcher.js --mark TEST_B`, then trigger the update simulation:
+   `window.api.devUpdateSim()` (UI button "Update-sim (relaunch)", DevTools
+   console, or `node spike/cdp-eval.js "window.api.devUpdateSim()"`). The
+   main-side `dev:updateSim` handler runs `app.relaunch(); app.exit(0);` —
+   the documented fallback that reproduces `quitAndInstall()`'s
+   "main process dies and is replaced" semantics without a real release
+   (`dev-app-update.yml` documents the faithful-quitAndInstall alternative
+   for when a real feed exists). A NEW Electron main PID appearing after this
+   is expected — what matters is holder survival across the exit/relaunch
+   boundary.
 
    Watch `spike-log.jsonl` for 30s. Record alive/dead for each candidate.
 6. Cleanup: run `spike/holder-candidate-c-unregister.ps1`, stop the watcher,
