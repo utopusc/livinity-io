@@ -103,9 +103,9 @@ describe('CHANNELS', () => {
     expect(CHANNELS.appQuit).toBe('app:quit');
   });
 
-  it('defines the 10 Phase-2 auth channels', () => {
+  it('defines the 9 Phase-2 auth channels (authSignInWithGoogle removed — device-flow pivot, D-16/D-18)', () => {
     expect(CHANNELS.authLogin).toBe('auth:login');
-    expect(CHANNELS.authSignInWithGoogle).toBe('auth:signInWithGoogle');
+    expect((CHANNELS as Record<string, string>).authSignInWithGoogle).toBeUndefined();
     expect(CHANNELS.authSignOut).toBe('auth:signOut');
     expect(CHANNELS.authGetRoute).toBe('auth:getRoute');
     expect(CHANNELS.authChooseFree).toBe('auth:chooseFree');
