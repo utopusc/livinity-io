@@ -39,16 +39,16 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 import type { IpcRendererEvent } from 'electron';
-import type { ShellApi, DevSpikeApi, AuthApi, Status } from '../../shared/ipc-contract';
+import type { ShellApi, DevSpikeApi, AuthApi, Status, DeviceLoginUpdate } from '../../shared/ipc-contract';
 
 // Mirrors shared/ipc-contract.ts CHANNELS exactly — duplicated here because a
 // sandboxed preload cannot require() that (or any) local project file. Kept
 // in sync by tests/shell-preload.test.ts.
 //
-// Phase 2 (auth): 9 auth:* channels. `authSignInWithGoogle` is deliberately
-// NOT present — that channel was removed from the canonical CHANNELS export
-// (device-flow pivot, D-16/D-18); the device-flow channels that replace it
-// land in Plan 02-09.
+// Phase 2 (auth): 9 auth:* channels + 3 device-flow channels (device-flow
+// pivot, D-16/D-18). `authSignInWithGoogle` is deliberately NOT present —
+// that channel was removed from the canonical CHANNELS export; the 3 device-
+// flow channels below replace it.
 const CHANNELS = {
   vaultSet: 'vault:set',
   vaultHas: 'vault:has',
@@ -68,6 +68,9 @@ const CHANNELS = {
   authRegenerateKey: 'auth:regenerateKey',
   authGetAccount: 'auth:getAccount',
   authOpenExternal: 'auth:openExternal',
+  authStartDeviceLogin: 'auth:startDeviceLogin',
+  authCancelDeviceLogin: 'auth:cancelDeviceLogin',
+  authDeviceLoginUpdate: 'auth:deviceLoginUpdate',
 } as const;
 
 // DEV-ONLY spike channels (Plan 04) — local literals for the same sandbox
@@ -117,6 +120,17 @@ const api: ShellApi & DevSpikeApi & AuthApi = {
   authRegenerateKey: () => ipcRenderer.invoke(CHANNELS.authRegenerateKey),
   authGetAccount: () => ipcRenderer.invoke(CHANNELS.authGetAccount),
   authOpenExternal: (target) => ipcRenderer.invoke(CHANNELS.authOpenExternal, { target }),
+  // Device-flow login (device-flow pivot, D-16/D-18) — replaces the retired
+  // embedded-browser Google sign-in.
+  startDeviceLogin: () => ipcRenderer.invoke(CHANNELS.authStartDeviceLogin),
+  cancelDeviceLogin: () => ipcRenderer.invoke(CHANNELS.authCancelDeviceLogin),
+  onDeviceLoginUpdate: (cb: (update: DeviceLoginUpdate) => void) => {
+    const listener = (_event: IpcRendererEvent, update: DeviceLoginUpdate) => cb(update);
+    ipcRenderer.on(CHANNELS.authDeviceLoginUpdate, listener);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.authDeviceLoginUpdate, listener);
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld('api', api);

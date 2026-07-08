@@ -16,7 +16,9 @@
  * POST-PIVOT (D-16/D-18): the embedded-Google-window sign-in channel from an
  * earlier plan has been removed from shared/ipc-contract.ts entirely, so no
  * handler for it is (or can be) registered here. The device-flow channels
- * that replace embedded sign-in are added in Plan 02-09.
+ * that replace embedded sign-in are registered below — startDeviceLogin's
+ * onUpdate callback forwards to deps.getMainWindow(), the one thing this
+ * file's AuthIpcDeps was retained for since Plan 02-04.
  */
 
 import { ipcMain, shell, type BrowserWindow } from 'electron';
@@ -26,6 +28,7 @@ import { validateSession, signOut } from '../platform/session-manager';
 import { login, getMe, getDashboard, chooseFree, mintKey, probeKey } from '../platform/auth-client';
 import { decideKeyAction } from '../platform/decide-key-action';
 import { nextBackoffMs } from '../platform/backoff';
+import { startDeviceLogin, cancelDeviceLogin } from '../platform/device-client';
 import { vaultGet, vaultSet, vaultHas, vaultDelete } from '../storage/secrets-vault';
 import { logSafe } from '../log';
 
@@ -42,11 +45,11 @@ const RESET_PASSWORD_URL = 'https://livinity.io/reset-password';
 const PRICING_URL = 'https://livinity.io/pricing';
 
 export interface AuthIpcDeps {
-  /** Retained for Plan 02-09, which uses it to push device-login update events. */
+  /** Used by the device-flow handlers below to push update events to the renderer. */
   getMainWindow: () => BrowserWindow | null;
 }
 
-export function registerAuthIpc(_deps: AuthIpcDeps): void {
+export function registerAuthIpc(deps: AuthIpcDeps): void {
   // D-08: client-side login throttle. Module-level state — the platform's
   // login endpoint has no server-side rate limiting today, so this is the
   // only thing standing between a scripted renderer and a hammered endpoint.
@@ -279,5 +282,31 @@ export function registerAuthIpc(_deps: AuthIpcDeps): void {
     } catch {
       logSafe('auth.openExternal', { exception: true });
     }
+  });
+
+  // Device-flow login (device-flow pivot, D-16/D-18) — no renderer payload
+  // to parse; a stray payload is simply ignored.
+  ipcMain.handle(CHANNELS.authStartDeviceLogin, async () => {
+    try {
+      const win = deps.getMainWindow();
+      const result = await startDeviceLogin((update) => {
+        win?.webContents.send(CHANNELS.authDeviceLoginUpdate, update);
+      });
+      logSafe('device.start', { ok: result.ok });
+      return result;
+    } catch {
+      logSafe('device.start', { exception: true });
+      return { ok: false as const, reason: 'network' as const };
+    }
+  });
+
+  ipcMain.handle(CHANNELS.authCancelDeviceLogin, async () => {
+    try {
+      cancelDeviceLogin();
+    } catch {
+      logSafe('device.cancel', { exception: true });
+    }
+    logSafe('device.cancel', {});
+    return { ok: true as const };
   });
 }
