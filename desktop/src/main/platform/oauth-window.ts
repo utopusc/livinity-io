@@ -159,6 +159,14 @@ export async function signInWithGoogle(parent?: BrowserWindowType): Promise<OAut
   win.setMenu(null);
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
+  // UI-SPEC locks the native title bar text to "Sign in with Google — Livinity"
+  // (Screen 2 notes). Electron's default behavior overwrites the window title
+  // with the loaded page's own <title> on every navigation — prevent that so
+  // the app-chosen title sticks for the lifetime of this window.
+  win.on('page-title-updated', (event) => {
+    event.preventDefault();
+  });
+
   // Set the UA override BEFORE loadURL — Google's embedded-webview detection
   // inspects the UA on the very first navigation request.
   win.webContents.userAgent = buildChromeUserAgent(process.versions.chrome);
