@@ -86,6 +86,20 @@ export async function vaultHas(key: VaultKey): Promise<boolean> {
   return typeof existing[key] === 'string';
 }
 
+/**
+ * Removes `key` from the vault (no-op if absent), via the same
+ * withVaultLock + atomicWriteFile shape as `vaultSet` — additive primitive
+ * for sign-out (D-07) and stale-key eviction (AUTH-06 decideKeyAction
+ * 'stale-reprompt'). Never touches any other key stored alongside it.
+ */
+export async function vaultDelete(key: VaultKey): Promise<void> {
+  return withVaultLock(async () => {
+    const existing = await vaultReadAll();
+    delete existing[key];
+    await atomicWriteFile(vaultPath(), JSON.stringify(existing));
+  });
+}
+
 async function vaultReadAll(): Promise<Record<string, string>> {
   try {
     return JSON.parse(await fs.readFile(vaultPath(), 'utf8'));
