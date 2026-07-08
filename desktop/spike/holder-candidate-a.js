@@ -13,6 +13,13 @@
  * terminal: doing so would put its child outside Electron's Job Object entirely
  * and invalidate Test A (it would trivially "survive" for the wrong reason).
  *
+ * RUNTIME NOTE: the dev:spawnHolderA handler spawns this script with
+ * ELECTRON_RUN_AS_NODE=1 (process.execPath inside Electron is electron.exe —
+ * without the flag, this script and its detached child would boot as full
+ * Electron/Chromium apps, which never exit and manage their own Job Objects,
+ * contaminating the observation). With the flag, this script and the
+ * placeholder below (which inherits the env) are pure Node processes.
+ *
  * The placeholder holder is a pure-Windows long-running process
  * (`node -e "setInterval(()=>{},1000)"`) per RESEARCH.md Open Question 1 — a
  * WSL distro is NOT required for a decisive verdict, since the Windows Job

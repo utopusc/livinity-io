@@ -101,7 +101,20 @@ export function registerShellIpc(deps: ShellIpcDeps): void {
   if (!app.isPackaged) {
     ipcMain.handle('dev:spawnHolderA', async () => {
       const holder = path.join(app.getAppPath(), 'spike', 'holder-candidate-a.js');
-      spawn(process.execPath, [holder], { stdio: 'ignore', windowsHide: true });
+      // ELECTRON_RUN_AS_NODE=1 is REQUIRED for spike fidelity: process.execPath
+      // here is electron.exe, and without the flag both this holder script AND
+      // the detached placeholder it spawns (which inherits this env) boot as
+      // full Electron/Chromium apps — the intermediate never exits and Chromium
+      // manages its own Job Objects, which would contaminate the survival
+      // observation with Electron-specific behavior that does not generalize
+      // to the real future holder (a plain wsl.exe/node process). With the
+      // flag, both run as pure Node processes while still being CreateProcess'd
+      // from inside Electron's Job Object tree — the exact condition under test.
+      spawn(process.execPath, [holder], {
+        stdio: 'ignore',
+        windowsHide: true,
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      });
       logSafe('spike.dev-spawn-holder-a', {});
       return { ok: true };
     });
