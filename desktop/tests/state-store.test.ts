@@ -106,6 +106,26 @@ describe('state-store', () => {
     readSpy.mockRestore();
   });
 
+  it('removes the orphaned .tmp file when the rename ultimately fails (IN-03)', async () => {
+    const renameSpy = vi.spyOn(fsPromises, 'rename').mockImplementation(async () => {
+      const err: any = new Error('EACCES: permission denied, rename');
+      err.code = 'EACCES'; // non-retryable — fails on the first attempt
+      throw err;
+    });
+
+    await expect(writeState({ version: 1, currentStep: 'will-fail' })).rejects.toThrow(
+      'EACCES'
+    );
+
+    const tmpExists = await fsPromises
+      .access(path.join(currentStateDir, 'state.json.tmp'))
+      .then(() => true)
+      .catch(() => false);
+    expect(tmpExists).toBe(false);
+
+    renameSpy.mockRestore();
+  });
+
   it('the shared StateSchema has no secret-shaped fields (session/apiKey/token)', () => {
     const fieldNames = Object.keys(StateSchema.shape);
     expect(fieldNames).not.toContain('session');

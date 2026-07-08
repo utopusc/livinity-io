@@ -46,12 +46,19 @@ export async function renameWithRetry(from: string, to: string, attempts = 3): P
 /**
  * Writes `contents` to `target` via a `.tmp` sibling file + atomic rename —
  * a crash mid-write leaves either the old valid file or the new valid file,
- * never a torn file.
+ * never a torn file. If the rename ultimately fails (exhausted retries or a
+ * non-retryable error), best-effort removes the orphaned `.tmp` file before
+ * rethrowing (IN-03), so a failed write doesn't leave debris in `userData`.
  */
 export async function atomicWriteFile(target: string, contents: string): Promise<void> {
   const tmp = target + '.tmp';
   await fs.writeFile(tmp, contents, 'utf8');
-  await renameWithRetry(tmp, target);
+  try {
+    await renameWithRetry(tmp, target);
+  } catch (err) {
+    await fs.rm(tmp, { force: true }).catch(() => {});
+    throw err;
+  }
 }
 
 /**

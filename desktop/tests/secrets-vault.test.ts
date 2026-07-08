@@ -155,4 +155,22 @@ describe('secrets-vault', () => {
     expect(await vaultGet('session')).toBe('value-1');
     expect(await vaultGet('apiKey')).toBe('value-2');
   });
+
+  it('removes the orphaned .tmp file when the rename ultimately fails (IN-03)', async () => {
+    const renameSpy = vi.spyOn(fs, 'rename').mockImplementation(async () => {
+      const err: any = new Error('EACCES: permission denied, rename');
+      err.code = 'EACCES'; // non-retryable — fails on the first attempt
+      throw err;
+    });
+
+    await expect(vaultSet('session', 'will-fail')).rejects.toThrow('EACCES');
+
+    const tmpExists = await fs
+      .access(path.join(currentVaultDir, 'vault.bin.tmp'))
+      .then(() => true)
+      .catch(() => false);
+    expect(tmpExists).toBe(false);
+
+    renameSpy.mockRestore();
+  });
 });
