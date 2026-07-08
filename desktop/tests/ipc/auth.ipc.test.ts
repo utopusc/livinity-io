@@ -54,6 +54,11 @@ vi.mock('../../src/main/storage/secrets-vault', () => ({
   vaultDelete: vi.fn(),
 }));
 
+vi.mock('../../src/main/platform/device-client', () => ({
+  startDeviceLogin: vi.fn(),
+  cancelDeviceLogin: vi.fn(),
+}));
+
 import { CHANNELS } from '../../shared/ipc-contract';
 import { THROTTLE_AFTER } from '../../src/main/platform/backoff';
 import { validateSession, signOut } from '../../src/main/platform/session-manager';
@@ -67,7 +72,9 @@ import {
 } from '../../src/main/platform/auth-client';
 import { decideKeyAction } from '../../src/main/platform/decide-key-action';
 import { vaultGet, vaultSet, vaultHas, vaultDelete } from '../../src/main/storage/secrets-vault';
+import { startDeviceLogin, cancelDeviceLogin } from '../../src/main/platform/device-client';
 import { registerAuthIpc } from '../../src/main/ipc/auth.ipc';
+import type { DeviceLoginUpdate } from '../../shared/ipc-contract';
 
 const loginMock = vi.mocked(login);
 const getMeMock = vi.mocked(getMe);
@@ -82,10 +89,16 @@ const vaultGetMock = vi.mocked(vaultGet);
 const vaultSetMock = vi.mocked(vaultSet);
 const vaultHasMock = vi.mocked(vaultHas);
 const vaultDeleteMock = vi.mocked(vaultDelete);
+const startDeviceLoginMock = vi.mocked(startDeviceLogin);
+const cancelDeviceLoginMock = vi.mocked(cancelDeviceLogin);
+
+// Mutable so individual tests can simulate both a live main window
+// (webContents.send observable) and the null case (no window yet).
+let mockWindow: { webContents: { send: ReturnType<typeof vi.fn> } } | null = null;
 
 describe('auth.ipc', () => {
   beforeAll(() => {
-    registerAuthIpc({ getMainWindow: () => null });
+    registerAuthIpc({ getMainWindow: () => mockWindow as never });
   });
 
   // Reset call-history on every SERVICE mock between tests (never the
@@ -106,6 +119,9 @@ describe('auth.ipc', () => {
     vaultSetMock.mockClear();
     vaultHasMock.mockClear();
     vaultDeleteMock.mockClear();
+    startDeviceLoginMock.mockClear();
+    cancelDeviceLoginMock.mockClear();
+    mockWindow = null;
   });
 
   describe('auth:signInWithGoogle (severed — device-flow pivot, D-16/D-18)', () => {
@@ -379,6 +395,79 @@ describe('auth.ipc', () => {
         },
       });
       expect(await handler({})).toEqual({ email: 'a@b.co', username: 'bruce' });
+    });
+  });
+
+  describe('auth:startDeviceLogin (device-flow pivot, D-16/D-18)', () => {
+    it('forwards device-login updates to the main window via CHANNELS.authDeviceLoginUpdate', async () => {
+      const sendMock = vi.fn();
+      mockWindow = { webContents: { send: sendMock } };
+      let capturedOnUpdate: ((u: DeviceLoginUpdate) => void) | undefined;
+      startDeviceLoginMock.mockImplementationOnce(async (onUpdate) => {
+        capturedOnUpdate = onUpdate;
+        return { ok: true, userCode: 'ABCD-2345', expiresInMs: 900000 };
+      });
+
+      const handler = getHandler(CHANNELS.authStartDeviceLogin)!;
+      const result = await handler({});
+
+      expect(result).toEqual({ ok: true, userCode: 'ABCD-2345', expiresInMs: 900000 });
+      capturedOnUpdate!({ phase: 'waiting' });
+      expect(sendMock).toHaveBeenCalledWith(CHANNELS.authDeviceLoginUpdate, { phase: 'waiting' });
+    });
+
+    it("returns device-client's already_running result verbatim on a concurrent call", async () => {
+      startDeviceLoginMock.mockResolvedValueOnce({ ok: false, reason: 'already_running' });
+
+      const handler = getHandler(CHANNELS.authStartDeviceLogin)!;
+      const result = await handler({});
+
+      expect(result).toEqual({ ok: false, reason: 'already_running' });
+    });
+
+    it('does not throw when getMainWindow() returns null — update forwarding is a no-op', async () => {
+      mockWindow = null;
+      let capturedOnUpdate: ((u: DeviceLoginUpdate) => void) | undefined;
+      startDeviceLoginMock.mockImplementationOnce(async (onUpdate) => {
+        capturedOnUpdate = onUpdate;
+        return { ok: true, userCode: 'WXYZ-6789', expiresInMs: 900000 };
+      });
+
+      const handler = getHandler(CHANNELS.authStartDeviceLogin)!;
+      await handler({});
+
+      expect(() => capturedOnUpdate!({ phase: 'waiting' })).not.toThrow();
+    });
+
+    it('survives startDeviceLogin() throwing and returns a safe network-error fallback', async () => {
+      startDeviceLoginMock.mockRejectedValueOnce(new Error('boom'));
+
+      const handler = getHandler(CHANNELS.authStartDeviceLogin)!;
+      const result = await handler({});
+
+      expect(result).toEqual({ ok: false, reason: 'network' });
+    });
+  });
+
+  describe('auth:cancelDeviceLogin (device-flow pivot, D-16/D-18)', () => {
+    it('calls device-client.cancelDeviceLogin() and returns { ok: true }', async () => {
+      const handler = getHandler(CHANNELS.authCancelDeviceLogin)!;
+
+      const result = await handler({});
+
+      expect(cancelDeviceLoginMock).toHaveBeenCalled();
+      expect(result).toEqual({ ok: true });
+    });
+
+    it('survives cancelDeviceLogin() throwing and still returns { ok: true }', async () => {
+      cancelDeviceLoginMock.mockImplementationOnce(() => {
+        throw new Error('boom');
+      });
+
+      const handler = getHandler(CHANNELS.authCancelDeviceLogin)!;
+      const result = await handler({});
+
+      expect(result).toEqual({ ok: true });
     });
   });
 

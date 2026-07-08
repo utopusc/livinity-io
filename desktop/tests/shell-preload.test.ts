@@ -167,6 +167,32 @@ describe('shell-preload Phase-2 auth channel wiring (drift guard vs. shared/ipc-
   it('does NOT expose an authSignInWithGoogle method (removed — device-flow pivot, D-16/D-18)', () => {
     expect((getExposedApi() as Record<string, unknown>).authSignInWithGoogle).toBeUndefined();
   });
+
+  it('startDeviceLogin invokes the canonical auth:startDeviceLogin channel with no payload', async () => {
+    await getExposedApi()!.startDeviceLogin();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.authStartDeviceLogin);
+  });
+
+  it('cancelDeviceLogin invokes the canonical auth:cancelDeviceLogin channel with no payload', async () => {
+    await getExposedApi()!.cancelDeviceLogin();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.authCancelDeviceLogin);
+  });
+
+  it('onDeviceLoginUpdate subscribes on the canonical auth:deviceLoginUpdate channel', () => {
+    const cb = vi.fn();
+    getExposedApi()!.onDeviceLoginUpdate(cb);
+    expect(onMock).toHaveBeenCalledWith(CHANNELS.authDeviceLoginUpdate, expect.any(Function));
+  });
+
+  it('onDeviceLoginUpdate returns an unsubscribe function that removes the exact listener (mirrors onStatusChanged)', () => {
+    const cb = vi.fn();
+    const unsubscribe = getExposedApi()!.onDeviceLoginUpdate(cb) as () => void;
+    expect(typeof unsubscribe).toBe('function');
+
+    const registeredListener = onMock.mock.calls[onMock.mock.calls.length - 1][1];
+    unsubscribe();
+    expect(removeListenerMock).toHaveBeenCalledWith(CHANNELS.authDeviceLoginUpdate, registeredListener);
+  });
 });
 
 describe('shell-preload DEV-ONLY spike channels (Plan 04 drift guard vs. shell.ipc.ts)', () => {
