@@ -73,6 +73,32 @@ function createWindow(): void {
     }
   });
 
+  // WR-05: if the renderer's Chromium process crashes or hangs, mainWindow
+  // was previously left dead/blank with no self-healing path short of the
+  // user manually quitting from the tray and relaunching. `reload()` recovers
+  // a crashed renderer in place; capped at 3 attempts so a genuine crash loop
+  // logs and gives up instead of spinning forever. 'clean-exit' is a normal
+  // exit (not a crash), so it is logged but never triggers a reload.
+  let rendererCrashCount = 0;
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    logSafe('renderer.crashed', { reason: details.reason });
+    if (details.reason === 'clean-exit') return;
+    rendererCrashCount += 1;
+    if (rendererCrashCount <= 3) {
+      mainWindow?.reload();
+    } else {
+      logSafe('renderer.crashed.give-up', { count: rendererCrashCount });
+    }
+  });
+
+  mainWindow.webContents.on('unresponsive', () => {
+    logSafe('renderer.unresponsive', {});
+  });
+
+  mainWindow.webContents.on('responsive', () => {
+    logSafe('renderer.responsive', {});
+  });
+
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
   } else {
