@@ -24,6 +24,12 @@ export default function DeviceApprovePage() {
     deviceName: string;
     platform: string;
   } | null>(null);
+  // WR-03: pre-approval identity disclosure — the device the code belongs to,
+  // fetched via GET /api/device/lookup and shown BEFORE the approving click.
+  const [confirmInfo, setConfirmInfo] = useState<{
+    deviceName: string;
+    platform: string;
+  } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Prefill the code from ?code= (deep-link from the desktop app), if present.
@@ -69,7 +75,9 @@ export default function DeviceApprovePage() {
     setError('');
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  // Step 1 (WR-03): look up WHICH device this code belongs to — approval happens
+  // only after the user has seen it, never in the same click as code entry.
+  async function handleLookup(e: React.FormEvent) {
     e.preventDefault();
     setError('');
 
@@ -81,12 +89,46 @@ export default function DeviceApprovePage() {
 
     setLoading(true);
     try {
+      const res = await fetch('/api/device/lookup?code=' + encodeURIComponent(code));
+
+      if (res.status === 401) {
+        router.push('/login?redirect=' + encodeURIComponent('/device' + window.location.search));
+        return;
+      }
+      const data = await res.json();
+      if (!res.ok) {
+        setError(
+          res.status === 404
+            ? 'Invalid or expired code. Check the code shown by your Livinity app and try again.'
+            : data.error || 'Something went wrong. Please try again.'
+        );
+        return;
+      }
+
+      setConfirmInfo({ deviceName: data.deviceName, platform: data.platform });
+    } catch {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Step 2: the actual approval — only reachable from the confirmation card.
+  async function handleApprove() {
+    setError('');
+    setLoading(true);
+    try {
       const res = await fetch('/api/device/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_code: code }),
       });
 
+      if (res.status === 401) {
+        // Session died between lookup and approve — same recovery as step 1
+        router.push('/login?redirect=' + encodeURIComponent('/device' + window.location.search));
+        return;
+      }
       const data = await res.json();
 
       if (!res.ok) {
@@ -103,6 +145,11 @@ export default function DeviceApprovePage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleCancelConfirm() {
+    setConfirmInfo(null);
+    setError('');
   }
 
   if (checkingAuth) {
@@ -149,8 +196,67 @@ export default function DeviceApprovePage() {
     );
   }
 
+  // WR-03 confirmation step: the user sees exactly what they are about to
+  // authorize — and a phishing warning — before the approving click exists.
+  if (confirmInfo) {
+    return (
+      <div className={CARD}>
+        <div className="mb-5 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[#6e6e73] dark:text-[#86868b]">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#1d1d1f] dark:bg-[#f5f5f7]" />
+          Device pairing
+        </div>
+        <h2 className="text-lg font-semibold tracking-[-0.02em] text-[#1d1d1f] dark:text-[#f5f5f7]">
+          Approve this device?
+        </h2>
+        <p className="mt-2 text-sm text-[#6e6e73] dark:text-[#86868b]">
+          The code <span className="font-mono text-[#1d1d1f] dark:text-[#f5f5f7]">{code}</span> was
+          requested by a device that identifies itself as:
+        </p>
+
+        <div className="mt-4 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 dark:border-[rgba(255,255,255,0.10)] dark:bg-black">
+          <p className="text-[15px] font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+            {confirmInfo.deviceName}
+          </p>
+          <p className="mt-0.5 text-sm text-[#6e6e73] dark:text-[#86868b]">
+            {PLATFORM_LABELS[confirmInfo.platform] || confirmInfo.platform}
+          </p>
+        </div>
+
+        <p className="mt-4 text-sm text-[#6e6e73] dark:text-[#86868b]">
+          The name above is self-reported and can say anything — do not trust it on its own.
+          Approving gives that device full access to your Livinity account. Only continue if you
+          just requested this code on your own computer — if someone else sent you this code, do
+          not approve it.
+        </p>
+
+        {error && (
+          <div className="mt-4 rounded-[10px] border border-[rgba(220,38,38,0.18)] bg-[rgba(220,38,38,0.07)] p-3 text-sm text-[#b91c1c] dark:border-[rgba(248,113,113,0.22)] dark:bg-[rgba(248,113,113,0.08)] dark:text-[#fca5a5]">
+            {error}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={handleApprove}
+          disabled={loading}
+          className="mt-5 w-full rounded-xl bg-[#1d1d1f] p-[15px] text-[15px] font-medium text-white transition-transform hover:-translate-y-px hover:opacity-90 disabled:translate-y-0 disabled:cursor-wait disabled:opacity-50 dark:bg-[#f5f5f7] dark:text-black"
+        >
+          {loading ? 'Approving...' : 'Approve Device'}
+        </button>
+        <button
+          type="button"
+          onClick={handleCancelConfirm}
+          disabled={loading}
+          className="mt-2.5 w-full rounded-xl border border-[rgba(0,0,0,0.10)] bg-transparent p-[13px] text-[15px] font-medium text-[#1d1d1f] transition-colors hover:bg-[rgba(0,0,0,0.04)] disabled:opacity-50 dark:border-[rgba(255,255,255,0.14)] dark:text-[#f5f5f7] dark:hover:bg-[rgba(255,255,255,0.06)]"
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleLookup} className="space-y-4">
       <div className={CARD}>
         <div className="mb-5 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[#6e6e73] dark:text-[#86868b]">
           <span className="h-1.5 w-1.5 rounded-full bg-[#1d1d1f] dark:bg-[#f5f5f7]" />
@@ -192,7 +298,7 @@ export default function DeviceApprovePage() {
           disabled={loading || code.replace(/-/g, '').length !== 8}
           className="mt-3.5 w-full rounded-xl bg-[#1d1d1f] p-[15px] text-[15px] font-medium text-white transition-transform hover:-translate-y-px hover:opacity-90 disabled:translate-y-0 disabled:cursor-wait disabled:opacity-50 dark:bg-[#f5f5f7] dark:text-black"
         >
-          {loading ? 'Approving...' : 'Approve Device'}
+          {loading ? 'Checking...' : 'Continue'}
         </button>
       </div>
     </form>

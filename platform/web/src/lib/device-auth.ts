@@ -152,6 +152,34 @@ export async function approveGrant(userCode: string, userId: string, sessionId: 
   return { success: true, deviceInfo: grant.device_info };
 }
 
+/**
+ * WR-03: pre-approval identity disclosure. Returns ONLY the requesting device's
+ * self-reported name/platform for a PENDING, unexpired grant — never user_id,
+ * session_id, or any code/token material. Consumed by GET /api/device/lookup so
+ * the /device page can show the user WHAT they are about to authorize BEFORE the
+ * approving click (RFC 8628 device-code-phishing mitigation — the same
+ * disclosure step GitHub/Google/Microsoft device flows use).
+ */
+export async function lookupPendingGrant(userCode: string): Promise<{
+  deviceName: string;
+  platform: string;
+} | null> {
+  // Same normalization approveGrant applies, so lookup and approve agree on the key
+  const normalized = userCode.toUpperCase().replace(/-/g, '').replace(/^(.{4})/, '$1-');
+  const result = await pool.query<{ status: string; device_info: any; expires_at: Date }>(
+    'SELECT status, device_info, expires_at FROM device_grants WHERE user_code = $1 LIMIT 1',
+    [normalized]
+  );
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  if (row.status !== 'pending') return null;
+  if (new Date() > new Date(row.expires_at)) return null;
+  return {
+    deviceName: String(row.device_info?.deviceName ?? 'Unknown device'),
+    platform: String(row.device_info?.platform ?? 'unknown'),
+  };
+}
+
 export interface DeviceTokenPayload {
   userId: string;
   deviceId: string;
