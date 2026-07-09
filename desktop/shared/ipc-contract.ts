@@ -58,6 +58,14 @@ export const StateSchema = z.object({
   version: z.literal(1),
   currentStep: z.string(),
   domainLabel: z.string().optional(),
+  // Phase 3 (D-16): non-secret CF facts for SHELL-05 resume + Phase 4/5 install env-vars.
+  // The CF token and connector token themselves NEVER live here — they are in the vault
+  // (VaultKeySchema `cfToken`/`tunnelToken`). Only these identifiers/labels are persisted.
+  tunnelId: z.string().optional(),
+  accountId: z.string().optional(),
+  zoneId: z.string().optional(),
+  zoneName: z.string().optional(),
+  subLabel: z.string().optional(),
 });
 export type State = z.infer<typeof StateSchema>;
 
@@ -87,6 +95,18 @@ export const CHANNELS = {
   authStartDeviceLogin: 'auth:startDeviceLogin',
   authCancelDeviceLogin: 'auth:cancelDeviceLogin',
   authDeviceLoginUpdate: 'auth:deviceLoginUpdate',
+  // Cloudflare automation (Phase 3). The token crosses IN once on cfVerifyToken and is
+  // stored main-side to the vault on all-pass — it NEVER returns across any of these
+  // channels. cfProvisionUpdate is a main -> renderer progress push (mirrors
+  // authDeviceLoginUpdate). These literals are duplicated in the sandboxed preload;
+  // 03-08 syncs them via the drift-guard test — do NOT edit the preload from this plan.
+  cfVerifyToken: 'cf:verifyToken',
+  cfGetZones: 'cf:getZones',
+  cfSelectDomain: 'cf:selectDomain',
+  cfRecheckZone: 'cf:recheckZone',
+  cfProvision: 'cf:provision',
+  cfOpenExternal: 'cf:openExternal',
+  cfProvisionUpdate: 'cf:provisionUpdate',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -261,6 +281,131 @@ export interface AuthApi {
   cancelDeviceLogin(): Promise<{ ok: true }>;
   /** Subscribes to device-login progress pushes; returns an unsubscribe function (mirrors onStatusChanged). */
   onDeviceLoginUpdate(cb: (update: DeviceLoginUpdate) => void): () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Cloudflare automation (Phase 3, Free/BYOD)
+// ---------------------------------------------------------------------------
+
+/**
+ * Same file-level IPC-boundary invariant as the vault and auth sections: NONE of
+ * the Cf* result schemas below, and NO method on `CfApi`, ever returns the CF API
+ * token or the tunnel connector token across the boundary. The CF token crosses IN
+ * once (cfVerifyToken) and is stored to the vault main-side on an all-scope pass;
+ * the connector token is fetched and stored to the vault during provisioning. The
+ * renderer only ever receives per-scope verdict rows, secret-free zone summaries,
+ * live name-servers, and a display summary — never a secret. (Mirrors the
+ * AccountSchema.strict() leak-guard discipline above.)
+ */
+
+/**
+ * A single per-scope verify row. `missingLabel` is the EXACT CF permission name
+ * (verbatim as the Cloudflare dashboard spells it) when this scope failed (D-03),
+ * so the renderer can tell the user precisely which permission to add.
+ */
+export const CfScopeRowSchema = z.object({
+  scope: z.enum(['tunnel', 'dns', 'zone']),
+  ok: z.boolean(),
+  missingLabel: z.string().optional(),
+});
+export type CfScopeRow = z.infer<typeof CfScopeRowSchema>;
+
+/**
+ * Result of `cf:verifyToken`. On 'verified' the token has been stored to the vault
+ * main-side; it NEVER crosses back. `rows` always has 3 entries so the renderer
+ * renders three per-scope rows in every non-network case.
+ */
+export const CfVerifyResultSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('verified'), rows: z.array(CfScopeRowSchema) }),
+  z.object({ kind: z.literal('scope-missing'), rows: z.array(CfScopeRowSchema) }),
+  z.object({ kind: z.literal('token-invalid') }),
+  z.object({ kind: z.literal('network') }),
+]);
+export type CfVerifyResult = z.infer<typeof CfVerifyResultSchema>;
+
+/** A secret-free zone summary for the dropdown (the account id stays main-side). */
+export const CfZoneSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  status: z.enum(['active', 'pending', 'initializing', 'moved', 'deleted', 'deactivated']),
+});
+export type CfZoneSummary = z.infer<typeof CfZoneSummarySchema>;
+
+/** Result of `cf:getZones`. */
+export const CfGetZonesResultSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), zones: z.array(CfZoneSummarySchema) }),
+  z.object({ ok: z.literal(false), reason: z.enum(['network', 'unauthorized']) }),
+]);
+export type CfGetZonesResult = z.infer<typeof CfGetZonesResultSchema>;
+
+/**
+ * Result of `cf:selectDomain` (DNS-scope probe on the CHOSEN zone + D-08 collision
+ * read). 'collision' deliberately carries NO target hostname (UI-SPEC Screen 4
+ * shows none) — it is a bare signal, never a leak of what the record points at.
+ */
+export const CfSelectDomainResultSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('ready') }),
+  z.object({ kind: z.literal('collision') }),
+  z.object({ kind: z.literal('scope-missing'), rows: z.array(CfScopeRowSchema) }),
+  z.object({ kind: z.literal('network') }),
+]);
+export type CfSelectDomainResult = z.infer<typeof CfSelectDomainResultSchema>;
+
+/**
+ * Result of `cf:recheckZone` (CF-04 NS screen). 'pending' carries the live
+ * name_servers[] to display; nothing secret.
+ */
+export const CfRecheckZoneResultSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('active') }),
+  z.object({ kind: z.literal('pending'), nameServers: z.array(z.string()) }),
+  z.object({ kind: z.literal('network') }),
+]);
+export type CfRecheckZoneResult = z.infer<typeof CfRecheckZoneResultSchema>;
+
+/**
+ * Result of `cf:provision`. On 'scope-missing' a WRITE-level 403 routes back to
+ * the same per-scope shape as Screen 1 (D-04, UI-SPEC provisioning-403 copy). The
+ * 'ready' summary carries only display strings — no token, no connector secret.
+ */
+export const CfProvisionResultSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('ready'),
+    summary: z.object({ address: z.string(), tunnelName: z.string(), recordsLabel: z.string() }),
+  }),
+  z.object({
+    kind: z.literal('scope-missing'),
+    step: z.enum(['tunnel', 'ingress', 'dns']),
+    rows: z.array(CfScopeRowSchema),
+  }),
+  z.object({ kind: z.literal('error'), reason: z.string() }),
+  z.object({ kind: z.literal('network') }),
+]);
+export type CfProvisionResult = z.infer<typeof CfProvisionResultSchema>;
+
+/** Human-friendly progress pushed main -> renderer on CHANNELS.cfProvisionUpdate. */
+export const CfProvisionUpdateSchema = z.object({
+  phase: z.enum(['tunnel', 'ingress', 'dns']),
+});
+export type CfProvisionUpdate = z.infer<typeof CfProvisionUpdateSchema>;
+
+/**
+ * CfApi — the Cloudflare-automation sibling of AuthApi. Same IPC-boundary
+ * invariant: no method here ever returns the CF API token or the tunnel connector
+ * token — only verdict rows, secret-free zone summaries, name-servers, and display
+ * summaries cross this boundary.
+ */
+export interface CfApi {
+  /** Token crosses IN once (like authProbeKey); stored to the vault only on all-pass. Never returns. */
+  cfVerifyToken(token: string): Promise<CfVerifyResult>;
+  cfGetZones(): Promise<CfGetZonesResult>;
+  cfSelectDomain(zoneId: string, subLabel: string): Promise<CfSelectDomainResult>;
+  cfRecheckZone(zoneId: string): Promise<CfRecheckZoneResult>;
+  /** takeOver=true only from the Collision screen's confirmed path (D-08). */
+  cfProvision(takeOver?: boolean): Promise<CfProvisionResult>;
+  /** enum-allowlisted external open (system browser only). */
+  cfOpenExternal(target: 'token-form' | 'add-site'): Promise<void>;
+  /** Subscribes to provisioning-progress pushes; returns an unsubscribe function (mirrors onStatusChanged). */
+  onProvisionUpdate(cb: (update: CfProvisionUpdate) => void): () => void;
 }
 
 // ---------------------------------------------------------------------------
