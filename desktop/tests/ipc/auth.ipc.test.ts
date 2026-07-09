@@ -301,14 +301,59 @@ describe('auth.ipc', () => {
       expect(result).toMatchObject({ ok: false });
     });
 
-    it('stores the pasted key in the vault and returns { ok: true } on a valid probe', async () => {
+    it('stores the pasted key in the vault and returns { ok: true } on a valid probe when no current session can be resolved (fails open on the extra identity check)', async () => {
       const handler = getHandler(CHANNELS.authProbeKey)!;
-      probeKeyMock.mockResolvedValueOnce({ ok: true });
+      probeKeyMock.mockResolvedValueOnce({ ok: true, email: 'a@b.co' });
+      vaultGetMock.mockResolvedValueOnce(null);
 
       const result = await handler({}, { key: 'liv_k_pasted' });
 
       expect(vaultSetMock).toHaveBeenCalledWith('apiKey', 'liv_k_pasted');
       expect(result).toEqual({ ok: true });
+    });
+
+    it('WR-02: accepts the key when the probed email MATCHES the currently signed-in account', async () => {
+      const handler = getHandler(CHANNELS.authProbeKey)!;
+      vaultGetMock.mockResolvedValueOnce('sess-1');
+      getMeMock.mockResolvedValueOnce({
+        ok: true,
+        user: {
+          userId: 'u1',
+          username: 'bruce',
+          email: 'a@b.co',
+          emailVerified: true,
+          is_admin: false,
+          free_byod: true,
+        },
+      });
+      probeKeyMock.mockResolvedValueOnce({ ok: true, email: 'a@b.co' });
+
+      const result = await handler({}, { key: 'liv_k_pasted' });
+
+      expect(vaultSetMock).toHaveBeenCalledWith('apiKey', 'liv_k_pasted');
+      expect(result).toEqual({ ok: true });
+    });
+
+    it('WR-02: rejects with { ok:false, reason:"account_mismatch" } when the probed key belongs to a DIFFERENT account than the one signed in, and never stores it', async () => {
+      const handler = getHandler(CHANNELS.authProbeKey)!;
+      vaultGetMock.mockResolvedValueOnce('sess-1');
+      getMeMock.mockResolvedValueOnce({
+        ok: true,
+        user: {
+          userId: 'u1',
+          username: 'bruce',
+          email: 'signed-in@b.co',
+          emailVerified: true,
+          is_admin: false,
+          free_byod: true,
+        },
+      });
+      probeKeyMock.mockResolvedValueOnce({ ok: true, email: 'someone-else@b.co' });
+
+      const result = await handler({}, { key: 'liv_k_pasted' });
+
+      expect(result).toEqual({ ok: false, reason: 'account_mismatch' });
+      expect(vaultSetMock).not.toHaveBeenCalled();
     });
   });
 
@@ -528,7 +573,8 @@ describe('auth.ipc', () => {
 
     it('auth:probeKey survives vaultSet throwing after a valid probe and returns { ok:false, reason:"network" }', async () => {
       const handler = getHandler(CHANNELS.authProbeKey)!;
-      probeKeyMock.mockResolvedValueOnce({ ok: true });
+      vaultGetMock.mockResolvedValueOnce(null);
+      probeKeyMock.mockResolvedValueOnce({ ok: true, email: 'a@b.co' });
       vaultSetMock.mockRejectedValueOnce(new Error('VAULT_UNAVAILABLE'));
 
       await expect(handler({}, { key: 'liv_k_pasted' })).resolves.toEqual({

@@ -276,7 +276,7 @@ describe('auth-client', () => {
   });
 
   describe('probeKey', () => {
-    it('attaches header X-Api-Key: <key> and returns { ok:true } on 200', async () => {
+    it('attaches header X-Api-Key: <key> and returns { ok:true, email } on 200 (WR-02: email surfaced for main-process-internal account-match use)', async () => {
       fetchMock.mockResolvedValueOnce(mockResponse(200, { username: 'alice', email: 'a@b.co' }));
 
       const result = await probeKey('liv_k_abc');
@@ -287,7 +287,7 @@ describe('auth-client', () => {
           headers: expect.objectContaining({ 'X-Api-Key': 'liv_k_abc' }),
         })
       );
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({ ok: true, email: 'a@b.co' });
     });
 
     it('returns { ok:false, reason:"invalid" } on 401', async () => {

@@ -250,15 +250,19 @@ export async function mintKey(sessionValue: string, action: MintKeyAction): Prom
 }
 
 export type ProbeKeyResult =
-  | { ok: true }
+  | { ok: true; email: string }
   | { ok: false; reason: 'invalid' | 'inactive' | 'not_found' | 'network' };
 
 /**
  * `GET /api/me/profile` (X-Api-Key auth) — the D-14 live-validation probe for
- * a pasted install key. Returns only `{ ok:true }` on success — never the
- * username/email the platform sent back (schema-level leak-guard boundary).
- * A 402 (valid key, inactive account) is treated as a rejection (Open
- * Question 2 default).
+ * a pasted install key. On success, returns `{ ok:true, email }` — the
+ * platform-reported email is surfaced for MAIN-PROCESS-INTERNAL use only
+ * (WR-02: comparing against the currently signed-in account's own email in
+ * auth.ipc.ts's authProbeKey handler, so a key belonging to a different
+ * account is rejected instead of silently adopted). It must never itself
+ * cross the IPC boundary — the IPC handler constructs its own `{ ok: true }`
+ * response rather than forwarding this result verbatim. A 402 (valid key,
+ * inactive account) is treated as a rejection (Open Question 2 default).
  */
 export async function probeKey(key: string): Promise<ProbeKeyResult> {
   const outcome = await safeFetch(() => apiKeyGet('/api/me/profile', key));
@@ -290,5 +294,5 @@ export async function probeKey(key: string): Promise<ProbeKeyResult> {
   }
 
   logSafe('auth.probeKey', { status: res.status });
-  return { ok: true };
+  return { ok: true, email: parsed.data.email };
 }

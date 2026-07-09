@@ -15,13 +15,15 @@ interface KeyChoiceProps {
   onProceed: () => void;
 }
 
-type ProbeError = '' | 'invalid' | 'inactive' | 'network';
+type ProbeError = '' | 'invalid' | 'inactive' | 'network' | 'account_mismatch';
 type RegenError = '' | 'email_unverified' | 'subscription_required' | 'network' | 'failed';
 
 const PROBE_ERROR_COPY: Record<Exclude<ProbeError, ''>, string> = {
   invalid: "That key doesn't look right. Double-check and try again.",
   inactive: "This key's account doesn't currently have an active plan.",
   network: "Couldn't reach Livinity. Check your connection and try again.",
+  account_mismatch:
+    'This key belongs to a different account. Sign in with that account, or generate a new key for this one.',
 };
 
 const REGEN_ERROR_COPY: Record<Exclude<RegenError, ''>, string> = {

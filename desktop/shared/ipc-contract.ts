@@ -161,10 +161,19 @@ export const KeyActionResultSchema = z.object({
 });
 export type KeyActionResult = z.infer<typeof KeyActionResultSchema>;
 
-/** Result of `authProbeKey` (X-API-Key live validation, D-14). NEVER echoes the probed key back. */
+/**
+ * Result of `authProbeKey` (X-API-Key live validation, D-14). NEVER echoes
+ * the probed key back. `account_mismatch` (WR-02) means the key is live and
+ * belongs to SOME active account, but not the one currently signed in on
+ * this device — the mismatch outcome crosses the boundary as a plain reason
+ * string, never the mismatched email/username itself.
+ */
 export const ProbeKeyResultSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true) }),
-  z.object({ ok: z.literal(false), reason: z.enum(['invalid', 'inactive', 'not_found', 'network']) }),
+  z.object({
+    ok: z.literal(false),
+    reason: z.enum(['invalid', 'inactive', 'not_found', 'network', 'account_mismatch']),
+  }),
 ]);
 export type ProbeKeyResult = z.infer<typeof ProbeKeyResultSchema>;
 

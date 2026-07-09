@@ -212,13 +212,28 @@ export function registerAuthIpc(deps: AuthIpcDeps): void {
 
     try {
       const result = await probeKey(parsed.data.key);
-      if (result.ok) {
-        await vaultSet('apiKey', parsed.data.key);
-        logSafe('auth.probeKey', { ok: true });
-        return { ok: true };
+      if (!result.ok) {
+        logSafe('auth.probeKey', { ok: false });
+        return { ok: false, reason: result.reason };
       }
-      logSafe('auth.probeKey', { ok: false });
-      return { ok: false, reason: result.reason };
+
+      // WR-02: a live, syntactically-valid liv_k_ key may belong to a
+      // DIFFERENT Livinity account than the one currently signed in on this
+      // device. Compare identities here, main-process-side only — neither
+      // email ever crosses the IPC boundary, only the mismatch outcome.
+      // If the current session can't be resolved (no session / network
+      // failure), fail OPEN on this extra check (matches the pre-existing
+      // "probe succeeded" behavior) rather than blocking a legitimate paste.
+      const sessionValue = await vaultGet('session');
+      const me = sessionValue ? await getMe(sessionValue) : null;
+      if (me?.ok && result.email !== me.user.email) {
+        logSafe('auth.probeKey', { accountMismatch: true });
+        return { ok: false, reason: 'account_mismatch' as const };
+      }
+
+      await vaultSet('apiKey', parsed.data.key);
+      logSafe('auth.probeKey', { ok: true });
+      return { ok: true };
     } catch {
       logSafe('auth.probeKey', { exception: true });
       return { ok: false, reason: 'network' as const };
