@@ -18,12 +18,20 @@ vi.mock('electron', () => ({
   },
 }));
 
+vi.mock('../src/main/log', () => ({
+  logSafe: vi.fn(),
+}));
+
 import { safeStorage } from 'electron';
+import { logSafe } from '../src/main/log';
 import { vaultSet, vaultGet, vaultHas, vaultDelete } from '../src/main/storage/secrets-vault';
+
+const logSafeMock = vi.mocked(logSafe);
 
 describe('secrets-vault', () => {
   beforeEach(async () => {
     currentVaultDir = await fs.mkdtemp(path.join(os.tmpdir(), 'liv-vault-'));
+    logSafeMock.mockClear();
     vi.mocked(safeStorage.isEncryptionAvailable).mockReturnValue(true);
     vi.mocked(safeStorage.encryptString).mockImplementation((s: string) =>
       Buffer.from('ENC:' + s)
@@ -165,6 +173,29 @@ describe('secrets-vault', () => {
     expect(await vaultHas('session')).toBe(false);
     expect(await vaultHas('apiKey')).toBe(true);
     expect(await vaultGet('apiKey')).toBe('key-value');
+  });
+
+  it('IN-02: does NOT log anything when vault.bin simply does not exist yet (ENOENT, expected on first run)', async () => {
+    expect(await vaultHas('session')).toBe(false);
+    expect(logSafeMock).not.toHaveBeenCalledWith('vault.read.corrupt', expect.anything());
+  });
+
+  it('IN-02: logs a diagnostic breadcrumb (scalar-only, no secret value) when vault.bin contains genuinely corrupt JSON', async () => {
+    const vaultFile = path.join(currentVaultDir, 'vault.bin');
+    await fs.writeFile(vaultFile, '{not valid json', 'utf8');
+
+    const result = await vaultHas('session');
+
+    expect(result).toBe(false);
+    expect(logSafeMock).toHaveBeenCalledWith(
+      'vault.read.corrupt',
+      expect.objectContaining({ message: expect.any(String) })
+    );
+    // No secret value (there is none stored, but the guard is on shape): the
+    // logged payload must only ever be a scalar message string, never the
+    // raw file contents object.
+    const call = logSafeMock.mock.calls.find(([event]) => event === 'vault.read.corrupt');
+    expect(typeof call?.[1]?.message).toBe('string');
   });
 
   it('removes the orphaned .tmp file when the rename ultimately fails (IN-03)', async () => {

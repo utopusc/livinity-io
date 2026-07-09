@@ -14,6 +14,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { VaultKey } from '../../../shared/ipc-contract';
 import { atomicWriteFile } from './atomic-write';
+import { logSafe } from '../log';
 
 const vaultPath = () => path.join(app.getPath('userData'), 'vault.bin');
 
@@ -103,7 +104,19 @@ export async function vaultDelete(key: VaultKey): Promise<void> {
 async function vaultReadAll(): Promise<Record<string, string>> {
   try {
     return JSON.parse(await fs.readFile(vaultPath(), 'utf8'));
-  } catch {
+  } catch (e) {
+    // IN-02: distinguish the expected "no vault.bin yet" case (ENOENT, e.g.
+    // first run, or after a legitimate vaultDelete of every key) from a
+    // genuine read failure (corrupt JSON from a torn write, AV quarantine,
+    // roaming-profile mismatch, permission error) — the latter is otherwise
+    // indistinguishable from "no vault yet" and the very next vaultSet/
+    // vaultDelete would silently persist an empty object over it, discarding
+    // every previously stored secret with zero diagnostic trail. No secret
+    // VALUE is ever in `e.message` here — only a read/parse failure reason.
+    const code = (e as NodeJS.ErrnoException)?.code;
+    if (code !== 'ENOENT') {
+      logSafe('vault.read.corrupt', { message: String(e instanceof Error ? e.message : e) });
+    }
     return {};
   }
 }
