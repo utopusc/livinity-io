@@ -37,22 +37,40 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'invalid_grant' }, { status: 400 });
     }
 
-    // Create device record and issue JWT
-    const deviceId = await createDeviceRecord(grant.userId, {
-      deviceName: grant.deviceInfo.deviceName,
-      platform: grant.deviceInfo.platform,
+    // WR-01: consume the grant with a single atomic statement BEFORE minting anything.
+    // Two concurrent requests with the same device_code (client retry / network replay)
+    // could both pass the SELECT above; only one can win this row-locked DELETE, so one
+    // approval can never mint two independent device JWTs. Mirrors /api/device/exchange's
+    // token_exchanged_at CAS (migration 0029). The loser gets invalid_grant — identical
+    // to what any post-consumption poll already received.
+    const claimed = await pool.query<{
+      user_id: string;
+      session_id: string;
+      device_info: { deviceName: string; platform: string };
+    }>(
+      `DELETE FROM device_grants
+       WHERE device_code = $1 AND status = 'approved'
+       RETURNING user_id, session_id, device_info`,
+      [device_code]
+    );
+    if (claimed.rows.length === 0) {
+      return NextResponse.json({ error: 'invalid_grant' }, { status: 400 });
+    }
+    const row = claimed.rows[0];
+
+    // Create device record and issue JWT — from the claimed row, not the pre-read grant
+    const deviceId = await createDeviceRecord(row.user_id, {
+      deviceName: row.device_info.deviceName,
+      platform: row.device_info.platform,
     });
 
     const token = signDeviceToken({
-      userId: grant.userId,
+      userId: row.user_id,
       deviceId,
-      deviceName: grant.deviceInfo.deviceName,
-      platform: grant.deviceInfo.platform,
-      sessionId: grant.sessionId,  // Phase 14 SESS-01: bind this JWT to the approving user session
+      deviceName: row.device_info.deviceName,
+      platform: row.device_info.platform,
+      sessionId: row.session_id,  // Phase 14 SESS-01: bind this JWT to the approving user session
     });
-
-    // Mark grant as consumed (delete it so device_code can't be reused)
-    await pool.query('DELETE FROM device_grants WHERE device_code = $1', [device_code]);
 
     return NextResponse.json({
       access_token: token,
