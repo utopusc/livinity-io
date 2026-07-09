@@ -86,19 +86,22 @@ describe('session-manager', () => {
       expect(result).toEqual({ kind: 'byod-wizard' });
     });
 
-    it('on getMe 401: clears the vault session and returns { kind: "login", expired: true } (D-06)', async () => {
+    it('on getMe 401: clears the vault session AND apiKey, and returns { kind: "login", expired: true } (D-06, CR-01)', async () => {
       await vaultSet('session', 'sess-abc');
+      await vaultSet('apiKey', 'liv_k_stale_a');
       getMeMock.mockResolvedValueOnce({ ok: false, status: 401 });
 
       const result = await validateSession();
 
       expect(result).toEqual({ kind: 'login', expired: true });
       expect(await vaultHas('session')).toBe(false);
+      expect(await vaultHas('apiKey')).toBe(false);
       expect(getDashboardMock).not.toHaveBeenCalled();
     });
 
-    it('on getDashboard 401: clears the vault session and returns { kind: "login", expired: true } (D-06)', async () => {
+    it('on getDashboard 401: clears the vault session AND apiKey, and returns { kind: "login", expired: true } (D-06, CR-01)', async () => {
       await vaultSet('session', 'sess-abc');
+      await vaultSet('apiKey', 'liv_k_stale_a');
       getMeMock.mockResolvedValueOnce({
         ok: true,
         user: {
@@ -116,6 +119,7 @@ describe('session-manager', () => {
 
       expect(result).toEqual({ kind: 'login', expired: true });
       expect(await vaultHas('session')).toBe(false);
+      expect(await vaultHas('apiKey')).toBe(false);
     });
 
     it('on getMe network error: returns { kind: "error", reason: "network" } and leaves the vault UNTOUCHED (D-12, Pitfall 3)', async () => {
@@ -152,12 +156,22 @@ describe('session-manager', () => {
   });
 
   describe('signOut', () => {
-    it('clears the vault session only — no OAuth partition to clear post-pivot', async () => {
+    it('clears the vault session — no OAuth partition to clear post-pivot', async () => {
       await vaultSet('session', 'sess-abc');
 
       await signOut();
 
       expect(await vaultHas('session')).toBe(false);
+    });
+
+    it('also clears the cached apiKey (CR-01) — a key must never outlive its owning session', async () => {
+      await vaultSet('session', 'sess-abc');
+      await vaultSet('apiKey', 'liv_k_stale_a');
+
+      await signOut();
+
+      expect(await vaultHas('session')).toBe(false);
+      expect(await vaultHas('apiKey')).toBe(false);
     });
   });
 });

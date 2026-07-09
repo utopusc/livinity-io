@@ -43,7 +43,11 @@ export async function validateSession(): Promise<RouteResult> {
 
   const me = await getMe(sessionValue);
   if (!me.ok && 'status' in me && me.status === 401) {
+    // CR-01: a stale `apiKey` must never outlive the session it was cached
+    // under — clearing only 'session' here would let a different account's
+    // key be silently reused as "use-cached" on the next sign-in.
     await vaultDelete('session');
+    await vaultDelete('apiKey');
     logSafe('session.validate', { result: 'login-expired' });
     return { kind: 'login', expired: true };
   }
@@ -55,7 +59,9 @@ export async function validateSession(): Promise<RouteResult> {
 
   const dash = await getDashboard(sessionValue);
   if (!dash.ok && 'status' in dash && dash.status === 401) {
+    // CR-01: same apiKey-clear pairing as the getMe 401 branch above.
     await vaultDelete('session');
+    await vaultDelete('apiKey');
     logSafe('session.validate', { result: 'login-expired' });
     return { kind: 'login', expired: true };
   }
@@ -73,11 +79,15 @@ export async function validateSession(): Promise<RouteResult> {
 }
 
 /**
- * Sign-out (D-07, post-pivot): clears the vault `session` key only. There is
- * no embedded-OAuth partition to clear anymore — the device flow (Plan 09)
+ * Sign-out (D-07, post-pivot): clears the vault `session` key AND the cached
+ * `apiKey` (CR-01) — a key must never outlive the session it was minted
+ * under, or the next sign-in on this machine (a different account) could
+ * silently inherit it via decideKeyAction's 'use-cached' branch. There is no
+ * embedded-OAuth partition to clear anymore — the device flow (Plan 09)
  * never creates an Electron-owned cookie jar in the first place.
  */
 export async function signOut(): Promise<void> {
   await vaultDelete('session');
+  await vaultDelete('apiKey');
   logSafe('session.signout', {});
 }
