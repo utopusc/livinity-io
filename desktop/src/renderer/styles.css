@@ -526,3 +526,99 @@ button {
     opacity: 0.35;
   }
 }
+
+/* ===========================================================================
+   Phase 3 additions (Cloudflare BYOD wizard) -- additive only, same discipline
+   as the Phase-2 block above: no new color/size token is introduced; every
+   class below reuses the inherited token system. Monochrome color-discipline
+   (UI-SPEC call 1): a per-scope PASS is --fg / --fg-dim, NEVER the
+   --status-running green (green means exactly one thing -- "the box is live");
+   a genuine FAIL is --status-error. No text below uses the faintest fg token
+   (~4.0:1 -- it fails WCAG-AA at 12-14px, a carried-forward restriction).
+   =========================================================================== */
+
+/* ---------- Per-scope verify rows (Screen 1 -- CfToken) ----------
+   Stacked with md (16px) gap; each row is glyph + scope-name at sm (8px). */
+.scope-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.scope-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.scope-row .scope-name {
+  color: var(--fg-dim);
+}
+.scope-row.pass .scope-name {
+  color: var(--fg-dim); /* monochrome PASS -- deliberately NOT --status-running */
+}
+.scope-row.fail .scope-name {
+  color: var(--status-error);
+}
+.scope-row .scope-glyph {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-mute);
+}
+.scope-row.pass .scope-glyph {
+  color: var(--fg);
+}
+.scope-row.fail .scope-glyph {
+  color: var(--status-error);
+}
+/* Inline expansion beneath a failing row: the exact missing permission (D-03). */
+.scope-missing-detail {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--status-error);
+  margin-top: 4px;
+}
+
+/* ---------- Native <select> zone dropdown (Screen 2 -- DomainPicker) ----------
+   Reuses .field-input sizing on --surface-2; native element keeps built-in
+   keyboard + screen-reader support and active-first optgroup ordering. */
+.cf-select {
+  width: 100%;
+  min-height: 36px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--fg);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 9px 12px;
+}
+
+/* ---------- Reusable copy button (lands here so Screen 3 / 03-09 reuses it) ----------
+   Neutral .btn-based (never accent, never red). On copy the trailing check
+   pops in; the transition is prefers-reduced-motion-guarded. */
+.copy-btn .copy-check {
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.copy-btn.copied .copy-check {
+  opacity: 1;
+  transform: scale(1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .copy-btn .copy-check {
+    transition: none;
+  }
+}
+
+/* ---------- URL preview (Screen 2) ----------
+   No net-new class needed: each of the two preview rows reuses .card-row (the
+   "Your LivOS" / "Your apps" Label caption) + .value-chip (already --mono) for
+   the live-computed <sub>.<zone> / chat-<sub>.<zone> value. */
