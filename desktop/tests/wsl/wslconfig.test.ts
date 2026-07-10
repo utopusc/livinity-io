@@ -93,6 +93,32 @@ describe('mergeWsl2Keys — append missing key within an existing [wsl2] section
   });
 });
 
+describe('mergeWsl2Keys — insert after a terminator-less last [wsl2] line (CR-01 regression)', () => {
+  it('does NOT glue the new key onto a trailing-newline-less last kv line (swap=0 stays intact)', () => {
+    const merged = mergeWsl2Keys(parseIni('[wsl2]\nswap=0'), { memory: '8GB' });
+    const out = serializeIni(merged);
+    expect(out).toBe('[wsl2]\nswap=0\nmemory=8GB\n');
+    // the user's own line must survive byte-intact as its own line
+    expect(out).toContain('swap=0\n');
+    expect(out).not.toContain('swap=0memory');
+  });
+
+  it('does NOT glue the new key onto a terminator-less header-only [wsl2] file', () => {
+    const merged = mergeWsl2Keys(parseIni('[wsl2]'), { memory: '8GB' });
+    const out = serializeIni(merged);
+    expect(out).toBe('[wsl2]\nmemory=8GB\n');
+    expect(out).not.toContain('[wsl2]memory');
+  });
+
+  it('preserves a CRLF file: the normalized anchor gains a terminator and the untouched lines keep \\r\\n', () => {
+    const merged = mergeWsl2Keys(parseIni('[wsl2]\r\nswap=0'), { memory: '8GB' });
+    const out = serializeIni(merged);
+    expect(out).toContain('[wsl2]\r\n');
+    expect(out).not.toContain('swap=0memory');
+    expect(out).toContain('memory=8GB\n');
+  });
+});
+
 describe('mergeWsl2Keys — no [wsl2] section at all', () => {
   it('appends a new [wsl2] section + keys at EOF and leaves [experimental] intact', () => {
     const original = '# a comment\n[experimental]\nautoMemoryReclaim=gradual\n';

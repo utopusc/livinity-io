@@ -155,6 +155,15 @@ export function mergeWsl2Keys(lines: IniLine[], patch: Partial<Record<Wsl2Key, s
     .map((key) => ({ kind: 'kv' as const, section: 'wsl2', key, value: patch[key]!, text: `${key}=${patch[key]}\n` }));
 
   if (wsl2SectionIndex !== -1) {
+    // Normalize the insertion anchor: a terminator-less last line (a file
+    // that ends inside [wsl2] without a trailing newline) must gain its
+    // terminator BEFORE anything is inserted after it, or the new key glues
+    // onto it and corrupts a line this app does not own (e.g.
+    // '[wsl2]\nswap=0' + memory patch -> 'swap=0memory=8GB').
+    const anchor = result[lastWsl2LineIndex];
+    if (anchor.text.length > 0 && !/[\r\n]$/.test(anchor.text)) {
+      result[lastWsl2LineIndex] = { ...anchor, text: `${anchor.text}\n` };
+    }
     result.splice(lastWsl2LineIndex + 1, 0, ...newKvLines);
     return result;
   }
