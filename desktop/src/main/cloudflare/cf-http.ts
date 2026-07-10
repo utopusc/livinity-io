@@ -76,12 +76,30 @@ function jitter(ms: number): number {
 
 /**
  * The retry taxonomy. A present network `errCode` (ECONNRESET/ETIMEDOUT/EAI_AGAIN)
- * always retries; otherwise only 429 and any 5xx retry. 401/403/404 (auth / scope
- * / not-found) are terminal and NEVER retry.
+ * retries; otherwise 429 and any 5xx retry. 401/403/404 (auth / scope / not-found)
+ * are terminal and NEVER retry.
+ *
+ * Non-idempotent guard (IN-01): a `POST` (createTunnel / createDnsCname) that CF
+ * may have already PROCESSED server-side before the response was lost must NOT be
+ * auto-replayed on a dropped connection or a 5xx — a blind retry would create a
+ * DUPLICATE tunnel or DNS record in that narrow window. So a POST is not retried
+ * on network/5xx. A 429 stays retryable for EVERY method: rate-limited means CF
+ * REJECTED the request (nothing was created), so honoring Retry-After cannot
+ * duplicate. GET/PUT/DELETE are idempotent and retry on the full network/5xx set.
  */
-export function shouldRetry(status: number, errCode?: string): boolean {
-  if (errCode) return ['ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT'].includes(errCode);
-  return status === 429 || (status >= 500 && status < 600);
+export function shouldRetry(
+  status: number,
+  errCode?: string,
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET'
+): boolean {
+  const idempotent = method !== 'POST';
+  if (errCode) {
+    if (!idempotent) return false; // never replay a non-idempotent POST on a network error
+    return ['ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT'].includes(errCode);
+  }
+  if (status === 429) return true; // rate-limited = rejected -> a safe replay for any method
+  if (!idempotent) return false; // no 5xx replay for a non-idempotent POST
+  return status >= 500 && status < 600;
 }
 
 /**
@@ -151,7 +169,7 @@ export async function callCf<T>(
       logSafe('cf.call', { status: res.status, endpoint });
 
       if (!res.ok) {
-        if (shouldRetry(res.status) && attempt < MAX_RETRIES) {
+        if (shouldRetry(res.status, undefined, opts.method) && attempt < MAX_RETRIES) {
           await sleep(retryAfterMs(res) ?? jitter(BACKOFF_BASE_MS[attempt]));
           continue;
         }
@@ -183,7 +201,7 @@ export async function callCf<T>(
       if (err instanceof CfApiError) throw err; // already terminal — surface immediately
       const e = err as NodeJS.ErrnoException & { name?: string };
       const errCode = e?.code ?? (e?.name === 'AbortError' ? 'ETIMEDOUT' : undefined);
-      if (shouldRetry(0, errCode) && attempt < MAX_RETRIES) {
+      if (shouldRetry(0, errCode, opts.method) && attempt < MAX_RETRIES) {
         await sleep(jitter(BACKOFF_BASE_MS[attempt]));
         continue;
       }

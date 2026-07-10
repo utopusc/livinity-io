@@ -70,6 +70,24 @@ describe('cf-http', () => {
       expect(shouldRetry(0, 'EAI_AGAIN')).toBe(true);
       expect(shouldRetry(0, 'NOPE')).toBe(false);
     });
+
+    it('does NOT retry a non-idempotent POST on 5xx or a network error (IN-01)', () => {
+      expect(shouldRetry(500, undefined, 'POST')).toBe(false);
+      expect(shouldRetry(503, undefined, 'POST')).toBe(false);
+      expect(shouldRetry(0, 'ECONNRESET', 'POST')).toBe(false);
+      expect(shouldRetry(0, 'ETIMEDOUT', 'POST')).toBe(false);
+    });
+
+    it('still retries a POST on a 429 (rate-limited = rejected, so a replay cannot duplicate)', () => {
+      expect(shouldRetry(429, undefined, 'POST')).toBe(true);
+    });
+
+    it('retries the idempotent methods (GET/PUT/DELETE) on 5xx/network as before', () => {
+      expect(shouldRetry(500, undefined, 'PUT')).toBe(true);
+      expect(shouldRetry(500, undefined, 'DELETE')).toBe(true);
+      expect(shouldRetry(0, 'ECONNRESET', 'GET')).toBe(true);
+      expect(shouldRetry(0, 'ECONNRESET', 'PUT')).toBe(true);
+    });
   });
 
   describe('callCf', () => {
@@ -164,6 +182,37 @@ describe('cf-http', () => {
       await expectation;
 
       expect(fetchMock).toHaveBeenCalledTimes(4);
+    });
+
+    it('does NOT retry a POST on a thrown network error — a duplicate create is worse than a surfaced failure (IN-01)', async () => {
+      fetchMock.mockRejectedValue(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }));
+
+      const err = await callCf('tok', { method: 'POST', path: '/accounts/a1/cfd_tunnel', body: {} }).catch((e) => e);
+
+      expect(err).toBeInstanceOf(CfApiError);
+      expect(err).toMatchObject({ status: 0 });
+      expect(fetchMock).toHaveBeenCalledTimes(1); // no replay of a non-idempotent create
+    });
+
+    it('does NOT retry a POST on a 5xx — the create may have already succeeded server-side (IN-01)', async () => {
+      fetchMock.mockResolvedValue(mockRes(500, fail(0, 'server error')));
+
+      const err = await callCf('tok', { method: 'POST', path: '/zones/z1/dns_records', body: {} }).catch((e) => e);
+
+      expect(err).toMatchObject({ status: 500 });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('STILL retries a POST on a 429 up to MAX_RETRIES (rate-limited is a safe replay)', async () => {
+      vi.useFakeTimers();
+      fetchMock.mockResolvedValue(mockRes(429, fail(10000, 'rate limited')));
+
+      const promise = callCf('tok', { method: 'POST', path: '/accounts/a1/cfd_tunnel', body: {} });
+      const expectation = expect(promise).rejects.toBeInstanceOf(CfApiError);
+      await vi.runAllTimersAsync();
+      await expectation;
+
+      expect(fetchMock).toHaveBeenCalledTimes(4); // 1 initial + 3 retries
     });
 
     it('never leaks the token into the thrown error or any logSafe call', async () => {
