@@ -118,7 +118,13 @@ export function runElevatedWslInstall(
       await fs.unlink(resultFile).catch(() => {});
       if (raw === null) return { ok: false, exitCode: -1 };
       try {
-        const parsed = JSON.parse(raw) as { exitCode: number };
+        // The inner script runs under Windows PowerShell 5.1, whose
+        // `Set-Content -Encoding utf8` ALWAYS writes a UTF-8 BOM; Node's
+        // utf8 readFile preserves it as a leading U+FEFF, which JSON.parse
+        // rejects (U+FEFF is not JSON whitespace). Strip it before parsing
+        // or every elevated enable — success or failure — is misreported as
+        // a declined UAC prompt.
+        const parsed = JSON.parse(raw.replace(/^\uFEFF/, '')) as { exitCode: number };
         return { ok: parsed.exitCode === 0, exitCode: parsed.exitCode };
       } catch {
         return { ok: false, exitCode: -1 };

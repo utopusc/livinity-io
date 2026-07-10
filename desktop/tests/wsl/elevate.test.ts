@@ -55,6 +55,18 @@ describe('elevate', () => {
     expect(unlinkMock).toHaveBeenCalled();
   });
 
+  it('resolves {ok:true, exitCode:0} when the temp file is UTF-8-BOM-prefixed (PS 5.1 Set-Content -Encoding utf8 always writes a BOM) — WR-01 regression', async () => {
+    readFileMock.mockResolvedValue('\uFEFF' + JSON.stringify({ exitCode: 0 }));
+    const result = await runElevatedWslInstall({ sleep: instantSleep });
+    expect(result).toEqual({ ok: true, exitCode: 0 });
+  });
+
+  it('a BOM-prefixed non-zero exit code still parses (never misreported as declined -1) — WR-01 regression', async () => {
+    readFileMock.mockResolvedValue('\uFEFF' + JSON.stringify({ exitCode: 14107 }));
+    const result = await runElevatedWslInstall({ sleep: instantSleep });
+    expect(result).toEqual({ ok: false, exitCode: 14107 });
+  });
+
   it('resolves {ok:false, exitCode:14107} (feature-enablement failure, routed onward as needs-enable — NOT bios-blocked) when the temp file contains {"exitCode":14107}', async () => {
     readFileMock.mockResolvedValue(JSON.stringify({ exitCode: 14107 }));
     const result = await runElevatedWslInstall({ sleep: instantSleep });
