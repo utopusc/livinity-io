@@ -54,8 +54,8 @@ const DISTRO_NAME = 'livinity';
 // uid-1000 `livinity` user, no OOBE; see the rootfs-v1 release notes for the
 // full recipe) and update BOTH constants here in the same commit.
 const ROOTFS_RELEASE_URL =
-  'https://github.com/utopusc/livinity-io/releases/download/rootfs-v1/livinity.wsl';
-const ROOTFS_SHA256 = 'c04c09cd2a715c1c2d515baeed7c1433856105d400f268fd584ea5a6ba7ffb78';
+  'https://github.com/utopusc/livinity-io/releases/download/rootfs-v2/livinity.wsl';
+const ROOTFS_SHA256 = '121293686380669964a47cf44f154f63d05aa6af52bdd95dcc0fd2fe1760a2ef';
 
 // No arm64 rootfs artifact exists yet (D-09) — an arm64 machine is blocked
 // gracefully rather than attempting a corrupt x64-on-arm64 import.
