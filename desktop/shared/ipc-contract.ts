@@ -366,6 +366,9 @@ export type CfRecheckZoneResult = z.infer<typeof CfRecheckZoneResultSchema>;
  * Result of `cf:provision`. On 'scope-missing' a WRITE-level 403 routes back to
  * the same per-scope shape as Screen 1 (D-04, UI-SPEC provisioning-403 copy). The
  * 'ready' summary carries only display strings — no token, no connector secret.
+ * 'collision' is a bare signal (like CfSelectDomainResult's) that provision found a
+ * FOREIGN apex record at write time and `takeOver` was not set — the renderer routes
+ * to the Collision screen (D-08); it carries no target hostname (never a leak).
  */
 export const CfProvisionResultSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -377,6 +380,7 @@ export const CfProvisionResultSchema = z.discriminatedUnion('kind', [
     step: z.enum(['tunnel', 'ingress', 'dns']),
     rows: z.array(CfScopeRowSchema),
   }),
+  z.object({ kind: z.literal('collision') }),
   z.object({ kind: z.literal('error'), reason: z.string() }),
   z.object({ kind: z.literal('network') }),
 ]);

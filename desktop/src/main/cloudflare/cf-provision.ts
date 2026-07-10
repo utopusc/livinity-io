@@ -12,9 +12,10 @@
  *      tunnel's existing per-app rules survive (D-15 / T-03-07), with a
  *      verify-and-repair re-push if a reused-but-locally-managed tunnel drops the
  *      config (T-03-14);
- *   4. creates the ONE apex proxied CNAME behind the D-08 collision gate (Task 2);
+ *   4. creates the ONE apex proxied CNAME behind the D-08 collision gate (apex-only,
+ *      D-13), with the sole destructive delete gated on an explicit take-over;
  *   5. records the non-secret facts to the state store and returns the Screen-5
- *      summary (Task 2).
+ *      summary.
  *
  * The chosen zone's accountId (and zoneId/zoneName/subLabel) are read from the
  * state store, persisted by 03-05 selectDomainProbe — NOT re-resolved here (no
@@ -37,6 +38,9 @@ import {
   getTunnelToken,
   getIngress,
   putIngress,
+  listDnsByName,
+  createDnsCname,
+  deleteDnsRecord,
 } from './cf-client';
 import { CfApiError } from './cf-http';
 import { mergeIngress } from './merge-ingress';
@@ -46,7 +50,7 @@ import { vaultGet, vaultSet } from '../storage/secrets-vault';
 // here under the intent-revealing aliases getState/setState the plan's steps +
 // acceptance greps name — the same drift-reconciliation cf-verify shipped at 03-05
 // (`patchState as setState`), no wrapper invented.
-import { readState as getState } from '../storage/state-store';
+import { readState as getState, patchState as setState } from '../storage/state-store';
 import { logSafe } from '../log';
 import type {
   CfProvisionResult,
@@ -124,8 +128,8 @@ async function withTunnelIngressLock<T>(tunnelId: string, fn: () => Promise<T>):
 /**
  * The idempotent write orchestrator. Reuses-or-creates the tunnel by name, fetches
  * the connector token into the vault, RMW-pushes the apex ingress without clobbering
- * per-app rules, then (Task 2) creates the collision-gated apex CNAME and persists
- * the non-secret facts. `takeOver` is honored ONLY on the Task-2 DNS branch.
+ * per-app rules, creates the collision-gated apex CNAME, and persists the non-secret
+ * facts. `takeOver` is honored ONLY on the DNS collision branch (D-08).
  */
 export async function provisionTunnelAndDns(
   input: { username: string | null; takeOver?: boolean },
@@ -189,7 +193,29 @@ export async function provisionTunnelAndDns(
         }
       });
 
-      // (4) collision-gated apex CNAME + (5) state facts + summary land in Task 2.
+      // (4) DNS — the ONE apex proxied CNAME behind the D-08 collision gate.
+      //     `target` is THIS tunnel's cfargotunnel address; only the exact apex
+      //     host is queried (apex-only, D-13 — no catch-everything host is ever
+      //     built). A record already pointing at this tunnel resumes silently; a
+      //     FOREIGN record is a collision that is deleted ONLY on an explicit
+      //     take-over (the sole destructive external write in the phase, T-03-05).
+      step = 'dns';
+      onUpdate?.({ phase: 'dns' });
+      const target = `${id}.cfargotunnel.com`;
+      const existing = await listDnsByName(token, zoneId, apexHost);
+      if (existing.length && existing.every((r) => r.content === target)) {
+        // resume: already ours — no create, no destructive write.
+      } else if (existing.length) {
+        if (!input.takeOver) return { kind: 'collision' }; // gated behind the Collision screen (03-09)
+        for (const r of existing) await deleteDnsRecord(token, zoneId, r.id);
+        await createDnsCname(token, zoneId, apexHost, id);
+      } else {
+        await createDnsCname(token, zoneId, apexHost, id);
+      }
+
+      // (5) persist the non-secret facts (D-16) and return the Screen-5 summary.
+      await setState({ tunnelId: id, accountId, zoneId, zoneName, subLabel });
+      logSafe('cf.provision', { ok: true });
       return {
         kind: 'ready',
         summary: { address: apexHost, tunnelName: name, recordsLabel: '1 DNS record + tunnel route' },

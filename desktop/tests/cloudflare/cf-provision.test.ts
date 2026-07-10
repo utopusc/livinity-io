@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 /**
  * cf-provision.test.ts mocks the CF client (cf-client), the vault (secrets-vault),
@@ -43,11 +45,14 @@ import {
   getTunnelToken,
   getIngress,
   putIngress,
+  listDnsByName,
+  createDnsCname,
+  deleteDnsRecord,
 } from '../../src/main/cloudflare/cf-client';
 import { vaultGet, vaultSet } from '../../src/main/storage/secrets-vault';
 import { readState, patchState } from '../../src/main/storage/state-store';
 import { provisionTunnelAndDns } from '../../src/main/cloudflare/cf-provision';
-import type { IngressEntry, TunnelList } from '../../src/main/cloudflare/cf-schemas';
+import type { IngressEntry, TunnelList, DnsRecordList } from '../../src/main/cloudflare/cf-schemas';
 import type { State } from '../../../shared/ipc-contract';
 
 const listTunnelsMock = vi.mocked(listTunnels);
@@ -55,6 +60,9 @@ const createTunnelMock = vi.mocked(createTunnel);
 const getTunnelTokenMock = vi.mocked(getTunnelToken);
 const getIngressMock = vi.mocked(getIngress);
 const putIngressMock = vi.mocked(putIngress);
+const listDnsByNameMock = vi.mocked(listDnsByName);
+const createDnsCnameMock = vi.mocked(createDnsCname);
+const deleteDnsRecordMock = vi.mocked(deleteDnsRecord);
 const vaultGetMock = vi.mocked(vaultGet);
 const vaultSetMock = vi.mocked(vaultSet);
 // state-store exposes readState/patchState; cf-provision imports them as
@@ -103,6 +111,9 @@ beforeEach(() => {
   getTunnelTokenMock.mockReset();
   getIngressMock.mockReset();
   putIngressMock.mockReset();
+  listDnsByNameMock.mockReset();
+  createDnsCnameMock.mockReset();
+  deleteDnsRecordMock.mockReset();
   vaultGetMock.mockReset();
   vaultSetMock.mockReset();
   getStateMock.mockReset();
@@ -117,9 +128,18 @@ beforeEach(() => {
   // Ingress already carries the apex after a push -> the verify-and-repair loop breaks.
   getIngressMock.mockResolvedValue([PER_APP_RULE, { hostname: APEX, service: 'http://localhost:80' }, CATCH_ALL]);
   putIngressMock.mockResolvedValue(undefined);
+  // DNS defaults: no existing apex record -> a single clean create.
+  listDnsByNameMock.mockResolvedValue([]);
+  createDnsCnameMock.mockResolvedValue({ id: 'rec-new' });
+  deleteDnsRecordMock.mockResolvedValue(undefined);
   vaultSetMock.mockResolvedValue(undefined);
   setStateMock.mockResolvedValue(state());
 });
+
+/** A parsed DNS record (as cf-client.listDnsByName returns) pointing at `content`. */
+function dnsRecord(content: string, id = 'rec-1'): DnsRecordList[number] {
+  return { id, name: APEX, type: 'CNAME', content, proxied: true };
+}
 
 describe('provisionTunnelAndDns — accountId guard (read from the 03-05-persisted state)', () => {
   it('a missing accountId short-circuits to network BEFORE any listTunnels call (the guard)', async () => {
@@ -233,5 +253,114 @@ describe('provisionTunnelAndDns — write-403 -> precise per-scope step (D-04)',
     const result = await provisionTunnelAndDns({ username: 'drampa' });
 
     expect(result).toEqual({ kind: 'network' });
+  });
+});
+
+describe('provisionTunnelAndDns — collision-gated apex CNAME (D-08 / D-13)', () => {
+  it('a record already pointing at OUR tunnel -> ready, createDnsCname NOT called (silent resume)', async () => {
+    // default create path -> tunnelId 'tun-new'; the existing record already targets it.
+    listDnsByNameMock.mockResolvedValue([dnsRecord('tun-new.cfargotunnel.com')] as DnsRecordList);
+
+    const result = await provisionTunnelAndDns({ username: 'drampa' });
+
+    expect(result.kind).toBe('ready');
+    expect(createDnsCnameMock).not.toHaveBeenCalled();
+    expect(deleteDnsRecordMock).not.toHaveBeenCalled();
+  });
+
+  it('a FOREIGN record with takeOver=false -> collision, deleteDnsRecord NOT called, no facts persisted', async () => {
+    listDnsByNameMock.mockResolvedValue([dnsRecord('other.example.com')] as DnsRecordList);
+
+    const result = await provisionTunnelAndDns({ username: 'drampa' });
+
+    expect(result).toEqual({ kind: 'collision' });
+    expect(deleteDnsRecordMock).not.toHaveBeenCalled();
+    expect(createDnsCnameMock).not.toHaveBeenCalled();
+    // returns BEFORE the state write — the destructive path is fully gated.
+    expect(setStateMock).not.toHaveBeenCalled();
+  });
+
+  it('a FOREIGN record with takeOver=true -> deletes the foreign record THEN creates our CNAME', async () => {
+    listDnsByNameMock.mockResolvedValue([dnsRecord('other.example.com', 'rec-9')] as DnsRecordList);
+
+    const result = await provisionTunnelAndDns({ username: 'drampa', takeOver: true });
+
+    expect(result.kind).toBe('ready');
+    expect(deleteDnsRecordMock).toHaveBeenCalledWith(TOKEN, 'zone-1', 'rec-9');
+    expect(createDnsCnameMock).toHaveBeenCalledWith(TOKEN, 'zone-1', APEX, 'tun-new');
+    // delete happens BEFORE create.
+    expect(deleteDnsRecordMock.mock.invocationCallOrder[0]).toBeLessThan(
+      createDnsCnameMock.mock.invocationCallOrder[0]
+    );
+  });
+
+  it('no existing record -> exactly ONE createDnsCname for the apex host (no wildcard name)', async () => {
+    listDnsByNameMock.mockResolvedValue([]);
+
+    const result = await provisionTunnelAndDns({ username: 'drampa' });
+
+    expect(result.kind).toBe('ready');
+    expect(createDnsCnameMock).toHaveBeenCalledTimes(1);
+    const nameArg = createDnsCnameMock.mock.calls[0][2];
+    expect(nameArg).toBe(APEX);
+    // apex-only, D-13: the created name is never a catch-everything wildcard.
+    expect(nameArg.startsWith('*')).toBe(false);
+    expect(deleteDnsRecordMock).not.toHaveBeenCalled();
+  });
+
+  it('a 403 on the collision read -> scope-missing step:"dns" with the DNS row failed', async () => {
+    listDnsByNameMock.mockRejectedValue(cfErr(403));
+
+    const result = await provisionTunnelAndDns({ username: 'drampa' });
+
+    expect(result.kind).toBe('scope-missing');
+    if (result.kind === 'scope-missing') {
+      expect(result.step).toBe('dns');
+      const dnsRow = result.rows.find((r) => r.scope === 'dns');
+      expect(dnsRow).toMatchObject({ ok: false, missingLabel: 'Zone · DNS · Edit' });
+    }
+  });
+
+  it('a 403 on createDnsCname -> scope-missing step:"dns"', async () => {
+    createDnsCnameMock.mockRejectedValue(cfErr(403));
+
+    const result = await provisionTunnelAndDns({ username: 'drampa' });
+
+    expect(result.kind).toBe('scope-missing');
+    if (result.kind === 'scope-missing') expect(result.step).toBe('dns');
+  });
+});
+
+describe('provisionTunnelAndDns — non-secret facts + Screen-5 summary (D-16 / D-17)', () => {
+  it('persists all five chosen-zone facts (tunnelId/accountId/zoneId/zoneName/subLabel)', async () => {
+    await provisionTunnelAndDns({ username: 'drampa' });
+
+    expect(setStateMock).toHaveBeenCalledWith({
+      tunnelId: 'tun-new',
+      accountId: 'acct-1',
+      zoneId: 'zone-1',
+      zoneName: 'example.com',
+      subLabel: 'liv',
+    });
+  });
+
+  it('returns the ready summary with address=`<sub>.<zone>`, the tunnel name, and the apex-only records label', async () => {
+    const result = await provisionTunnelAndDns({ username: 'drampa' });
+
+    expect(result).toEqual({
+      kind: 'ready',
+      summary: { address: APEX, tunnelName: DERIVED_NAME, recordsLabel: '1 DNS record + tunnel route' },
+    });
+  });
+});
+
+describe('provisionTunnelAndDns — apex-only source invariant (D-13)', () => {
+  it('the cf-provision source never constructs a wildcard host name', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('../../src/main/cloudflare/cf-provision.ts', import.meta.url)),
+      'utf8'
+    );
+    // A wildcard-host literal (asterisk-dot) must appear nowhere in the module.
+    expect(src.includes('*' + '.')).toBe(false);
   });
 });
