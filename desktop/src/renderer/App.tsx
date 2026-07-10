@@ -246,7 +246,16 @@ export default function App() {
     if (zr.ok) zoneName = zr.zones.find((z) => z.id === zoneId)?.name ?? '';
     const r = await window.api.cfRecheckZone(zoneId);
     if (r.kind === 'active') {
-      await startProvision(false);
+      // The zone activated in the window between the dropdown load and the pick,
+      // but it NEVER went through selectDomainProbe: DomainPicker routes a
+      // non-active zone straight to onPendingZone WITHOUT calling cfSelectDomain,
+      // so no {zoneId,zoneName,subLabel,accountId} was persisted for THIS zone.
+      // Route back through the picker — exactly like the Nameservers onActive
+      // path — so the now-active zone is re-selected via cfSelectDomain (the one
+      // place those facts are captured) BEFORE any provision. Provisioning here
+      // would either dead-end on the guard (no facts) or silently provision a
+      // DIFFERENT earlier zone's stale facts (WR-02).
+      setCfStep('cf-domain');
       return;
     }
     if (r.kind === 'pending') {
