@@ -66,6 +66,16 @@ export const StateSchema = z.object({
   zoneId: z.string().optional(),
   zoneName: z.string().optional(),
   subLabel: z.string().optional(),
+  // Phase 4 (D-03/SHELL-05): WSL wizard-resume fields so the flow survives the
+  // mandatory reboot. NO secret fields ever belong here — the vault is the only
+  // place secrets live. wslResource* are non-secret user-chosen resource limits
+  // (RAM/CPU/disk), re-validated against WSL value formats before ever being
+  // written to `.wslconfig` (04-09) — a tampered state file cannot inject a
+  // malformed `.wslconfig` line.
+  wslStep: z.string().optional(),
+  wslResourceMemoryGb: z.number().optional(),
+  wslResourceProcessors: z.number().optional(),
+  wslResourceDiskGb: z.number().optional(),
 });
 export type State = z.infer<typeof StateSchema>;
 
@@ -107,6 +117,21 @@ export const CHANNELS = {
   cfProvision: 'cf:provision',
   cfOpenExternal: 'cf:openExternal',
   cfProvisionUpdate: 'cf:provisionUpdate',
+  // WSL2 provisioning (Phase 4). Same duplication discipline as the cf:* block above:
+  // these literals are duplicated in the sandboxed preload (04-09) and kept in sync by
+  // the drift-guard test. wslDownloadUpdate/wslInstallUpdate are main -> renderer
+  // progress pushes (mirror cfProvisionUpdate), never invoke handlers.
+  wslDetect: 'wsl:detect',
+  wslEnable: 'wsl:enable',
+  wslCheckBios: 'wsl:checkBios',
+  wslRestartNow: 'wsl:restartNow',
+  wslDistroInstall: 'wsl:distroInstall',
+  wslInstallInvoke: 'wsl:installInvoke',
+  wslConfigGet: 'wsl:configGet',
+  wslConfigApply: 'wsl:configApply',
+  wslOpenExternal: 'wsl:openExternal',
+  wslDownloadUpdate: 'wsl:downloadUpdate',
+  wslInstallUpdate: 'wsl:installUpdate',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -410,6 +435,154 @@ export interface CfApi {
   cfOpenExternal(target: 'token-form' | 'add-site'): Promise<void>;
   /** Subscribes to provisioning-progress pushes; returns an unsubscribe function (mirrors onStatusChanged). */
   onProvisionUpdate(cb: (update: CfProvisionUpdate) => void): () => void;
+}
+
+// ---------------------------------------------------------------------------
+// WSL2 provisioning (Phase 4)
+// ---------------------------------------------------------------------------
+
+/**
+ * None of the Wsl* result schemas, and no method on WslApi, ever returns a
+ * secret. The install.sh env vars (LIVOS_API_KEY / LIVOS_CF_TOKEN /
+ * LIVOS_CF_TUNNEL_TOKEN) are read from the DPAPI vault main-side inside
+ * install-invoke.ts and forwarded via WSLENV; they never cross this IPC
+ * boundary — not even to build the invocation, since the renderer never
+ * supplies them.
+ */
+
+/**
+ * Result of `wsl:detect` (and `wsl:checkBios`, which reuses this same shape —
+ * it is a reactive re-check of the 0x80370102 BIOS-blocked case). Drives
+ * Screen 1 (detect) and Screen 2 (BIOS dead-end).
+ */
+export const WslDetectResultSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('ready') }),
+  z.object({ kind: z.literal('needs-enable') }),
+  z.object({ kind: z.literal('needs-reboot') }),
+  z.object({ kind: z.literal('bios-blocked') }),
+  z.object({ kind: z.literal('distro-missing') }),
+  z.object({ kind: z.literal('wsl-missing') }),
+]);
+export type WslDetectResult = z.infer<typeof WslDetectResultSchema>;
+
+/**
+ * Result of `wsl:enable`. 'bios-blocked' is defensive/retained — reached via
+ * wsl:detect/wsl:checkBios's reactive 0x80370102, NOT from exit 14107, which
+ * classifies as needs-enable and is surfaced by wsl:enable as 'error' per the
+ * single rule in decide-wsl-state.ts (04-02). 'declined' covers a dismissed/
+ * declined UAC prompt — recoverable, not a fault.
+ */
+export const WslEnableResultSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('needs-reboot') }),
+  z.object({ kind: z.literal('bios-blocked') }),
+  z.object({ kind: z.literal('declined') }),
+  z.object({ kind: z.literal('error') }),
+]);
+export type WslEnableResult = z.infer<typeof WslEnableResultSchema>;
+
+/** Result of `wsl:distroInstall`. */
+export const WslDistroInstallResultSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('installed') }),
+  z.object({ kind: z.literal('disk-too-small'), freeGb: z.number(), driveLetter: z.string() }),
+  z.object({ kind: z.literal('arch-unsupported') }),
+  z.object({ kind: z.literal('download-failed') }),
+  z.object({ kind: z.literal('checksum-failed') }),
+  z.object({ kind: z.literal('error') }),
+]);
+export type WslDistroInstallResult = z.infer<typeof WslDistroInstallResultSchema>;
+
+/**
+ * Result of `wsl:installInvoke`. Mirrors map-install-exit's InstallVerdict
+ * (04-03). 'generic-failure' carries an optional `reason` for the ONE red
+ * technical line on Screen 6 — never a secret (it is derived from install.sh's
+ * own stdout/stderr tail, not from vault contents).
+ */
+export const WslInstallInvokeResultSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('ok') }),
+  z.object({ kind: z.literal('systemd-retry') }),
+  z.object({ kind: z.literal('disk-too-small') }),
+  z.object({ kind: z.literal('our-bug') }),
+  z.object({ kind: z.literal('generic-failure'), reason: z.string().optional() }),
+]);
+export type WslInstallInvokeResult = z.infer<typeof WslInstallInvokeResultSchema>;
+
+/**
+ * The secret-free resource snapshot for `wsl:configGet` (Screen 3). `cpuRamTunable`
+ * is the D-16/D-17 flag the ResourceAllocation screen uses to render full
+ * (CPU/RAM+disk) vs disk-only.
+ */
+export const WslResourceInfoSchema = z.object({
+  totalRamGb: z.number(),
+  totalCores: z.number(),
+  freeDiskGb: z.number(),
+  driveLetter: z.string(),
+  recommended: z.object({
+    memoryGb: z.number(),
+    processors: z.number(),
+    diskGb: z.number(),
+  }),
+  current: z.object({
+    memoryGb: z.number().optional(),
+    processors: z.number().optional(),
+  }),
+  cpuRamTunable: z.boolean(),
+});
+export type WslResourceInfo = z.infer<typeof WslResourceInfoSchema>;
+
+/** Result of `wsl:configApply` (the invisible `wsl --shutdown` behind Screen 3's "Applying"). */
+export const WslConfigApplyResultSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true) }),
+  z.object({
+    ok: z.literal(false),
+    reason: z.enum(['invalid_values', 'write_failed', 'shutdown_failed']),
+  }),
+]);
+export type WslConfigApplyResult = z.infer<typeof WslConfigApplyResultSchema>;
+
+/** Progress pushed main -> renderer on CHANNELS.wslDownloadUpdate (Screen 4). */
+export const WslDownloadUpdateSchema = z.object({
+  phase: z.enum(['disk-check', 'downloading', 'verifying', 'importing', 'sparse']),
+  doneBytes: z.number().optional(),
+  totalBytes: z.number().optional(),
+});
+export type WslDownloadUpdate = z.infer<typeof WslDownloadUpdateSchema>;
+
+/**
+ * Progress pushed main -> renderer on CHANNELS.wslInstallUpdate (Screen 5). Coarse
+ * Phase-4 step-list; Phase 5 enriches with parsed install.sh step markers without a
+ * schema change.
+ */
+export const WslInstallUpdateSchema = z.object({
+  phase: z.enum(['preparing', 'installing', 'starting']),
+});
+export type WslInstallUpdate = z.infer<typeof WslInstallUpdateSchema>;
+
+/**
+ * WslApi — the WSL2-provisioning sibling of CfApi. Same IPC-boundary invariant:
+ * no method here ever returns a secret — only detection verdicts, resource
+ * snapshots, and progress updates cross this boundary.
+ */
+export interface WslApi {
+  wslDetect(): Promise<WslDetectResult>;
+  wslEnable(): Promise<WslEnableResult>;
+  wslCheckBios(): Promise<WslDetectResult>;
+  /** USER-INITIATED reboot ONLY — invoked solely from the D-03 "Restart now" button, never
+   * auto-called; the main handler also arms `openAtLogin --hidden` resume per D-04. */
+  wslRestartNow(): Promise<void>;
+  wslDistroInstall(): Promise<WslDistroInstallResult>;
+  wslInstallInvoke(): Promise<WslInstallInvokeResult>;
+  wslConfigGet(): Promise<WslResourceInfo>;
+  wslConfigApply(limits: {
+    memoryGb?: number;
+    processors?: number;
+    diskGb: number;
+  }): Promise<WslConfigApplyResult>;
+  /** enum-allowlisted external open (system browser only), mirrors cfOpenExternal. */
+  wslOpenExternal(target: 'bios-help' | 'arm-help'): Promise<void>;
+  /** Subscribes to download-progress pushes; returns an unsubscribe function (mirrors onProvisionUpdate). */
+  onDownloadUpdate(cb: (u: WslDownloadUpdate) => void): () => void;
+  /** Subscribes to install-progress pushes; returns an unsubscribe function (mirrors onProvisionUpdate). */
+  onInstallUpdate(cb: (u: WslInstallUpdate) => void): () => void;
 }
 
 // ---------------------------------------------------------------------------
