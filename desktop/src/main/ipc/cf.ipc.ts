@@ -79,8 +79,17 @@ export function registerCfIpc(deps: CfIpcDeps): void {
     }
   });
 
+  // cf:getZones — a no-arg handler: a legitimate call carries no payload, so
+  // z.undefined() passes. Actually BRANCH on the safeParse result (IN-04) rather
+  // than discarding it, so a hostile renderer's stray payload is rejected with the
+  // same safe union the sibling handlers use — the schema-block comment's
+  // "defense in depth" claim is now what the code really does. The legitimate
+  // no-arg path (raw === undefined) is unchanged.
   ipcMain.handle(CHANNELS.cfGetZones, async (_event, raw: unknown) => {
-    NoPayload.safeParse(raw);
+    const parsed = NoPayload.safeParse(raw);
+    if (!parsed.success) {
+      return { ok: false as const, reason: 'network' as const };
+    }
     try {
       return await getZonesFromVault();
     } catch {

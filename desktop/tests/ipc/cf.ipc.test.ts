@@ -182,6 +182,15 @@ describe('cf.ipc', () => {
       expect(result).toMatchObject({ ok: true });
       expect(hasSecretKey(result)).toBe(false);
     });
+
+    it('rejects a hostile stray payload with the safe union WITHOUT calling getZonesFromVault (IN-04)', async () => {
+      const handler = getHandler(CHANNELS.cfGetZones)!;
+
+      const result = await handler({}, { unexpected: 'payload' });
+
+      expect(getZonesFromVaultMock).not.toHaveBeenCalled();
+      expect(result).toEqual({ ok: false, reason: 'network' });
+    });
   });
 
   describe('cf:selectDomain', () => {
