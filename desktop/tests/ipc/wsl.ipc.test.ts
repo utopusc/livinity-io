@@ -686,6 +686,44 @@ describe('wsl.ipc', () => {
       expect(result).toEqual({ ok: true });
     });
 
+    it('refuses to write a NUL-laced read (a UTF-16LE .wslconfig read as utf8) — the whole garbled file is never rewritten to disk (WR-05 regression)', async () => {
+      // '[wsl2]\nmemory=4GB\n' saved as UTF-16LE, read back as utf8: every
+      // other byte decodes as NUL — parseIni would see no [wsl2] section.
+      const utf16leAsUtf8 = Buffer.from('[wsl2]\nmemory=4GB\n', 'utf16le').toString('utf8');
+      readFileMock.mockResolvedValueOnce(utf16leAsUtf8);
+
+      const handler = getHandler(CHANNELS.wslConfigApply)!;
+      const result = await handler({}, { memoryGb: 8, processors: 4, diskGb: 64 });
+
+      expect(result).toEqual({ ok: false, reason: 'write_failed' });
+      expect(writeFileMock).not.toHaveBeenCalled();
+      expect(execWslMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses to write a replacement-character (U+FFFD) read — decode damage never round-trips to disk (WR-05 regression)', async () => {
+      readFileMock.mockResolvedValueOnce('[wsl2]\nmemory=4GB\n\uFFFD\uFFFD garbled tail');
+
+      const handler = getHandler(CHANNELS.wslConfigApply)!;
+      const result = await handler({}, { memoryGb: 8, processors: 4, diskGb: 64 });
+
+      expect(result).toEqual({ ok: false, reason: 'write_failed' });
+      expect(writeFileMock).not.toHaveBeenCalled();
+    });
+
+    it('a UTF-8 BOM alone is NOT treated as garble — the apply proceeds and the BOM byte survives the round-trip', async () => {
+      readFileMock.mockResolvedValueOnce('\uFEFF[wsl2]\nkernelCommandLine=quiet\n');
+      execWslMock.mockResolvedValue({ code: 0, stdout: '', stderr: '' });
+
+      const handler = getHandler(CHANNELS.wslConfigApply)!;
+      const result = await handler({}, { memoryGb: 8, processors: 4, diskGb: 64 });
+
+      expect(result).toEqual({ ok: true });
+      const writtenContent = writeFileMock.mock.calls[0][1] as string;
+      expect(writtenContent.startsWith('\uFEFF')).toBe(true);
+      expect(writtenContent).toContain('memory=8GB');
+      expect(writtenContent).toContain('kernelCommandLine=quiet');
+    });
+
     it('a write failure returns { ok:false, reason:"write_failed" } and never attempts the disk resize/shutdown', async () => {
       readFileMock.mockResolvedValueOnce('');
       writeFileMock.mockRejectedValueOnce(new Error('EPERM'));

@@ -382,6 +382,17 @@ export function registerWslIpc(deps: WslIpcDeps): void {
 
     try {
       const content = await readWslconfigContent();
+
+      // Encoding tripwire (WR-05): a non-UTF-8 `.wslconfig` (e.g. UTF-16LE
+      // saved by an editor as "Unicode") read as utf8 becomes NUL-laced
+      // mojibake — parseIni would see no [wsl2] section, append a fresh one,
+      // and the write below would permanently destroy every prior line for
+      // ALL the user's distros. Refuse to write anything that looks garbled.
+      if (content.includes('\u0000') || content.includes('\uFFFD')) {
+        logSafe('wsl.configApply', { ok: false, step: 'encoding-guard' });
+        return { ok: false as const, reason: 'write_failed' as const };
+      }
+
       const merged = mergeWsl2Keys(parseIni(content), v.patch);
       const serialized = serializeIni(merged);
 
