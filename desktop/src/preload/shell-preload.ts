@@ -39,7 +39,15 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 import type { IpcRendererEvent } from 'electron';
-import type { ShellApi, DevSpikeApi, AuthApi, Status, DeviceLoginUpdate } from '../../shared/ipc-contract';
+import type {
+  ShellApi,
+  DevSpikeApi,
+  AuthApi,
+  CfApi,
+  Status,
+  DeviceLoginUpdate,
+  CfProvisionUpdate,
+} from '../../shared/ipc-contract';
 
 // Mirrors shared/ipc-contract.ts CHANNELS exactly — duplicated here because a
 // sandboxed preload cannot require() that (or any) local project file. Kept
@@ -71,6 +79,18 @@ const CHANNELS = {
   authStartDeviceLogin: 'auth:startDeviceLogin',
   authCancelDeviceLogin: 'auth:cancelDeviceLogin',
   authDeviceLoginUpdate: 'auth:deviceLoginUpdate',
+  // Phase 3 (Cloudflare / Free-BYOD): 6 cf:* invoke channels + the
+  // cf:provisionUpdate progress push (mirrors authDeviceLoginUpdate). Duplicated
+  // here as literals for the same sandbox reason as the auth block above; the
+  // token crosses IN once on cf:verifyToken and NEVER returns. Kept in sync with
+  // the canonical CHANNELS.cf* export by tests/shell-preload.test.ts (drift guard).
+  cfVerifyToken: 'cf:verifyToken',
+  cfGetZones: 'cf:getZones',
+  cfSelectDomain: 'cf:selectDomain',
+  cfRecheckZone: 'cf:recheckZone',
+  cfProvision: 'cf:provision',
+  cfOpenExternal: 'cf:openExternal',
+  cfProvisionUpdate: 'cf:provisionUpdate',
 } as const;
 
 // DEV-ONLY spike channels (Plan 04) — local literals for the same sandbox
@@ -81,7 +101,7 @@ const DEV_CHANNELS = {
   devUpdateSim: 'dev:updateSim',
 } as const;
 
-const api: ShellApi & DevSpikeApi & AuthApi = {
+const api: ShellApi & DevSpikeApi & AuthApi & CfApi = {
   vaultSet: (key, value) => ipcRenderer.invoke(CHANNELS.vaultSet, { key, value }),
   vaultHas: (key) => ipcRenderer.invoke(CHANNELS.vaultHas, { key }),
   getState: () => ipcRenderer.invoke(CHANNELS.stateGet),
@@ -129,6 +149,24 @@ const api: ShellApi & DevSpikeApi & AuthApi = {
     ipcRenderer.on(CHANNELS.authDeviceLoginUpdate, listener);
     return () => {
       ipcRenderer.removeListener(CHANNELS.authDeviceLoginUpdate, listener);
+    };
+  },
+  // Phase 3 (Cloudflare / Free-BYOD) — the token crosses IN once on
+  // cfVerifyToken (like authProbeKey) and never returns; cfOpenExternal sends an
+  // enum target (never a URL); onProvisionUpdate uses the same subscribe-and-
+  // return-unsubscribe pattern as onStatusChanged/onDeviceLoginUpdate.
+  cfVerifyToken: (token) => ipcRenderer.invoke(CHANNELS.cfVerifyToken, { token }),
+  cfGetZones: () => ipcRenderer.invoke(CHANNELS.cfGetZones),
+  cfSelectDomain: (zoneId, subLabel) =>
+    ipcRenderer.invoke(CHANNELS.cfSelectDomain, { zoneId, subLabel }),
+  cfRecheckZone: (zoneId) => ipcRenderer.invoke(CHANNELS.cfRecheckZone, { zoneId }),
+  cfProvision: (takeOver) => ipcRenderer.invoke(CHANNELS.cfProvision, { takeOver }),
+  cfOpenExternal: (target) => ipcRenderer.invoke(CHANNELS.cfOpenExternal, { target }),
+  onProvisionUpdate: (cb: (update: CfProvisionUpdate) => void) => {
+    const listener = (_event: IpcRendererEvent, update: CfProvisionUpdate) => cb(update);
+    ipcRenderer.on(CHANNELS.cfProvisionUpdate, listener);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.cfProvisionUpdate, listener);
     };
   },
 };

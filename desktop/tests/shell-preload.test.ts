@@ -195,6 +195,60 @@ describe('shell-preload Phase-2 auth channel wiring (drift guard vs. shared/ipc-
   });
 });
 
+describe('shell-preload Phase-3 cf channel wiring (drift guard vs. shared/ipc-contract.ts)', () => {
+  beforeEach(() => {
+    invokeMock.mockClear();
+    onMock.mockClear();
+    removeListenerMock.mockClear();
+  });
+
+  it('cfVerifyToken invokes the canonical cf:verifyToken channel with { token }', async () => {
+    await getExposedApi()!.cfVerifyToken('cf-token-abc');
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.cfVerifyToken, { token: 'cf-token-abc' });
+  });
+
+  it('cfGetZones invokes the canonical cf:getZones channel with no payload', async () => {
+    await getExposedApi()!.cfGetZones();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.cfGetZones);
+  });
+
+  it('cfSelectDomain invokes the canonical cf:selectDomain channel with { zoneId, subLabel }', async () => {
+    await getExposedApi()!.cfSelectDomain('z1', 'home');
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.cfSelectDomain, { zoneId: 'z1', subLabel: 'home' });
+  });
+
+  it('cfRecheckZone invokes the canonical cf:recheckZone channel with { zoneId }', async () => {
+    await getExposedApi()!.cfRecheckZone('z1');
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.cfRecheckZone, { zoneId: 'z1' });
+  });
+
+  it('cfProvision invokes the canonical cf:provision channel with { takeOver }', async () => {
+    await getExposedApi()!.cfProvision(true);
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.cfProvision, { takeOver: true });
+  });
+
+  it('cfOpenExternal invokes the canonical cf:openExternal channel with { target } (enum, never a URL)', async () => {
+    await getExposedApi()!.cfOpenExternal('token-form');
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.cfOpenExternal, { target: 'token-form' });
+  });
+
+  it('onProvisionUpdate subscribes on the canonical cf:provisionUpdate channel', () => {
+    const cb = vi.fn();
+    getExposedApi()!.onProvisionUpdate(cb);
+    expect(onMock).toHaveBeenCalledWith(CHANNELS.cfProvisionUpdate, expect.any(Function));
+  });
+
+  it('onProvisionUpdate returns an unsubscribe function that removes the exact listener (mirrors onStatusChanged)', () => {
+    const cb = vi.fn();
+    const unsubscribe = getExposedApi()!.onProvisionUpdate(cb) as () => void;
+    expect(typeof unsubscribe).toBe('function');
+
+    const registeredListener = onMock.mock.calls[onMock.mock.calls.length - 1][1];
+    unsubscribe();
+    expect(removeListenerMock).toHaveBeenCalledWith(CHANNELS.cfProvisionUpdate, registeredListener);
+  });
+});
+
 describe('shell-preload DEV-ONLY spike channels (Plan 04 drift guard vs. shell.ipc.ts)', () => {
   // The dev spike channels are deliberately NOT part of the production
   // CHANNELS object (Plan 03 decision), so the canonical source to guard
