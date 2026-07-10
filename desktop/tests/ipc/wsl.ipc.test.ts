@@ -238,7 +238,7 @@ describe('wsl.ipc', () => {
       );
     });
 
-    it('a persisted wslStep of wsl-restart feeds needsReboot -> needs-reboot', async () => {
+    it('a persisted wsl-restart flag + a CLEAN --status is recognized as a completed reboot: the stale flag is cleared, the login item disarmed, and the verdict proceeds to ready — never a permanent needs-reboot loop (WR-02 regression)', async () => {
       const handler = getHandler(CHANNELS.wslDetect)!;
       execWslMock.mockImplementation((args: string[]) =>
         Promise.resolve(args[0] === '--status' ? READY_STATUS : REGISTERED_LIST)
@@ -249,7 +249,40 @@ describe('wsl.ipc', () => {
 
       const result = await handler({});
 
-      expect(result).toEqual({ kind: 'needs-reboot' });
+      expect(result).toEqual({ kind: 'ready' });
+      expect(patchStateMock).toHaveBeenCalledWith({ wslStep: undefined });
+      expect(setLoginItemSettingsMock).toHaveBeenCalledWith({ openAtLogin: false });
+    });
+
+    it('a persisted wsl-restart flag + clean status but no distro yet clears the flag and proceeds to distro-missing (WR-02 regression)', async () => {
+      const handler = getHandler(CHANNELS.wslDetect)!;
+      execWslMock.mockImplementation((args: string[]) =>
+        Promise.resolve(args[0] === '--status' ? READY_STATUS : EMPTY_LIST)
+      );
+      getVirtualizationEnabledMock.mockResolvedValueOnce(true);
+      getVmLaunchErrorMock.mockResolvedValueOnce(null);
+      readStateMock.mockResolvedValueOnce({ version: 1, currentStep: 'x', wslStep: 'wsl-restart' });
+
+      const result = await handler({});
+
+      expect(result).toEqual({ kind: 'distro-missing' });
+      expect(patchStateMock).toHaveBeenCalledWith({ wslStep: undefined });
+    });
+
+    it('a persisted wsl-restart flag + a NON-ZERO --status (the reboot genuinely did not complete the enable) keeps the flag and classifies needs-enable', async () => {
+      const handler = getHandler(CHANNELS.wslDetect)!;
+      execWslMock.mockImplementation((args: string[]) =>
+        Promise.resolve(args[0] === '--status' ? { code: 1, stdout: '', stderr: '' } : EMPTY_LIST)
+      );
+      getVirtualizationEnabledMock.mockResolvedValueOnce(true);
+      getVmLaunchErrorMock.mockResolvedValueOnce(null);
+      readStateMock.mockResolvedValueOnce({ version: 1, currentStep: 'x', wslStep: 'wsl-restart' });
+
+      const result = await handler({});
+
+      expect(result).toEqual({ kind: 'needs-enable' });
+      expect(patchStateMock).not.toHaveBeenCalled();
+      expect(setLoginItemSettingsMock).not.toHaveBeenCalled();
     });
 
     it('a non-zero --status exit is needs-enable, never bios-blocked, even with no launch probe run', async () => {

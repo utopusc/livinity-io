@@ -154,7 +154,19 @@ export function registerWslIpc(deps: WslIpcDeps): void {
       const biosVirtEnabled = await getVirtualizationEnabled();
       const launchError = await getVmLaunchError(distroReg);
       const s = await readState();
-      const needsReboot = s?.wslStep === WSL_RESTART_STEP;
+      let needsReboot = s?.wslStep === WSL_RESTART_STEP;
+      if (needsReboot && status.code === 0) {
+        // A clean `wsl --status` proves the feature works — the persisted
+        // pending-reboot flag is stale (the reboot happened, or was never
+        // actually needed). NOTHING else ever clears it, so without this the
+        // post-reboot resume loops forever on needs-reboot -> "Windows setup
+        // didn't finish" (WR-02). Clearing it also disarms the D-04 hidden-
+        // resume login item wsl:enable/wsl:restartNow armed — its single job
+        // (surviving the mandatory reboot) is done.
+        await patchState({ wslStep: undefined });
+        app.setLoginItemSettings({ openAtLogin: false });
+        needsReboot = false;
+      }
 
       return decideWslState({
         statusExit: status.code,
