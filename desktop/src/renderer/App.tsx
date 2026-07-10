@@ -675,6 +675,7 @@ export default function App() {
             {wslStep === 'downloading' && (
               <Downloading
                 onInstalled={() => setWslStep('installing')}
+                onBiosBlocked={() => setWslStep('bios-deadend')}
                 onDiskTooSmall={(freeGb, driveLetter) => {
                   setWslOutcome({ outcome: 'disk', freeGb, driveLetter });
                   setWslStep('install-outcome');

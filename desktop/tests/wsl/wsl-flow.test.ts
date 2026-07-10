@@ -4,6 +4,7 @@ import {
   mapWslEnableResult,
   mapInstallInvokeResult,
   mapDistroInstallResult,
+  mapDistroErrorRecheck,
   formatDownloadReadout,
   installStepCaptions,
 } from '../../src/renderer/screens/wsl/wsl-flow';
@@ -100,6 +101,39 @@ describe('mapDistroInstallResult (Screen 4 outcome mapping)', () => {
 
   it('installed carries no extra fields', () => {
     expect(mapDistroInstallResult({ kind: 'installed' })).toEqual({ kind: 'installed' });
+  });
+});
+
+describe("mapDistroErrorRecheck (Screen 4's post-'error' wsl:detect re-check router, WR-04 regression)", () => {
+  it('a reactive bios-blocked re-check routes to the BIOS dead-end, never the download-failed copy', () => {
+    expect(mapDistroErrorRecheck({ kind: 'bios-blocked' })).toBe('bios-deadend');
+  });
+
+  it('every non-bios verdict keeps the inline retryable download-failed state', () => {
+    const nonBiosKinds: WslDetectResult['kind'][] = [
+      'ready',
+      'needs-enable',
+      'needs-reboot',
+      'distro-missing',
+      'wsl-missing',
+    ];
+    for (const kind of nonBiosKinds) {
+      expect(mapDistroErrorRecheck({ kind } as WslDetectResult)).toBe('download-failed');
+    }
+  });
+
+  it('is total over all six WslDetectResult kinds', () => {
+    const kinds: WslDetectResult['kind'][] = [
+      'ready',
+      'needs-enable',
+      'needs-reboot',
+      'bios-blocked',
+      'distro-missing',
+      'wsl-missing',
+    ];
+    for (const kind of kinds) {
+      expect(() => mapDistroErrorRecheck({ kind } as WslDetectResult)).not.toThrow();
+    }
   });
 });
 

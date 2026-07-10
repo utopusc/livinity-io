@@ -123,6 +123,19 @@ export function mapDistroInstallResult(r: WslDistroInstallResult): DistroInstall
 }
 
 /**
+ * Routes Screen 4's bare 'error' outcome AFTER a follow-up wsl:detect re-check
+ * (WR-04): a first-boot firmware block resolves distro-install's 'error' kind,
+ * and rendering that as "The download was interrupted" is both the wrong
+ * diagnosis and a retry trap — the retry hits the D-11 reuse gate (the distro
+ * IS imported) and advances onto a VM that cannot boot. Only a reactive
+ * 'bios-blocked' re-check verdict routes to the BIOS dead-end; every other
+ * verdict keeps the inline retryable download-failed state.
+ */
+export function mapDistroErrorRecheck(r: WslDetectResult): 'bios-deadend' | 'download-failed' {
+  return r.kind === 'bios-blocked' ? 'bios-deadend' : 'download-failed';
+}
+
+/**
  * Formats a Screen-4 download progress readout: "{done} MB of {total} MB ·
  * {pct}%" (decimal MB, matches the UI-SPEC mono readout template verbatim).
  */

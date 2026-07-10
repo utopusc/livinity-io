@@ -20,18 +20,27 @@
  */
 
 import { useEffect, useState } from 'react';
-import { formatDownloadReadout, mapDistroInstallResult } from './wsl-flow';
+import { formatDownloadReadout, mapDistroInstallResult, mapDistroErrorRecheck } from './wsl-flow';
 import type { WslDownloadUpdate } from '../../../../shared/ipc-contract';
 
 interface DownloadingProps {
   onInstalled: () => void;
   onDiskTooSmall: (freeGb: number, driveLetter: string) => void;
   onArchUnsupported: () => void;
+  /** A post-'error' wsl:detect re-check captured a reactive 0x80370102 — route
+   * to the BIOS dead-end screen instead of the misleading download-failed copy
+   * (WR-04; mirrors WslEnable's onBiosBlocked). */
+  onBiosBlocked: () => void;
 }
 
 type DownloadPhase = 'active' | 'download-failed' | 'checksum-failed' | 'arm-blocked';
 
-export default function Downloading({ onInstalled, onDiskTooSmall, onArchUnsupported }: DownloadingProps) {
+export default function Downloading({
+  onInstalled,
+  onDiskTooSmall,
+  onArchUnsupported,
+  onBiosBlocked,
+}: DownloadingProps) {
   const [progress, setProgress] = useState<WslDownloadUpdate | null>(null);
   const [phase, setPhase] = useState<DownloadPhase>('active');
 
@@ -58,9 +67,25 @@ export default function Downloading({ onInstalled, onDiskTooSmall, onArchUnsuppo
         case 'checksum-failed':
           setPhase('checksum-failed');
           break;
-        case 'error':
+        case 'error': {
+          // WR-04: a first-boot 0x80370102 firmware block resolves the bare
+          // 'error' kind. Re-run the reactive wsl:detect probe and route a
+          // bios-blocked verdict to the BIOS dead-end screen — "Try again"
+          // here would hit the D-11 reuse gate (the distro IS imported) and
+          // advance onto a VM that cannot boot. Any other verdict (or a
+          // failed re-check) keeps the retryable download-failed state.
+          try {
+            const detect = await window.api.wslDetect();
+            if (mapDistroErrorRecheck(detect) === 'bios-deadend') {
+              onBiosBlocked();
+              break;
+            }
+          } catch {
+            // fall through to the retryable state below
+          }
           setPhase('download-failed');
           break;
+        }
       }
     } catch {
       setPhase('download-failed');
