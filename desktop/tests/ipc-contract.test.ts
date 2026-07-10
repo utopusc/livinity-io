@@ -11,6 +11,10 @@ import {
   AccountSchema,
   DeviceLoginUpdateSchema,
   AuthStartDeviceLoginResultSchema,
+  WslDetectResultSchema,
+  WslDistroInstallResultSchema,
+  WslInstallInvokeResultSchema,
+  WslConfigApplyResultSchema,
 } from '../shared/ipc-contract';
 
 describe('VaultKeySchema', () => {
@@ -90,6 +94,23 @@ describe('StateSchema', () => {
   it('rejects a state object missing currentStep', () => {
     expect(StateSchema.safeParse({ version: 1 }).success).toBe(false);
   });
+
+  it('accepts a patch carrying the Phase-4 WSL wizard-resume fields', () => {
+    expect(
+      StateSchema.safeParse({
+        version: 1,
+        currentStep: 'welcome',
+        wslStep: 'resource-allocation',
+        wslResourceMemoryGb: 8,
+        wslResourceProcessors: 4,
+        wslResourceDiskGb: 64,
+      }).success
+    ).toBe(true);
+  });
+
+  it('still accepts the minimal state object without any wsl* fields', () => {
+    expect(StateSchema.safeParse({ version: 1, currentStep: 'x' }).success).toBe(true);
+  });
 });
 
 describe('CHANNELS', () => {
@@ -122,6 +143,33 @@ describe('CHANNELS', () => {
     expect(CHANNELS.authStartDeviceLogin).toBe('auth:startDeviceLogin');
     expect(CHANNELS.authCancelDeviceLogin).toBe('auth:cancelDeviceLogin');
     expect(CHANNELS.authDeviceLoginUpdate).toBe('auth:deviceLoginUpdate');
+  });
+
+  it('defines the 11 Phase-4 wsl:* channels, each keyed wsl* and valued wsl:*', () => {
+    const wslKeys = [
+      'wslDetect',
+      'wslEnable',
+      'wslCheckBios',
+      'wslRestartNow',
+      'wslDistroInstall',
+      'wslInstallInvoke',
+      'wslConfigGet',
+      'wslConfigApply',
+      'wslOpenExternal',
+      'wslDownloadUpdate',
+      'wslInstallUpdate',
+    ] as const;
+    const channels = CHANNELS as Record<string, string>;
+    for (const key of wslKeys) {
+      expect(channels[key]).toBeDefined();
+      expect(channels[key].startsWith('wsl:')).toBe(true);
+    }
+    // Naming-convention guard the 04-09 drift-guard test depends on.
+    expect(CHANNELS.wslDetect).toBe('wsl:detect');
+    expect(CHANNELS.wslEnable).toBe('wsl:enable');
+    expect(CHANNELS.wslDistroInstall).toBe('wsl:distroInstall');
+    expect(CHANNELS.wslInstallInvoke).toBe('wsl:installInvoke');
+    expect(CHANNELS.wslConfigApply).toBe('wsl:configApply');
   });
 });
 
@@ -236,5 +284,81 @@ describe('AuthStartDeviceLoginResultSchema (discriminated union)', () => {
 
   it('rejects an unrecognized ok:false reason', () => {
     expect(AuthStartDeviceLoginResultSchema.safeParse({ ok: false, reason: 'bogus' }).success).toBe(false);
+  });
+});
+
+describe('WslDetectResultSchema (discriminated union)', () => {
+  it('accepts every valid kind', () => {
+    for (const kind of [
+      'ready',
+      'needs-enable',
+      'needs-reboot',
+      'bios-blocked',
+      'distro-missing',
+      'wsl-missing',
+    ]) {
+      expect(WslDetectResultSchema.safeParse({ kind }).success).toBe(true);
+    }
+  });
+
+  it('rejects an unknown kind', () => {
+    expect(WslDetectResultSchema.safeParse({ kind: 'bogus' }).success).toBe(false);
+  });
+});
+
+describe('WslDistroInstallResultSchema (discriminated union)', () => {
+  it('accepts disk-too-small with its required payload', () => {
+    expect(
+      WslDistroInstallResultSchema.safeParse({ kind: 'disk-too-small', freeGb: 8, driveLetter: 'C' })
+        .success
+    ).toBe(true);
+  });
+
+  it('rejects disk-too-small missing freeGb (proves the payload shape is enforced)', () => {
+    expect(
+      WslDistroInstallResultSchema.safeParse({ kind: 'disk-too-small', driveLetter: 'C' }).success
+    ).toBe(false);
+  });
+
+  it('accepts the other bare-kind variants', () => {
+    for (const kind of ['installed', 'arch-unsupported', 'download-failed', 'checksum-failed', 'error']) {
+      expect(WslDistroInstallResultSchema.safeParse({ kind }).success).toBe(true);
+    }
+  });
+});
+
+describe('WslInstallInvokeResultSchema (discriminated union)', () => {
+  it('accepts each of the 5 kinds', () => {
+    expect(WslInstallInvokeResultSchema.safeParse({ kind: 'ok' }).success).toBe(true);
+    expect(WslInstallInvokeResultSchema.safeParse({ kind: 'systemd-retry' }).success).toBe(true);
+    expect(WslInstallInvokeResultSchema.safeParse({ kind: 'disk-too-small' }).success).toBe(true);
+    expect(WslInstallInvokeResultSchema.safeParse({ kind: 'our-bug' }).success).toBe(true);
+    expect(WslInstallInvokeResultSchema.safeParse({ kind: 'generic-failure' }).success).toBe(true);
+  });
+
+  it('accepts generic-failure with an optional reason string', () => {
+    expect(
+      WslInstallInvokeResultSchema.safeParse({ kind: 'generic-failure', reason: 'exit code 1' }).success
+    ).toBe(true);
+  });
+
+  it('rejects an unknown kind', () => {
+    expect(WslInstallInvokeResultSchema.safeParse({ kind: 'bogus' }).success).toBe(false);
+  });
+});
+
+describe('WslConfigApplyResultSchema (discriminated union)', () => {
+  it('accepts ok:true', () => {
+    expect(WslConfigApplyResultSchema.safeParse({ ok: true }).success).toBe(true);
+  });
+
+  it('accepts ok:false with a valid reason', () => {
+    expect(
+      WslConfigApplyResultSchema.safeParse({ ok: false, reason: 'invalid_values' }).success
+    ).toBe(true);
+  });
+
+  it('rejects ok:false with an unrecognized reason', () => {
+    expect(WslConfigApplyResultSchema.safeParse({ ok: false, reason: 'nope' }).success).toBe(false);
   });
 });
