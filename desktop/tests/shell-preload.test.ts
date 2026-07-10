@@ -249,6 +249,95 @@ describe('shell-preload Phase-3 cf channel wiring (drift guard vs. shared/ipc-co
   });
 });
 
+describe('shell-preload Phase-4 wsl channel wiring (drift guard vs. shared/ipc-contract.ts)', () => {
+  beforeEach(() => {
+    invokeMock.mockClear();
+    onMock.mockClear();
+    removeListenerMock.mockClear();
+  });
+
+  it('wslDetect invokes the canonical wsl:detect channel with no payload', async () => {
+    await getExposedApi()!.wslDetect();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.wslDetect);
+  });
+
+  it('wslEnable invokes the canonical wsl:enable channel with no payload', async () => {
+    await getExposedApi()!.wslEnable();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.wslEnable);
+  });
+
+  it('wslCheckBios invokes the canonical wsl:checkBios channel with no payload', async () => {
+    await getExposedApi()!.wslCheckBios();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.wslCheckBios);
+  });
+
+  it('wslRestartNow invokes the canonical wsl:restartNow channel with no payload', async () => {
+    await getExposedApi()!.wslRestartNow();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.wslRestartNow);
+  });
+
+  it('wslDistroInstall invokes the canonical wsl:distroInstall channel with no payload', async () => {
+    await getExposedApi()!.wslDistroInstall();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.wslDistroInstall);
+  });
+
+  it('wslInstallInvoke invokes the canonical wsl:installInvoke channel with no payload', async () => {
+    await getExposedApi()!.wslInstallInvoke();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.wslInstallInvoke);
+  });
+
+  it('wslConfigGet invokes the canonical wsl:configGet channel with no payload', async () => {
+    await getExposedApi()!.wslConfigGet();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.wslConfigGet);
+  });
+
+  it('wslConfigApply invokes the canonical wsl:configApply channel with the exact limits payload', async () => {
+    await getExposedApi()!.wslConfigApply({ memoryGb: 8, processors: 4, diskGb: 64 });
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.wslConfigApply, {
+      memoryGb: 8,
+      processors: 4,
+      diskGb: 64,
+    });
+  });
+
+  it('wslOpenExternal invokes the canonical wsl:openExternal channel with { target } (enum, never a URL)', async () => {
+    await getExposedApi()!.wslOpenExternal('bios-help');
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.wslOpenExternal, { target: 'bios-help' });
+  });
+
+  it('onDownloadUpdate subscribes on the canonical wsl:downloadUpdate channel', () => {
+    const cb = vi.fn();
+    getExposedApi()!.onDownloadUpdate(cb);
+    expect(onMock).toHaveBeenCalledWith(CHANNELS.wslDownloadUpdate, expect.any(Function));
+  });
+
+  it('onDownloadUpdate returns an unsubscribe function that removes the exact listener (mirrors onProvisionUpdate)', () => {
+    const cb = vi.fn();
+    const unsubscribe = getExposedApi()!.onDownloadUpdate(cb) as () => void;
+    expect(typeof unsubscribe).toBe('function');
+
+    const registeredListener = onMock.mock.calls[onMock.mock.calls.length - 1][1];
+    unsubscribe();
+    expect(removeListenerMock).toHaveBeenCalledWith(CHANNELS.wslDownloadUpdate, registeredListener);
+  });
+
+  it('onInstallUpdate subscribes on the canonical wsl:installUpdate channel', () => {
+    const cb = vi.fn();
+    getExposedApi()!.onInstallUpdate(cb);
+    expect(onMock).toHaveBeenCalledWith(CHANNELS.wslInstallUpdate, expect.any(Function));
+  });
+
+  it('onInstallUpdate returns an unsubscribe function that removes the exact listener (mirrors onProvisionUpdate)', () => {
+    const cb = vi.fn();
+    const unsubscribe = getExposedApi()!.onInstallUpdate(cb) as () => void;
+    expect(typeof unsubscribe).toBe('function');
+
+    const registeredListener = onMock.mock.calls[onMock.mock.calls.length - 1][1];
+    unsubscribe();
+    expect(removeListenerMock).toHaveBeenCalledWith(CHANNELS.wslInstallUpdate, registeredListener);
+  });
+});
+
 describe('shell-preload DEV-ONLY spike channels (Plan 04 drift guard vs. shell.ipc.ts)', () => {
   // The dev spike channels are deliberately NOT part of the production
   // CHANNELS object (Plan 03 decision), so the canonical source to guard

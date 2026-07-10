@@ -44,9 +44,12 @@ import type {
   DevSpikeApi,
   AuthApi,
   CfApi,
+  WslApi,
   Status,
   DeviceLoginUpdate,
   CfProvisionUpdate,
+  WslDownloadUpdate,
+  WslInstallUpdate,
 } from '../../shared/ipc-contract';
 
 // Mirrors shared/ipc-contract.ts CHANNELS exactly — duplicated here because a
@@ -91,6 +94,22 @@ const CHANNELS = {
   cfProvision: 'cf:provision',
   cfOpenExternal: 'cf:openExternal',
   cfProvisionUpdate: 'cf:provisionUpdate',
+  // Phase 4 (WSL2 provisioning engine): 9 wsl:* invoke channels + the 2
+  // wsl:downloadUpdate/wsl:installUpdate progress pushes (mirror
+  // cfProvisionUpdate). Duplicated here as literals for the same sandbox
+  // reason as the auth/cf blocks above. Kept in sync with the canonical
+  // CHANNELS.wsl* export by tests/shell-preload.test.ts (drift guard).
+  wslDetect: 'wsl:detect',
+  wslEnable: 'wsl:enable',
+  wslCheckBios: 'wsl:checkBios',
+  wslRestartNow: 'wsl:restartNow',
+  wslDistroInstall: 'wsl:distroInstall',
+  wslInstallInvoke: 'wsl:installInvoke',
+  wslConfigGet: 'wsl:configGet',
+  wslConfigApply: 'wsl:configApply',
+  wslOpenExternal: 'wsl:openExternal',
+  wslDownloadUpdate: 'wsl:downloadUpdate',
+  wslInstallUpdate: 'wsl:installUpdate',
 } as const;
 
 // DEV-ONLY spike channels (Plan 04) — local literals for the same sandbox
@@ -101,7 +120,7 @@ const DEV_CHANNELS = {
   devUpdateSim: 'dev:updateSim',
 } as const;
 
-const api: ShellApi & DevSpikeApi & AuthApi & CfApi = {
+const api: ShellApi & DevSpikeApi & AuthApi & CfApi & WslApi = {
   vaultSet: (key, value) => ipcRenderer.invoke(CHANNELS.vaultSet, { key, value }),
   vaultHas: (key) => ipcRenderer.invoke(CHANNELS.vaultHas, { key }),
   getState: () => ipcRenderer.invoke(CHANNELS.stateGet),
@@ -167,6 +186,34 @@ const api: ShellApi & DevSpikeApi & AuthApi & CfApi = {
     ipcRenderer.on(CHANNELS.cfProvisionUpdate, listener);
     return () => {
       ipcRenderer.removeListener(CHANNELS.cfProvisionUpdate, listener);
+    };
+  },
+  // Phase 4 (WSL2 provisioning engine) — no method here ever returns a
+  // secret (the install.sh env vars are read from the vault main-side inside
+  // install-invoke.ts and never cross this boundary); wslOpenExternal sends
+  // an enum target (never a URL); onDownloadUpdate/onInstallUpdate use the
+  // same subscribe-and-return-unsubscribe pattern as onProvisionUpdate.
+  wslDetect: () => ipcRenderer.invoke(CHANNELS.wslDetect),
+  wslEnable: () => ipcRenderer.invoke(CHANNELS.wslEnable),
+  wslCheckBios: () => ipcRenderer.invoke(CHANNELS.wslCheckBios),
+  wslRestartNow: () => ipcRenderer.invoke(CHANNELS.wslRestartNow),
+  wslDistroInstall: () => ipcRenderer.invoke(CHANNELS.wslDistroInstall),
+  wslInstallInvoke: () => ipcRenderer.invoke(CHANNELS.wslInstallInvoke),
+  wslConfigGet: () => ipcRenderer.invoke(CHANNELS.wslConfigGet),
+  wslConfigApply: (limits) => ipcRenderer.invoke(CHANNELS.wslConfigApply, limits),
+  wslOpenExternal: (target) => ipcRenderer.invoke(CHANNELS.wslOpenExternal, { target }),
+  onDownloadUpdate: (cb: (u: WslDownloadUpdate) => void) => {
+    const listener = (_event: IpcRendererEvent, u: WslDownloadUpdate) => cb(u);
+    ipcRenderer.on(CHANNELS.wslDownloadUpdate, listener);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.wslDownloadUpdate, listener);
+    };
+  },
+  onInstallUpdate: (cb: (u: WslInstallUpdate) => void) => {
+    const listener = (_event: IpcRendererEvent, u: WslInstallUpdate) => cb(u);
+    ipcRenderer.on(CHANNELS.wslInstallUpdate, listener);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.wslInstallUpdate, listener);
     };
   },
 };
