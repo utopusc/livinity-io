@@ -622,3 +622,202 @@ button {
    No net-new class needed: each of the two preview rows reuses .card-row (the
    "Your LivOS" / "Your apps" Label caption) + .value-chip (already --mono) for
    the live-computed <sub>.<zone> / chat-<sub>.<zone> value. */
+
+/* ===========================================================================
+   Phase 4 additions (WSL2 provisioning engine) -- additive only, same
+   discipline as the Phase-2/3 blocks above: no existing rule touched, no new
+   color/size custom property introduced. Progress-color discipline (UI-SPEC
+   "Color" section): the determinate fill, the indeterminate sweep, and every
+   done-check below are monochrome -- the box is not live during setup/
+   download/install, so none of this reuses the tray "live" accent; that
+   color means exactly one thing across the whole app and it isn't spent
+   here. Restriction carried forward from Phase 2/3: the faintest fg token
+   never carries text at 12-14px (fails WCAG-AA) -- not used anywhere below.
+   =========================================================================== */
+
+/* ---------- Display (NET-NEW Typography role, 28px/600/1.2) ---------- */
+.display {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--fg);
+}
+
+/* ---------- Setup shell (centered content column, the wide-canvas contract) ----------
+   .setup-shell top-anchors multi-element screens (resource sliders, download/
+   install progress) with a 2xl (48px) inset; .setup-shell--centered vertically
+   centers the calm single-message decision screens (restart, BIOS dead-end)
+   with 3xl (64px) breathing instead. */
+.setup-shell {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 48px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.setup-shell--centered {
+  min-height: calc(100vh - 96px);
+  justify-content: center;
+  padding: 64px 0;
+}
+
+/* ---------- Determinate progress bar (Screen 4 download) ----------
+   Monochrome fill on a --surface-2 track -- see the header note above. */
+.progress-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--fg);
+  border-radius: inherit;
+  transition: width 0.3s ease;
+}
+
+/* ---------- Indeterminate sweep (wait states: detect/enabling/resume) ----------
+   prefers-reduced-motion falls back to a static partial fill, never a frozen
+   spinner implying a hang. */
+.progress-indeterminate .progress-fill {
+  width: 40%;
+  animation: progress-sweep 1.4s ease-in-out infinite;
+}
+@keyframes progress-sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(280%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress-indeterminate .progress-fill {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* ---------- Progress readout (mono size/percent line under the bar) ---------- */
+.progress-readout {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--fg-mute);
+}
+
+/* ---------- Install step-list scaffold (Screen 5, the Phase-5 enrichment slot) ----------
+   pending = faint (--fg-mute, never the faintest token) dot; active reuses
+   .status-dot-pulse; done = monochrome --fg check -- glyph + text, never
+   color alone (WCAG 1.4.1). */
+.step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--fg-dim);
+}
+.step-indicator {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-mute);
+}
+.step-item.done .step-indicator {
+  color: var(--fg);
+}
+.step-item.done {
+  color: var(--fg-dim);
+}
+
+/* ---------- Resource sliders (Screen 3, native <input type=range>) ----------
+   Thumb enlarged to a 20px visual / effective grab area; track stays
+   --surface-2 like the progress bar. */
+.range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  outline: none;
+}
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--fg);
+  border: none;
+  cursor: pointer;
+}
+.range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--fg);
+  border: none;
+  cursor: pointer;
+}
+.range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.range-readout {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+.range-tick {
+  position: relative;
+  height: 4px;
+}
+
+/* ---------- BIOS help-step list (Screen 2, a real <ol>) ----------
+   Styled numbers via ::before counters -- screen-reader-friendly ordered
+   list, no color-only meaning. */
+.help-steps {
+  list-style: none;
+  counter-reset: help-step;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+}
+.help-step {
+  counter-increment: help-step;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--fg-dim);
+}
+.help-step::before {
+  content: counter(help-step);
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

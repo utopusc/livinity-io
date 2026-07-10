@@ -1,0 +1,115 @@
+/**
+ * src/renderer/screens/wsl/wsl-flow.ts
+ *
+ * Pure, React-free routing helpers for the App.tsx WSL2 sub-router (04-10).
+ * Extracted so the sub-router's result->step mapping, its copy formatting,
+ * and its coarse step captions are unit-testable in the node vitest
+ * environment -- mirrors screens/cloudflare/cf-flow.ts's template exactly.
+ *
+ * Nothing here reaches across the preload bridge or imports a UI library --
+ * plain in / plain out, zero IO.
+ */
+
+import type {
+  WslDetectResult,
+  WslDistroInstallResult,
+  WslInstallInvokeResult,
+} from '../../../../shared/ipc-contract';
+
+/**
+ * The WSL2 wizard steps the App.tsx sub-router switches on. mapWslDetectResult
+ * is the phase's SOLE result->step router -- an earlier decide-enable-action
+ * module was dropped as a redundant second router that risked drifting from
+ * this one; every wsl:detect verdict lands on exactly one of these.
+ */
+export type WslStep =
+  | 'wsl-detect'
+  | 'wsl-enable'
+  | 'wsl-waiting'
+  | 'wsl-enabling'
+  | 'wsl-restart'
+  | 'wsl-resume'
+  | 'bios-deadend'
+  | 'resource'
+  | 'downloading'
+  | 'installing'
+  | 'install-outcome'
+  | 'wsl-handoff';
+
+/**
+ * Maps a raw wsl:detect (or wsl:checkBios, which reuses the same result
+ * shape -- a reactive re-check, not a distinct verdict space) verdict to the
+ * next wizard step. TOTAL over all six WslDetectResult kinds -- 'needs-enable'
+ * and 'wsl-missing' both route to the same pre-UAC screen because the
+ * elevated enable call self-bootstraps the WSL feature either way
+ * (WslEnable.tsx does not need to distinguish them).
+ */
+export function mapWslDetectResult(r: WslDetectResult): { step: WslStep } {
+  switch (r.kind) {
+    case 'ready':
+      return { step: 'wsl-handoff' };
+    case 'distro-missing':
+      return { step: 'resource' };
+    case 'needs-enable':
+      return { step: 'wsl-enable' };
+    case 'wsl-missing':
+      return { step: 'wsl-enable' };
+    case 'needs-reboot':
+      return { step: 'wsl-restart' };
+    case 'bios-blocked':
+      return { step: 'bios-deadend' };
+  }
+}
+
+/** The Screen-6 mapped outcome of a wsl:installInvoke call (map-install-exit's InstallVerdict, renderer-side). */
+export type InstallInvokeOutcome = 'done' | 'systemd-retry' | 'disk' | 'our-bug' | 'generic';
+
+/** Maps a raw wsl:installInvoke result to the Screen-6 outcome the sub-router renders. */
+export function mapInstallInvokeResult(r: WslInstallInvokeResult): { outcome: InstallInvokeOutcome } {
+  switch (r.kind) {
+    case 'ok':
+      return { outcome: 'done' };
+    case 'systemd-retry':
+      return { outcome: 'systemd-retry' };
+    case 'disk-too-small':
+      return { outcome: 'disk' };
+    case 'our-bug':
+      return { outcome: 'our-bug' };
+    case 'generic-failure':
+      return { outcome: 'generic' };
+  }
+}
+
+/**
+ * The Screen-4 mapped outcome of a wsl:distroInstall result. Pass-through
+ * shape (mirrors the schema's own fields) -- the disk-too-small case carries
+ * freeGb/driveLetter through for the disk-too-small screen's body copy.
+ */
+export interface DistroInstallOutcome {
+  kind: WslDistroInstallResult['kind'];
+  freeGb?: number;
+  driveLetter?: string;
+}
+
+export function mapDistroInstallResult(r: WslDistroInstallResult): DistroInstallOutcome {
+  if (r.kind === 'disk-too-small') {
+    return { kind: r.kind, freeGb: r.freeGb, driveLetter: r.driveLetter };
+  }
+  return { kind: r.kind };
+}
+
+/**
+ * Formats a Screen-4 download progress readout: "{done} MB of {total} MB ·
+ * {pct}%" (decimal MB, matches the UI-SPEC mono readout template verbatim).
+ */
+export function formatDownloadReadout(doneBytes: number, totalBytes: number): string {
+  const doneMb = Math.round(doneBytes / 1_000_000);
+  const totalMb = Math.round(totalBytes / 1_000_000);
+  const pct = totalBytes > 0 ? Math.round((doneBytes / totalBytes) * 100) : 0;
+  return `${doneMb} MB of ${totalMb} MB · ${pct}%`;
+}
+
+/** The Screen-5 coarse step-list labels (the slot Phase 5 enriches without a layout change). */
+export function installStepCaptions(): string[] {
+  return ['Preparing your system', 'Installing components', 'Starting Livinity'];
+}
