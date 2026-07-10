@@ -45,6 +45,7 @@ import {
 import { CfApiError } from './cf-http';
 import { mergeIngress } from './merge-ingress';
 import { deriveTunnelName } from './derive-tunnel-name';
+import { validateSubLabel } from './validate-sub-label';
 import { vaultGet, vaultSet } from '../storage/secrets-vault';
 // The state store exposes readState/patchState (its real API). They are imported
 // here under the intent-revealing aliases getState/setState the plan's steps +
@@ -149,10 +150,17 @@ export async function provisionTunnelAndDns(
     const { zoneId, zoneName, subLabel, accountId } = st;
     if (!zoneId || !zoneName || !subLabel || !accountId) return { kind: 'network' };
 
-    // apexHost is built from the state-store subLabel, which validateSubLabel already
-    // gated main-side at 03-05 (T-03-06) — the value is trusted here without a
-    // re-validation call. Apex-only per D-13: a catch-everything wildcard host is
-    // never constructed anywhere in this module.
+    // Re-assert the authoritative sub-label gate (T-03-06) on the value provision
+    // ACTUALLY uses, immediately after reading state — do NOT trust that the value
+    // 03-05 selectDomainProbe gated is still the one persisted. The state store's
+    // subLabel is renderer-mutable between the two calls: window.api.setState({...})
+    // validates against StateSchema.partial(), where subLabel is z.string().optional()
+    // (any string passes, no single-label check), so a compromised renderer can
+    // overwrite just the label ('a.b.evil') while keeping the validated account
+    // facts. Re-run validateSubLabel here BEFORE the value forms a hostname or is
+    // persisted as the D-16 LIVOS_DOMAIN install fact. Apex-only per D-13: a
+    // catch-everything wildcard host is never constructed anywhere in this module.
+    if (!validateSubLabel(subLabel).ok) return { kind: 'network' };
     const apexHost = `${subLabel}.${zoneName}`;
     const name = deriveTunnelName({ username: input.username, subLabel });
 

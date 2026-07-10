@@ -172,6 +172,43 @@ describe('provisionTunnelAndDns — accountId guard (read from the 03-05-persist
   });
 });
 
+describe('provisionTunnelAndDns — re-asserts the authoritative sub-label gate on the renderer-mutable state (WR-01 / T-03-06)', () => {
+  it('a dotted/illegal subLabel persisted into state -> network BEFORE any CF write (the gate is re-run here, not just at 03-05)', async () => {
+    // A compromised/XSS'd renderer overwrites ONLY the subLabel field via
+    // window.api.setState (StateSchema.partial() accepts any string) AFTER
+    // selectDomainProbe gated the real one and persisted the validated account facts.
+    getStateMock.mockResolvedValue(state({ subLabel: 'a.b.evil' }));
+
+    const result = await provisionTunnelAndDns({ username: 'drampa' });
+
+    expect(result).toEqual({ kind: 'network' });
+    // no external CF state is touched — the guard runs before the first account write.
+    expect(listTunnelsMock).not.toHaveBeenCalled();
+    expect(createTunnelMock).not.toHaveBeenCalled();
+    expect(createDnsCnameMock).not.toHaveBeenCalled();
+    // and the un-revalidated value is never persisted as the LIVOS_DOMAIN install fact.
+    expect(setStateMock).not.toHaveBeenCalled();
+  });
+
+  it('a subLabel with an illegal charset (uppercase/underscore) is likewise rejected before any CF write', async () => {
+    getStateMock.mockResolvedValue(state({ subLabel: 'Bad_Label' }));
+
+    const result = await provisionTunnelAndDns({ username: 'drampa' });
+
+    expect(result).toEqual({ kind: 'network' });
+    expect(listTunnelsMock).not.toHaveBeenCalled();
+    expect(createTunnelMock).not.toHaveBeenCalled();
+  });
+
+  it('a normal single-label subLabel passes the re-assert and provisions through to ready', async () => {
+    // the beforeEach default subLabel 'liv' is a valid single DNS label.
+    const result = await provisionTunnelAndDns({ username: 'drampa' });
+
+    expect(result.kind).toBe('ready');
+    expect(listTunnelsMock).toHaveBeenCalled();
+  });
+});
+
 describe('provisionTunnelAndDns — tunnel reuse-by-name idempotency (CF-05 / D-14)', () => {
   it('reuses the tunnel when one already exists with the derived name (createTunnel NOT called)', async () => {
     listTunnelsMock.mockResolvedValue([{ id: 'tun-existing', name: DERIVED_NAME }] as TunnelList);
