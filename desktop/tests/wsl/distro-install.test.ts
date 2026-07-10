@@ -189,6 +189,40 @@ describe('distro-install / provisionDistro', () => {
     expect(result).toEqual({ kind: 'installed' });
   });
 
+  it('a failed --install --from-file (non-zero exit) resolves error and NEVER reaches the first-boot verify (WR-03 regression)', async () => {
+    execWslMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === '--list') return LIST_EMPTY;
+      if (args[0] === '--version') return VERSION_2_5;
+      if (args[0] === '--install') return { code: 1, stdout: '', stderr: '' };
+      return OK_EXEC;
+    });
+    getFreeDiskGbMock.mockResolvedValue(50);
+    getVmLaunchErrorMock.mockResolvedValue(null);
+    const deps = fakeDeps();
+    const result = await provisionDistro(undefined, deps);
+    expect(result).toEqual({ kind: 'error' });
+    expect(result.kind).not.toBe('installed');
+    // first-boot verify + sparse must never run against a distro that failed to import
+    expect(getVmLaunchErrorMock).not.toHaveBeenCalled();
+    const sparseCall = execWslMock.mock.calls.find(([args]) => args[0] === '--manage');
+    expect(sparseCall).toBeUndefined();
+  });
+
+  it('a failed --import fallback (spawn-dead null exit) resolves error, NOT installed (WR-03 regression)', async () => {
+    execWslMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === '--list') return LIST_EMPTY;
+      if (args[0] === '--version') return VERSION_2_4_0;
+      if (args[0] === '--import') return { code: null, stdout: '', stderr: '' };
+      return OK_EXEC;
+    });
+    getFreeDiskGbMock.mockResolvedValue(50);
+    getVmLaunchErrorMock.mockResolvedValue(null);
+    const deps = fakeDeps();
+    const result = await provisionDistro(undefined, deps);
+    expect(result).toEqual({ kind: 'error' });
+    expect(getVmLaunchErrorMock).not.toHaveBeenCalled();
+  });
+
   it('FIRST-BOOT VERIFY: a captured 0x80370102 launch error resolves error, NOT installed', async () => {
     execWslMock.mockImplementation(async (args: string[]) => {
       if (args[0] === '--list') return LIST_EMPTY;

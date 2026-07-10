@@ -255,19 +255,27 @@ export async function provisionDistro(
     onUpdate?.({ phase: 'importing' });
     const versionResult = await execWslFn(['--version']);
     const version = parseWslVersion(versionResult.stdout);
-    if (version && compareVersions(version, '2.4.4') >= 0) {
-      await execWslFn([
-        '--install',
-        '--from-file',
-        tmpFile,
-        '--name',
-        DISTRO_NAME,
-        '--no-launch',
-        '--location',
-        installDir,
-      ]);
-    } else {
-      await execWslFn(['--import', DISTRO_NAME, installDir, tmpFile]);
+    const importResult =
+      version && compareVersions(version, '2.4.4') >= 0
+        ? await execWslFn([
+            '--install',
+            '--from-file',
+            tmpFile,
+            '--name',
+            DISTRO_NAME,
+            '--no-launch',
+            '--location',
+            installDir,
+          ])
+        : await execWslFn(['--import', DISTRO_NAME, installDir, tmpFile]);
+    // A failed import (disk filled mid-import, --location rejected, name
+    // conflict, older WSL misparsing the flags) must never fall through to
+    // the first-boot verify — getVmLaunchError on a NONEXISTENT distro
+    // yields no 0x80370102 token, so the failure would be swallowed and the
+    // run misreported as 'installed' (WR-03).
+    if (importResult.code !== 0) {
+      logSafe('wsl.distroInstall', { importFailed: true, code: importResult.code ?? -1 });
+      return { kind: 'error' };
     }
 
     // First-boot verify (Pitfall 3): the just-imported distro is booted ONCE
