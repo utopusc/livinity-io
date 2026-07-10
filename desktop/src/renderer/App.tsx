@@ -203,25 +203,34 @@ export default function App() {
     setCfProvError(null);
     setCfProvPhase(null);
     setCfStep('cf-provisioning');
-    const r = await window.api.cfProvision(takeOver);
-    const outcome = provisionResultToOutcome(r);
-    if (outcome.step === 'cf-ready') {
-      setCfHolder((h) => ({ ...h, summary: outcome.summary }));
-      setCfStep('cf-ready');
-      return;
+    try {
+      const r = await window.api.cfProvision(takeOver);
+      const outcome = provisionResultToOutcome(r);
+      if (outcome.step === 'cf-ready') {
+        setCfHolder((h) => ({ ...h, summary: outcome.summary }));
+        setCfStep('cf-ready');
+        return;
+      }
+      if (outcome.step === 'cf-collision') {
+        await enterCollision();
+        return;
+      }
+      if (outcome.step === 'cf-token') {
+        // WRITE-403 -> precise per-scope screen (never a generic failure).
+        setCfHolder((h) => ({ ...h, scopeRows: outcome.rows, writeStep: outcome.writeStep }));
+        setCfStep('cf-token');
+        return;
+      }
+      // error | network: stay on the provisioning card and show the error state.
+      setCfProvError(outcome.error);
+    } catch {
+      // The main handler is written to always resolve a safe union, so this never
+      // fires in normal operation — but a handler-registration race or a main-side
+      // throw OUTSIDE the handler's own try/catch would otherwise leave the
+      // "Setting things up" spinner running forever with no recovery control (IN-02).
+      // Degrade to the retryable error card like every other failure path.
+      setCfProvError('error');
     }
-    if (outcome.step === 'cf-collision') {
-      await enterCollision();
-      return;
-    }
-    if (outcome.step === 'cf-token') {
-      // WRITE-403 -> precise per-scope screen (never a generic failure).
-      setCfHolder((h) => ({ ...h, scopeRows: outcome.rows, writeStep: outcome.writeStep }));
-      setCfStep('cf-token');
-      return;
-    }
-    // error | network: stay on the provisioning card and show the error state.
-    setCfProvError(outcome.error);
   }
 
   // DomainPicker.onCollision (and a provision-time collision): selectDomainProbe
