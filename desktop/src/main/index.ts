@@ -17,6 +17,7 @@ import { createTray, updateTrayStatus } from './tray/tray-controller';
 import { registerShellIpc } from './ipc/shell.ipc';
 import { registerAuthIpc } from './ipc/auth.ipc';
 import { registerCfIpc } from './ipc/cf.ipc';
+import { registerWslIpc } from './ipc/wsl.ipc';
 import { logSafe, redactSecretLike } from './log';
 import { CHANNELS, type Status } from '../../shared/ipc-contract';
 
@@ -26,16 +27,29 @@ let isQuitting = false;
 
 const isDev = process.env.NODE_ENV === 'development';
 
+// D-04 (hidden auto-resume): a login-triggered `openAtLogin --hidden` launch
+// (armed by wsl:enable/wsl:restartNow, 04-09) must stay in the tray until the
+// WSL sub-router explicitly needs focus for a user-facing step -- never
+// showing the window on this path is what makes the resume feel invisible
+// rather than a surprise window popping up mid-boot.
+const startHidden = process.argv.includes('--hidden');
+
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
 }
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 480,
-    height: 680,
-    minWidth: 420,
-    minHeight: 500,
+    // D-18 (setup canvas): grown from the 480x680 tray window to the roomier
+    // 900x720 setup canvas (min 720x600) that hosts the whole login/CF/WSL
+    // wizard -- a BrowserWindow options-object edit only, per PATTERNS.md
+    // Section H. Everything else in this options object (frame,
+    // backgroundColor, show, webPreferences) is unchanged from Phase 1.
+    width: 900,
+    height: 720,
+    minWidth: 720,
+    minHeight: 600,
+    center: true,
     frame: false,
     backgroundColor: '#050507',
     show: false,
@@ -114,7 +128,12 @@ function createWindow(): void {
   }
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
+    // D-04: a --hidden resume (post-reboot auto-launch) stays in the tray --
+    // the WSL sub-router requests focus itself (via the tray's existing
+    // onOpen / getMainWindow) only when a user-facing step is actually due.
+    if (!startHidden) {
+      mainWindow?.show();
+    }
   });
 
   // CLOSE-TO-TRAY (SHELL-03, corrected vs. agent-app's business-state connection
@@ -225,6 +244,11 @@ if (!gotLock) {
     // renderer (mirrors registerAuthIpc's device-login push). The 6 cf:* invoke
     // handlers are inert until the byod-wizard sub-router calls them.
     registerCfIpc({ getMainWindow });
+
+    // WSL2 provisioning IPC (Phase 4). getMainWindow lets wsl:distroInstall/
+    // wsl:installInvoke forward progress pushes; inert until the App WSL
+    // sub-router calls them.
+    registerWslIpc({ getMainWindow });
 
     logSafe('app.ready', {});
   });
