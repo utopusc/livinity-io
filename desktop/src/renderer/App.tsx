@@ -36,6 +36,13 @@ import {
   type CfStep,
   type CfReadySummary,
 } from './screens/cloudflare/cf-flow';
+import WslEnable from './screens/wsl/WslEnable';
+import BiosDeadEnd from './screens/wsl/BiosDeadEnd';
+import ResourceAllocation from './screens/wsl/ResourceAllocation';
+import Downloading from './screens/wsl/Downloading';
+import InstallingProgress from './screens/wsl/InstallingProgress';
+import InstallOutcome from './screens/wsl/InstallOutcome';
+import { mapWslDetectResult, mapInstallInvokeResult, type WslStep } from './screens/wsl/wsl-flow';
 
 const STATUSES: Status[] = ['installing', 'running', 'stopped', 'error'];
 
@@ -50,7 +57,8 @@ type Screen =
   | 'key-choice'
   | 'byod-wizard'
   | 'pro-wizard'
-  | 'legacy-free-wizard';
+  | 'legacy-free-wizard'
+  | 'wsl-wizard';
 
 const WIZARD_SCREENS: Screen[] = ['byod-wizard', 'pro-wizard', 'legacy-free-wizard'];
 
@@ -81,6 +89,20 @@ const EMPTY_CF_HOLDER: CfHolder = {
   scopeRows: null,
   writeStep: null,
 };
+
+/**
+ * The mapped Screen-6 outcome InstallOutcome.tsx renders, threaded between the
+ * `installing` and `install-outcome` WSL steps -- carries the optional
+ * disk-stop facts / red technical-reason line those variants need.
+ */
+interface WslOutcomeHolder {
+  outcome: 'disk' | 'systemd-retry' | 'our-bug' | 'generic';
+  freeGb?: number;
+  driveLetter?: string;
+  reason?: string;
+}
+
+const EMPTY_WSL_OUTCOME: WslOutcomeHolder = { outcome: 'generic' };
 
 /** UI-SPEC Screen 7 -- neutral badge text, no color-coding by tier. */
 function planBadgeText(screen: Screen): string {
@@ -118,6 +140,18 @@ export default function App() {
   // downgrading back into the collision guard it already cleared).
   const cfTakeOverRef = useRef(false);
 
+  // ---- WSL2 provisioning wizard sub-router state (Phase 4) ----
+  // Active ONLY inside the `wsl-wizard` branch. 'wsl-detect' is both the
+  // initial value AND the sole re-entry target for a live-state re-verify
+  // (D-04/T-04-19) -- BiosDeadEnd's "resolved" and a --hidden post-reboot
+  // resume both route back through it, never straight to a persisted step.
+  const [wslStep, setWslStep] = useState<WslStep>('wsl-detect');
+  const [wslOutcome, setWslOutcome] = useState<WslOutcomeHolder>(EMPTY_WSL_OUTCOME);
+  // True only when this mount discovered a persisted wslStep (a --hidden
+  // auto-resume after the mandatory reboot) -- passed to WslEnable so it
+  // shows "Picking up where we left off" instead of the first-run copy.
+  const [wslResume, setWslResume] = useState(false);
+
   // ---- Phase 1 debug shell state (dev-gated below) ----
   const [status, setStatus] = useState<Status>('stopped');
   const [currentStep, setCurrentStep] = useState<string>('');
@@ -135,6 +169,11 @@ export default function App() {
       setCfHolder(EMPTY_CF_HOLDER);
       setCfProvError(null);
       setCfProvPhase(null);
+      // A fresh login also resets the WSL wizard sub-router -- a re-login
+      // always re-enters the CF/WSL wizards at their own Screen 1.
+      setWslStep('wsl-detect');
+      setWslOutcome(EMPTY_WSL_OUTCOME);
+      setWslResume(false);
       setLoginExpired(route.expired ?? false);
       setRouteError(false);
       setScreen('login');
@@ -151,8 +190,37 @@ export default function App() {
     setScreen(route.kind);
   }
 
+  // Entry point into the WSL2 provisioning sub-router (Phase 5's real
+  // orchestrated handoff seam -- see the byod-wizard cf-handoff / pro /
+  // legacy-free placeholders below, plus the DEV debug-shell trigger).
+  // Always starts at 'wsl-detect' -- a fresh entry re-verifies live state
+  // exactly like a resume does (D-04), it just never had a persisted step.
+  function enterWslWizard(): void {
+    setWslResume(false);
+    setWslStep('wsl-detect');
+    setWslOutcome(EMPTY_WSL_OUTCOME);
+    setScreen('wsl-wizard');
+  }
+
   useEffect(() => {
-    window.api.authGetRoute().then(mapRouteToScreen);
+    window.api.authGetRoute().then(async (route) => {
+      mapRouteToScreen(route);
+      // D-04 resume-to-step: a persisted state.wslStep means a WSL wizard
+      // reboot/resume is in flight (set by wsl:enable/wsl:restartNow,
+      // 04-09) -- ONLY an authenticated, routed destination (never
+      // 'login'/'error') may re-enter it, and it ALWAYS re-verifies live
+      // WSL state via the 'wsl-detect' gate first -- NEVER blindly
+      // continuing straight to the persisted step (T-04-19: a reboot that
+      // silently failed or changed state must not be trusted).
+      if (route.kind !== 'login' && route.kind !== 'error') {
+        const s = await window.api.getState();
+        if (s.wslStep) {
+          setWslResume(true);
+          setWslStep('wsl-detect');
+          setScreen('wsl-wizard');
+        }
+      }
+    });
   }, []);
 
   function handleRoutingRetry(): void {
@@ -188,6 +256,40 @@ export default function App() {
     const unsubscribe = window.api.onProvisionUpdate((u) => setCfProvPhase(u.phase));
     return unsubscribe;
   }, [cfStep]);
+
+  // ---- WSL2 provisioning wizard sub-router handlers (Phase 4) ----
+
+  // The 'wsl-detect' entry gate (D-04): every entry -- the initial mount, a
+  // resumed session, or BiosDeadEnd's "resolved" return -- calls wsl:detect
+  // itself and routes via mapWslDetectResult, the phase's sole result->step
+  // router (wsl-flow.ts). This is a LIVE re-verify, never a blind continue
+  // to whatever step was last persisted (T-04-19). 'needs-reboot' collapses
+  // into the same 'wsl-enable' mount as every other enable-path outcome --
+  // WslEnable owns the restart/resume/resume-failed sub-states internally
+  // (its own on-mount wslDetect() re-verifies a SECOND time, defense in
+  // depth), so there is no separate top-level render block for a raw
+  // 'wsl-restart' WslStep value.
+  useEffect(() => {
+    if (screen !== 'wsl-wizard' || wslStep !== 'wsl-detect') return;
+    let cancelled = false;
+    void window.api.wslDetect().then((result) => {
+      if (cancelled) return;
+      const { step } = mapWslDetectResult(result);
+      setWslStep(step === 'wsl-restart' ? 'wsl-enable' : step);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [screen, wslStep]);
+
+  // Progress-push ownership (IN-06): Downloading.tsx and InstallingProgress.tsx
+  // each subscribe to their own onDownloadUpdate/onInstallUpdate push
+  // (04-08) and unsubscribe on their own unmount -- App does NOT also
+  // subscribe here (unlike the CF onProvisionUpdate effect above, which owns
+  // its push because the provisioning card itself is inline JSX, not a
+  // separate component). Mounting/unmounting the screen below is the only
+  // subscribe/unsubscribe trigger needed; a second subscription here would
+  // double-fire every progress update.
 
   // CfToken.onVerified: a fresh all-scope pass clears any stale provisioning-403
   // rows and advances to the domain picker.
@@ -472,21 +574,32 @@ export default function App() {
 
             {cfStep === 'cf-handoff' && (
               <section className="card">
-                {/* HANDOFF (D-17): in a standalone Phase-3 build "Continue" ends
-                    the CF section here. Phase 5's install orchestrator wires this
-                    button into WSL provisioning — this placeholder IS that
-                    Phase-5 handoff point. */}
+                {/* HANDOFF (D-17): this Continue button is the real Phase-5
+                    orchestration handoff seam -- Phase 5 will eventually decide
+                    WHEN to enter WSL provisioning (resume state, install
+                    orchestration); for now it enters the Phase-4 WSL sub-router
+                    directly, the same engine Phase 5 drives. */}
                 <h1 className="heading">Cloudflare is set up</h1>
                 <p className="note-line" style={{ marginTop: 8 }}>
-                  Installing LivOS on your machine is the next step — coming in a later update.
+                  Next, Livinity sets up LivOS on this PC.
                 </p>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-block"
+                  style={{ marginTop: 24 }}
+                  onClick={enterWslWizard}
+                >
+                  Continue
+                </button>
               </section>
             )}
           </>
         )}
 
-        {/* Pro / legacy-free wizards are out of Phase 3's scope — keep the
-            Phase-2 placeholder card unchanged. */}
+        {/* Pro / legacy-free wizards have no CF step (the platform resolves
+            domain/tunnel server-side) -- their placeholder's Continue is the
+            same Phase-5 handoff seam as the byod-wizard's cf-handoff above,
+            entering the WSL sub-router directly for now. */}
         {(screen === 'pro-wizard' || screen === 'legacy-free-wizard') && (
           <section className="card">
             <div className="card-row" style={{ justifyContent: 'flex-start', gap: 12 }}>
@@ -494,9 +607,131 @@ export default function App() {
               <span className="plan-badge">{planBadgeText(screen)}</span>
             </div>
             <p className="note-line" style={{ marginTop: 16 }}>
-              Setup wizard continues in the next step.
+              Next, Livinity sets up LivOS on this PC.
             </p>
+            <button
+              type="button"
+              className="btn btn-primary btn-block"
+              style={{ marginTop: 24 }}
+              onClick={enterWslWizard}
+            >
+              Continue
+            </button>
           </section>
+        )}
+
+        {/* WSL2 provisioning wizard (Phase 4): detect -> enable/UAC/reboot ->
+            [bios dead-end] -> resource allocation -> download -> install ->
+            outcome. Entered from the byod-wizard cf-handoff / pro / legacy-
+            free placeholders above, the DEV debug-shell trigger below, or a
+            --hidden post-reboot resume (the initial-mount effect above). The
+            AccountChip header (top of this component) persists across every
+            step, same as the CF sub-router. */}
+        {screen === 'wsl-wizard' && (
+          <>
+            {wslStep === 'wsl-detect' && (
+              <div className="setup-shell setup-shell--centered">
+                <section aria-busy="true">
+                  <h1 className="display">
+                    {wslResume ? 'Picking up where we left off' : 'Getting your PC ready'}
+                  </h1>
+                  <p className="note-line" style={{ marginTop: 16 }}>
+                    {wslResume
+                      ? 'Finishing your Windows setup…'
+                      : 'Checking what Livinity needs to set up. This only takes a moment.'}
+                  </p>
+                  <div style={{ marginTop: 24 }}>
+                    <div
+                      className="progress-track progress-indeterminate"
+                      role="progressbar"
+                      aria-label="Working"
+                    >
+                      <div className="progress-fill" />
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {wslStep === 'wsl-enable' && (
+              <WslEnable
+                resume={wslResume}
+                onProceed={() => setWslStep('resource')}
+                onBiosBlocked={() => setWslStep('bios-deadend')}
+                onRestartChosen={(later) => {
+                  if (!later) void window.api.wslRestartNow();
+                }}
+              />
+            )}
+
+            {wslStep === 'bios-deadend' && (
+              <BiosDeadEnd onResolved={() => setWslStep('wsl-detect')} />
+            )}
+
+            {wslStep === 'resource' && (
+              <ResourceAllocation onContinue={() => setWslStep('downloading')} />
+            )}
+
+            {wslStep === 'downloading' && (
+              <Downloading
+                onInstalled={() => setWslStep('installing')}
+                onDiskTooSmall={(freeGb, driveLetter) => {
+                  setWslOutcome({ outcome: 'disk', freeGb, driveLetter });
+                  setWslStep('install-outcome');
+                }}
+                onArchUnsupported={() => {
+                  // Downloading renders the honest ARM64 "not ready for this PC
+                  // yet" block ITSELF and stays on screen (04-08) -- there is no
+                  // matching InstallOutcome variant, and navigating away would
+                  // hide that message. This hook exists only for parent-side
+                  // bookkeeping (04-08's own decision note); no navigation here.
+                }}
+              />
+            )}
+
+            {wslStep === 'installing' && (
+              <InstallingProgress
+                onOutcome={(r) => {
+                  if (r.kind === 'ok') {
+                    setWslStep('wsl-handoff');
+                    return;
+                  }
+                  // mapInstallInvokeResult's 'done' member is only ever produced
+                  // by the 'ok' branch already handled above -- this cast is a
+                  // static-typing artifact of reusing the shared total mapper,
+                  // not a runtime possibility here.
+                  const { outcome } = mapInstallInvokeResult(r) as {
+                    outcome: Exclude<ReturnType<typeof mapInstallInvokeResult>['outcome'], 'done'>;
+                  };
+                  setWslOutcome({
+                    outcome,
+                    reason: r.kind === 'generic-failure' ? r.reason : undefined,
+                  });
+                  setWslStep('install-outcome');
+                }}
+              />
+            )}
+
+            {wslStep === 'install-outcome' && (
+              <InstallOutcome
+                {...wslOutcome}
+                onRetry={() => setWslStep(wslOutcome.outcome === 'disk' ? 'downloading' : 'installing')}
+              />
+            )}
+
+            {wslStep === 'wsl-handoff' && (
+              <section className="card">
+                {/* Phase 4's job ends here -- Phase 5 owns the resumable
+                    install state machine + the "your box is live" success
+                    screen (INSTALL-01/04); this is a placeholder terminal
+                    state only. */}
+                <h1 className="heading">LivOS is installing on your PC</h1>
+                <p className="note-line" style={{ marginTop: 8 }}>
+                  This runs in the background — Livinity will let you know when it's ready.
+                </p>
+              </section>
+            )}
+          </>
         )}
 
         {import.meta.env.DEV && (
@@ -561,6 +796,13 @@ export default function App() {
                 </button>
               </div>
               {spikeMessage && <p className="result-line">{spikeMessage}</p>}
+            </section>
+
+            <section className="card">
+              <h2 className="card-title">WSL provisioning (dev)</h2>
+              <button className="btn btn-primary" onClick={enterWslWizard}>
+                Start WSL provisioning (dev)
+              </button>
             </section>
           </>
         )}
