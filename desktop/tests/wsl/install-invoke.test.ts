@@ -137,7 +137,7 @@ describe('install-invoke / runInstall', () => {
     expect(hasSecretValue(args, [FIXTURE_API_KEY])).toBe(false);
   });
 
-  it('spawns hidden+detached+unref root wsl invocation of bash /tmp/livinity-install.sh', async () => {
+  it('spawns hidden+detached+unref root wsl invocation reading install.sh via stdin (keeps BASH_SOURCE empty so install.sh self-bootstraps)', async () => {
     vaultFixture();
     const promise = runInstall({ tier: 'pro' }, undefined, { spawn: spawnMock as never });
     await waitForSpawnCall(spawnMock);
@@ -147,7 +147,10 @@ describe('install-invoke / runInstall', () => {
     const [cmd, args, opts] = spawnMock.mock.calls[0] as [string, string[], Record<string, unknown>];
     expect(cmd).toBe('wsl.exe');
     expect(args).toEqual(expect.arrayContaining(['-d', 'livinity', '-u', 'root']));
-    expect(args.join(' ')).toContain('bash /tmp/livinity-install.sh');
+    expect(args.join(' ')).toContain('bash < /tmp/livinity-install.sh');
+    // Regression guard for the exit-2 bootstrap bug: the file-path form makes
+    // install.sh resolve helpers next to /tmp and die before doing anything.
+    expect(args.join(' ')).not.toMatch(/bash \/tmp\/livinity-install\.sh/);
     expect(opts.windowsHide).toBe(true);
     expect(opts.detached).toBe(true);
     expect(opts.stdio).toEqual(['ignore', 'pipe', 'pipe']);

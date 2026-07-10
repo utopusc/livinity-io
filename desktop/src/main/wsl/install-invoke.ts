@@ -165,7 +165,13 @@ export async function runInstall(
         '--',
         'bash',
         '-lc',
-        'curl -fsSL https://livinity.io/install.sh -o /tmp/livinity-install.sh && bash /tmp/livinity-install.sh',
+        // `bash < file` (stdin), NOT `bash file`: with a real script path in
+        // BASH_SOURCE, install.sh's helper resolution false-positives into its
+        // cloned-repo mode and dies with exit 2 looking for /tmp/install/*
+        // (live-diagnosed 2026-07-10). Stdin keeps BASH_SOURCE empty so the
+        // self-bootstrap mode downloads the helpers, while download-to-file
+        // first (curl -f && ...) still guards against running a partial script.
+        'curl -fsSL https://livinity.io/install.sh -o /tmp/livinity-install.sh && bash < /tmp/livinity-install.sh',
       ],
       {
         windowsHide: true,
