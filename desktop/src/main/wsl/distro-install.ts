@@ -47,17 +47,15 @@ import type { WslDistroInstallResult, WslDownloadUpdate } from '../../../shared/
 
 const DISTRO_NAME = 'livinity';
 
-// Cross-team CI dependency (D-07/Claude's Discretion): the ACTUAL livinity.wsl
-// rootfs artifact + its published sha256 are produced by a SEPARATE release
-// pipeline (same GitHub Releases channel the app's own auto-update already
-// uses) — building that artifact is explicitly out of THIS phase's scope
-// (04-RESEARCH.md Don't-Hand-Roll). This orchestrator's download/verify/
-// import machinery is built and unit-tested against these manifest
-// constants; they MUST be updated to the real published values before the
-// 04-10 operator UAT can succeed end-to-end against a live artifact.
+// Rootfs manifest (D-07/D-08): the artifact lives on a PINNED rootfs-vN tag —
+// deliberately NOT /releases/latest, which the box-update channel owns (a new
+// app release would silently drop a latest-attached asset). Shipping a new
+// rootfs = publish a new rootfs-vN release (slim Ubuntu-24.04, systemd baked,
+// uid-1000 `livinity` user, no OOBE; see the rootfs-v1 release notes for the
+// full recipe) and update BOTH constants here in the same commit.
 const ROOTFS_RELEASE_URL =
-  'https://github.com/livinity-io/livos/releases/latest/download/livinity.wsl';
-const ROOTFS_SHA256 = 'PUBLISHED_BY_CI_RELEASE_PIPELINE_PLACEHOLDER_SHA256';
+  'https://github.com/utopusc/livinity-io/releases/download/rootfs-v1/livinity.wsl';
+const ROOTFS_SHA256 = 'c04c09cd2a715c1c2d515baeed7c1433856105d400f268fd584ea5a6ba7ffb78';
 
 // No arm64 rootfs artifact exists yet (D-09) — an arm64 machine is blocked
 // gracefully rather than attempting a corrupt x64-on-arm64 import.

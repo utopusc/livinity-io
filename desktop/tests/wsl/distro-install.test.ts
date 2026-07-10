@@ -53,7 +53,7 @@ function fakeDeps(over: Partial<ProvisionDistroDeps> = {}): Partial<ProvisionDis
     downloadFile: vi.fn(async (_url, _dest, onProgress) => {
       onProgress?.(100, 100);
     }),
-    sha256File: vi.fn(async () => 'PUBLISHED_BY_CI_RELEASE_PIPELINE_PLACEHOLDER_SHA256'),
+    sha256File: vi.fn(async () => 'c04c09cd2a715c1c2d515baeed7c1433856105d400f268fd584ea5a6ba7ffb78'),
     unlinkFile: vi.fn(async () => undefined),
     ...over,
   };
