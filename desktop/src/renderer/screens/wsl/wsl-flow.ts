@@ -48,7 +48,17 @@ export type WslStep =
 export function mapWslDetectResult(r: WslDetectResult): { step: WslStep } {
   switch (r.kind) {
     case 'ready':
-      return { step: 'wsl-handoff' };
+      // A registered `livinity` distro does NOT prove LivOS is installed
+      // INSIDE it — a distro imported by a prior run whose install.sh never
+      // finished is still 'ready' here (live-diagnosed 2026-07-10: an empty
+      // reused distro dead-ended the wizard on the handoff placeholder,
+      // install.sh never ran). Per D-11 (reuse the distro, re-run install.sh
+      // idempotently) route through the SAME setup pipeline as a fresh
+      // machine — resource -> downloading (provisionDistro reuses, no
+      // re-import) -> installing. Detecting a genuinely-complete install and
+      // short-circuiting to a live dashboard is Phase 5's job (install marker),
+      // not something Phase-4 detect can prove from distro-registration alone.
+      return { step: 'resource' };
     case 'distro-missing':
       return { step: 'resource' };
     case 'needs-enable':

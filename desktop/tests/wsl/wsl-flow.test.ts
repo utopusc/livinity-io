@@ -14,8 +14,8 @@ import type {
 } from '../../shared/ipc-contract';
 
 describe('mapWslDetectResult (WSL2 sub-router SOLE result->step router)', () => {
-  it('ready -> wsl-handoff (WSL usable + distro present -> proceed to install handoff)', () => {
-    expect(mapWslDetectResult({ kind: 'ready' })).toEqual({ step: 'wsl-handoff' });
+  it('ready -> resource (distro registered != LivOS installed; D-11 reuse + idempotent reinstall, never dead-end at handoff)', () => {
+    expect(mapWslDetectResult({ kind: 'ready' })).toEqual({ step: 'resource' });
   });
 
   it('distro-missing -> resource (WSL ready, need to allocate + install)', () => {
