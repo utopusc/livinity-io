@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import { createTray, updateTrayStatus } from './tray/tray-controller';
 import { registerShellIpc } from './ipc/shell.ipc';
 import { registerAuthIpc } from './ipc/auth.ipc';
+import { registerCfIpc } from './ipc/cf.ipc';
 import { logSafe, redactSecretLike } from './log';
 import { CHANNELS, type Status } from '../../shared/ipc-contract';
 
@@ -218,6 +219,12 @@ if (!gotLock) {
     });
 
     registerAuthIpc({ getMainWindow });
+
+    // CF (Free/BYOD) wizard IPC (Phase 3). getMainWindow is passed so the
+    // cf:provision handler can forward cf:provisionUpdate progress pushes to the
+    // renderer (mirrors registerAuthIpc's device-login push). The 6 cf:* invoke
+    // handlers are inert until the byod-wizard sub-router calls them.
+    registerCfIpc({ getMainWindow });
 
     logSafe('app.ready', {});
   });
