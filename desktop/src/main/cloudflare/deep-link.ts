@@ -16,14 +16,18 @@
 
 // The 3 least-privilege scopes, frozen `as const` (T-03-03: exactly 3, no 4th).
 //
-// Keys are a CANDIDATE — VERIFIED/patched at plan 03-10 via
-// GET /user/tokens/permission_groups. The always-visible 3-scope checklist
-// card (D-02) is the load-bearing fallback regardless: a template URL only
-// pre-fills the form, so verification (decideScopeVerdict) is the real gate.
+// Keys VERIFIED 2026-07-09 against the working create-token-via-URL template
+// used by cloudflare-tunnel-ingress-controller (a deployed CF Tunnel tool) +
+// corroborating search: the Cloudflare-Tunnel edit key is `argotunnel` (NO
+// underscore) — the earlier `argo_tunnel` candidate was wrong. `dns`/edit and
+// `zone`/read confirmed. The always-visible 3-scope checklist card (D-02) is
+// the load-bearing fallback regardless: a template URL only pre-fills the form,
+// so verification (decideScopeVerdict) is the real gate. Only the account-scoped
+// pre-fill BEHAVIOR (does it actually populate) remains a manual browser check.
 export const CF_TOKEN_SCOPES = [
-  { key: 'argo_tunnel', type: 'edit' }, // Account · Cloudflare Tunnel · Edit
-  { key: 'dns', type: 'edit' }, //         Zone · DNS · Edit
-  { key: 'zone', type: 'read' }, //        Zone · Zone · Read
+  { key: 'argotunnel', type: 'edit' }, // Account · Cloudflare Tunnel · Edit
+  { key: 'dns', type: 'edit' }, //        Zone · DNS · Edit
+  { key: 'zone', type: 'read' }, //       Zone · Zone · Read
 ] as const;
 
 export function buildTokenDeepLink(): string {

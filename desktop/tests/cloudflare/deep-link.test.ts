@@ -30,7 +30,7 @@ describe('buildTokenDeepLink', () => {
     expect(raw).not.toBeNull();
     // URLSearchParams.get already url-decodes; JSON.parse yields the array.
     expect(JSON.parse(raw as string)).toEqual([
-      { key: 'argo_tunnel', type: 'edit' },
+      { key: 'argotunnel', type: 'edit' },
       { key: 'dns', type: 'edit' },
       { key: 'zone', type: 'read' },
     ]);
@@ -38,7 +38,8 @@ describe('buildTokenDeepLink', () => {
 
   it('exposes exactly 3 frozen scope entries (T-03-03: no 4th scope)', () => {
     expect(CF_TOKEN_SCOPES).toHaveLength(3);
-    expect(CF_TOKEN_SCOPES.map((s) => s.key)).toEqual(['argo_tunnel', 'dns', 'zone']);
+    // `argotunnel` (no underscore) is the verified CF Tunnel permission-group key.
+    expect(CF_TOKEN_SCOPES.map((s) => s.key)).toEqual(['argotunnel', 'dns', 'zone']);
   });
 
   it('is deterministic (same output on repeat calls)', () => {
