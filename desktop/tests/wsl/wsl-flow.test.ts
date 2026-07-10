@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   mapWslDetectResult,
+  mapWslEnableResult,
   mapInstallInvokeResult,
   mapDistroInstallResult,
   formatDownloadReadout,
@@ -48,6 +49,24 @@ describe('mapWslDetectResult (WSL2 sub-router SOLE result->step router)', () => 
     for (const kind of kinds) {
       expect(() => mapWslDetectResult({ kind } as WslDetectResult)).not.toThrow();
     }
+  });
+});
+
+describe('mapWslEnableResult (WslEnable.tsx screen-safe outcome rename)', () => {
+  it('needs-reboot -> restart-required', () => {
+    expect(mapWslEnableResult({ kind: 'needs-reboot' })).toEqual({ outcome: 'restart-required' });
+  });
+
+  it('bios-blocked -> bios-deadend', () => {
+    expect(mapWslEnableResult({ kind: 'bios-blocked' })).toEqual({ outcome: 'bios-deadend' });
+  });
+
+  it('declined -> declined', () => {
+    expect(mapWslEnableResult({ kind: 'declined' })).toEqual({ outcome: 'declined' });
+  });
+
+  it('error -> error', () => {
+    expect(mapWslEnableResult({ kind: 'error' })).toEqual({ outcome: 'error' });
   });
 });
 

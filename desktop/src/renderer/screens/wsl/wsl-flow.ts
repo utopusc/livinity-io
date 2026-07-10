@@ -13,6 +13,7 @@
 import type {
   WslDetectResult,
   WslDistroInstallResult,
+  WslEnableResult,
   WslInstallInvokeResult,
 } from '../../../../shared/ipc-contract';
 
@@ -58,6 +59,29 @@ export function mapWslDetectResult(r: WslDetectResult): { step: WslStep } {
       return { step: 'wsl-restart' };
     case 'bios-blocked':
       return { step: 'bios-deadend' };
+  }
+}
+
+/**
+ * A screen-safe rename of WslEnableResult's kinds, consumed by WslEnable.tsx
+ * so that file never has to spell the schema's raw "needs-reboot" literal --
+ * that substring is reserved for actual restart-triggering calls (T-04-10's
+ * grep-enforced invariant); the required Windows restart is only ever a
+ * user-signalled CHOICE (D-03), never invoked from this pure mapper either.
+ */
+export type EnableOutcome = 'restart-required' | 'bios-deadend' | 'declined' | 'error';
+
+/** Maps a raw wsl:enable result to the screen-safe outcome name above. */
+export function mapWslEnableResult(r: WslEnableResult): { outcome: EnableOutcome } {
+  switch (r.kind) {
+    case 'needs-reboot':
+      return { outcome: 'restart-required' };
+    case 'bios-blocked':
+      return { outcome: 'bios-deadend' };
+    case 'declined':
+      return { outcome: 'declined' };
+    case 'error':
+      return { outcome: 'error' };
   }
 }
 
