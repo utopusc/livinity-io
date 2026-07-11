@@ -29,17 +29,22 @@
  * elements (05-UI-SPEC: a status readout and a CTA don't compete for the
  * same job the "one accent per screen" rule protects against).
  *
- * Security (T-05-06): "Open your Livinity" calls flowOpenBox() with NO
- * arguments -- the URL is derived MAIN-SIDE from trusted state, never a
- * renderer-supplied address, so a compromised renderer can't open an
- * arbitrary URL through shell.openExternal. The `address` prop here is
- * DISPLAY-ONLY (T-05-01: a non-secret public hostname).
+ * Security (T-05-06/T-06-16): "Open your Livinity" calls engineOpenInBrowser()
+ * with NO arguments -- the URL is derived + D-10 stopped-gated MAIN-SIDE
+ * (openInBrowserGated, 06-07 via 06-10), never a renderer-supplied address, so
+ * a compromised renderer can't open an arbitrary URL through
+ * shell.openExternal, and a stopped engine explains instead of opening a dead
+ * 1033 tab. This replaces the former ungated legacy open-in-browser channel
+ * (06-11). The `address` prop here is DISPLAY-ONLY (T-05-01: a non-secret
+ * public hostname).
  */
 
 import { useEffect, useRef, useState } from 'react';
 
 interface LiveSuccessProps {
   address: string | null;
+  /** 06-11 (D-12 additive-only): routes to the Settings control room. */
+  onManage: () => void;
 }
 
 const COPIED_RESET_MS = 1800;
@@ -140,7 +145,7 @@ function CopyButton({ value, label }: { value: string; label: string }): React.R
   );
 }
 
-export default function LiveSuccess({ address }: LiveSuccessProps) {
+export default function LiveSuccess({ address, onManage }: LiveSuccessProps) {
   return (
     <div className="setup-shell">
       <section>
@@ -203,9 +208,20 @@ export default function LiveSuccess({ address }: LiveSuccessProps) {
           type="button"
           className="btn btn-primary btn-block"
           style={{ marginTop: 32 }}
-          onClick={() => void window.api.flowOpenBox()}
+          onClick={() => void window.api.engineOpenInBrowser()}
         >
           Open your Livinity
+        </button>
+
+        {/* D-12 additive-only: the tiny "Manage your server" link, routing to the
+            06-09 Settings control room -- verbatim text match to its Display title. */}
+        <button
+          type="button"
+          className="link-mute"
+          style={{ marginTop: 24 }}
+          onClick={onManage}
+        >
+          Manage your server
         </button>
       </section>
     </div>

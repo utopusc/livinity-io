@@ -49,6 +49,7 @@ import ConnectedCheck from './screens/ConnectedCheck';
 import LiveSuccess from './screens/LiveSuccess';
 import UnifiedError from './screens/UnifiedError';
 import NoTunnel410 from './screens/NoTunnel410';
+import Settings from './screens/Settings';
 
 const STATUSES: Status[] = ['installing', 'running', 'stopped', 'error'];
 
@@ -68,7 +69,8 @@ type Screen =
   | 'connected-check'
   | 'live-success'
   | 'orchestrator-error'
-  | 'no-tunnel-410';
+  | 'no-tunnel-410'
+  | 'settings';
 
 const WIZARD_SCREENS: Screen[] = ['byod-wizard', 'pro-wizard', 'legacy-free-wizard'];
 
@@ -493,6 +495,17 @@ export default function App() {
     return unsubscribe;
   }, []);
 
+  // Phase 6 (06-11): the tray "Settings" row and the D-10 stopped-open gate
+  // (engine.ts's focusSettingsInstead, via engine:openDashboard/openInBrowser)
+  // both route the main window here via this SAME push -- the sole place
+  // `engine:navigate` is translated into a screen switch.
+  useEffect(() => {
+    const unsubscribe = window.api.onEngineNavigate((nav) => {
+      if (nav.screen === 'settings') setScreen('settings');
+    });
+    return unsubscribe;
+  }, []);
+
   async function handleSimulate(s: Status): Promise<void> {
     await window.api.simulateStatus(s);
     setStatus(s);
@@ -841,7 +854,14 @@ export default function App() {
             the former bb30bd92 wsl-handoff card. Reached from
             ConnectedCheck.onConnected above or directly from a D-03
             fast-path FlowRoute (kind: 'live-success', applyFlowRoute). */}
-        {screen === 'live-success' && <LiveSuccess address={liveAddress} />}
+        {screen === 'live-success' && (
+          <LiveSuccess address={liveAddress} onManage={() => setScreen('settings')} />
+        )}
+
+        {/* DASH-03: the control-room screen, reached from the tray "Settings" row /
+            the D-10 stopped-open gate (both via the onEngineNavigate push above) or
+            LiveSuccess's "Manage your server" link. */}
+        {screen === 'settings' && <Settings onSignedOut={() => setScreen('login')} />}
 
         {/* Screen 3 (INSTALL-03; D-07): the unified orchestrator-error
             screen -- reached from a live resume's stale-CF-token FlowRoute
