@@ -48,7 +48,13 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import type { EngineStatusResult, WslResourceInfo, Account } from '../../../shared/ipc-contract';
+import type {
+  EngineStatusResult,
+  WslResourceInfo,
+  Account,
+  UpdateUiState,
+  DiagnosticsExportResult,
+} from '../../../shared/ipc-contract';
 import {
   statusBadge,
   toggleLabel,
@@ -57,6 +63,7 @@ import {
   resourceSavePlan,
   type Transition,
 } from './settings-flow';
+import { updateStatusLine, checkButton, restartCta } from './update-flow';
 import { RangeRow } from './wsl/ResourceAllocation';
 
 interface SettingsProps {
@@ -190,38 +197,72 @@ export default function Settings({ onSignedOut }: SettingsProps) {
   // ---- Account ----
   const [account, setAccount] = useState<Account | null>(null);
 
+  // ---- About & updates ----
+  const [updateState, setUpdateState] = useState<UpdateUiState | null>(null);
+  const [restarting, setRestarting] = useState(false);
+
+  // ---- Diagnostics ----
+  const [exporting, setExporting] = useState(false);
+  const [diagOutcome, setDiagOutcome] = useState<DiagnosticsExportResult['outcome'] | null>(null);
+  const [logsFolderFailed, setLogsFolderFailed] = useState(false);
+  const diagSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   async function refreshStatus(): Promise<void> {
     const result = await window.api.engineGetStatus();
     setStatus(result);
   }
 
   useEffect(() => {
-    void refreshStatus();
-    window.api.wslConfigGet().then((info) => {
-      setResourceInfo(info);
-      const values = {
-        memoryGb: info.current.memoryGb ?? info.recommended.memoryGb,
-        processors: info.current.processors ?? info.recommended.processors,
-        // No "current" diskGb round-trips on the wire (disk is a creation-time
-        // cap, not an applied .wslconfig value) -- fall back to recommended.
-        diskGb: info.recommended.diskGb,
-      };
-      setLoaded(values);
-      setMemoryGb(values.memoryGb);
-      setProcessors(values.processors);
-      setDiskGb(values.diskGb);
-    });
-    window.api.authGetAccount().then(setAccount);
-    window.api.getState().then((state) => setStartAtLogin(state.startAtLogin ?? true));
+    // IN-06 fold-in: every independent mount-time fetch below gains a `.catch`
+    // so a single rejected snapshot (e.g. a transient IPC failure) never
+    // surfaces as an unhandled promise rejection -- each card simply keeps
+    // its initial/empty state until the next successful refresh.
+    void refreshStatus().catch(() => {});
+    window.api
+      .wslConfigGet()
+      .then((info) => {
+        setResourceInfo(info);
+        const values = {
+          memoryGb: info.current.memoryGb ?? info.recommended.memoryGb,
+          processors: info.current.processors ?? info.recommended.processors,
+          // No "current" diskGb round-trips on the wire (disk is a creation-time
+          // cap, not an applied .wslconfig value) -- fall back to recommended.
+          diskGb: info.recommended.diskGb,
+        };
+        setLoaded(values);
+        setMemoryGb(values.memoryGb);
+        setProcessors(values.processors);
+        setDiskGb(values.diskGb);
+      })
+      .catch(() => {});
+    window.api.authGetAccount().then(setAccount).catch(() => {});
+    window.api
+      .getState()
+      .then((state) => setStartAtLogin(state.startAtLogin ?? true))
+      .catch(() => {});
+    window.api.updateGetState().then(setUpdateState).catch(() => {});
     // Runs once on mount -- each independent card fetches its own snapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     const unsubscribe = window.api.onStatusChanged(() => {
-      void refreshStatus();
+      void refreshStatus().catch(() => {});
     });
     return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = window.api.onUpdateStatus((s) => {
+      setUpdateState(s);
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (diagSavedTimerRef.current) clearTimeout(diagSavedTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -237,6 +278,11 @@ export default function Settings({ onSignedOut }: SettingsProps) {
   const toggle = toggleLabel({ desired, transition });
   const restart = restartLabel({ transition });
   const msAgo = status?.lastCheckedAt != null ? Date.now() - status.lastCheckedAt : null;
+
+  // About & updates card display state -- consumed verbatim from update-flow.ts (07-02),
+  // never re-derived inline (UI-SPEC Pure-Decider-Seams).
+  const checkUpdateBtn = updateState ? checkButton(updateState) : null;
+  const restartUpdateCta = updateState ? restartCta(updateState) : null;
 
   async function runAction(kind: Exclude<Transition, null>): Promise<void> {
     setTransition(kind);
@@ -337,6 +383,65 @@ export default function Settings({ onSignedOut }: SettingsProps) {
   async function handleSignOut(): Promise<void> {
     await window.api.authSignOut();
     onSignedOut();
+  }
+
+  async function handleCheckForUpdates(): Promise<void> {
+    try {
+      await window.api.updateCheck();
+    } catch {
+      // Background-style call -- the real state (including a 'failed' status
+      // line) arrives via the onUpdateStatus push, not this call's return.
+    }
+  }
+
+  async function handleRestartToUpdate(): Promise<void> {
+    setRestarting(true);
+    try {
+      const result = await window.api.updateRestartToInstall();
+      if (!result.ok || result.blocked) {
+        // Blocked by the D-06 install-gate (or a raw failure) -- the button
+        // returns to its normal state; the install-gate note (driven by
+        // updateState.installBlocked) already explains why.
+        setRestarting(false);
+      }
+      // On a real accepted restart the window closes shortly after -- no
+      // further local state change needed (Screen Notes §5: no interstitial).
+    } catch {
+      setRestarting(false);
+    }
+  }
+
+  async function handleExportDiagnostics(): Promise<void> {
+    if (exporting) return;
+    setExporting(true);
+    setDiagOutcome(null);
+    if (diagSavedTimerRef.current) clearTimeout(diagSavedTimerRef.current);
+    try {
+      const result = await window.api.supportExportDiagnostics();
+      if (result.outcome === 'cancelled') {
+        // Save dialog cancelled -- no message, button simply re-enables.
+        setDiagOutcome(null);
+      } else {
+        setDiagOutcome(result.outcome);
+        if (result.outcome === 'saved') {
+          diagSavedTimerRef.current = setTimeout(() => setDiagOutcome(null), SAVED_RESET_MS);
+        }
+      }
+    } catch {
+      setDiagOutcome('failed');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleOpenLogsFolder(): Promise<void> {
+    setLogsFolderFailed(false);
+    try {
+      const result = await window.api.engineOpenLogsFolder();
+      setLogsFolderFailed(!result.ok);
+    } catch {
+      setLogsFolderFailed(true);
+    }
   }
 
   return (
@@ -546,15 +651,99 @@ export default function Settings({ onSignedOut }: SettingsProps) {
           </div>
         </div>
 
-        {/* ---------- Diagnostics (bottom, tertiary) ---------- */}
-        <button
-          type="button"
-          className="link-mute"
-          style={{ marginTop: 24 }}
-          onClick={() => void window.api.engineOpenLogsFolder()}
-        >
-          Open logs folder
-        </button>
+        {/* ---------- About & updates card (07-09/UI-SPEC §3) ---------- */}
+        <div className="card" style={{ marginTop: 24 }}>
+          <h2 className="card-title">ABOUT & UPDATES</h2>
+          <div className="card-row">
+            <span className="field-label">Version</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="value-chip mono">{updateState?.currentVersion ?? ''}</span>
+              <span className="plan-badge">Beta</span>
+            </div>
+          </div>
+          {updateState && (
+            <div aria-live="polite">
+              <p className="note-line" style={{ marginTop: 12 }}>
+                {updateStatusLine(updateState)}
+              </p>
+            </div>
+          )}
+          {(checkUpdateBtn?.visible || restartUpdateCta?.visible) && (
+            <div className="btn-row" style={{ marginTop: 16 }}>
+              {checkUpdateBtn?.visible && (
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={checkUpdateBtn.disabled}
+                  onClick={() => void handleCheckForUpdates()}
+                >
+                  {checkUpdateBtn.label}
+                </button>
+              )}
+              {restartUpdateCta?.visible && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={restartUpdateCta.disabled || restarting}
+                  onClick={() => void handleRestartToUpdate()}
+                >
+                  {restarting ? 'Restarting…' : restartUpdateCta.label}
+                </button>
+              )}
+            </div>
+          )}
+          {restartUpdateCta?.visible && restartUpdateCta.blockedNote && !restarting && (
+            <p className="note-line" style={{ marginTop: 8 }}>
+              {restartUpdateCta.blockedNote}
+            </p>
+          )}
+        </div>
+
+        {/* ---------- Diagnostics card (07-09/UI-SPEC §4) ---------- */}
+        <div className="card" style={{ marginTop: 24 }}>
+          <h2 className="card-title">DIAGNOSTICS</h2>
+          <p className="note-line">
+            If something isn't working, export a diagnostics file to share with support.
+            Passwords, keys, and tokens are removed automatically.
+          </p>
+          <div className="btn-row" style={{ marginTop: 16 }}>
+            <button
+              type="button"
+              className="btn"
+              disabled={exporting}
+              onClick={() => void handleExportDiagnostics()}
+            >
+              {exporting ? 'Exporting…' : 'Export diagnostics…'}
+            </button>
+            <button type="button" className="link-mute" onClick={() => void handleOpenLogsFolder()}>
+              Open logs folder
+            </button>
+          </div>
+          <div aria-live="polite">
+            {diagOutcome === 'saved' && (
+              <p className="note-line" style={{ marginTop: 12 }}>
+                Saved.
+              </p>
+            )}
+            {diagOutcome === 'folder-fallback' && (
+              <p className="note-line" style={{ marginTop: 12 }}>
+                Couldn't package the file — Livinity opened a folder with the diagnostics files
+                instead.
+              </p>
+            )}
+            {diagOutcome === 'failed' && (
+              <p className="error-line" style={{ marginTop: 12 }}>
+                Couldn't export diagnostics — try again.
+              </p>
+            )}
+            {logsFolderFailed && (
+              <p className="note-line" style={{ marginTop: 12 }}>
+                Couldn't open the logs folder — try again.
+              </p>
+            )}
+          </div>
+        </div>
+
       </section>
     </div>
   );
