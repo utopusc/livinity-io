@@ -143,6 +143,10 @@ const CHANNELS = {
   engineOpenInBrowser: 'engine:openInBrowser',
   engineOpenLogsFolder: 'engine:openLogsFolder',
   engineNavigate: 'engine:navigate',
+  // engineGetUsage — tray quick-panel addendum (post-Phase-7). Same duplication
+  // discipline as the rest of this block. Kept in sync with the canonical
+  // CHANNELS.engineGetUsage export by tests/shell-preload.test.ts (drift guard).
+  engineGetUsage: 'engine:getUsage',
   // Phase 7 (packaging / auto-update / diagnostics / clean uninstall): 3
   // update:* invoke channels + the update:status push, 1 support:* invoke
   // channel, 4 remove:* invoke channels + the remove:progress push.
@@ -309,6 +313,9 @@ const api: ShellApi &
       ipcRenderer.removeListener(CHANNELS.engineNavigate, listener);
     };
   },
+  // Tray quick-panel addendum (post-Phase-7) — no renderer payload; the D-10-style
+  // passive-while-stopped discipline lives entirely main-side (usage-probe.ts).
+  engineGetUsage: () => ipcRenderer.invoke(CHANNELS.engineGetUsage),
   // Phase 7 (packaging / auto-update / diagnostics / clean uninstall) — no
   // method here ever returns a secret; updateRestartToInstall returns
   // {ok, blocked} (never a URL/token); removeOpenCfDashboard sends NO
