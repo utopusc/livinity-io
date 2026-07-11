@@ -433,6 +433,98 @@ describe('shell-preload Phase-6 engine channel wiring (drift guard vs. shared/ip
   });
 });
 
+describe('shell-preload Phase-7 update channel wiring (drift guard vs. shared/ipc-contract.ts)', () => {
+  beforeEach(() => {
+    invokeMock.mockClear();
+    onMock.mockClear();
+    removeListenerMock.mockClear();
+  });
+
+  it('updateGetState invokes the canonical update:getState channel with no payload', async () => {
+    await getExposedApi()!.updateGetState();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.updateGetState);
+  });
+
+  it('updateCheck invokes the canonical update:check channel with no payload', async () => {
+    await getExposedApi()!.updateCheck();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.updateCheck);
+  });
+
+  it('updateRestartToInstall invokes the canonical update:restartToInstall channel with no payload', async () => {
+    await getExposedApi()!.updateRestartToInstall();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.updateRestartToInstall);
+  });
+
+  it('onUpdateStatus subscribes on the canonical update:status channel', () => {
+    const cb = vi.fn();
+    getExposedApi()!.onUpdateStatus(cb);
+    expect(onMock).toHaveBeenCalledWith(CHANNELS.updateStatus, expect.any(Function));
+  });
+
+  it('onUpdateStatus returns an unsubscribe function that removes the exact listener (mirrors onEngineNavigate)', () => {
+    const cb = vi.fn();
+    const unsubscribe = getExposedApi()!.onUpdateStatus(cb) as () => void;
+    expect(typeof unsubscribe).toBe('function');
+
+    const registeredListener = onMock.mock.calls[onMock.mock.calls.length - 1][1];
+    unsubscribe();
+    expect(removeListenerMock).toHaveBeenCalledWith(CHANNELS.updateStatus, registeredListener);
+  });
+});
+
+describe('shell-preload Phase-7 support/remove channel wiring (drift guard vs. shared/ipc-contract.ts)', () => {
+  beforeEach(() => {
+    invokeMock.mockClear();
+    onMock.mockClear();
+    removeListenerMock.mockClear();
+  });
+
+  it('supportExportDiagnostics invokes the canonical support:exportDiagnostics channel with no payload', async () => {
+    await getExposedApi()!.supportExportDiagnostics();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.supportExportDiagnostics);
+  });
+
+  it('removeGetOffer invokes the canonical remove:getOffer channel with no payload (D-12, booleans only)', async () => {
+    await getExposedApi()!.removeGetOffer();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.removeGetOffer);
+  });
+
+  it('removeExecute invokes the canonical remove:execute channel with the exact choices payload', async () => {
+    await getExposedApi()!.removeExecute({ cf: true, distro: true, clear: false });
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.removeExecute, {
+      cf: true,
+      distro: true,
+      clear: false,
+    });
+  });
+
+  it('removeFinish invokes the canonical remove:finish channel with no payload', async () => {
+    await getExposedApi()!.removeFinish();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.removeFinish);
+  });
+
+  it('removeOpenCfDashboard invokes the canonical remove:openCfDashboard channel with no payload (B2, never a renderer URL)', async () => {
+    await getExposedApi()!.removeOpenCfDashboard();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.removeOpenCfDashboard);
+  });
+
+  it('onRemoveProgress subscribes on the canonical remove:progress channel', () => {
+    const cb = vi.fn();
+    getExposedApi()!.onRemoveProgress(cb);
+    expect(onMock).toHaveBeenCalledWith(CHANNELS.removeProgress, expect.any(Function));
+  });
+
+  it('onRemoveProgress returns an unsubscribe function that removes the exact listener (mirrors onEngineNavigate)', () => {
+    const cb = vi.fn();
+    const unsubscribe = getExposedApi()!.onRemoveProgress(cb) as () => void;
+    expect(typeof unsubscribe).toBe('function');
+
+    const registeredListener = onMock.mock.calls[onMock.mock.calls.length - 1][1];
+    unsubscribe();
+    expect(removeListenerMock).toHaveBeenCalledWith(CHANNELS.removeProgress, registeredListener);
+  });
+});
+
 describe('shell-preload DEV-ONLY spike channels (Plan 04 drift guard vs. shell.ipc.ts)', () => {
   // The dev spike channels are deliberately NOT part of the production
   // CHANNELS object (Plan 03 decision), so the canonical source to guard

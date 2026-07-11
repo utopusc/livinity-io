@@ -47,12 +47,18 @@ import type {
   WslApi,
   FlowApi,
   EngineApi,
+  UpdateApi,
+  SupportApi,
+  RemoveApi,
   Status,
   DeviceLoginUpdate,
   CfProvisionUpdate,
   WslDownloadUpdate,
   WslInstallUpdate,
   EngineNavigate,
+  UpdateUiState,
+  RemoveChoices,
+  RemoveProgress,
 } from '../../shared/ipc-contract';
 
 // Mirrors shared/ipc-contract.ts CHANNELS exactly — duplicated here because a
@@ -137,6 +143,23 @@ const CHANNELS = {
   engineOpenInBrowser: 'engine:openInBrowser',
   engineOpenLogsFolder: 'engine:openLogsFolder',
   engineNavigate: 'engine:navigate',
+  // Phase 7 (packaging / auto-update / diagnostics / clean uninstall): 3
+  // update:* invoke channels + the update:status push, 1 support:* invoke
+  // channel, 4 remove:* invoke channels + the remove:progress push.
+  // Duplicated here as literals for the same sandbox reason as the auth/cf/
+  // wsl/flow/engine blocks above. Kept in sync with the canonical
+  // CHANNELS.update*/support*/remove* export by tests/shell-preload.test.ts
+  // (drift guard).
+  updateGetState: 'update:getState',
+  updateCheck: 'update:check',
+  updateRestartToInstall: 'update:restartToInstall',
+  updateStatus: 'update:status',
+  supportExportDiagnostics: 'support:exportDiagnostics',
+  removeGetOffer: 'remove:getOffer',
+  removeExecute: 'remove:execute',
+  removeFinish: 'remove:finish',
+  removeProgress: 'remove:progress',
+  removeOpenCfDashboard: 'remove:openCfDashboard',
 } as const;
 
 // DEV-ONLY spike channels (Plan 04) — local literals for the same sandbox
@@ -147,7 +170,16 @@ const DEV_CHANNELS = {
   devUpdateSim: 'dev:updateSim',
 } as const;
 
-const api: ShellApi & DevSpikeApi & AuthApi & CfApi & WslApi & FlowApi & EngineApi = {
+const api: ShellApi &
+  DevSpikeApi &
+  AuthApi &
+  CfApi &
+  WslApi &
+  FlowApi &
+  EngineApi &
+  UpdateApi &
+  SupportApi &
+  RemoveApi = {
   vaultSet: (key, value) => ipcRenderer.invoke(CHANNELS.vaultSet, { key, value }),
   vaultHas: (key) => ipcRenderer.invoke(CHANNELS.vaultHas, { key }),
   getState: () => ipcRenderer.invoke(CHANNELS.stateGet),
@@ -266,12 +298,44 @@ const api: ShellApi & DevSpikeApi & AuthApi & CfApi & WslApi & FlowApi & EngineA
     ipcRenderer.invoke(CHANNELS.engineSetStartAtLogin, { enabled }),
   engineOpenDashboard: () => ipcRenderer.invoke(CHANNELS.engineOpenDashboard),
   engineOpenInBrowser: () => ipcRenderer.invoke(CHANNELS.engineOpenInBrowser),
-  engineOpenLogsFolder: () => ipcRenderer.invoke(CHANNELS.engineOpenLogsFolder),
+  // IN-03: the {ok} shape reflects shell.openPath's resolved error string
+  // (main-side, engine.ipc.ts) — '' -> {ok:true}, a non-empty error -> {ok:false}.
+  engineOpenLogsFolder: (): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(CHANNELS.engineOpenLogsFolder),
   onEngineNavigate: (cb: (nav: EngineNavigate) => void) => {
     const listener = (_event: IpcRendererEvent, nav: EngineNavigate) => cb(nav);
     ipcRenderer.on(CHANNELS.engineNavigate, listener);
     return () => {
       ipcRenderer.removeListener(CHANNELS.engineNavigate, listener);
+    };
+  },
+  // Phase 7 (packaging / auto-update / diagnostics / clean uninstall) — no
+  // method here ever returns a secret; updateRestartToInstall returns
+  // {ok, blocked} (never a URL/token); removeOpenCfDashboard sends NO
+  // renderer-supplied URL (the handler maps NoPayload to a FIXED literal,
+  // the cf:openExternal enum-allowlist pattern); onUpdateStatus/
+  // onRemoveProgress use the same subscribe-and-return-unsubscribe pattern
+  // as onEngineNavigate/onProvisionUpdate.
+  updateGetState: () => ipcRenderer.invoke(CHANNELS.updateGetState),
+  updateCheck: () => ipcRenderer.invoke(CHANNELS.updateCheck),
+  updateRestartToInstall: () => ipcRenderer.invoke(CHANNELS.updateRestartToInstall),
+  onUpdateStatus: (cb: (s: UpdateUiState) => void) => {
+    const listener = (_event: IpcRendererEvent, s: UpdateUiState) => cb(s);
+    ipcRenderer.on(CHANNELS.updateStatus, listener);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.updateStatus, listener);
+    };
+  },
+  supportExportDiagnostics: () => ipcRenderer.invoke(CHANNELS.supportExportDiagnostics),
+  removeGetOffer: () => ipcRenderer.invoke(CHANNELS.removeGetOffer),
+  removeExecute: (choices: RemoveChoices) => ipcRenderer.invoke(CHANNELS.removeExecute, choices),
+  removeFinish: () => ipcRenderer.invoke(CHANNELS.removeFinish),
+  removeOpenCfDashboard: () => ipcRenderer.invoke(CHANNELS.removeOpenCfDashboard),
+  onRemoveProgress: (cb: (p: RemoveProgress) => void) => {
+    const listener = (_event: IpcRendererEvent, p: RemoveProgress) => cb(p);
+    ipcRenderer.on(CHANNELS.removeProgress, listener);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.removeProgress, listener);
     };
   },
 };
