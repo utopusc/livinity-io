@@ -49,7 +49,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { EngineStatusResult, WslResourceInfo, Account } from '../../../shared/ipc-contract';
-import { statusBadge, toggleLabel, restartLabel, formatLastChecked, type Transition } from './settings-flow';
+import {
+  statusBadge,
+  toggleLabel,
+  restartLabel,
+  formatLastChecked,
+  resourceSavePlan,
+  type Transition,
+} from './settings-flow';
 import { RangeRow } from './wsl/ResourceAllocation';
 
 interface SettingsProps {
@@ -272,7 +279,18 @@ export default function Settings({ onSignedOut }: SettingsProps) {
     setResourceSaving(true);
     setResourceSaveFailed(false);
     setResourceSaved(false);
+    // WR-09: wsl:configApply ends in a whole-VM `wsl --shutdown`. While the
+    // engine is desired-running the save is an ORCHESTRATED stop -> apply ->
+    // start (surfaced through the existing 'restarting' transition UI), so
+    // supervision never has to mop up an "unexpected" death -- no dead engine
+    // behind a "Saved." line, no spurious "recovered automatically" toast.
+    const plan = resourceSavePlan(desired);
+    const restartsEngine = plan.includes('engine-start');
     try {
+      if (plan.includes('engine-stop')) {
+        setTransition('restarting');
+        await window.api.engineStop();
+      }
       const limits = resourceInfo.cpuRamTunable ? { memoryGb, processors, diskGb } : { diskGb };
       const result = await window.api.wslConfigApply(limits);
       if (result.ok) {
@@ -284,10 +302,24 @@ export default function Settings({ onSignedOut }: SettingsProps) {
       } else {
         setResourceSaveFailed(true);
       }
+      if (restartsEngine) {
+        // ALWAYS bring the engine back -- it was deliberately stopped above,
+        // even when the apply itself reported a failure.
+        await window.api.engineStart();
+      }
     } catch {
       setResourceSaveFailed(true);
+      if (restartsEngine) {
+        try {
+          await window.api.engineStart();
+        } catch {
+          // refreshStatus below re-syncs whatever state we actually landed in.
+        }
+      }
     } finally {
+      if (restartsEngine) setTransition(null);
       setResourceSaving(false);
+      void refreshStatus();
     }
   }
 
@@ -439,10 +471,12 @@ export default function Settings({ onSignedOut }: SettingsProps) {
                 />
               </div>
 
-              {/* Honest VM-global disclosure (D-17) -- verbatim reuse, unconditional. */}
+              {/* Honest VM-global disclosure (D-17) + WR-09 save-restart disclosure. */}
               <p className="note-line" style={{ marginTop: 16 }}>
                 Memory and processor limits apply to every Linux environment on your PC, not just
                 Livinity — that's how Windows' WSL works. Disk space is used by Livinity only.
+                Saving briefly restarts Windows' Linux layer (including any other Linux
+                environments you run) — if your engine is running, Livinity restarts it for you.
               </p>
 
               {resourceSaving && (

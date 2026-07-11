@@ -120,6 +120,28 @@ export function restartLabel({ transition }: RestartLabelInput): ActionLabel {
   return { label: 'Restart engine', disabled: transition !== null };
 }
 
+/**
+ * WR-09: `wsl:configApply` ends in a whole-VM `wsl --shutdown` (the only way
+ * CPU/RAM limits take effect -- a pre-existing, accepted Phase-4 behavior in
+ * a context where nothing was running yet). Saving while the engine runs must
+ * therefore be an ORCHESTRATED stop -> apply -> start, never a bare apply:
+ * a bare apply silently killed the holder/livinityd/cloudflared/dashboard,
+ * showed "Saved." over a dead engine for up to ~45s, and the eventual
+ * tick-respawn fired a spurious "recovered automatically" toast as the direct
+ * result of the user's own Save click.
+ */
+export type ResourceSaveStep = 'engine-stop' | 'config-apply' | 'engine-start';
+
+/** Pure plan: desired-running => bracket the apply with an engine stop/start
+ * (surfaced as the existing 'restarting' transition UI); desired-stopped =>
+ * the apply alone (nothing to bounce, nothing to bring back). */
+export function resourceSavePlan(desired: 'running' | 'stopped'): ResourceSaveStep[] {
+  if (desired === 'running') {
+    return ['engine-stop', 'config-apply', 'engine-start'];
+  }
+  return ['config-apply'];
+}
+
 /** Below this threshold (ms), the last-checked line reads "just now" rather than "0s ago". */
 const JUST_NOW_THRESHOLD_MS = 2000;
 

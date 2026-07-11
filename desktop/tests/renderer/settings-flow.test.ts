@@ -4,6 +4,7 @@ import {
   toggleLabel,
   restartLabel,
   formatLastChecked,
+  resourceSavePlan,
 } from '../../src/renderer/screens/settings-flow';
 import { ENGINE_TRANSITION_LABELS } from '../../shared/ipc-contract';
 
@@ -193,5 +194,23 @@ describe('formatLastChecked', () => {
 
   it('45000ms -> "Last checked 45s ago"', () => {
     expect(formatLastChecked(45000)).toBe('Last checked 45s ago');
+  });
+});
+
+/**
+ * WR-09 table: `wsl:configApply` ends in a whole-VM `wsl --shutdown`, so a
+ * Save under a desired-RUNNING engine must be the exact orchestrated
+ * stop -> apply -> start sequence (never a bare apply that silently kills the
+ * engine and lets the 45s tick-respawn mop up with a spurious "recovered
+ * automatically" toast). A desired-stopped engine gets the bare apply -- there
+ * is nothing to bounce and NOTHING may auto-start a deliberately-stopped engine.
+ */
+describe('resourceSavePlan (WR-09)', () => {
+  it('desired=running -> exact ordered plan [engine-stop, config-apply, engine-start]', () => {
+    expect(resourceSavePlan('running')).toEqual(['engine-stop', 'config-apply', 'engine-start']);
+  });
+
+  it('desired=stopped -> [config-apply] only -- the save must NEVER auto-start a deliberately-stopped engine', () => {
+    expect(resourceSavePlan('stopped')).toEqual(['config-apply']);
   });
 });
