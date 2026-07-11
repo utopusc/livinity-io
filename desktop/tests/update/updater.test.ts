@@ -288,6 +288,37 @@ describe('checkForUpdates', () => {
     expect(() => checkForUpdates()).not.toThrow();
     expect(fake.checkForUpdatesSpy).not.toHaveBeenCalled();
   });
+
+  it("WR-01: a REJECTED checkForUpdates() promise is consumed — no unhandledRejection reaches the process (electron-updater 6.8.9 emits 'error' AND rethrows)", async () => {
+    const fake = new FakeUpdater();
+    fake.checkForUpdatesSpy.mockImplementation(() => Promise.reject(new Error('offline')));
+    initUpdater({ isPackaged: () => true, updater: fake, getVersion: () => '0.1.0' });
+
+    const onUnhandled = vi.fn();
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      expect(() => checkForUpdates()).not.toThrow();
+      // Two macrotask turns: Node emits 'unhandledRejection' at the end of the
+      // turn in which a rejection is left handler-less — pre-fix this fires.
+      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
+      expect(onUnhandled).not.toHaveBeenCalled();
+      expect(logSafeMock).toHaveBeenCalledWith('update.check', { rejected: true });
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
+  it('WR-01: a SYNCHRONOUSLY-throwing checkForUpdates() is still caught (exception breadcrumb path intact)', () => {
+    const fake = new FakeUpdater();
+    fake.checkForUpdatesSpy.mockImplementation(() => {
+      throw new Error('sync boom');
+    });
+    initUpdater({ isPackaged: () => true, updater: fake, getVersion: () => '0.1.0' });
+
+    expect(() => checkForUpdates()).not.toThrow();
+    expect(logSafeMock).toHaveBeenCalledWith('update.check', { exception: true });
+  });
 });
 
 describe('other events reduce through nextStatus + pushStatus', () => {

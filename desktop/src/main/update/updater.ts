@@ -216,11 +216,21 @@ export function getUpdateState(): UpdateUiState {
 }
 
 /** Manual "Check for updates" trigger (and the target of `scheduleChecks`'
- * cadence timer). A no-op before `initUpdater` runs or while unpackaged. */
+ * cadence timer). A no-op before `initUpdater` runs or while unpackaged.
+ *
+ * WR-01: electron-updater 6.8.9's `AppUpdater.checkForUpdates()` REJECTS its
+ * returned promise on every failed check (it emits 'error' AND rethrows,
+ * AppUpdater.js:269-273) — the 'error' event already drives the status rail
+ * via the listener wired in `initUpdater`, but the rethrown rejection must be
+ * consumed here or every offline poll (+3min, each 6h tick) produces an
+ * UnhandledPromiseRejection in main. `Promise.resolve(...)` normalizes the
+ * `unknown`-typed return so a fake/sync updater is equally safe. */
 export function checkForUpdates(): void {
   if (!activeUpdater || currentState.state === 'dev') return;
   try {
-    activeUpdater.checkForUpdates();
+    Promise.resolve(activeUpdater.checkForUpdates()).catch(() => {
+      logSafe('update.check', { rejected: true });
+    });
   } catch {
     logSafe('update.check', { exception: true });
   }
