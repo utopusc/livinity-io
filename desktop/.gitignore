@@ -4,6 +4,11 @@ release/
 spike/spike-log.jsonl
 spike/*.pid
 
+# update-smoke harness (07-11, D-07) runtime output -- local build/log
+# artifacts, never committed.
+scripts/update-smoke/.smoke/
+scripts/update-smoke/watcher-log.jsonl
+
 # electron-builder's buildResources dir (icon.png + installer.nsh) is SOURCE,
 # not build output -- the root .gitignore's generic `build/` rule (meant for
 # build-output dirs elsewhere in the monorepo) would otherwise shadow it.
