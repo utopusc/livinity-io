@@ -3,3 +3,9 @@ dist/
 release/
 spike/spike-log.jsonl
 spike/*.pid
+
+# electron-builder's buildResources dir (icon.png + installer.nsh) is SOURCE,
+# not build output -- the root .gitignore's generic `build/` rule (meant for
+# build-output dirs elsewhere in the monorepo) would otherwise shadow it.
+!build/
+!build/**

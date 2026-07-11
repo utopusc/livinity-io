@@ -2,11 +2,19 @@ appId: io.livinity.desktop
 productName: Livinity Desktop
 directories:
   output: release
+  buildResources: build
 files:
   - dist/**/*
-  - "!spike/**/*"
+  - "!**/*.map"
 win:
   target: nsis
+  icon: build/icon.png
 nsis:
   oneClick: true
   perMachine: false
+  deleteAppDataOnUninstall: false
+  artifactName: Livinity-Desktop-Setup-${version}.${ext}
+  include: build/installer.nsh
+publish:
+  provider: generic
+  url: https://github.com/utopusc/livinity-io/releases/download/desktop-latest

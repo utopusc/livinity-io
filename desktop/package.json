@@ -1,6 +1,6 @@
 {
   "name": "livinity-desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Livinity Desktop - GUI-only Windows installer/tray for self-hosted LivOS",
   "main": "dist/main/src/main/index.js",
   "private": true,
