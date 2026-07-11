@@ -226,6 +226,47 @@ describe('engine (Task 1: desired-state lifecycle)', () => {
     });
   });
 
+  describe('WR-05: install-in-flight gate on user engine actions', () => {
+    it('stopEngine during a live install => NO patchState/killHolder/--terminate (never tear down a mid-provisioning distro)', async () => {
+      isInstallInFlightMock.mockReturnValue(true);
+      const setStatus = vi.fn();
+      const closeDashboard = vi.fn();
+
+      await stopEngine({ setStatus, closeDashboard });
+
+      expect(patchStateMock).not.toHaveBeenCalled();
+      expect(killHolderMock).not.toHaveBeenCalled();
+      expect(execWslMock).not.toHaveBeenCalled();
+      expect(setStatus).not.toHaveBeenCalled();
+      expect(closeDashboard).not.toHaveBeenCalled();
+      expect(logSafeMock).toHaveBeenCalledWith('engine.stop', { blockedByInstall: true });
+    });
+
+    it('restartEngine during a live install => NO killHolder/--terminate/boot', async () => {
+      isInstallInFlightMock.mockReturnValue(true);
+      const setStatus = vi.fn();
+
+      await restartEngine({ setStatus });
+
+      expect(killHolderMock).not.toHaveBeenCalled();
+      expect(execWslMock).not.toHaveBeenCalled();
+      expect(adoptOrSpawnHolderMock).not.toHaveBeenCalled();
+      expect(logSafeMock).toHaveBeenCalledWith('engine.restart', { blockedByInstall: true });
+    });
+
+    it('startEngine during a live install => NO patchState/spawn/self-heal (symmetry)', async () => {
+      isInstallInFlightMock.mockReturnValue(true);
+      const setStatus = vi.fn();
+
+      await startEngine({ setStatus });
+
+      expect(patchStateMock).not.toHaveBeenCalled();
+      expect(adoptOrSpawnHolderMock).not.toHaveBeenCalled();
+      expect(execWslMock).not.toHaveBeenCalled();
+      expect(logSafeMock).toHaveBeenCalledWith('engine.start', { blockedByInstall: true });
+    });
+  });
+
   describe('getEngineStatus', () => {
     it('returns {state,address,lastCheckedAt,desiredState} shaped for EngineStatusResultSchema, carrying no secret', async () => {
       readStateMock.mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'running' });

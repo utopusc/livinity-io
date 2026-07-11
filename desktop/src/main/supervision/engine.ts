@@ -220,6 +220,14 @@ export async function stopEngine(deps: Partial<EngineDeps> = {}): Promise<void> 
 
 async function stopEngineBody(d: EngineDeps): Promise<void> {
   try {
+    // WR-05: IN-06's install gate applies to USER actions too — the tray rows
+    // stay clickable during a live 15-20min install.sh run, and one Stop click
+    // must never run `wsl --terminate livinity` against a mid-provisioning
+    // distro (a destroyed multi-GB run + a half-provisioned distro left behind).
+    if (d.isInstallInFlight()) {
+      logSafe('engine.stop', { blockedByInstall: true });
+      return;
+    }
     await d.patchState({ engineDesiredState: 'stopped' });
     await terminateLivinity(d);
     d.setStatus('stopped');
@@ -238,6 +246,11 @@ export async function startEngine(deps: Partial<EngineDeps> = {}): Promise<void>
 
 async function startEngineBody(d: EngineDeps): Promise<void> {
   try {
+    // WR-05 (symmetry with stop/restart): never boot-and-heal mid-install.
+    if (d.isInstallInFlight()) {
+      logSafe('engine.start', { blockedByInstall: true });
+      return;
+    }
     await d.patchState({ engineDesiredState: 'running' });
     const healthy = await bootAndVerify(d);
     d.setStatus(healthy ? 'running' : 'error');
@@ -256,6 +269,12 @@ export async function restartEngine(deps: Partial<EngineDeps> = {}): Promise<voi
 
 async function restartEngineBody(d: EngineDeps): Promise<void> {
   try {
+    // WR-05: a Restart click mid-install is the most likely poke (the tray can
+    // look wrong during a first install) — never `--terminate` a live install.
+    if (d.isInstallInFlight()) {
+      logSafe('engine.restart', { blockedByInstall: true });
+      return;
+    }
     await terminateLivinity(d);
     const healthy = await bootAndVerify(d);
     d.setStatus(healthy ? 'running' : 'error');
