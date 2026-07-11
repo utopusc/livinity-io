@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
  * connected-probe.test.ts mocks every real-module collaborator
@@ -37,6 +37,7 @@ import {
   isInstalledAndHealthy,
   deriveAddress,
   runConnectedProbe,
+  defaultFetchOk,
 } from '../../src/main/orchestrator/connected-probe';
 
 /** Tiny timing window shared by every bounded-retry test -- keeps the suite fast. */
@@ -134,6 +135,39 @@ describe('connected-probe', () => {
       const readState = vi.fn().mockRejectedValue(new Error('disk error'));
       const address = await deriveAddress({ readState });
       expect(address).toBeNull();
+    });
+  });
+
+  describe('defaultFetchOk (WR-03: the global-fetch branch is timeout-bounded)', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('THE REGRESSION ROW: passes an AbortSignal to global fetch -- pre-fix the primary branch had NO timeout (undici default: 300s)', async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({ status: 200 });
+      vi.stubGlobal('fetch', fetchSpy);
+
+      await expect(defaultFetchOk('https://liv.example.com/')).resolves.toBe(true);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, opts] = fetchSpy.mock.calls[0];
+      expect(url).toBe('https://liv.example.com/');
+      expect(opts?.signal).toBeInstanceOf(AbortSignal);
+      // A live countdown signal (AbortSignal.timeout), not an already-fired one.
+      expect((opts.signal as AbortSignal).aborted).toBe(false);
+    });
+
+    it('a non-200 status resolves false', async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({ status: 502 });
+      vi.stubGlobal('fetch', fetchSpy);
+      await expect(defaultFetchOk('https://liv.example.com/')).resolves.toBe(false);
+    });
+
+    it('a rejected fetch (e.g. the AbortSignal timeout firing) resolves false -- never throws, never hangs the probe loop', async () => {
+      const timeoutError = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+      const fetchSpy = vi.fn().mockRejectedValue(timeoutError);
+      vi.stubGlobal('fetch', fetchSpy);
+      await expect(defaultFetchOk('https://liv.example.com/')).resolves.toBe(false);
     });
   });
 

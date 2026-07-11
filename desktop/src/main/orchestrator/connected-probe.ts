@@ -63,11 +63,17 @@ function sleep(ms: number): Promise<void> {
  * (Electron's Node-based main process, Node 18+), falling back to
  * `node:https` when it is not. Any failure -- network error, timeout, a
  * non-200 status -- resolves `false`; this NEVER throws and NEVER hangs past
- * `REACH_FETCH_TIMEOUT_MS`.
+ * `REACH_FETCH_TIMEOUT_MS`. The global-fetch branch (the one that ALWAYS
+ * runs in Electron's main process) is bounded by `AbortSignal.timeout` --
+ * WR-03: without it, undici's 300s default header/body timeouts let a
+ * black-holed connection stall a single probe iteration for minutes, and
+ * `runConnectedProbe`'s deadline is only checked BETWEEN iterations.
+ * Exported for the WR-03 regression test only -- production callers go
+ * through `runConnectedProbe`'s injectable `deps.fetch`.
  */
-function defaultFetchOk(url: string): Promise<boolean> {
+export function defaultFetchOk(url: string): Promise<boolean> {
   if (typeof fetch === 'function') {
-    return fetch(url)
+    return fetch(url, { signal: AbortSignal.timeout(REACH_FETCH_TIMEOUT_MS) })
       .then((res) => res.status === 200)
       .catch(() => false);
   }
