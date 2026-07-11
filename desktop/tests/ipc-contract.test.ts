@@ -20,6 +20,10 @@ import {
   FailureVerdictSchema,
   FlowRouteSchema,
   ConnectedProbeResultSchema,
+  EngineStatusResultSchema,
+  EngineNavigateSchema,
+  ENGINE_TRANSITION_LABELS,
+  type EngineApi,
 } from '../shared/ipc-contract';
 
 describe('VaultKeySchema', () => {
@@ -457,5 +461,133 @@ describe('Phase 5 flow contract', () => {
     expect(FailureVerdictSchema.safeParse({ screen: 'bogus', retryStep: 'installing' }).success).toBe(
       false
     );
+  });
+});
+
+describe('Phase 6 engine contract', () => {
+  // (f) T-05-01 leak-guard — same recursive-key scan reused verbatim from the
+  // Phase-5 block above, applied to the new engine-surface schemas.
+  function hasSecretKey(value: unknown): boolean {
+    if (value === null || typeof value !== 'object') return false;
+    for (const [k, v] of Object.entries(value)) {
+      if (/token|secret|apiKey/i.test(k)) return true;
+      if (hasSecretKey(v)) return true;
+    }
+    return false;
+  }
+
+  it('(a) StateSchema still parses with NEITHER new field (backward compat)', () => {
+    expect(StateSchema.safeParse({ version: 1, currentStep: '' }).success).toBe(true);
+  });
+
+  it('(a) StateSchema round-trips engineDesiredState + startAtLogin together', () => {
+    expect(
+      StateSchema.safeParse({
+        version: 1,
+        currentStep: 'welcome',
+        engineDesiredState: 'stopped',
+        startAtLogin: false,
+      }).success
+    ).toBe(true);
+  });
+
+  it('(a) StateSchema rejects an out-of-enum engineDesiredState (Tampering mitigation, T-06-01)', () => {
+    expect(
+      StateSchema.safeParse({
+        version: 1,
+        currentStep: 'welcome',
+        engineDesiredState: 'paused',
+      }).success
+    ).toBe(false);
+  });
+
+  it('(b) every engine: CHANNELS value matches its key (drift sanity), incl. engineOpenInBrowser', () => {
+    const channels = CHANNELS as Record<string, string>;
+    const engineKeys = Object.keys(channels).filter((k) => channels[k].startsWith('engine:'));
+    expect(engineKeys.length).toBe(9);
+    for (const key of engineKeys) {
+      const action = channels[key].slice('engine:'.length);
+      // key is "engine" + Capitalized action, e.g. engineOpenInBrowser -> 'engine:openInBrowser'
+      expect(key.toLowerCase()).toBe(`engine${action}`.toLowerCase());
+    }
+    expect(CHANNELS.engineStart).toBe('engine:start');
+    expect(CHANNELS.engineStop).toBe('engine:stop');
+    expect(CHANNELS.engineRestart).toBe('engine:restart');
+    expect(CHANNELS.engineGetStatus).toBe('engine:getStatus');
+    expect(CHANNELS.engineSetStartAtLogin).toBe('engine:setStartAtLogin');
+    expect(CHANNELS.engineOpenDashboard).toBe('engine:openDashboard');
+    expect(CHANNELS.engineOpenInBrowser).toBe('engine:openInBrowser');
+    expect(CHANNELS.engineOpenLogsFolder).toBe('engine:openLogsFolder');
+    expect(CHANNELS.engineNavigate).toBe('engine:navigate');
+  });
+
+  it('(c) EngineApi surface has engineOpenInBrowser (compile-time fixture)', () => {
+    const fixture = {
+      engineStart: async () => ({ ok: true }),
+      engineStop: async () => ({ ok: true }),
+      engineRestart: async () => ({ ok: true }),
+      engineGetStatus: async () => ({
+        state: 'running' as const,
+        address: null,
+        lastCheckedAt: null,
+        desiredState: 'running' as const,
+      }),
+      engineSetStartAtLogin: async (enabled: boolean) => ({ ok: true, startAtLogin: enabled }),
+      engineOpenDashboard: async () => {},
+      engineOpenInBrowser: async () => {},
+      engineOpenLogsFolder: async () => {},
+      onEngineNavigate: () => () => {},
+    } satisfies EngineApi;
+    expect(typeof fixture.engineOpenInBrowser).toBe('function');
+  });
+
+  it('(d) ENGINE_TRANSITION_LABELS carries the exact three literals', () => {
+    expect(ENGINE_TRANSITION_LABELS.starting).toBe('Starting…');
+    expect(ENGINE_TRANSITION_LABELS.stopping).toBe('Stopping…');
+    expect(ENGINE_TRANSITION_LABELS.restarting).toBe('Restarting…');
+  });
+
+  it('(e) EngineStatusResultSchema parses both the running and stopped shapes', () => {
+    expect(
+      EngineStatusResultSchema.safeParse({
+        state: 'running',
+        address: 'liv.x.com',
+        lastCheckedAt: 123,
+        desiredState: 'running',
+      }).success
+    ).toBe(true);
+    expect(
+      EngineStatusResultSchema.safeParse({
+        state: 'stopped',
+        address: null,
+        lastCheckedAt: null,
+        desiredState: 'stopped',
+      }).success
+    ).toBe(true);
+  });
+
+  it('(e) EngineStatusResultSchema rejects an unknown state', () => {
+    expect(
+      EngineStatusResultSchema.safeParse({
+        state: 'bogus',
+        address: null,
+        lastCheckedAt: null,
+        desiredState: 'running',
+      }).success
+    ).toBe(false);
+  });
+
+  it('(f) no engine-surface schema shape carries a token/secret/apiKey key', () => {
+    expect(
+      hasSecretKey(
+        EngineStatusResultSchema.parse({
+          state: 'running',
+          address: 'liv.x.com',
+          lastCheckedAt: 123,
+          desiredState: 'running',
+        })
+      )
+    ).toBe(false);
+    expect(hasSecretKey(EngineNavigateSchema.parse({ screen: 'settings' }))).toBe(false);
   });
 });
