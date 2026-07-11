@@ -69,6 +69,19 @@ const REASON_TAIL_CHARS = 300;
 // install.sh run against the same distro (idempotency, D-11).
 let inFlight = false;
 
+/**
+ * Live signal (INSTALL-01, 05-07): is a `runInstall` call currently active in
+ * THIS process? Distinct from the ledger's `flowStep==='installing'` hint,
+ * which survives a relaunch but can be stale (this boolean does NOT persist
+ * across an app restart — the ledger hint covers that case).
+ * `decide-resume-point.ts`'s `ResumePointSignals.installMidRun` is exactly
+ * this live probe; `flow.ts` reads it via this getter rather than
+ * re-implementing its own tracking of the install child's lifecycle.
+ */
+export function isInstallInFlight(): boolean {
+  return inFlight;
+}
+
 function drainInstallChild(
   child: ChildProcess,
   onUpdate?: (u: WslInstallUpdate) => void
