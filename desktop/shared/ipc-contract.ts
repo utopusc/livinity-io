@@ -81,6 +81,10 @@ export const StateSchema = z.object({
   // migration. A hint only: resume NEVER trusts this alone, it re-verifies
   // against live state before skipping or re-running a step (D-02).
   flowStep: z.string().optional(),
+  // Phase 6 (TRAY-06/TRAY-01): additive-optional, no migration needed — an
+  // already-persisted state.json without these still parses (safeParse tolerates absence).
+  engineDesiredState: z.enum(['running', 'stopped']).optional(),
+  startAtLogin: z.boolean().optional(), // undefined == D-05 default (true)
 });
 export type State = z.infer<typeof StateSchema>;
 
@@ -145,6 +149,21 @@ export const CHANNELS = {
   flowConnectedCheck: 'flow:connectedCheck',
   flowOpenBox: 'flow:openBox',
   flowOpenExternal: 'flow:openExternal',
+  // Tray supervision + embedded dashboard (Phase 6). Same duplication discipline as the
+  // cf:*/wsl:*/flow:* blocks above: these literals are duplicated in the sandboxed preload
+  // (06-10) and kept in sync by the drift-guard test. engineNavigate is a main -> renderer
+  // PUSH (mirrors statusChanged/cfProvisionUpdate), never an invoke handler.
+  engineStart: 'engine:start',
+  engineStop: 'engine:stop',
+  engineRestart: 'engine:restart',
+  engineGetStatus: 'engine:getStatus',
+  engineSetStartAtLogin: 'engine:setStartAtLogin',
+  engineOpenDashboard: 'engine:openDashboard',
+  // D-10 STOPPED-GATED open (openInBrowserGated, 06-07) — replaces the ungated flowOpenBox
+  // for tray/Settings/LiveSuccess "Open in browser" surfaces.
+  engineOpenInBrowser: 'engine:openInBrowser',
+  engineOpenLogsFolder: 'engine:openLogsFolder',
+  engineNavigate: 'engine:navigate',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -716,6 +735,65 @@ export interface FlowApi {
   flowOpenBox(): Promise<void>;
   /** enum-allowlisted external open (system browser), mirrors wslOpenExternal. */
   flowOpenExternal(target: 'support'): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// Tray supervision & embedded dashboard (Phase 6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Same file-level IPC-boundary invariant as every section above: no method on
+ * `EngineApi`, and no schema below, ever returns a secret. `engineOpenInBrowser`
+ * is a no-payload/void channel — the URL is derived + D-10 stopped-gated
+ * MAIN-SIDE (openInBrowserGated, 06-07 via 06-10); no address ever crosses in
+ * either direction.
+ */
+
+/**
+ * Result of `engine:getStatus`. Reuses the EXISTING 4-value StatusSchema for
+ * `state` (Don't Hand-Roll — never fork the tray's status enum).
+ */
+export const EngineStatusResultSchema = z.object({
+  state: StatusSchema,
+  address: z.string().nullable(),
+  lastCheckedAt: z.number().nullable(),
+  desiredState: z.enum(['running', 'stopped']),
+});
+export type EngineStatusResult = z.infer<typeof EngineStatusResultSchema>;
+
+/** Payload of the main -> renderer `engine:navigate` push (tray "Settings" / stopped-open gate). */
+export const EngineNavigateSchema = z.object({ screen: z.enum(['settings']) });
+export type EngineNavigate = z.infer<typeof EngineNavigateSchema>;
+
+/**
+ * The single shared source of truth for the three engine-transition button/status
+ * labels (INFO-4: shared/ is importable by BOTH main and renderer) — 06-04's
+ * settings-flow.ts and 06-11's buildTrayView both import this instead of
+ * re-typing the literals.
+ */
+export const ENGINE_TRANSITION_LABELS = {
+  starting: 'Starting…',
+  stopping: 'Stopping…',
+  restarting: 'Restarting…',
+} as const;
+
+/**
+ * EngineApi — the tray-supervision/embedded-dashboard sibling of FlowApi. Same
+ * IPC-boundary invariant: no method here ever returns a secret.
+ */
+export interface EngineApi {
+  engineStart(): Promise<{ ok: boolean }>;
+  engineStop(): Promise<{ ok: boolean }>;
+  engineRestart(): Promise<{ ok: boolean }>;
+  engineGetStatus(): Promise<EngineStatusResult>;
+  engineSetStartAtLogin(enabled: boolean): Promise<{ ok: boolean; startAtLogin: boolean }>;
+  engineOpenDashboard(): Promise<void>;
+  /** D-10 stopped-gated "Open in browser" (openInBrowserGated, 06-07 via 06-10). No payload,
+   *  no return value — the URL is derived + gated MAIN-SIDE, never renderer-supplied. */
+  engineOpenInBrowser(): Promise<void>;
+  engineOpenLogsFolder(): Promise<void>;
+  /** main -> renderer navigation push (tray "Settings"/stopped-open gate). Returns unsubscribe. */
+  onEngineNavigate(cb: (nav: EngineNavigate) => void): () => void;
 }
 
 // ---------------------------------------------------------------------------
