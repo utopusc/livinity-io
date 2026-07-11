@@ -182,6 +182,65 @@ describe('flow (enterFlow / resumeFlow)', () => {
     expect(patchStateMock).toHaveBeenCalledWith({ flowStep: 'connected-check' });
   });
 
+  describe('WR-01 regression: launch-time resumeFlow must never self-pollinate the ledger', () => {
+    /** Stateful readState/patchState pair -- the second launch reads whatever the first persisted. */
+    function wireStatefulStore(initial: Record<string, unknown>): () => Record<string, unknown> {
+      let stored: Record<string, unknown> = { ...initial };
+      readStateMock.mockImplementation(() => Promise.resolve(stored));
+      patchStateMock.mockImplementation((patch: Record<string, unknown>) => {
+        stored = { ...stored, ...patch };
+        return Promise.resolve(stored);
+      });
+      return () => stored;
+    }
+
+    it('two sequential resumeFlow() calls against an initially-empty state BOTH return null (no polluting flowStep persisted)', async () => {
+      const getStored = wireStatefulStore({ version: 1, currentStep: 'x' });
+
+      const first = await resumeFlow();
+      const second = await resumeFlow();
+
+      expect(first).toBeNull();
+      expect(second).toBeNull(); // pre-fix, the first call persisted flowStep='wsl-detect' and the second hijacked the launch
+      expect(getStored().flowStep).toBeUndefined();
+    });
+
+    it('a BYOD user who has NOT yet done CF setup still routes to cf-wizard on the next launch (never straight into the WSL wizard)', async () => {
+      const getStored = wireStatefulStore({ version: 1, currentStep: 'x' });
+
+      // First authenticated launch -- pre-CF, indistinguishable from Pro:
+      // nothing to resume, and nothing may be persisted here.
+      expect(await resumeFlow()).toBeNull();
+      expect(getStored().flowStep).toBeUndefined();
+
+      // The user then progresses mid-CF (domain picked -> subLabel/zoneName
+      // persisted, provisioning unfinished -- no tunnelId) and relaunches:
+      // the next launch must re-enter the CF wizard, not the WSL wizard.
+      await patchStateMock({ subLabel: 'liv', zoneName: 'example.com' });
+      expect(await resumeFlow()).toEqual({ kind: 'cf-wizard' });
+    });
+
+    it('enterFlow (the user-consented Continue) STILL persists the fresh-entry pointer -- the post-reboot --hidden resume depends on it', async () => {
+      const getStored = wireStatefulStore({ version: 1, currentStep: 'x' });
+
+      const route = await enterFlow();
+
+      expect(route).toEqual({ kind: 'wsl-detect', resume: false });
+      expect(getStored().flowStep).toBe('wsl-detect');
+      // ...and the NEXT launch resumes into the wizard (D-09).
+      expect(await resumeFlow()).toEqual({ kind: 'wsl-detect', resume: true });
+    });
+
+    it('resumeFlow still persists a CONCRETE (non-fresh) route -- only the "nothing has started" shape is exempt', async () => {
+      const getStored = wireStatefulStore({ version: 1, currentStep: 'x', flowStep: 'connected-check' });
+
+      const route = await resumeFlow();
+
+      expect(route).toEqual({ kind: 'connected-check' });
+      expect(getStored().flowStep).toBe('connected-check');
+    });
+  });
+
   describe('THE LOAD-BEARING TEST (criterion 1): the double-entry guard', () => {
     it('two overlapping enterFlow() calls never double-provision -- the mocked collaborator is called at most once', async () => {
       isInstalledAndHealthyMock.mockResolvedValue(true);

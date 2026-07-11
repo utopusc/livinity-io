@@ -140,8 +140,20 @@ async function gatherSignals(deps: Partial<FlowDeps>): Promise<ResumePointSignal
  * resulting ledger pointer via `patchState({ flowStep })` (INSTALL-01
  * hint-ledger), and NEVER throws -- every exit (a thrown collaborator, a
  * malformed read) degrades to `SAFE_DEFAULT`.
+ *
+ * WR-01 (ledger self-pollination): the fresh-entry route
+ * (`{ kind:'wsl-detect', resume:false }`) means "nothing has started", so the
+ * launch-time `resumeFlow` must NOT persist it -- doing so made the SECOND
+ * launch read `flowStep='wsl-detect'`, turn it into `resume:true`, and hijack
+ * every subsequent launch straight into the WSL wizard (skipping the
+ * pro/byod consent card -- and, for a BYOD user who had not yet done CF
+ * setup, skipping the CF wizard entirely into a doomed Pro-mode install).
+ * `enterFlow` DOES still persist the same fresh-entry shape: that call is
+ * the user-consented Continue click ("the flow genuinely started"), and the
+ * post-reboot --hidden auto-resume depends on that persisted pointer to
+ * re-enter the WSL wizard at all.
  */
-async function computeFlowRoute(deps: Partial<FlowDeps>): Promise<FlowRoute> {
+async function computeFlowRoute(deps: Partial<FlowDeps>, source: 'enter' | 'resume'): Promise<FlowRoute> {
   if (inFlight) {
     logSafe('flow.compute', { guarded: true });
     return SAFE_DEFAULT;
@@ -151,8 +163,11 @@ async function computeFlowRoute(deps: Partial<FlowDeps>): Promise<FlowRoute> {
     const signals = await gatherSignals(deps);
     const route = decideResumePoint(signals);
 
-    const patchStateFn = deps.patchState ?? realPatchState;
-    await patchStateFn({ flowStep: route.kind }).catch(() => undefined);
+    const isFreshEntry = route.kind === 'wsl-detect' && !route.resume;
+    if (source === 'enter' || !isFreshEntry) {
+      const patchStateFn = deps.patchState ?? realPatchState;
+      await patchStateFn({ flowStep: route.kind }).catch(() => undefined);
+    }
 
     logSafe('flow.compute', { kind: route.kind });
     return route;
@@ -171,7 +186,7 @@ async function computeFlowRoute(deps: Partial<FlowDeps>): Promise<FlowRoute> {
  * rejects -- degrades to `SAFE_DEFAULT`.
  */
 export async function enterFlow(deps: Partial<FlowDeps> = {}): Promise<FlowRoute> {
-  return computeFlowRoute(deps);
+  return computeFlowRoute(deps, 'enter');
 }
 
 /**
@@ -182,10 +197,12 @@ export async function enterFlow(deps: Partial<FlowDeps> = {}): Promise<FlowRoute
  * (`{ kind:'wsl-detect', resume:false }`) IS `SAFE_DEFAULT`, so a thrown
  * collaborator during a resume is indistinguishable from a genuinely fresh
  * launch; both correctly fall back to the renderer's normal auth route
- * rather than forcing an orchestrator screen.
+ * rather than forcing an orchestrator screen. The 'resume' source means the
+ * fresh-entry shape is NEVER persisted from here (WR-01) -- two launches
+ * against an empty ledger both stay "nothing to resume".
  */
 export async function resumeFlow(deps: Partial<FlowDeps> = {}): Promise<FlowRoute | null> {
-  const route = await computeFlowRoute(deps);
+  const route = await computeFlowRoute(deps, 'resume');
   if (route.kind === 'wsl-detect' && !route.resume) {
     return null;
   }
