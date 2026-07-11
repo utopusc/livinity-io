@@ -283,13 +283,19 @@ describe('engine.ipc', () => {
   });
 
   describe('engine:openLogsFolder', () => {
-    it('ignores any renderer-supplied payload and calls shell.openPath with the fixed app.getPath("logs") path', async () => {
+    it('takes no renderer payload and calls shell.openPath with the fixed app.getPath("logs") path -- never renderer-derived', async () => {
       const handler = getHandler(CHANNELS.engineOpenLogsFolder)!;
       getPathMock.mockReturnValueOnce('/fixed/logs/path');
-      const result = await handler({}, { path: 'C:\\evil\\renderer\\supplied' });
+      const result = await handler({});
       expect(getPathMock).toHaveBeenCalledWith('logs');
       expect(openPathMock).toHaveBeenCalledWith('/fixed/logs/path');
-      expect(openPathMock).not.toHaveBeenCalledWith(expect.stringContaining('evil'));
+      expect(result).toBeUndefined();
+    });
+
+    it('rejects a hostile stray payload (e.g. a renderer-supplied path) WITHOUT calling shell.openPath at all (IN-04)', async () => {
+      const handler = getHandler(CHANNELS.engineOpenLogsFolder)!;
+      const result = await handler({}, { path: 'C:\\evil\\renderer\\supplied' });
+      expect(openPathMock).not.toHaveBeenCalled();
       expect(result).toBeUndefined();
     });
 
@@ -363,14 +369,13 @@ describe('engine.ipc', () => {
       expect(openExternalMock).not.toHaveBeenCalled();
     });
 
-    it('running-gate: a fake desiredState=running implementation opens a MAIN-SIDE-derived URL via THIS module\'s wired openExternal dep -- never renderer-supplied (the handler ignores any payload)', async () => {
+    it('running-gate: a fake desiredState=running implementation opens a MAIN-SIDE-derived URL via THIS module\'s wired openExternal dep -- the handler takes no payload at all, so no renderer-supplied URL can ever reach it', async () => {
       openInBrowserGatedMock.mockImplementationOnce(async (deps?: Partial<EngineDeps>) => {
         await deps?.openExternal?.('https://home.example.com/');
       });
       const handler = getHandler(CHANNELS.engineOpenInBrowser)!;
-      await handler({}, { url: 'https://renderer-supplied.evil/' });
+      await handler({});
       expect(openExternalMock).toHaveBeenCalledWith('https://home.example.com/');
-      expect(openExternalMock).not.toHaveBeenCalledWith(expect.stringContaining('evil'));
     });
 
     it('rejects a hostile stray payload WITHOUT calling openInBrowserGated', async () => {
