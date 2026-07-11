@@ -1,0 +1,104 @@
+<!--
+  src/renderer/dashboard-loading.html
+
+  The DASH-01 sandboxed dashboard window's "Starting your dashboard..." static
+  interstitial (06-UI-SPEC.md "Net-new visual surface this phase" section).
+  The dashboard BrowserWindow has NO app preload (D-09, zero IPC/secret
+  reach) so it can never import styles.css or any app bundle -- this file is
+  therefore fully self-contained: no external CSS/JS, no bundler dependency,
+  no color beyond the three monochrome tokens hand-duplicated below from
+  styles.css's :root (--bg/--fg/--fg-mute) so it reads as unmistakably the
+  same product without any shared import.
+
+  src/main/dashboard/dashboard-window.ts loadFile()s this file at its BUILT
+  path: dist/renderer/dashboard-loading.html (vite.config.ts's multi-page
+  rollupOptions.input emits it there, same outDir as index.html).
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Livinity — Starting…</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        /* --bg */
+        background: #050507;
+        font-family:
+          -apple-system,
+          BlinkMacSystemFont,
+          'SF Pro Display',
+          'SF Pro Text',
+          'Helvetica Neue',
+          system-ui,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      .wrap {
+        text-align: center;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        margin: 0 auto 16px;
+        border-radius: 50%;
+        /* --fg-mute */
+        background: #a1a1a8;
+        animation: dot-pulse 1.6s ease-in-out infinite;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 20px;
+        font-weight: 600;
+        line-height: 1.2;
+        /* --fg */
+        color: #f5f5f7;
+      }
+      p {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 400;
+        line-height: 1.5;
+        /* --fg-mute */
+        color: #a1a1a8;
+      }
+      @keyframes dot-pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.35;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .dot {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="dot" aria-hidden="true"></div>
+      <h1>Starting your dashboard…</h1>
+      <p>This usually takes a few seconds.</p>
+    </div>
+  </body>
+</html>
