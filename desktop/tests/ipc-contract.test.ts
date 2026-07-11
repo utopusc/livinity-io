@@ -15,6 +15,11 @@ import {
   WslDistroInstallResultSchema,
   WslInstallInvokeResultSchema,
   WslConfigApplyResultSchema,
+  WslInstallUpdateSchema,
+  INSTALL_CAPTIONS,
+  FailureVerdictSchema,
+  FlowRouteSchema,
+  ConnectedProbeResultSchema,
 } from '../shared/ipc-contract';
 
 describe('VaultKeySchema', () => {
@@ -360,5 +365,97 @@ describe('WslConfigApplyResultSchema (discriminated union)', () => {
 
   it('rejects ok:false with an unrecognized reason', () => {
     expect(WslConfigApplyResultSchema.safeParse({ ok: false, reason: 'nope' }).success).toBe(false);
+  });
+});
+
+describe('Phase 5 flow contract', () => {
+  // (f) T-05-01 leak-guard — same recursive-key scan cf.ipc.test.ts/wsl.ipc.test.ts
+  // use, applied here to representative parsed instances of every new Phase-5
+  // schema (mirrors the CF/WSL no-secret-across-IPC invariant).
+  function hasSecretKey(value: unknown): boolean {
+    if (value === null || typeof value !== 'object') return false;
+    for (const [k, v] of Object.entries(value)) {
+      if (/token|secret|apiKey/i.test(k)) return true;
+      if (hasSecretKey(v)) return true;
+    }
+    return false;
+  }
+
+  it('(a) StateSchema still parses with NO flowStep (backward compat), and with flowStep set', () => {
+    expect(StateSchema.safeParse({ version: 1, currentStep: 'welcome' }).success).toBe(true);
+    expect(
+      StateSchema.safeParse({ version: 1, currentStep: 'welcome', flowStep: 'installing' }).success
+    ).toBe(true);
+  });
+
+  it('(b) WslInstallUpdateSchema accepts a bare phase (no caption) and the full enriched shape', () => {
+    expect(WslInstallUpdateSchema.safeParse({ phase: 'installing' }).success).toBe(true);
+    expect(
+      WslInstallUpdateSchema.safeParse({
+        phase: 'installing',
+        caption: 'x',
+        stepIndex: 3,
+        stepTotal: 6,
+      }).success
+    ).toBe(true);
+  });
+
+  it('(c) INSTALL_CAPTIONS has exactly 6 entries', () => {
+    expect(INSTALL_CAPTIONS.length).toBe(6);
+  });
+
+  it('(d) every flow: CHANNELS value matches its key (drift sanity)', () => {
+    const channels = CHANNELS as Record<string, string>;
+    const flowKeys = Object.keys(channels).filter((k) => channels[k].startsWith('flow:'));
+    expect(flowKeys.length).toBe(5);
+    for (const key of flowKeys) {
+      const action = channels[key].slice('flow:'.length);
+      // key is "flow" + Capitalized action, e.g. flowEnter -> 'flow:enter'
+      expect(key.toLowerCase()).toBe(`flow${action}`.toLowerCase());
+    }
+    expect(CHANNELS.flowEnter).toBe('flow:enter');
+    expect(CHANNELS.flowResume).toBe('flow:resume');
+    expect(CHANNELS.flowConnectedCheck).toBe('flow:connectedCheck');
+    expect(CHANNELS.flowOpenBox).toBe('flow:openBox');
+    expect(CHANNELS.flowOpenExternal).toBe('flow:openExternal');
+  });
+
+  it('(e) FlowRouteSchema parses live-success with a nullable address and rejects an unknown kind', () => {
+    expect(FlowRouteSchema.safeParse({ kind: 'live-success', address: null }).success).toBe(true);
+    expect(FlowRouteSchema.safeParse({ kind: 'bogus' }).success).toBe(false);
+  });
+
+  it('(f) no Phase-5 schema shape carries a token/secret/apiKey key', () => {
+    expect(hasSecretKey(FailureVerdictSchema.parse({ screen: 'generic', retryStep: 'installing' }))).toBe(
+      false
+    );
+    for (const route of [
+      { kind: 'cf-wizard' },
+      { kind: 'wsl-detect', resume: true },
+      { kind: 'installing' },
+      { kind: 'connected-check' },
+      { kind: 'live-success', address: null },
+      { kind: 'cf-reconnect' },
+    ]) {
+      expect(hasSecretKey(FlowRouteSchema.parse(route))).toBe(false);
+    }
+    for (const probe of [
+      { kind: 'connected', address: null },
+      { kind: 'still-confirming', address: null },
+    ]) {
+      expect(hasSecretKey(ConnectedProbeResultSchema.parse(probe))).toBe(false);
+    }
+  });
+
+  it('(g) FailureVerdictSchema accepts the D-07 carrier shapes and rejects a bad screen value', () => {
+    expect(
+      FailureVerdictSchema.safeParse({ screen: 'no-tunnel-410', retryStep: 'installing' }).success
+    ).toBe(true);
+    expect(FailureVerdictSchema.safeParse({ screen: 'disk', retryStep: 'installing' }).success).toBe(
+      true
+    );
+    expect(FailureVerdictSchema.safeParse({ screen: 'bogus', retryStep: 'installing' }).success).toBe(
+      false
+    );
   });
 });
