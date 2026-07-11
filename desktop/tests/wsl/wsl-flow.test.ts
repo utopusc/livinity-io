@@ -8,6 +8,7 @@ import {
   formatDownloadReadout,
   installStepCaptions,
 } from '../../src/renderer/screens/wsl/wsl-flow';
+import { INSTALL_CAPTIONS } from '../../shared/ipc-contract';
 import type {
   WslDetectResult,
   WslDistroInstallResult,
@@ -147,12 +148,9 @@ describe('formatDownloadReadout (Screen 4 mono readout)', () => {
   });
 });
 
-describe('installStepCaptions (Screen 5 coarse step-list labels)', () => {
-  it('returns the 3 coarse Phase-4 labels', () => {
-    expect(installStepCaptions()).toEqual([
-      'Preparing your system',
-      'Installing components',
-      'Starting Livinity',
-    ]);
+describe('installStepCaptions (Screen 5 step-list labels)', () => {
+  it('returns the 6 INSTALL_CAPTIONS -- the single source of truth (Phase 5 / 05-06)', () => {
+    expect(installStepCaptions()).toEqual([...INSTALL_CAPTIONS]);
+    expect(installStepCaptions()).toHaveLength(6);
   });
 });

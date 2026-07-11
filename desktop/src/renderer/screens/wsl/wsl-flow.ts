@@ -10,6 +10,7 @@
  * plain in / plain out, zero IO.
  */
 
+import { INSTALL_CAPTIONS } from '../../../../shared/ipc-contract';
 import type {
   WslDetectResult,
   WslDistroInstallResult,
@@ -156,7 +157,11 @@ export function formatDownloadReadout(doneBytes: number, totalBytes: number): st
   return `${doneMb} MB of ${totalMb} MB · ${pct}%`;
 }
 
-/** The Screen-5 coarse step-list labels (the slot Phase 5 enriches without a layout change). */
+/**
+ * The Screen-5 step-list labels. Phase 5 (D-04/05-06): the 6 captions live in
+ * EXACTLY ONE place -- `INSTALL_CAPTIONS` (shared/ipc-contract.ts) -- so this
+ * function is a thin re-export, never a second, driftable copy of the array.
+ */
 export function installStepCaptions(): string[] {
-  return ['Preparing your system', 'Installing components', 'Starting Livinity'];
+  return [...INSTALL_CAPTIONS];
 }

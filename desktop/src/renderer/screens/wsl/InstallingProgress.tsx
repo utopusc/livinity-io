@@ -5,9 +5,14 @@
  * waiting state for the longest, highest-anxiety stretch of onboarding.
  * Kicks off install.sh (wsl:installInvoke) on mount, subscribes to
  * onInstallUpdate progress pushes (unsubscribed on cleanup, IN-06), and
- * renders a coarse, monochrome 3-item step-list (`installStepCaptions`,
- * wsl-flow.ts) -- the exact scaffold Phase 5 (INSTALL-02) enriches with
- * human-parsed installer markers WITHOUT a layout change.
+ * renders `installStepCaptions()` (wsl-flow.ts, a thin re-export of the
+ * single-source-of-truth `INSTALL_CAPTIONS`) as a 6-item step-list.
+ *
+ * Phase 5 (INSTALL-02/D-04): the active step is driven by the live
+ * `stepIndex` install-invoke.ts streams over onInstallUpdate as it parses
+ * real installer markers -- falling back to the coarse 3-phase mapping when
+ * `stepIndex` is absent (defense in depth, Pitfall 4: before the first
+ * marker arrives, or if install.sh's stderr never emits a recognized title).
  *
  * Step indicators are monochrome (progress-color-discipline, never green --
  * the box is not live yet): done = --fg check glyph, active = the shared
@@ -15,18 +20,19 @@
  * text, never color alone (WCAG 1.4.1), and the active step also carries
  * `aria-current="step"`.
  *
- * D-05/D-14: never renders raw install.sh stdout -- onOutcome hands the
- * RAW WslInstallInvokeResult up to the parent (App-level sub-router, 04-10)
- * to map to InstallOutcome's mapped screens; this component's own labels
- * are human phrases only.
+ * D-05/D-14: never renders raw install.sh stdout -- only the 6 fixed
+ * INSTALL_CAPTIONS strings ever appear as labels. onOutcome hands the
+ * enriched `InstallInvokeResult` (D-07: the raw result PLUS an optional
+ * `failureVerdict`) up to the parent (App-level sub-router, 05-09) to map to
+ * InstallOutcome/NoTunnel410/UnifiedError's mapped screens.
  */
 
 import { useEffect, useState } from 'react';
 import { installStepCaptions } from './wsl-flow';
-import type { WslInstallInvokeResult, WslInstallUpdate } from '../../../../shared/ipc-contract';
+import type { InstallInvokeResult, WslInstallUpdate } from '../../../../shared/ipc-contract';
 
 interface InstallingProgressProps {
-  onOutcome: (result: WslInstallInvokeResult) => void;
+  onOutcome: (result: InstallInvokeResult) => void;
 }
 
 const PHASE_ORDER: WslInstallUpdate['phase'][] = ['preparing', 'installing', 'starting'];
@@ -47,7 +53,7 @@ function CheckGlyph(): React.ReactElement {
 }
 
 export default function InstallingProgress({ onOutcome }: InstallingProgressProps) {
-  const [phase, setPhase] = useState<WslInstallUpdate['phase']>('preparing');
+  const [update, setUpdate] = useState<WslInstallUpdate>({ phase: 'preparing' });
 
   async function runInstall(): Promise<void> {
     const result = await window.api.wslInstallInvoke();
@@ -55,7 +61,7 @@ export default function InstallingProgress({ onOutcome }: InstallingProgressProp
   }
 
   useEffect(() => {
-    const unsubscribe = window.api.onInstallUpdate((u) => setPhase(u.phase));
+    const unsubscribe = window.api.onInstallUpdate((u) => setUpdate(u));
     void runInstall();
     return unsubscribe;
     // Runs once on mount -- install.sh kicks off exactly once per screen entry.
@@ -63,7 +69,10 @@ export default function InstallingProgress({ onOutcome }: InstallingProgressProp
   }, []);
 
   const captions = installStepCaptions();
-  const activeIndex = PHASE_ORDER.indexOf(phase);
+  // Live stepIndex (1..6) drives the active step; falls back to the coarse
+  // 3-phase mapping when absent (Pitfall 4 defense in depth).
+  const activeIndex =
+    update.stepIndex !== undefined ? update.stepIndex - 1 : PHASE_ORDER.indexOf(update.phase);
 
   return (
     <div className="setup-shell">
