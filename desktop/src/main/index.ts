@@ -19,7 +19,7 @@
  *    supervision interval stops when the process itself exits.
  */
 
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, shell, Notification, powerMonitor } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import {
@@ -35,6 +35,8 @@ import { registerCfIpc } from './ipc/cf.ipc';
 import { registerWslIpc } from './ipc/wsl.ipc';
 import { registerFlowIpc } from './ipc/flow.ipc';
 import { registerEngineIpc } from './ipc/engine.ipc';
+import { registerUpdateIpc } from './ipc/update.ipc';
+import { registerSupportIpc } from './ipc/support.ipc';
 import {
   startEngine,
   stopEngine,
@@ -44,13 +46,16 @@ import {
   openInBrowserGated,
   runHealthPass,
   startSupervision,
+  requestRestartToUpdate,
   type EngineDeps,
 } from './supervision/engine';
 import { syncLoginItem, setStartAtLogin, getStartAtLogin } from './supervision/login-item';
 import { decideAutoBringUp } from './supervision/decide-supervision';
 import { wirePowerEvents } from './supervision/power-events';
 import { openDashboardWindow, closeDashboardWindow } from './dashboard/dashboard-window';
-import { readState } from './storage/state-store';
+import { readState, patchState } from './storage/state-store';
+import { initUpdater, getUpdateState, restartToUpdate } from './update/updater';
+import { isInstallInFlight } from './wsl/install-invoke';
 import { logSafe, redactSecretLike } from './log';
 import { CHANNELS, ENGINE_TRANSITION_LABELS, type Status } from '../../shared/ipc-contract';
 
@@ -254,18 +259,23 @@ const engineDeps: Partial<EngineDeps> = {
 /** Pure-ish D-07 view-model builder: current icon Status + a live getEngineStatus()/
  * getStartAtLogin() read. Any in-flight transition label comes from the SAME
  * ENGINE_TRANSITION_LABELS const settings-flow.ts (06-04) imports -- the tray and
- * Settings screen can never drift (INFO-4). */
+ * Settings screen can never drift (INFO-4). UPD-01 (07-11): updateReadyVersion/
+ * updateBlocked are read LIVE from getUpdateState() on every build -- never a
+ * stale cached value, matching W2's live-installBlocked discipline. */
 async function buildTrayView(status: Status): Promise<TrayViewState> {
   const [engineStatus, startAtLoginChecked] = await Promise.all([
     getEngineStatus(engineDeps),
     getStartAtLogin(),
   ]);
+  const updateState = getUpdateState();
   return {
     status,
     statusText: engineTransition ? ENGINE_TRANSITION_LABELS[engineTransition] : statusToLabel(status),
     engineRunning: engineStatus.desiredState === 'running',
     startAtLoginChecked,
     actionsDisabled: engineTransition !== null,
+    updateReadyVersion: updateState.state === 'ready' ? updateState.readyVersion : null,
+    updateBlocked: updateState.installBlocked,
   };
 }
 
@@ -345,6 +355,14 @@ const trayCallbacks: TrayCallbacks = {
     mainWindow?.focus();
     mainWindow?.webContents.send(CHANNELS.engineNavigate, { screen: 'settings' });
   },
+  // UPD-01 (07-11): the tray's conditional "Restart to update" row calls the
+  // SAME requestRestartToUpdate the Settings CTA reaches via
+  // update:restartToInstall (update.ipc.ts) -- one action, two triggers.
+  // quitAndInstall is explicitly updater.ts's restartToUpdate (Q1.3: always
+  // quitAndInstall(true, true)), mirroring update.ipc.ts's own explicit call.
+  onRestartToUpdate: () => {
+    void requestRestartToUpdate({ quitAndInstall: restartToUpdate });
+  },
   onQuit: handleQuit,
 };
 
@@ -387,6 +405,12 @@ if (!gotLock) {
 
     tray = createTray(trayCallbacks);
 
+    // IN-05: seed the tray's row set once immediately after creation -- the
+    // row set (including any conditional Restart-to-update row) is truthful
+    // from the very first menu open, not just after the first status/update
+    // event arrives.
+    void refreshTrayView(lastStatus);
+
     registerShellIpc({
       getMainWindow,
       setStatus,
@@ -415,6 +439,58 @@ if (!gotLock) {
     // getMainWindow/setStatus closures registerShellIpc already uses --
     // window.api.engine* is now LIVE end-to-end.
     registerEngineIpc({ getMainWindow, setStatus });
+
+    // UPD-01/SUP-01/SUP-02 (07-11): update.ipc.ts/support.ipc.ts wiring.
+    // registerUpdateIpc is called FIRST so its returned pushUpdateStatus is
+    // available to inject as initUpdater's pushStatus dep (I5) -- this is the
+    // ONE place CHANNELS.updateStatus is ever sent; index.ts itself never
+    // raw-sends it.
+    const { pushUpdateStatus } = registerUpdateIpc({ getMainWindow });
+
+    // initUpdater is isPackaged-gated INSIDE the function (Pitfall 5) -- an
+    // unpackaged dev run never touches the real autoUpdater singleton, so
+    // this call is always safe to make unconditionally here.
+    initUpdater({
+      isPackaged: () => app.isPackaged,
+      isInstallInFlight, // W2: feeds UpdateUiState.installBlocked live
+      readState,
+      patchState,
+      getVersion: () => app.getVersion(),
+      // D-05: one notification per version, fired when the download is
+      // READY. Clicking it focuses the main window and navigates to
+      // Settings' ABOUT & UPDATES card (mirrors onOpenSettings' shape).
+      notify: (version: string) => {
+        if (!Notification.isSupported()) return;
+        const n = new Notification({
+          title: 'Update ready',
+          body: `Update ready — restart Livinity Desktop when convenient. (v${version})`,
+        });
+        n.on('click', () => {
+          mainWindow?.show();
+          mainWindow?.focus();
+          mainWindow?.webContents.send(CHANNELS.engineNavigate, { screen: 'settings' });
+        });
+        n.show();
+      },
+      pushStatus: pushUpdateStatus, // I5 -- the ipc helper, never a raw webContents.send here
+      refreshTray: () => void refreshTrayView(lastStatus),
+      scheduleChecks: (check: () => void) => {
+        setTimeout(check, 3 * 60_000);
+        setInterval(check, 6 * 60 * 60_000);
+      },
+      // Pitfall 3: disarm autoInstallOnAppQuit on Windows session-end (Windows
+      // sign-out/shutdown fires the app 'quit' event too -- spawning the NSIS
+      // installer mid-session-teardown corrupts installs). Belt-and-braces:
+      // both the main window's 'session-end' and powerMonitor's 'shutdown'
+      // wire the same disarm callback; a no-op registration on either is
+      // harmless (RESEARCH Open Question 3).
+      onSessionEnd: (disarm: () => void) => {
+        mainWindow?.on('session-end', disarm);
+        powerMonitor.on('shutdown', disarm);
+      },
+    });
+
+    registerSupportIpc({ getMainWindow });
 
     // TRAY-01: reconciles the persisted startAtLogin preference with any
     // pending-reboot need (login-item.ts is the SOLE setLoginItemSettings
