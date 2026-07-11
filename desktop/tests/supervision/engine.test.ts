@@ -459,6 +459,82 @@ describe('engine (Task 2: supervisionTick / runHealthPass / notifications / star
     });
   });
 
+  describe('WR-02: lifecycle serialization (one mutex for start/stop/restart/tick/heal)', () => {
+    it('stopEngine invoked while a tick is mid-flight queues BEHIND the tick -- the tick never respawns the holder the user just stopped', async () => {
+      let holderKilled = false;
+      killHolderMock.mockImplementation(async () => {
+        holderKilled = true;
+      });
+      readHolderRecordMock.mockImplementation(async () =>
+        holderKilled ? null : { pid: 4242, spawnedAt: '2026-01-01T00:00:00.000Z' }
+      );
+      isPidAliveAsWslMock.mockResolvedValue(true);
+      isInstalledAndHealthyMock.mockResolvedValue(true);
+
+      let releaseTick: (() => void) | undefined;
+      const gate = new Promise<void>((resolve) => {
+        releaseTick = resolve;
+      });
+      readStateMock
+        .mockImplementationOnce(async () => {
+          await gate; // the tick hangs between its snapshot and holderAlive
+          return { version: 1, currentStep: 'x', engineDesiredState: 'running' };
+        })
+        .mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'stopped' });
+
+      const tickP = supervisionTick();
+      const stopP = stopEngine({ setStatus: vi.fn(), closeDashboard: vi.fn() });
+
+      // Give an UN-serialized stop every chance to complete mid-tick (the
+      // pre-fix interleaving: holder killed while the tick still holds its
+      // stale 'running' snapshot -> 'respawn' -> holder resurrected forever).
+      await new Promise((r) => setTimeout(r, 0));
+      releaseTick?.();
+      await Promise.all([tickP, stopP]);
+
+      expect(adoptOrSpawnHolderMock).not.toHaveBeenCalled();
+    });
+
+    it('startEngine and stopEngine never interleave -- a stop invoked mid-start queues behind it (patchState order proves it)', async () => {
+      const patches: unknown[] = [];
+      patchStateMock.mockImplementation(async (p: unknown) => {
+        patches.push(p);
+        return { version: 1, currentStep: 'x' };
+      });
+      let releaseBoot: (() => void) | undefined;
+      const bootGate = new Promise<void>((resolve) => {
+        releaseBoot = resolve;
+      });
+      adoptOrSpawnHolderMock.mockImplementation(async () => {
+        await bootGate; // start hangs mid-boot
+        return 4242;
+      });
+
+      const startP = startEngine({ setStatus: vi.fn() });
+      const stopP = stopEngine({ setStatus: vi.fn(), closeDashboard: vi.fn() });
+
+      await new Promise((r) => setTimeout(r, 0));
+      // The stop has NOT run yet -- only start's own 'running' persist landed.
+      expect(patches).toEqual([{ engineDesiredState: 'running' }]);
+
+      releaseBoot?.();
+      await Promise.all([startP, stopP]);
+
+      expect(patches).toEqual([{ engineDesiredState: 'running' }, { engineDesiredState: 'stopped' }]);
+    });
+
+    it("defense-in-depth: the respawn branch re-reads desiredState right before spawning -- a STOP that landed after the tick's snapshot wins", async () => {
+      readStateMock
+        .mockResolvedValueOnce({ version: 1, currentStep: 'x', engineDesiredState: 'running' }) // tick snapshot
+        .mockResolvedValueOnce({ version: 1, currentStep: 'x', engineDesiredState: 'stopped' }); // recheck: STOP landed
+      readHolderRecordMock.mockResolvedValue(null); // holder dead
+
+      await supervisionTick();
+
+      expect(adoptOrSpawnHolderMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe('startSupervision', () => {
     it('the interval callback is supervisionTick -- fires isInstallInFlight after intervalMs elapses', async () => {
       vi.useFakeTimers();
@@ -467,11 +543,14 @@ describe('engine (Task 2: supervisionTick / runHealthPass / notifications / star
         expect(isInstallInFlightMock).not.toHaveBeenCalled();
 
         await vi.advanceTimersByTimeAsync(1000);
-        expect(isInstallInFlightMock).toHaveBeenCalledTimes(1);
+        // WR-02: the gate runs twice per tick by design -- once in the
+        // wrapper (IN-06 literal-first-statement) and once at the serialized
+        // body's start (an install could begin while the tick was queued).
+        expect(isInstallInFlightMock).toHaveBeenCalledTimes(2);
 
         stop();
         await vi.advanceTimersByTimeAsync(5000);
-        expect(isInstallInFlightMock).toHaveBeenCalledTimes(1); // stop() cleared the interval
+        expect(isInstallInFlightMock).toHaveBeenCalledTimes(2); // stop() cleared the interval
       } finally {
         vi.useRealTimers();
       }

@@ -24,6 +24,11 @@
  *    the whole-VM flag would tear down the user's other WSL distros too. A
  *    source-scan test (engine.test.ts) asserts that flag's literal spelling
  *    never appears in this file.
+ * 4. WR-02 (lifecycle mutex): start/stop/restart, the supervision tick body,
+ *    and the wake health pass are all serialized through ONE module-level
+ *    promise chain (`serialized()`) — no two lifecycle operations ever
+ *    interleave, and a user STOP always queues BEHIND (never lands inside)
+ *    an in-flight tick's readState->holderAlive window.
  *
  * Every collaborator is injected via `Partial<EngineDeps>` (mirrors
  * `flow.ts`'s `FlowDeps`); `resolveDeps` merges the caller's overrides over
@@ -161,6 +166,28 @@ function resolveDeps(deps: Partial<EngineDeps>): EngineDeps {
 }
 
 // ---------------------------------------------------------------------------
+// serialized() — the ONE lifecycle mutex (WR-02). start/stop/restart, the
+// supervision tick body, and the wake health pass all run through this
+// promise-chain (mirrors flow.ts's module-level inFlight discipline, adapted
+// to queue-behind rather than drop): a user STOP can never land in the middle
+// of an in-flight tick's readState->holderAlive window (where the tick's
+// stale 'running' snapshot + freshly-killed holder would decide 'respawn' and
+// resurrect the holder the user just stopped, forever), and tray-vs-Settings
+// double-invokes can never interleave patchState/--terminate/bootAndVerify.
+// ---------------------------------------------------------------------------
+
+let opChain: Promise<unknown> = Promise.resolve();
+
+function serialized<T>(fn: () => Promise<T>): Promise<T> {
+  const next = opChain.then(fn, fn);
+  opChain = next.then(
+    () => undefined,
+    () => undefined
+  );
+  return next;
+}
+
+// ---------------------------------------------------------------------------
 // Desired-state lifecycle — start / stop / restart / getEngineStatus
 // ---------------------------------------------------------------------------
 
@@ -188,6 +215,10 @@ async function bootAndVerify(d: EngineDeps): Promise<boolean> {
  */
 export async function stopEngine(deps: Partial<EngineDeps> = {}): Promise<void> {
   const d = resolveDeps(deps);
+  return serialized(() => stopEngineBody(d));
+}
+
+async function stopEngineBody(d: EngineDeps): Promise<void> {
   try {
     await d.patchState({ engineDesiredState: 'stopped' });
     await terminateLivinity(d);
@@ -202,6 +233,10 @@ export async function stopEngine(deps: Partial<EngineDeps> = {}): Promise<void> 
  * existing status rail — 'running' on success, 'error' if health never verifies. */
 export async function startEngine(deps: Partial<EngineDeps> = {}): Promise<void> {
   const d = resolveDeps(deps);
+  return serialized(() => startEngineBody(d));
+}
+
+async function startEngineBody(d: EngineDeps): Promise<void> {
   try {
     await d.patchState({ engineDesiredState: 'running' });
     const healthy = await bootAndVerify(d);
@@ -216,6 +251,10 @@ export async function startEngine(deps: Partial<EngineDeps> = {}): Promise<void>
  * reachable while the engine is already desired-running). */
 export async function restartEngine(deps: Partial<EngineDeps> = {}): Promise<void> {
   const d = resolveDeps(deps);
+  return serialized(() => restartEngineBody(d));
+}
+
+async function restartEngineBody(d: EngineDeps): Promise<void> {
   try {
     await terminateLivinity(d);
     const healthy = await bootAndVerify(d);
@@ -282,6 +321,13 @@ function concludeNotify(d: EngineDeps, nowHealthy: boolean, repaired: boolean): 
 
 export async function runHealthPass(deps: Partial<EngineDeps> = {}): Promise<void> {
   const d = resolveDeps(deps);
+  // WR-02: the wake entry point queues behind any in-flight lifecycle op/tick.
+  // The tick's own 'heal' branch calls runHealthPassBody directly (it already
+  // holds the mutex -- re-entering serialized() there would deadlock).
+  return serialized(() => runHealthPassBody(d));
+}
+
+async function runHealthPassBody(d: EngineDeps): Promise<void> {
   try {
     // CR-01: the SAME two first-line gates supervisionTick enforces. This
     // function has a SECOND production entry point (the resume/unlock onWake
@@ -316,6 +362,17 @@ export async function supervisionTick(deps: Partial<EngineDeps> = {}): Promise<v
   // install.sh is running. Zero further collaborator calls happen past this line.
   if (d.isInstallInFlight()) return;
 
+  // WR-02: the tick body holds the same lifecycle mutex as start/stop/restart —
+  // a user STOP can no longer land inside this tick's readState->holderAlive
+  // window and get its holder resurrected by the tick's stale snapshot.
+  return serialized(() => supervisionTickBody(d));
+}
+
+async function supervisionTickBody(d: EngineDeps): Promise<void> {
+  // Re-checked at body start too: an install could have begun while this tick
+  // was queued behind a long-running lifecycle op.
+  if (d.isInstallInFlight()) return;
+
   try {
     const st = await d.readState();
     const holderAlive = await d.holderAlive();
@@ -334,6 +391,11 @@ export async function supervisionTick(deps: Partial<EngineDeps> = {}): Promise<v
       case 'noop':
         return;
       case 'respawn': {
+        // WR-02 defense-in-depth: re-read the desired state immediately before
+        // the spawn — a STOP that landed after this tick's own readState
+        // snapshot must win (never resurrect a holder the user just stopped).
+        const recheck = await d.readState();
+        if (recheck?.engineDesiredState !== 'running') return;
         await d.spawnHolder();
         const postHealthy = await d.isInstalledAndHealthy().catch(() => false);
         // A dead holder is direct, certain evidence the engine was NOT healthy an
@@ -344,7 +406,8 @@ export async function supervisionTick(deps: Partial<EngineDeps> = {}): Promise<v
         return;
       }
       case 'heal':
-        await runHealthPass(d);
+        // Direct body call — this tick already holds the WR-02 mutex.
+        await runHealthPassBody(d);
         return;
       case 'ok':
         concludeNotify(d, true, false);
