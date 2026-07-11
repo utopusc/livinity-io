@@ -23,6 +23,7 @@ import {
   EngineStatusResultSchema,
   EngineNavigateSchema,
   ENGINE_TRANSITION_LABELS,
+  UsageResultSchema,
   type EngineApi,
   UpdateUiStateSchema,
   DiagnosticsExportResultSchema,
@@ -512,10 +513,10 @@ describe('Phase 6 engine contract', () => {
     ).toBe(false);
   });
 
-  it('(b) every engine: CHANNELS value matches its key (drift sanity), incl. engineOpenInBrowser', () => {
+  it('(b) every engine: CHANNELS value matches its key (drift sanity), incl. engineOpenInBrowser/engineGetUsage', () => {
     const channels = CHANNELS as Record<string, string>;
     const engineKeys = Object.keys(channels).filter((k) => channels[k].startsWith('engine:'));
-    expect(engineKeys.length).toBe(9);
+    expect(engineKeys.length).toBe(10);
     for (const key of engineKeys) {
       const action = channels[key].slice('engine:'.length);
       // key is "engine" + Capitalized action, e.g. engineOpenInBrowser -> 'engine:openInBrowser'
@@ -530,9 +531,10 @@ describe('Phase 6 engine contract', () => {
     expect(CHANNELS.engineOpenInBrowser).toBe('engine:openInBrowser');
     expect(CHANNELS.engineOpenLogsFolder).toBe('engine:openLogsFolder');
     expect(CHANNELS.engineNavigate).toBe('engine:navigate');
+    expect(CHANNELS.engineGetUsage).toBe('engine:getUsage');
   });
 
-  it('(c) EngineApi surface has engineOpenInBrowser (compile-time fixture)', () => {
+  it('(c) EngineApi surface has engineOpenInBrowser + engineGetUsage (compile-time fixture)', () => {
     const fixture = {
       engineStart: async () => ({ ok: true }),
       engineStop: async () => ({ ok: true }),
@@ -548,8 +550,10 @@ describe('Phase 6 engine contract', () => {
       engineOpenInBrowser: async () => {},
       engineOpenLogsFolder: async () => ({ ok: true }),
       onEngineNavigate: () => () => {},
+      engineGetUsage: async () => ({ ok: false as const, reason: 'engine-stopped' as const }),
     } satisfies EngineApi;
     expect(typeof fixture.engineOpenInBrowser).toBe('function');
+    expect(typeof fixture.engineGetUsage).toBe('function');
   });
 
   it('(d) ENGINE_TRANSITION_LABELS carries the exact three literals', () => {
@@ -600,6 +604,48 @@ describe('Phase 6 engine contract', () => {
       )
     ).toBe(false);
     expect(hasSecretKey(EngineNavigateSchema.parse({ screen: 'settings' }))).toBe(false);
+  });
+
+  // Tray quick-panel addendum: engine:getUsage's discriminated-union result.
+  it('(g) UsageResultSchema parses the ok:true numeric-facts shape', () => {
+    expect(
+      UsageResultSchema.safeParse({
+        ok: true,
+        memUsedKb: 1024,
+        memTotalKb: 16384000,
+        load1: 0.52,
+        cpuCount: 8,
+        diskUsedKb: 876543,
+        diskTotalKb: 41943040,
+      }).success
+    ).toBe(true);
+  });
+
+  it('(g) UsageResultSchema parses both ok:false reasons (engine-stopped/probe-failed)', () => {
+    expect(UsageResultSchema.safeParse({ ok: false, reason: 'engine-stopped' }).success).toBe(true);
+    expect(UsageResultSchema.safeParse({ ok: false, reason: 'probe-failed' }).success).toBe(true);
+  });
+
+  it('(g) UsageResultSchema rejects an unknown ok:false reason and a malformed ok:true shape', () => {
+    expect(UsageResultSchema.safeParse({ ok: false, reason: 'bogus' }).success).toBe(false);
+    expect(UsageResultSchema.safeParse({ ok: true, memUsedKb: 1024 }).success).toBe(false);
+  });
+
+  it('(g) no UsageResultSchema shape (either branch) carries a token/secret/apiKey key', () => {
+    expect(
+      hasSecretKey(
+        UsageResultSchema.parse({
+          ok: true,
+          memUsedKb: 1024,
+          memTotalKb: 16384000,
+          load1: 0.52,
+          cpuCount: 8,
+          diskUsedKb: 876543,
+          diskTotalKb: 41943040,
+        })
+      )
+    ).toBe(false);
+    expect(hasSecretKey(UsageResultSchema.parse({ ok: false, reason: 'probe-failed' }))).toBe(false);
   });
 });
 
