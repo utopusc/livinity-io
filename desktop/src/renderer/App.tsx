@@ -17,6 +17,8 @@ import type {
   RouteResult,
   CfProvisionUpdate,
   CfScopeRow,
+  FlowRoute,
+  InstallInvokeResult,
 } from '../../shared/ipc-contract';
 import Login from './screens/Login';
 import AccountChip from './components/AccountChip';
@@ -43,6 +45,10 @@ import Downloading from './screens/wsl/Downloading';
 import InstallingProgress from './screens/wsl/InstallingProgress';
 import InstallOutcome from './screens/wsl/InstallOutcome';
 import { mapWslDetectResult, mapInstallInvokeResult, type WslStep } from './screens/wsl/wsl-flow';
+import ConnectedCheck from './screens/ConnectedCheck';
+import LiveSuccess from './screens/LiveSuccess';
+import UnifiedError from './screens/UnifiedError';
+import NoTunnel410 from './screens/NoTunnel410';
 
 const STATUSES: Status[] = ['installing', 'running', 'stopped', 'error'];
 
@@ -58,7 +64,11 @@ type Screen =
   | 'byod-wizard'
   | 'pro-wizard'
   | 'legacy-free-wizard'
-  | 'wsl-wizard';
+  | 'wsl-wizard'
+  | 'connected-check'
+  | 'live-success'
+  | 'orchestrator-error'
+  | 'no-tunnel-410';
 
 const WIZARD_SCREENS: Screen[] = ['byod-wizard', 'pro-wizard', 'legacy-free-wizard'];
 
@@ -151,11 +161,22 @@ export default function App() {
   // auto-resume after the mandatory reboot) -- passed to WslEnable so it
   // shows "Picking up where we left off" instead of the first-run copy.
   const [wslResume, setWslResume] = useState(false);
-  // The signed-in username, fetched when the WSL wizard reaches its terminal
-  // handoff, so the success screen can show the managed-box address
-  // ({username}.livinity.io) for the pro/legacy paths (the byod path derives
-  // its address from cfHolder instead).
-  const [boxUsername, setBoxUsername] = useState<string | null>(null);
+  // The live box address for LiveSuccess/ConnectedCheck (D-05/D-06) -- derived
+  // MAIN-SIDE by connected-probe.ts's deriveAddress (byod subLabel+zoneName,
+  // else the pro/legacy managed {username}.livinity.io via vaultGet+getMe,
+  // 05-07) and handed up through ConnectedCheck.onConnected / a live-success
+  // FlowRoute's own `address` field -- supersedes the renderer's former
+  // byod/boxUsername derivation, now redundant (D-06).
+  const [liveAddress, setLiveAddress] = useState<string | null>(null);
+  // The D-07 unified orchestrator-error screen's current variant + optional
+  // already-redacted reason -- set by applyFlowRoute's cf-reconnect case (a
+  // live resume-time stale-CF-token detection) or applyInstallFailure's
+  // cf-reconnect case (an install-time failureVerdict); null when
+  // 'orchestrator-error' is not the active screen.
+  const [orchestratorError, setOrchestratorError] = useState<{
+    variant: 'cloudflare-surface' | 'generic-orchestrator';
+    reason?: string;
+  } | null>(null);
 
   // ---- Phase 1 debug shell state (dev-gated below) ----
   const [status, setStatus] = useState<Status>('stopped');
@@ -195,35 +216,78 @@ export default function App() {
     setScreen(route.kind);
   }
 
+  // The single App-level dispatcher for a FlowRoute (flow:enter / flow:resume,
+  // 05-07/05-08) -- switches on `route.kind` to land on the right screen.
+  // Flat-union style, never nested: every new orchestrator-level screen this
+  // phase adds is its own top-level Screen member, not a sub-state of an
+  // existing one.
+  function applyFlowRoute(route: FlowRoute): void {
+    switch (route.kind) {
+      case 'cf-wizard':
+        // No persisted CF sub-step exists main-side (cfStep is in-memory-only
+        // React state, already 'cf-token' on a fresh mount) -- entering the
+        // byod-wizard screen always lands on Screen 1, same as a fresh
+        // 'byod-wizard' RouteResult.
+        setScreen('byod-wizard');
+        return;
+      case 'wsl-detect':
+        // UNCHANGED current behavior (Phase 4) -- a live re-verify, never a
+        // blind continue to a persisted step (D-04/T-04-19).
+        setWslResume(route.resume);
+        setWslStep('wsl-detect');
+        setWslOutcome(EMPTY_WSL_OUTCOME);
+        setScreen('wsl-wizard');
+        return;
+      case 'installing':
+        // install.sh was mid-run when the app was killed -- re-enter
+        // InstallingProgress, which always restarts the invocation from the
+        // top (idempotent, D-14), never resumes "mid-marker".
+        setWslStep('installing');
+        setScreen('wsl-wizard');
+        return;
+      case 'connected-check':
+        setScreen('connected-check');
+        return;
+      case 'live-success':
+        // D-03 fast-path -- NO resource/download/install re-walk, ever, on a
+        // healthy repeat launch.
+        setLiveAddress(route.address);
+        setScreen('live-success');
+        return;
+      case 'cf-reconnect':
+        setOrchestratorError({ variant: 'cloudflare-surface' });
+        setScreen('orchestrator-error');
+        return;
+    }
+  }
+
   // Entry point into the WSL2 provisioning sub-router (Phase 5's real
   // orchestrated handoff seam -- see the byod-wizard cf-handoff / pro /
   // legacy-free placeholders below, plus the DEV debug-shell trigger).
-  // Always starts at 'wsl-detect' -- a fresh entry re-verifies live state
-  // exactly like a resume does (D-04), it just never had a persisted step.
-  function enterWslWizard(): void {
-    setWslResume(false);
-    setWslStep('wsl-detect');
-    setWslOutcome(EMPTY_WSL_OUTCOME);
-    setScreen('wsl-wizard');
+  // Delegates to flow:enter (05-07's resumable state machine, live
+  // re-verified inside) instead of blindly jumping straight to 'wsl-detect' --
+  // a healthy already-installed relaunch now lands on live-success directly
+  // instead of re-walking the whole wizard (D-03).
+  async function enterWslWizard(): Promise<void> {
+    const route = await window.api.flowEnter();
+    applyFlowRoute(route);
   }
 
   useEffect(() => {
     window.api.authGetRoute().then(async (route) => {
       mapRouteToScreen(route);
-      // D-04 resume-to-step: a persisted state.wslStep means a WSL wizard
-      // reboot/resume is in flight (set by wsl:enable/wsl:restartNow,
-      // 04-09) -- ONLY an authenticated, routed destination (never
-      // 'login'/'error') may re-enter it, and it ALWAYS re-verifies live
-      // WSL state via the 'wsl-detect' gate first -- NEVER blindly
-      // continuing straight to the persisted step (T-04-19: a reboot that
-      // silently failed or changed state must not be trusted).
+      // D-09 resume-to-step (generalizes Phase 4's wslStep-only check to the
+      // WHOLE orchestrator, not just the WSL sub-flow): ONLY an
+      // authenticated, routed destination (never 'login'/'error') may
+      // resume, and it ALWAYS re-verifies live state via flow:resume on
+      // EVERY launch -- NEVER blindly continuing straight to a persisted
+      // step (T-04-19 carryover: a reboot/relaunch that silently failed or
+      // changed state must not be trusted). A null return means nothing to
+      // resume -- the route already applied by mapRouteToScreen above (the
+      // normal auth destination) stays as-is.
       if (route.kind !== 'login' && route.kind !== 'error') {
-        const s = await window.api.getState();
-        if (s.wslStep) {
-          setWslResume(true);
-          setWslStep('wsl-detect');
-          setScreen('wsl-wizard');
-        }
+        const r = await window.api.flowResume();
+        if (r) applyFlowRoute(r);
       }
     });
   }, []);
@@ -287,19 +351,45 @@ export default function App() {
     };
   }, [screen, wslStep]);
 
-  // On reaching the terminal handoff (install-invoke returned ok), fetch the
-  // username so the success screen can show the managed-box address. Cheap,
-  // main-side, no secrets; runs once per handoff entry.
-  useEffect(() => {
-    if (screen !== 'wsl-wizard' || wslStep !== 'wsl-handoff') return;
-    let cancelled = false;
-    void window.api.authGetAccount().then((account) => {
-      if (!cancelled) setBoxUsername(account?.username ?? null);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [screen, wslStep]);
+  // The D-07 FailureVerdict.screen -> screen-mount bridge (Blocker-2
+  // vocabulary bridge) -- the SOLE place in this file the FailureVerdict.screen
+  // enum is translated into a concrete screen/variant. `r.failureVerdict` is
+  // present only when install-invoke.ts (05-06) computed a live mapFailure
+  // verdict on this exit; when absent, mapInstallInvokeResult (wsl-flow.ts)
+  // supplies the same-named fallback for the 4 legacy WSL-surface kinds.
+  // 'login'/'no-entitlement' cannot arise from this wsl-install surface (only
+  // mapFailure's 'platform' branch produces them, which has no live caller on
+  // this path) -- the `default` branch safely routes any such/unmapped screen
+  // to the generic InstallOutcome card; those two named screens are reached
+  // from OTHER surfaces (Login/NoEntitlement), never from here.
+  function applyInstallFailure(r: InstallInvokeResult): void {
+    const verdict = r.failureVerdict;
+    const verdictScreen = verdict?.screen ?? mapInstallInvokeResult(r).outcome;
+    switch (verdictScreen) {
+      case 'no-tunnel-410':
+        setScreen('no-tunnel-410');
+        return;
+      case 'cf-reconnect':
+        setOrchestratorError({ variant: 'cloudflare-surface', reason: verdict?.copy });
+        setScreen('orchestrator-error');
+        return;
+      case 'disk':
+      case 'systemd-retry':
+      case 'our-bug':
+      case 'generic':
+      default:
+        setWslOutcome({
+          outcome:
+            verdictScreen === 'disk' || verdictScreen === 'systemd-retry' || verdictScreen === 'our-bug'
+              ? verdictScreen
+              : 'generic',
+          reason: verdict?.copy ?? (r.kind === 'generic-failure' ? r.reason : undefined),
+        });
+        setWslStep('install-outcome');
+        setScreen('wsl-wizard');
+        return;
+    }
+  }
 
   // Progress-push ownership (IN-06): Downloading.tsx and InstallingProgress.tsx
   // each subscribe to their own onDownloadUpdate/onInstallUpdate push
@@ -594,10 +684,10 @@ export default function App() {
             {cfStep === 'cf-handoff' && (
               <section className="card">
                 {/* HANDOFF (D-17): this Continue button is the real Phase-5
-                    orchestration handoff seam -- Phase 5 will eventually decide
-                    WHEN to enter WSL provisioning (resume state, install
-                    orchestration); for now it enters the Phase-4 WSL sub-router
-                    directly, the same engine Phase 5 drives. */}
+                    orchestration handoff seam -- flowEnter (05-07's resumable
+                    state machine, live re-verified inside) decides WHEN to
+                    enter WSL provisioning vs. land straight on live-success
+                    (D-03 fast-path) or an error/resume screen. */}
                 <h1 className="heading">Cloudflare is set up</h1>
                 <p className="note-line" style={{ marginTop: 8 }}>
                   Next, Livinity sets up LivOS on this PC.
@@ -606,7 +696,7 @@ export default function App() {
                   type="button"
                   className="btn btn-primary btn-block"
                   style={{ marginTop: 24 }}
-                  onClick={enterWslWizard}
+                  onClick={() => void enterWslWizard()}
                 >
                   Continue
                 </button>
@@ -617,8 +707,8 @@ export default function App() {
 
         {/* Pro / legacy-free wizards have no CF step (the platform resolves
             domain/tunnel server-side) -- their placeholder's Continue is the
-            same Phase-5 handoff seam as the byod-wizard's cf-handoff above,
-            entering the WSL sub-router directly for now. */}
+            same Phase-5 orchestrator handoff seam as the byod-wizard's
+            cf-handoff above (flowEnter decides WHERE to land). */}
         {(screen === 'pro-wizard' || screen === 'legacy-free-wizard') && (
           <section className="card">
             <div className="card-row" style={{ justifyContent: 'flex-start', gap: 12 }}>
@@ -632,7 +722,7 @@ export default function App() {
               type="button"
               className="btn btn-primary btn-block"
               style={{ marginTop: 24 }}
-              onClick={enterWslWizard}
+              onClick={() => void enterWslWizard()}
             >
               Continue
             </button>
@@ -713,21 +803,12 @@ export default function App() {
               <InstallingProgress
                 onOutcome={(r) => {
                   if (r.kind === 'ok') {
-                    setWslStep('wsl-handoff');
+                    // D-06: ConnectedCheck -> LiveSuccess replaces the
+                    // former bb30bd92 interim wsl-handoff card.
+                    setScreen('connected-check');
                     return;
                   }
-                  // mapInstallInvokeResult's 'done' member is only ever produced
-                  // by the 'ok' branch already handled above -- this cast is a
-                  // static-typing artifact of reusing the shared total mapper,
-                  // not a runtime possibility here.
-                  const { outcome } = mapInstallInvokeResult(r) as {
-                    outcome: Exclude<ReturnType<typeof mapInstallInvokeResult>['outcome'], 'done'>;
-                  };
-                  setWslOutcome({
-                    outcome,
-                    reason: r.kind === 'generic-failure' ? r.reason : undefined,
-                  });
-                  setWslStep('install-outcome');
+                  applyInstallFailure(r);
                 }}
               />
             )}
@@ -739,43 +820,54 @@ export default function App() {
               />
             )}
 
-            {wslStep === 'wsl-handoff' &&
-              (() => {
-                // Reached ONLY after install-invoke returns ok, so this is an
-                // honest completion state, not a spinner. The byod path derives
-                // its address from cfHolder ({subLabel}.{zoneName}); the pro/
-                // legacy managed paths use {username}.livinity.io. Phase 5 owns
-                // the richer live dashboard and Phase 6's tray app adds always-
-                // on background running + one-tap open -- until then this
-                // confirms success, shows the address, and says what's next.
-                const byodAddress =
-                  cfHolder.subLabel && cfHolder.zoneName
-                    ? `${cfHolder.subLabel}.${cfHolder.zoneName}`
-                    : null;
-                const boxAddress =
-                  byodAddress ?? (boxUsername ? `${boxUsername}.livinity.io` : null);
-                return (
-                  <section className="card">
-                    <h1 className="heading">LivOS is set up ✓</h1>
-                    <p className="note-line" style={{ marginTop: 8 }}>
-                      {boxAddress
-                        ? 'Livinity is installed on this PC. Your box lives at:'
-                        : 'Livinity is installed on this PC.'}
-                    </p>
-                    {boxAddress && (
-                      <div className="field-input mono" style={{ marginTop: 12 }}>
-                        {boxAddress}
-                      </div>
-                    )}
-                    <p className="note-line" style={{ marginTop: 16 }}>
-                      Keeping it always-on in the background and opening it in one
-                      tap arrive with the Livinity tray app — the next step.
-                    </p>
-                  </section>
-                );
-              })()}
           </>
         )}
+
+        {/* Screen 6 (INSTALL-04; D-05): the bounded connected-check wait
+            between install.sh exiting 0 and the arrival moment -- entered
+            either from InstallingProgress's onOutcome 'ok' branch above or
+            directly from a resumed FlowRoute (kind: 'connected-check',
+            applyFlowRoute). */}
+        {screen === 'connected-check' && (
+          <ConnectedCheck
+            onConnected={(address) => {
+              setLiveAddress(address);
+              setScreen('live-success');
+            }}
+          />
+        )}
+
+        {/* Screen 2 (INSTALL-04; D-05/D-06): the arrival screen -- supersedes
+            the former bb30bd92 wsl-handoff card. Reached from
+            ConnectedCheck.onConnected above or directly from a D-03
+            fast-path FlowRoute (kind: 'live-success', applyFlowRoute). */}
+        {screen === 'live-success' && <LiveSuccess address={liveAddress} />}
+
+        {/* Screen 3 (INSTALL-03; D-07): the unified orchestrator-error
+            screen -- reached from a live resume's stale-CF-token FlowRoute
+            (kind: 'cf-reconnect', applyFlowRoute) or the install-failure
+            dispatch's 'cf-reconnect' FailureVerdict.screen
+            (applyInstallFailure). The CTA re-enters the existing Phase-3
+            CfToken screen rather than retrying blindly (05-UI-SPEC Screen 3). */}
+        {screen === 'orchestrator-error' && orchestratorError && (
+          <UnifiedError
+            variant={orchestratorError.variant}
+            reason={orchestratorError.reason}
+            onRetry={() => {
+              setOrchestratorError(null);
+              setCfStep('cf-token');
+              setScreen('byod-wizard');
+            }}
+          />
+        )}
+
+        {/* Screen 4 (INSTALL-03; D-08): the dedicated calm 410/no-managed-
+            tunnel screen -- reached only from the install-failure dispatch's
+            'no-tunnel-410' FailureVerdict.screen (applyInstallFailure). Its
+            own "Check again" re-checks via flow:resume internally
+            (NoTunnel410.tsx); onResolved re-enters the orchestrator fresh
+            via flow:enter. */}
+        {screen === 'no-tunnel-410' && <NoTunnel410 onResolved={() => void enterWslWizard()} />}
 
         {import.meta.env.DEV && (
           <>
@@ -843,7 +935,7 @@ export default function App() {
 
             <section className="card">
               <h2 className="card-title">WSL provisioning (dev)</h2>
-              <button className="btn btn-primary" onClick={enterWslWizard}>
+              <button className="btn btn-primary" onClick={() => void enterWslWizard()}>
                 Start WSL provisioning (dev)
               </button>
             </section>
