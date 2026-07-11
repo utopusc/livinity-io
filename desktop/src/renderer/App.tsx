@@ -51,6 +51,7 @@ import UnifiedError from './screens/UnifiedError';
 import NoTunnel410 from './screens/NoTunnel410';
 import Settings from './screens/Settings';
 import RemoveFlow from './screens/remove/RemoveFlow';
+import QuickPanel from './screens/QuickPanel';
 
 const STATUSES: Status[] = ['installing', 'running', 'stopped', 'error'];
 
@@ -126,6 +127,16 @@ function planBadgeText(screen: Screen): string {
 }
 
 export default function App() {
+  // Tray-panel addendum (post-Phase-7): the quick-panel window
+  // (src/main/tray/quick-panel.ts) loads this SAME renderer entry with a
+  // `#quick-panel` hash -- that hash is fixed for the entire lifetime of
+  // this window instance (the main process never navigates it elsewhere),
+  // so this early branch always takes the same path on every render of a
+  // given mount and skips the normal screen router entirely. Additive only.
+  if (window.location.hash === '#quick-panel') {
+    return <QuickPanel />;
+  }
+
   // ---- Screen router state (Phase 2) ----
   // Initial mount and the between-request tier-detection wait both render
   // through 'routing' (Routing.tsx) -- there is no separate 'loading' state.
