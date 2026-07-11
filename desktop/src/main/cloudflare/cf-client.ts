@@ -261,3 +261,30 @@ export async function deleteDnsRecord(token: string, zoneId: string, id: string)
   await callCf<unknown>(token, { method: 'DELETE', path: `/zones/${seg(zoneId)}/dns_records/${seg(id)}` });
   logSafe('cf.deleteDns', { deleted: true });
 }
+
+/**
+ * `DELETE /accounts/{acct}/cfd_tunnel/{id}/connections` (SUP-02 teardown, Q3 step 3) —
+ * best-effort connector cleanup before the tunnel delete. Does NOT swallow the
+ * `CfApiError` itself; the caller (remove-executor.ts) tolerates ANY failure here.
+ */
+export async function deleteTunnelConnections(token: string, acctId: string, tunnelId: string): Promise<void> {
+  await callCf<unknown>(token, {
+    method: 'DELETE',
+    path: `/accounts/${seg(acctId)}/cfd_tunnel/${seg(tunnelId)}/connections`,
+  });
+  logSafe('cf.deleteConnections', { deleted: true });
+}
+
+/**
+ * `DELETE /accounts/{acct}/cfd_tunnel/{id}` (SUP-02 teardown, Q3 step 4). Does NOT
+ * classify the response itself — the caller (remove-executor.ts) treats a
+ * `CfApiError` with `status === 404` as success and retries once after the
+ * connections delete on any other failure, per D-13's best-effort teardown order.
+ */
+export async function deleteTunnel(token: string, acctId: string, tunnelId: string): Promise<void> {
+  await callCf<unknown>(token, {
+    method: 'DELETE',
+    path: `/accounts/${seg(acctId)}/cfd_tunnel/${seg(tunnelId)}`,
+  });
+  logSafe('cf.deleteTunnel', { deleted: true });
+}
