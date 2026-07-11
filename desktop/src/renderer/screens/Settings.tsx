@@ -2,10 +2,14 @@
  * src/renderer/screens/Settings.tsx
  *
  * DASH-03: the operator's headline ask ("iyi bir settings tasarlarsın
- * server'ı yönetecek") -- the app's steady-state control room. Task 1 of
- * 06-09 ships the Status / Engine cards + the Open dashboard/browser row;
- * Task 2 adds the Resource limits / Startup / Account cards + the "Open logs
- * folder" link on top of this same file.
+ * server'ı yönetecek") -- the app's steady-state control room. Five stacked
+ * cards (Status / Engine / Resource limits / Startup / Account) plus an Open
+ * dashboard/browser row and an Open-logs-folder link, composed ENTIRELY from
+ * existing `styles.css` classes (06-UI-SPEC's explicit "ZERO net-new CSS
+ * classes" contract) -- reuses `RangeRow` (ResourceAllocation.tsx, exported
+ * this plan) + the `CopyButton` pattern (LiveSuccess.tsx, duplicated per the
+ * established per-screen convention) + the existing `.status-badge`
+ * componentry (Phase 1 scaffolding, given a real signal for the first time).
  *
  * All labels/classes come from the pure `settings-flow.ts` (06-04) -- this
  * file never re-derives the status-badge/toggle/restart copy or class
@@ -30,22 +34,30 @@
  * - The in-flight `transition` (starting/stopping/restarting) is a PURELY
  *   LOCAL flag, set right before an engine action's IPC call and cleared in
  *   its `finally` -- `EngineStatusResult` has no wire-level transition field.
+ * - `WslResourceInfo.current` has no `diskGb` (disk is a creation-time cap,
+ *   never round-tripped as an "applied" value) -- the Disk slider pre-fills
+ *   at `recommended.diskGb` even though Memory/Processors pre-fill at their
+ *   real `current` values, per the plan's "current applied values" intent
+ *   applied to every field the wire contract actually carries.
  *
  * Security (T-06-10/T-06-08): every read here is the secret-free
- * `EngineStatusResult` -- no vault/token ever reaches this file. "Open in
- * browser"/"Open dashboard" take no renderer payload -- the URL/path is
- * derived MAIN-SIDE (openInBrowserGated, D-10), never renderer-supplied.
+ * `EngineStatusResult`/`Account`/`WslResourceInfo` -- no vault/token ever
+ * reaches this file. "Open in browser"/"Open dashboard" take no renderer
+ * payload -- the URL/path is derived MAIN-SIDE (openInBrowserGated, D-10),
+ * never renderer-supplied.
  */
 
 import { useEffect, useRef, useState } from 'react';
-import type { EngineStatusResult } from '../../../shared/ipc-contract';
+import type { EngineStatusResult, WslResourceInfo, Account } from '../../../shared/ipc-contract';
 import { statusBadge, toggleLabel, restartLabel, formatLastChecked, type Transition } from './settings-flow';
+import { RangeRow } from './wsl/ResourceAllocation';
 
 interface SettingsProps {
   onSignedOut: () => void;
 }
 
 const COPIED_RESET_MS = 1800;
+const SAVED_RESET_MS = 1800;
 
 const ACTION_VERB: Record<Exclude<Transition, null>, string> = {
   starting: 'start',
@@ -148,12 +160,28 @@ function CopyButton({ value, label }: { value: string; label: string }): React.R
 }
 
 export default function Settings({ onSignedOut }: SettingsProps) {
-  void onSignedOut; // consumed by Task 2's Account card (Sign out)
-
   // ---- Status / Engine ----
   const [status, setStatus] = useState<EngineStatusResult | null>(null);
   const [transition, setTransition] = useState<Transition>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // ---- Resource limits ----
+  const [resourceInfo, setResourceInfo] = useState<WslResourceInfo | null>(null);
+  const [memoryGb, setMemoryGb] = useState(0);
+  const [processors, setProcessors] = useState(0);
+  const [diskGb, setDiskGb] = useState(0);
+  const [loaded, setLoaded] = useState<{ memoryGb: number; processors: number; diskGb: number } | null>(null);
+  const [resourceTouched, setResourceTouched] = useState(false);
+  const [resourceSaving, setResourceSaving] = useState(false);
+  const [resourceSaved, setResourceSaved] = useState(false);
+  const [resourceSaveFailed, setResourceSaveFailed] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ---- Startup ----
+  const [startAtLogin, setStartAtLogin] = useState(true);
+
+  // ---- Account ----
+  const [account, setAccount] = useState<Account | null>(null);
 
   async function refreshStatus(): Promise<void> {
     const result = await window.api.engineGetStatus();
@@ -162,7 +190,23 @@ export default function Settings({ onSignedOut }: SettingsProps) {
 
   useEffect(() => {
     void refreshStatus();
-    // Runs once on mount.
+    window.api.wslConfigGet().then((info) => {
+      setResourceInfo(info);
+      const values = {
+        memoryGb: info.current.memoryGb ?? info.recommended.memoryGb,
+        processors: info.current.processors ?? info.recommended.processors,
+        // No "current" diskGb round-trips on the wire (disk is a creation-time
+        // cap, not an applied .wslconfig value) -- fall back to recommended.
+        diskGb: info.recommended.diskGb,
+      };
+      setLoaded(values);
+      setMemoryGb(values.memoryGb);
+      setProcessors(values.processors);
+      setDiskGb(values.diskGb);
+    });
+    window.api.authGetAccount().then(setAccount);
+    window.api.getState().then((state) => setStartAtLogin(state.startAtLogin ?? true));
+    // Runs once on mount -- each independent card fetches its own snapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -171,6 +215,12 @@ export default function Settings({ onSignedOut }: SettingsProps) {
       void refreshStatus();
     });
     return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
   }, []);
 
   const desired = status?.desiredState ?? 'stopped';
@@ -200,6 +250,61 @@ export default function Settings({ onSignedOut }: SettingsProps) {
       setTransition(null);
       void refreshStatus();
     }
+  }
+
+  function markResourceTouched(): void {
+    setResourceTouched(true);
+    setResourceSaveFailed(false);
+    setResourceSaved(false);
+  }
+
+  function handleUndoResources(): void {
+    if (!loaded) return;
+    setMemoryGb(loaded.memoryGb);
+    setProcessors(loaded.processors);
+    setDiskGb(loaded.diskGb);
+    setResourceTouched(false);
+    setResourceSaveFailed(false);
+  }
+
+  async function handleSaveResources(): Promise<void> {
+    if (!resourceInfo || resourceSaving) return;
+    setResourceSaving(true);
+    setResourceSaveFailed(false);
+    setResourceSaved(false);
+    try {
+      const limits = resourceInfo.cpuRamTunable ? { memoryGb, processors, diskGb } : { diskGb };
+      const result = await window.api.wslConfigApply(limits);
+      if (result.ok) {
+        setLoaded({ memoryGb, processors, diskGb });
+        setResourceTouched(false);
+        setResourceSaved(true);
+        if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+        savedTimerRef.current = setTimeout(() => setResourceSaved(false), SAVED_RESET_MS);
+      } else {
+        setResourceSaveFailed(true);
+      }
+    } catch {
+      setResourceSaveFailed(true);
+    } finally {
+      setResourceSaving(false);
+    }
+  }
+
+  async function handleToggleStartup(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
+    const next = e.target.checked;
+    setStartAtLogin(next);
+    try {
+      const result = await window.api.engineSetStartAtLogin(next);
+      setStartAtLogin(result.ok ? result.startAtLogin : !next);
+    } catch {
+      setStartAtLogin(!next);
+    }
+  }
+
+  async function handleSignOut(): Promise<void> {
+    await window.api.authSignOut();
+    onSignedOut();
   }
 
   return (
@@ -282,6 +387,140 @@ export default function Settings({ onSignedOut }: SettingsProps) {
             </button>
           </div>
         </div>
+
+        {/* ---------- Resource limits card ---------- */}
+        <div className="card" style={{ marginTop: 24 }}>
+          <h2 className="card-title">RESOURCE LIMITS</h2>
+          {resourceInfo && (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {resourceInfo.cpuRamTunable && (
+                  <RangeRow
+                    id="settings-resource-memory"
+                    label="Memory"
+                    value={memoryGb}
+                    min={1}
+                    max={Math.max(resourceInfo.totalRamGb, 1)}
+                    recommended={resourceInfo.recommended.memoryGb}
+                    formatReadout={(v) => `${v} GB of ${resourceInfo.totalRamGb} GB`}
+                    onChange={(v) => {
+                      setMemoryGb(v);
+                      markResourceTouched();
+                    }}
+                  />
+                )}
+                {resourceInfo.cpuRamTunable && (
+                  <RangeRow
+                    id="settings-resource-processors"
+                    label="Processor cores"
+                    value={processors}
+                    min={1}
+                    max={Math.max(resourceInfo.totalCores, 1)}
+                    recommended={resourceInfo.recommended.processors}
+                    formatReadout={(v) => `${v} of ${resourceInfo.totalCores} cores`}
+                    onChange={(v) => {
+                      setProcessors(v);
+                      markResourceTouched();
+                    }}
+                  />
+                )}
+                <RangeRow
+                  id="settings-resource-disk"
+                  label="Disk space for Livinity"
+                  value={diskGb}
+                  min={15}
+                  max={Math.max(resourceInfo.freeDiskGb, 15)}
+                  recommended={resourceInfo.recommended.diskGb}
+                  formatReadout={(v) => `Up to ${v} GB`}
+                  onChange={(v) => {
+                    setDiskGb(v);
+                    markResourceTouched();
+                  }}
+                />
+              </div>
+
+              {/* Honest VM-global disclosure (D-17) -- verbatim reuse, unconditional. */}
+              <p className="note-line" style={{ marginTop: 16 }}>
+                Memory and processor limits apply to every Linux environment on your PC, not just
+                Livinity — that's how Windows' WSL works. Disk space is used by Livinity only.
+              </p>
+
+              {resourceSaving && (
+                <p className="note-line" aria-live="polite" style={{ marginTop: 12 }}>
+                  Saving…
+                </p>
+              )}
+              {resourceSaved && !resourceSaving && (
+                <p className="note-line" aria-live="polite" style={{ marginTop: 12 }}>
+                  Saved.
+                </p>
+              )}
+              {resourceSaveFailed && !resourceSaving && (
+                <p className="note-line" aria-live="polite" style={{ marginTop: 12 }}>
+                  That didn't go through — try again.
+                </p>
+              )}
+
+              {resourceTouched && (
+                <div className="btn-row" style={{ marginTop: 12 }}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={resourceSaving}
+                    onClick={() => void handleSaveResources()}
+                  >
+                    {resourceSaving ? 'Saving…' : 'Save changes'}
+                  </button>
+                  <button type="button" className="link-mute" onClick={handleUndoResources}>
+                    Undo changes
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* ---------- Startup card ---------- */}
+        <div className="card" style={{ marginTop: 24 }}>
+          <h2 className="card-title">STARTUP</h2>
+          <div className="checkbox-row">
+            <input
+              type="checkbox"
+              id="settings-start-at-login"
+              checked={startAtLogin}
+              onChange={(e) => void handleToggleStartup(e)}
+            />
+            <label htmlFor="settings-start-at-login">
+              Start Livinity automatically when I sign in to Windows
+            </label>
+          </div>
+        </div>
+
+        {/* ---------- Account card ---------- */}
+        <div className="card" style={{ marginTop: 24 }}>
+          <h2 className="card-title">ACCOUNT</h2>
+          <div className="card-row">
+            <div>
+              <span className="field-label">Signed in as</span>
+              <p className="note-line" style={{ marginTop: 4 }}>
+                {account?.email ?? ''}
+              </p>
+            </div>
+            <button type="button" className="btn" onClick={() => void handleSignOut()}>
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        {/* ---------- Diagnostics (bottom, tertiary) ---------- */}
+        <button
+          type="button"
+          className="link-mute"
+          style={{ marginTop: 24 }}
+          onClick={() => void window.api.engineOpenLogsFolder()}
+        >
+          Open logs folder
+        </button>
       </section>
     </div>
   );
