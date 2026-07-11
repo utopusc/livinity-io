@@ -369,6 +369,70 @@ describe('shell-preload Phase-5 flow channel wiring (drift guard vs. shared/ipc-
   });
 });
 
+describe('shell-preload Phase-6 engine channel wiring (drift guard vs. shared/ipc-contract.ts)', () => {
+  beforeEach(() => {
+    invokeMock.mockClear();
+    onMock.mockClear();
+    removeListenerMock.mockClear();
+  });
+
+  it('engineStart invokes the canonical engine:start channel with no payload', async () => {
+    await getExposedApi()!.engineStart();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.engineStart);
+  });
+
+  it('engineStop invokes the canonical engine:stop channel with no payload', async () => {
+    await getExposedApi()!.engineStop();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.engineStop);
+  });
+
+  it('engineRestart invokes the canonical engine:restart channel with no payload', async () => {
+    await getExposedApi()!.engineRestart();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.engineRestart);
+  });
+
+  it('engineGetStatus invokes the canonical engine:getStatus channel with no payload', async () => {
+    await getExposedApi()!.engineGetStatus();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.engineGetStatus);
+  });
+
+  it('engineSetStartAtLogin invokes the canonical engine:setStartAtLogin channel with { enabled }', async () => {
+    await getExposedApi()!.engineSetStartAtLogin(true);
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.engineSetStartAtLogin, { enabled: true });
+  });
+
+  it('engineOpenDashboard invokes the canonical engine:openDashboard channel with no payload', async () => {
+    await getExposedApi()!.engineOpenDashboard();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.engineOpenDashboard);
+  });
+
+  it('engineOpenInBrowser invokes the canonical engine:openInBrowser channel with no payload (D-10 stopped-gated, main-side-derived address)', async () => {
+    await getExposedApi()!.engineOpenInBrowser();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.engineOpenInBrowser);
+  });
+
+  it('engineOpenLogsFolder invokes the canonical engine:openLogsFolder channel with no payload', async () => {
+    await getExposedApi()!.engineOpenLogsFolder();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.engineOpenLogsFolder);
+  });
+
+  it('onEngineNavigate subscribes on the canonical engine:navigate channel', () => {
+    const cb = vi.fn();
+    getExposedApi()!.onEngineNavigate(cb);
+    expect(onMock).toHaveBeenCalledWith(CHANNELS.engineNavigate, expect.any(Function));
+  });
+
+  it('onEngineNavigate returns an unsubscribe function that removes the exact listener (mirrors onProvisionUpdate)', () => {
+    const cb = vi.fn();
+    const unsubscribe = getExposedApi()!.onEngineNavigate(cb) as () => void;
+    expect(typeof unsubscribe).toBe('function');
+
+    const registeredListener = onMock.mock.calls[onMock.mock.calls.length - 1][1];
+    unsubscribe();
+    expect(removeListenerMock).toHaveBeenCalledWith(CHANNELS.engineNavigate, registeredListener);
+  });
+});
+
 describe('shell-preload DEV-ONLY spike channels (Plan 04 drift guard vs. shell.ipc.ts)', () => {
   // The dev spike channels are deliberately NOT part of the production
   // CHANNELS object (Plan 03 decision), so the canonical source to guard

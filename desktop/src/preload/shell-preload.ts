@@ -46,11 +46,13 @@ import type {
   CfApi,
   WslApi,
   FlowApi,
+  EngineApi,
   Status,
   DeviceLoginUpdate,
   CfProvisionUpdate,
   WslDownloadUpdate,
   WslInstallUpdate,
+  EngineNavigate,
 } from '../../shared/ipc-contract';
 
 // Mirrors shared/ipc-contract.ts CHANNELS exactly — duplicated here because a
@@ -121,6 +123,20 @@ const CHANNELS = {
   flowConnectedCheck: 'flow:connectedCheck',
   flowOpenBox: 'flow:openBox',
   flowOpenExternal: 'flow:openExternal',
+  // Phase 6 (tray supervision + embedded dashboard): 8 engine:* invoke channels
+  // + the engine:navigate main -> renderer push (mirrors cfProvisionUpdate).
+  // Duplicated here as literals for the same sandbox reason as the auth/cf/wsl/
+  // flow blocks above. Kept in sync with the canonical CHANNELS.engine* export
+  // by tests/shell-preload.test.ts (drift guard).
+  engineStart: 'engine:start',
+  engineStop: 'engine:stop',
+  engineRestart: 'engine:restart',
+  engineGetStatus: 'engine:getStatus',
+  engineSetStartAtLogin: 'engine:setStartAtLogin',
+  engineOpenDashboard: 'engine:openDashboard',
+  engineOpenInBrowser: 'engine:openInBrowser',
+  engineOpenLogsFolder: 'engine:openLogsFolder',
+  engineNavigate: 'engine:navigate',
 } as const;
 
 // DEV-ONLY spike channels (Plan 04) — local literals for the same sandbox
@@ -131,7 +147,7 @@ const DEV_CHANNELS = {
   devUpdateSim: 'dev:updateSim',
 } as const;
 
-const api: ShellApi & DevSpikeApi & AuthApi & CfApi & WslApi & FlowApi = {
+const api: ShellApi & DevSpikeApi & AuthApi & CfApi & WslApi & FlowApi & EngineApi = {
   vaultSet: (key, value) => ipcRenderer.invoke(CHANNELS.vaultSet, { key, value }),
   vaultHas: (key) => ipcRenderer.invoke(CHANNELS.vaultHas, { key }),
   getState: () => ipcRenderer.invoke(CHANNELS.stateGet),
@@ -236,6 +252,28 @@ const api: ShellApi & DevSpikeApi & AuthApi & CfApi & WslApi & FlowApi = {
   flowConnectedCheck: () => ipcRenderer.invoke(CHANNELS.flowConnectedCheck),
   flowOpenBox: () => ipcRenderer.invoke(CHANNELS.flowOpenBox),
   flowOpenExternal: (target) => ipcRenderer.invoke(CHANNELS.flowOpenExternal, { target }),
+  // Phase 6 (tray supervision + embedded dashboard) -- no method here ever
+  // returns a secret; engineOpenDashboard/engineOpenInBrowser/
+  // engineOpenLogsFolder take no renderer payload (the D-10 gate/address/
+  // fixed path are all resolved MAIN-SIDE); onEngineNavigate uses the same
+  // subscribe-and-return-unsubscribe pattern as onProvisionUpdate/
+  // onDownloadUpdate.
+  engineStart: () => ipcRenderer.invoke(CHANNELS.engineStart),
+  engineStop: () => ipcRenderer.invoke(CHANNELS.engineStop),
+  engineRestart: () => ipcRenderer.invoke(CHANNELS.engineRestart),
+  engineGetStatus: () => ipcRenderer.invoke(CHANNELS.engineGetStatus),
+  engineSetStartAtLogin: (enabled) =>
+    ipcRenderer.invoke(CHANNELS.engineSetStartAtLogin, { enabled }),
+  engineOpenDashboard: () => ipcRenderer.invoke(CHANNELS.engineOpenDashboard),
+  engineOpenInBrowser: () => ipcRenderer.invoke(CHANNELS.engineOpenInBrowser),
+  engineOpenLogsFolder: () => ipcRenderer.invoke(CHANNELS.engineOpenLogsFolder),
+  onEngineNavigate: (cb: (nav: EngineNavigate) => void) => {
+    const listener = (_event: IpcRendererEvent, nav: EngineNavigate) => cb(nav);
+    ipcRenderer.on(CHANNELS.engineNavigate, listener);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.engineNavigate, listener);
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld('api', api);
