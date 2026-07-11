@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { visibleChoices, goesList, staysList, stepCaptions, finalButton } from '../../src/renderer/screens/remove-flow';
 import type { RemoveChoices, RemoveOffer } from '../../shared/ipc-contract';
 
@@ -187,6 +189,21 @@ describe('stepCaptions (single-sourced from REMOVE_STEP_LABELS, removePlan order
       'Deleting the Livinity system',
       'Clearing your sign-in and settings',
     ]);
+  });
+});
+
+describe('RemoveFlow.tsx wiring source-scan (WR-06 — no React runner here; the pure cores above are behavior-tested, the screen wiring is scanned, updater.test.ts precedent)', () => {
+  const source = readFileSync(join(__dirname, '../../src/renderer/screens/remove/RemoveFlow.tsx'), 'utf8');
+
+  it("the confirm stage is NOT gated on a non-null offer — no blank dead-end (no buttons, no Go back) while removeGetOffer is pending or failed", () => {
+    expect(source).not.toMatch(/stage === 'confirm'\s*&&\s*offer\s*&&/);
+    // The confirm content renders against the null-safe fallback instead.
+    expect(source).toContain('offer ?? SAFE_OFFER');
+  });
+
+  it('the choices "Continue" is disabled until the offer resolves, and the getOffer failure path seeds the safe default (offer can never stay null forever)', () => {
+    expect(source).toContain('disabled={!offer}');
+    expect(source).toMatch(/\.catch\(\(\) => setOffer\(SAFE_OFFER\)\)/);
   });
 });
 

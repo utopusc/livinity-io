@@ -53,6 +53,13 @@ type Stage = 'choices' | 'confirm' | 'working' | 'handoff';
 const EMPTY_CHOICES: RemoveChoices = { cf: false, distro: false, clear: false };
 const EMPTY_VISIBLE = { cf: false, distro: true, clear: true };
 
+/** WR-06: the same "don't offer CF" default main-side computeRemoveOffer
+ * resolves on any uncertainty — seeded on a failed removeGetOffer and used as
+ * the confirm stage's null-fallback, so the confirm screen (and its Go back)
+ * can never be a blank dead-end. The confirm content only needs the offer for
+ * the CF line, which this default correctly omits. */
+const SAFE_OFFER: RemoveOffer = { offerCfTeardown: false, apexHost: null };
+
 /** Copied verbatim from wsl/InstallingProgress.tsx -- the shared step-list done glyph. */
 function CheckGlyph(): React.ReactElement {
   return (
@@ -81,10 +88,12 @@ export default function RemoveFlow({ onDone }: RemoveFlowProps) {
   const [progress, setProgress] = useState<Partial<Record<RemoveStepId, RemoveProgress['status']>>>({});
 
   useEffect(() => {
+    // WR-06: a preload/IPC-level failure seeds the safe default instead of
+    // leaving offer null forever (which would pin "Continue" disabled).
     window.api
       .removeGetOffer()
       .then(setOffer)
-      .catch(() => {});
+      .catch(() => setOffer(SAFE_OFFER));
   }, []);
 
   // Unconditional (not stage-gated): removeExecute's invoke() only resolves
@@ -99,6 +108,10 @@ export default function RemoveFlow({ onDone }: RemoveFlowProps) {
   }, []);
 
   const offered = offer ? visibleChoices(offer) : EMPTY_VISIBLE;
+  // WR-06: the confirm stage renders against this null-safe fallback — its
+  // content only needs the offer for the CF goes/stays line, which SAFE_OFFER
+  // correctly omits; "Go back" is therefore always reachable.
+  const safeOffer = offer ?? SAFE_OFFER;
   const btn = finalButton(choices, gateChecked);
   // Client-knowable without engineRunning: removePlan(choices, *) is always []
   // when none of the three choices are set (the stop-engine gate is
@@ -215,24 +228,30 @@ export default function RemoveFlow({ onDone }: RemoveFlowProps) {
             type="button"
             className="btn btn-primary btn-block"
             style={{ marginTop: 24 }}
+            disabled={!offer}
             onClick={() => setStage('confirm')}
           >
             Continue
           </button>
+          {!offer && (
+            <p className="note-line" style={{ marginTop: 8 }}>
+              Checking what Livinity set up on this PC…
+            </p>
+          )}
           <button type="button" className="link-mute" style={{ marginTop: 16 }} onClick={onDone}>
             Never mind — keep everything
           </button>
         </section>
       )}
 
-      {stage === 'confirm' && offer && (
+      {stage === 'confirm' && (
         <section>
           <h1 className="display">Ready to remove Livinity</h1>
 
           <p className="field-label" style={{ marginTop: 24 }}>
             WHAT GOES
           </p>
-          {goesList(choices, offer).map((line, i) => (
+          {goesList(choices, safeOffer).map((line, i) => (
             <p key={`goes-${i}`} className="note-line" style={{ marginTop: 8 }}>
               {line}
             </p>
@@ -241,7 +260,7 @@ export default function RemoveFlow({ onDone }: RemoveFlowProps) {
           <p className="field-label" style={{ marginTop: 24 }}>
             WHAT STAYS
           </p>
-          {staysList(choices, offer).map((line, i) => (
+          {staysList(choices, safeOffer).map((line, i) => (
             <p key={`stays-${i}`} className="note-line" style={{ marginTop: 8 }}>
               {line}
             </p>
