@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "electron-log": "^5.4.4",
+    "electron-updater": "6.8.9",
     "zod": "^4.4.3"
   },
   "devDependencies": {
