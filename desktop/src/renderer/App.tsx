@@ -50,6 +50,7 @@ import LiveSuccess from './screens/LiveSuccess';
 import UnifiedError from './screens/UnifiedError';
 import NoTunnel410 from './screens/NoTunnel410';
 import Settings from './screens/Settings';
+import RemoveFlow from './screens/remove/RemoveFlow';
 
 const STATUSES: Status[] = ['installing', 'running', 'stopped', 'error'];
 
@@ -70,7 +71,8 @@ type Screen =
   | 'live-success'
   | 'orchestrator-error'
   | 'no-tunnel-410'
-  | 'settings';
+  | 'settings'
+  | 'remove';
 
 const WIZARD_SCREENS: Screen[] = ['byod-wizard', 'pro-wizard', 'legacy-free-wizard'];
 
@@ -861,7 +863,15 @@ export default function App() {
         {/* DASH-03: the control-room screen, reached from the tray "Settings" row /
             the D-10 stopped-open gate (both via the onEngineNavigate push above) or
             LiveSuccess's "Manage your server" link. */}
-        {screen === 'settings' && <Settings onSignedOut={() => setScreen('login')} />}
+        {screen === 'settings' && (
+          <Settings onSignedOut={() => setScreen('login')} onRemove={() => setScreen('remove')} />
+        )}
+
+        {/* SUP-02 (07-10): the Remove-flow screen pair, reached from Settings'
+            "Remove Livinity…" danger-zone entry (onRemove above). onDone routes
+            back to Settings -- the flow holds no persisted step (07-UI-SPEC
+            screen-notes §2). */}
+        {screen === 'remove' && <RemoveFlow onDone={() => setScreen('settings')} />}
 
         {/* Screen 3 (INSTALL-03; D-07): the unified orchestrator-error
             screen -- reached from a live resume's stale-CF-token FlowRoute
