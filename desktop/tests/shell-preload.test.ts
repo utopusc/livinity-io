@@ -338,6 +338,37 @@ describe('shell-preload Phase-4 wsl channel wiring (drift guard vs. shared/ipc-c
   });
 });
 
+describe('shell-preload Phase-5 flow channel wiring (drift guard vs. shared/ipc-contract.ts)', () => {
+  beforeEach(() => {
+    invokeMock.mockClear();
+  });
+
+  it('flowEnter invokes the canonical flow:enter channel with no payload', async () => {
+    await getExposedApi()!.flowEnter();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.flowEnter);
+  });
+
+  it('flowResume invokes the canonical flow:resume channel with no payload', async () => {
+    await getExposedApi()!.flowResume();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.flowResume);
+  });
+
+  it('flowConnectedCheck invokes the canonical flow:connectedCheck channel with no payload', async () => {
+    await getExposedApi()!.flowConnectedCheck();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.flowConnectedCheck);
+  });
+
+  it('flowOpenBox invokes the canonical flow:openBox channel with no payload', async () => {
+    await getExposedApi()!.flowOpenBox();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.flowOpenBox);
+  });
+
+  it('flowOpenExternal invokes the canonical flow:openExternal channel with { target } (enum, never a URL)', async () => {
+    await getExposedApi()!.flowOpenExternal('support');
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.flowOpenExternal, { target: 'support' });
+  });
+});
+
 describe('shell-preload DEV-ONLY spike channels (Plan 04 drift guard vs. shell.ipc.ts)', () => {
   // The dev spike channels are deliberately NOT part of the production
   // CHANNELS object (Plan 03 decision), so the canonical source to guard

@@ -45,6 +45,7 @@ import type {
   AuthApi,
   CfApi,
   WslApi,
+  FlowApi,
   Status,
   DeviceLoginUpdate,
   CfProvisionUpdate,
@@ -110,6 +111,16 @@ const CHANNELS = {
   wslOpenExternal: 'wsl:openExternal',
   wslDownloadUpdate: 'wsl:downloadUpdate',
   wslInstallUpdate: 'wsl:installUpdate',
+  // Phase 5 (install orchestration): 5 flow:* invoke channels, no progress
+  // push (flow:connectedCheck's bounded retry resolves entirely inside
+  // runConnectedProbe main-side). Duplicated here as literals for the same
+  // sandbox reason as the auth/cf/wsl blocks above. Kept in sync with the
+  // canonical CHANNELS.flow* export by tests/shell-preload.test.ts (drift guard).
+  flowEnter: 'flow:enter',
+  flowResume: 'flow:resume',
+  flowConnectedCheck: 'flow:connectedCheck',
+  flowOpenBox: 'flow:openBox',
+  flowOpenExternal: 'flow:openExternal',
 } as const;
 
 // DEV-ONLY spike channels (Plan 04) — local literals for the same sandbox
@@ -120,7 +131,7 @@ const DEV_CHANNELS = {
   devUpdateSim: 'dev:updateSim',
 } as const;
 
-const api: ShellApi & DevSpikeApi & AuthApi & CfApi & WslApi = {
+const api: ShellApi & DevSpikeApi & AuthApi & CfApi & WslApi & FlowApi = {
   vaultSet: (key, value) => ipcRenderer.invoke(CHANNELS.vaultSet, { key, value }),
   vaultHas: (key) => ipcRenderer.invoke(CHANNELS.vaultHas, { key }),
   getState: () => ipcRenderer.invoke(CHANNELS.stateGet),
@@ -216,6 +227,15 @@ const api: ShellApi & DevSpikeApi & AuthApi & CfApi & WslApi = {
       ipcRenderer.removeListener(CHANNELS.wslInstallUpdate, listener);
     };
   },
+  // Phase 5 (install orchestration) -- no method here ever returns a secret;
+  // flowOpenBox/flowOpenExternal take no renderer-supplied URL (the address is
+  // derived main-side / the enum maps to a fixed URL); all 5 are plain
+  // request-response invokes, no progress push exists for this surface.
+  flowEnter: () => ipcRenderer.invoke(CHANNELS.flowEnter),
+  flowResume: () => ipcRenderer.invoke(CHANNELS.flowResume),
+  flowConnectedCheck: () => ipcRenderer.invoke(CHANNELS.flowConnectedCheck),
+  flowOpenBox: () => ipcRenderer.invoke(CHANNELS.flowOpenBox),
+  flowOpenExternal: (target) => ipcRenderer.invoke(CHANNELS.flowOpenExternal, { target }),
 };
 
 contextBridge.exposeInMainWorld('api', api);
