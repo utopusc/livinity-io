@@ -70,49 +70,129 @@ export function createTrayIcon(color: string): Buffer {
   ).toPNG();
 }
 
+/**
+ * `onOpen`/`onQuit` are the two original Phase-1 callbacks and stay required
+ * (the legacy `updateTrayStatus` shim below and its sole caller,
+ * `src/main/index.ts`, only ever supply these two). The 6 D-07 callbacks
+ * added in Phase 6 are optional — `createTray`'s real wiring (index.ts,
+ * landing in 06-11) will always supply all 8, but keeping them optional here
+ * means this additive change never breaks the still-untouched Phase-1 call
+ * site's object-literal shape (that rewiring is explicitly 06-11's job, not
+ * this plan's — see the module docstring / 06-05-PLAN.md).
+ */
 export interface TrayCallbacks {
   onOpen: () => void;
+  onOpenDashboard?: () => void;
+  onOpenInBrowser?: () => void;
+  onToggleEngine?: () => void; // start OR stop; label is computed from TrayViewState.engineRunning
+  onRestart?: () => void;
+  onToggleStartAtLogin?: () => void;
+  onOpenSettings?: () => void;
   onQuit: () => void;
 }
 
-function buildContextMenu(status: Status, cbs: TrayCallbacks) {
+/** Single source-of-truth view-model driving both the icon and the D-07 9-row menu. */
+export interface TrayViewState {
+  status: Status; // drives icon color/tooltip (existing 4-value enum)
+  statusText: string; // action-specific row/tooltip text ('Running'/'Starting…'/etc.)
+  engineRunning: boolean; // 'Start engine' vs 'Stop engine' row label
+  startAtLoginChecked: boolean;
+  actionsDisabled: boolean; // true while any transition is in flight (disables toggle+restart)
+}
+
+const NOOP = () => {};
+
+/**
+ * Pure D-07 9-row template builder (06-UI-SPEC "Tray menu (TRAY-04)" table):
+ * Open Livinity / Open dashboard / Open in browser / (sep) / Status: {text}
+ * (disabled) / (sep) / Start|Stop engine / Restart engine / (sep) / Start at
+ * login (checkbox) / Settings / (sep) / Quit.
+ */
+function buildContextMenu(view: TrayViewState, cbs: TrayCallbacks) {
   return Menu.buildFromTemplate([
-    { label: 'Open', click: cbs.onOpen },
+    { label: 'Open Livinity', click: cbs.onOpen },
+    { label: 'Open dashboard', click: cbs.onOpenDashboard ?? NOOP },
+    { label: 'Open in browser', click: cbs.onOpenInBrowser ?? NOOP },
     { type: 'separator' },
-    { label: `Status: ${statusToLabel(status)}`, id: 'status', enabled: false },
+    { label: `Status: ${view.statusText}`, id: 'status', enabled: false },
+    { type: 'separator' },
+    {
+      label: view.engineRunning ? 'Stop engine' : 'Start engine',
+      click: cbs.onToggleEngine ?? NOOP,
+      enabled: !view.actionsDisabled,
+    },
+    {
+      label: 'Restart engine',
+      click: cbs.onRestart ?? NOOP,
+      enabled: !view.actionsDisabled,
+    },
+    { type: 'separator' },
+    {
+      label: 'Start at login',
+      type: 'checkbox',
+      checked: view.startAtLoginChecked,
+      click: cbs.onToggleStartAtLogin ?? NOOP,
+    },
+    { label: 'Settings', click: cbs.onOpenSettings ?? NOOP },
     { type: 'separator' },
     { label: 'Quit', click: cbs.onQuit },
   ]);
 }
 
 /**
- * Builds the Tray with an initial 'stopped' icon, tooltip, and context menu.
- * `Open`/`Quit` are delegated to `opts` — index.ts owns the isQuitting flag,
- * this module only invokes the callback it was given.
+ * Builds the Tray with an initial 'stopped' view-model icon/tooltip/menu.
+ * `onOpen`/`onQuit` are delegated to `opts` — index.ts owns the isQuitting
+ * flag, this module only invokes the callback it was given.
  */
 export function createTray(opts: TrayCallbacks): Tray {
-  const initialStatus: Status = 'stopped';
-  const icon = nativeImage.createFromBuffer(createTrayIcon(statusToColor(initialStatus)), {
+  const initialView: TrayViewState = {
+    status: 'stopped',
+    statusText: statusToLabel('stopped'),
+    engineRunning: false,
+    startAtLoginChecked: false,
+    actionsDisabled: false,
+  };
+  const icon = nativeImage.createFromBuffer(createTrayIcon(statusToColor(initialView.status)), {
     width: 16,
     height: 16,
   });
   const tray = new Tray(icon);
-  tray.setToolTip('Livinity Desktop');
-  tray.setContextMenu(buildContextMenu(initialStatus, opts));
   tray.on('double-click', opts.onOpen);
+  updateTray(tray, initialView, opts);
   return tray;
 }
 
-/** Swaps the tray icon color/tooltip/menu-label to reflect the new status. */
+/** Swaps the tray icon color/tooltip/menu to reflect the new TrayViewState. */
+export function updateTray(tray: Tray, view: TrayViewState, cbs: TrayCallbacks): void {
+  tray.setImage(
+    nativeImage.createFromBuffer(createTrayIcon(statusToColor(view.status)), { width: 16, height: 16 })
+  );
+  tray.setToolTip(`Livinity Desktop – ${view.statusText}`);
+  tray.setContextMenu(buildContextMenu(view, cbs));
+}
+
+/**
+ * @deprecated Thin legacy shim for `src/main/index.ts`'s Phase-1
+ * `registerShellIpc.setStatus` call site (until 06-11 rewires it onto the
+ * real `TrayViewState`) — builds a minimal default view from just `status`
+ * and delegates to `updateTray`. Not removed here per 06-05-PLAN.md (avoids
+ * a Wave-2/Wave-5 coupling with 06-11's index.ts rewrite).
+ */
 export function updateTrayStatus(
   tray: Tray,
   status: Status,
   onOpen: () => void,
   onQuit: () => void
 ): void {
-  tray.setImage(
-    nativeImage.createFromBuffer(createTrayIcon(statusToColor(status)), { width: 16, height: 16 })
+  updateTray(
+    tray,
+    {
+      status,
+      statusText: statusToLabel(status),
+      engineRunning: status === 'running',
+      startAtLoginChecked: false,
+      actionsDisabled: false,
+    },
+    { onOpen, onQuit }
   );
-  tray.setToolTip(`Livinity Desktop - ${statusToLabel(status)}`);
-  tray.setContextMenu(buildContextMenu(status, { onOpen, onQuit }));
 }
