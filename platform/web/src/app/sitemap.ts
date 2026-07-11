@@ -14,8 +14,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticEntries: MetadataRoute.Sitemap = [
     { url: `${BASE}/`, changeFrequency: 'weekly', priority: 1 },
     { url: `${BASE}/pricing`, changeFrequency: 'monthly', priority: 0.9 },
-    // /download is deliberately absent — the desktop-agent page is
-    // deprecated (noindex'd) and its binaries were never shipped.
+    // /download is back: Livinity Desktop for Windows (v0.2.0 beta) shipped —
+    // the page now points at a real GitHub release asset and is indexable.
+    { url: `${BASE}/download`, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${BASE}/docs`, changeFrequency: 'weekly', priority: 0.8 },
     { url: `${BASE}/developers`, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${BASE}/legal`, changeFrequency: 'yearly', priority: 0.3 },

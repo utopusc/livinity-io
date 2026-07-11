@@ -6,30 +6,47 @@
     <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
 
-    <title>Download Livinity Agent — Windows, macOS &amp; Linux</title>
-    <meta name="description" content="Get the Livinity desktop agent for Windows, macOS, and Linux. Reach your self-hosted Cloud AI Computer from any device — securely, without exposing ports." />
-    <meta name="keywords" content="Livinity download, Livinity agent, self-hosted AI client, remote access desktop, LivOS client" />
+    <title>Download Livinity Desktop for Windows — v0.2.0 Beta</title>
+    <meta name="description" content="Livinity Desktop for Windows: zero terminal. Sign in, and your personal AI home server installs itself — WSL 2, LivOS, and your secure address, all handled for you." />
+    <meta name="keywords" content="Livinity Desktop download, Windows home server app, self-hosted AI, LivOS installer, WSL2 home server, zero terminal install" />
 
-    <!-- Deprecated page: the desktop agent is not offered anymore. Kept for
-         direct visitors; noindex + crawlable so search engines drop it. -->
-    <meta name="robots" content="noindex, nofollow" />
+    <link rel="canonical" href="https://livinity.io/download" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Livinity" />
-    <meta property="og:title" content="Download Livinity Agent" />
-    <meta property="og:description" content="Reach your Cloud AI Computer from any device. Windows, macOS, Linux — open-source, free." />
+    <meta property="og:title" content="Download Livinity Desktop for Windows" />
+    <meta property="og:description" content="Zero terminal. Sign in, and your personal AI home server installs itself. Windows 10/11 · v0.2.0 Beta." />
     <meta property="og:url" content="https://livinity.io/download" />
     <meta property="og:image" content="https://livinity.io/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-
     <meta property="og:image:alt" content="Livinity — Your own Cloud AI Computer" />
     <meta property="og:locale" content="en_US" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Download Livinity Agent" />
-    <meta name="twitter:description" content="Reach your Cloud AI Computer from any device — open-source, free." />
+    <meta name="twitter:title" content="Download Livinity Desktop for Windows" />
+    <meta name="twitter:description" content="Zero terminal. Sign in, and your personal AI home server installs itself. v0.2.0 Beta." />
     <meta name="twitter:image" content="https://livinity.io/og-image.png" />
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Livinity Desktop",
+      "operatingSystem": "Windows 10, Windows 11",
+      "applicationCategory": "UtilitiesApplication",
+      "softwareVersion": "0.2.0",
+      "url": "https://livinity.io/download",
+      "downloadUrl": "https://github.com/utopusc/livinity-io/releases/download/desktop-v0.2.0/Livinity-Desktop-Setup-0.2.0.exe",
+      "releaseNotes": "https://github.com/utopusc/livinity-io/releases/tag/desktop-v0.2.0",
+      "fileSize": "100MB",
+      "description": "Windows companion app for LivOS. Sign in and your personal AI home server installs itself — Livinity Desktop enables WSL 2, installs LivOS, connects your secure address, and keeps everything running from the system tray. No terminal needed.",
+      "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "publisher": { "@type": "Organization", "name": "Livinity", "url": "https://livinity.io/" }
+    }
+    </script>
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
@@ -48,13 +65,12 @@
     <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
     <style>
-      :root { --dl-pad: clamp(24px, 4vw, 56px); }
       body { background: var(--bg); color: var(--fg); }
 
-      .dl-shell { max-width: 1100px; margin: 0 auto; padding: 120px 32px 80px; }
+      .dl-shell { max-width: 880px; margin: 0 auto; padding: 120px 32px 80px; }
 
       /* Hero */
-      .dl-hero { text-align: center; margin-bottom: 72px; }
+      .dl-hero { text-align: center; margin-bottom: 56px; }
       .dl-mark {
         width: 72px; height: 72px; border-radius: 50%;
         background: var(--fg); margin: 0 auto 28px;
@@ -69,12 +85,20 @@
         letter-spacing: 0.18em; text-transform: uppercase;
         color: var(--fg-mute);
         margin-bottom: 16px;
-        display: inline-flex; align-items: center; gap: 8px;
+        display: inline-flex; align-items: center; gap: 10px;
       }
       .dl-eyebrow .ic { width: 6px; height: 6px; border-radius: 50%; background: var(--fg); }
+      .dl-beta {
+        display: inline-block;
+        padding: 3px 10px; border-radius: 999px;
+        background: var(--bg-2); border: 1px solid var(--line);
+        font-family: var(--mono); font-size: 10.5px;
+        letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--fg-mute);
+      }
 
       .dl-title {
-        font-size: clamp(40px, 5.5vw, 72px);
+        font-size: clamp(38px, 5.5vw, 68px);
         font-weight: 300; letter-spacing: -0.035em;
         line-height: 1.04; color: var(--fg);
         text-wrap: balance; margin: 0;
@@ -86,108 +110,91 @@
       .dl-sub {
         font-size: 17px; line-height: 1.55;
         color: var(--fg-mute);
-        max-width: 56ch; margin: 22px auto 0;
+        max-width: 54ch; margin: 22px auto 0;
         text-wrap: pretty;
       }
 
-      /* Detection notice */
-      .dl-detect {
-        display: inline-flex; align-items: center; gap: 10px;
-        margin-top: 28px;
-        padding: 8px 16px;
+      /* Download CTA */
+      .dl-cta-row {
+        display: flex; justify-content: center; align-items: center;
+        gap: 14px; margin-top: 34px; flex-wrap: wrap;
+      }
+      .dl-cta-row .btn { padding: 13px 24px; font-size: 15px; border-radius: 14px; }
+      .dl-cta-meta {
+        margin-top: 14px;
+        font-family: var(--mono); font-size: 12px;
+        letter-spacing: 0.03em;
+        color: var(--fg-mute);
+      }
+      .dl-cta-meta .sep { color: var(--fg-faint); margin: 0 8px; }
+      .dl-cta-alt {
+        margin-top: 10px;
+        font-size: 13px; color: var(--fg-mute);
+      }
+      .dl-cta-alt a { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
+
+      /* SmartScreen note — calm, neutral */
+      .dl-note {
+        max-width: 640px;
+        margin: 56px auto 0;
+        padding: 20px 24px;
         background: var(--bg-2);
         border: 1px solid var(--line);
-        border-radius: 999px;
-        font-size: 12.5px;
+        border-radius: 16px;
+        text-align: left;
+      }
+      .dl-note .t {
+        font-family: var(--mono); font-size: 11px;
+        letter-spacing: 0.14em; text-transform: uppercase;
         color: var(--fg-mute);
-        font-family: var(--mono);
-        letter-spacing: 0.02em;
+        margin-bottom: 8px;
       }
-      .dl-detect .dot {
-        width: 7px; height: 7px; border-radius: 50%;
-        background: var(--fg);
-        animation: dlBreathe 2.5s ease-in-out infinite;
+      .dl-note p {
+        font-size: 13.5px; line-height: 1.6;
+        color: var(--fg-mute); margin: 0;
+        text-wrap: pretty;
       }
-      .dl-detect a { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; margin-left: 4px; }
+      .dl-note p strong { color: var(--fg); font-weight: 500; }
 
-      /* Download cards */
-      .dl-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 18px;
-        margin-bottom: 72px;
-      }
-      @media (max-width: 800px) { .dl-grid { grid-template-columns: 1fr; } }
-      .dl-card {
-        position: relative;
-        padding: 32px 28px;
-        background: var(--bg);
+      /* Requirements */
+      .dl-req {
+        margin-top: 72px;
         border: 1px solid var(--line);
         border-radius: 20px;
-        display: flex; flex-direction: column; gap: 18px;
-        transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
-        text-decoration: none;
-        color: var(--fg);
+        overflow: hidden;
       }
-      .dl-card:hover {
-        transform: translateY(-2px);
-        border-color: var(--fg);
-        box-shadow: 0 24px 60px -28px rgba(0,0,0,0.18);
+      .dl-req-head {
+        padding: 18px 28px;
+        background: var(--bg-2);
+        border-bottom: 1px solid var(--line);
+        font-family: var(--mono); font-size: 11px;
+        letter-spacing: 0.16em; text-transform: uppercase;
+        color: var(--fg-mute);
       }
-      body.dark .dl-card:hover { box-shadow: 0 24px 60px -20px rgba(0,0,0,0.6); }
-      .dl-card.recommended {
-        border-color: var(--fg);
-        background: linear-gradient(160deg, var(--bg-2) 0%, var(--bg) 100%);
+      .dl-req-row {
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        gap: 16px;
+        padding: 15px 28px;
+        border-bottom: 1px solid var(--line);
+        font-size: 14px; line-height: 1.5;
       }
-      .dl-card .rec-pill {
-        position: absolute; top: 16px; right: 16px;
-        font-size: 9.5px; font-weight: 600;
-        padding: 4px 10px; border-radius: 999px;
-        background: var(--fg); color: var(--bg);
-        letter-spacing: 0.08em; text-transform: uppercase;
-        font-family: var(--mono);
+      .dl-req-row:last-child { border-bottom: none; }
+      .dl-req-row .k { color: var(--fg); font-weight: 500; }
+      .dl-req-row .v { color: var(--fg-mute); }
+      @media (max-width: 640px) {
+        .dl-req-row { grid-template-columns: 1fr; gap: 2px; }
       }
-      .dl-card .platform-ic {
-        width: 38px; height: 38px;
-        display: grid; place-items: center;
-        color: var(--fg);
-      }
-      .dl-card .platform-name {
-        font-size: 22px; font-weight: 400;
-        letter-spacing: -0.018em;
-        color: var(--fg);
-      }
-      .dl-card .platform-meta {
-        font-size: 12.5px; color: var(--fg-mute);
-        font-family: var(--mono); letter-spacing: 0.02em;
-        margin-top: -10px;
-      }
-      .dl-card .platform-cta {
-        margin-top: 6px;
-        display: inline-flex; align-items: center; justify-content: space-between;
-        padding: 12px 16px;
-        background: var(--fg); color: var(--bg);
-        border-radius: 12px;
-        font-size: 14px; font-weight: 500;
-        gap: 12px;
-        transition: opacity 0.15s;
-      }
-      .dl-card .platform-cta:hover { opacity: 0.92; }
-      .dl-card .platform-cta .arrow { display: inline-flex; }
-      .dl-card.ghost-cta .platform-cta {
-        background: transparent; color: var(--fg);
-        border: 1px solid var(--line-strong);
-      }
-      .dl-card.ghost-cta .platform-cta:hover { background: var(--bg-2); }
 
       /* Setup steps */
       .dl-steps {
-        margin-top: 96px;
+        margin-top: 72px;
         padding: 56px 48px;
         background: var(--bg-2);
         border-radius: 24px;
         border: 1px solid var(--line);
       }
+      @media (max-width: 640px) { .dl-steps { padding: 36px 24px; } }
       .dl-steps-eyebrow {
         font-family: var(--mono); font-size: 11px;
         letter-spacing: 0.18em; text-transform: uppercase;
@@ -223,18 +230,8 @@
         color: var(--fg-mute);
         text-wrap: pretty;
       }
-      .dl-step .code {
-        margin-top: 8px;
-        padding: 10px 14px;
-        background: var(--bg);
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        font-family: var(--mono); font-size: 12.5px;
-        color: var(--fg);
-        word-break: break-all;
-      }
 
-      /* Compatibility / footnote */
+      /* Footnote / footer */
       .dl-fine {
         margin-top: 64px;
         font-size: 13px; color: var(--fg-mute);
@@ -244,7 +241,6 @@
       .dl-fine a { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
       .dl-fine .sep { color: var(--fg-faint); margin: 0 10px; }
 
-      /* Footer */
       .dl-foot {
         margin-top: 80px;
         padding-top: 24px;
@@ -260,61 +256,78 @@
   <body>
     <!-- SEO / no-JS static shell — React replaces this on mount. Keep in sync with the babel block below. -->
     <div id="root">
+      <nav class="nav">
+        <div class="container nav-inner">
+          <a href="/" class="brand"><span class="brand-mark" aria-hidden="true"></span><span>Livinity</span></a>
+          <div class="nav-links">
+            <a href="/#liv">Liv Agent</a>
+            <a href="/#apps">App Library</a>
+            <a href="/download" class="on">Download</a>
+            <a href="/pricing">Pricing</a>
+            <a href="https://github.com/utopusc/livinity-io/releases" target="_blank" rel="noreferrer">Changelog</a>
+          </div>
+          <div class="nav-cta">
+            <a class="nav-signin" href="/login">Sign in</a>
+            <a class="btn btn-primary" href="/register">Sign up</a>
+          </div>
+        </div>
+      </nav>
       <main class="dl-shell">
         <header class="dl-hero">
           <div class="dl-mark"></div>
-          <div class="dl-eyebrow"><span class="ic"></span> Livinity Agent · v1.0</div>
-          <h1 class="dl-title">Take your computer <em>with you.</em></h1>
-          <p class="dl-sub">A small desktop agent that connects your devices to your Cloud AI Computer. Open files, chat with Liv, launch apps — from anywhere, securely, without exposing ports.</p>
+          <div class="dl-eyebrow"><span class="ic"></span> Livinity Desktop <span class="dl-beta">v0.2.0 Beta</span></div>
+          <h1 class="dl-title">Livinity Desktop <em>for Windows.</em></h1>
+          <p class="dl-sub">Zero terminal. Sign in, and your personal AI home server installs itself — Livinity Desktop sets everything up in the background and keeps it running from the system tray.</p>
+          <div class="dl-cta-row">
+            <a class="btn btn-primary" href="https://github.com/utopusc/livinity-io/releases/download/desktop-v0.2.0/Livinity-Desktop-Setup-0.2.0.exe">Download for Windows</a>
+            <a class="btn btn-ghost" href="https://github.com/utopusc/livinity-io/releases/tag/desktop-v0.2.0" target="_blank" rel="noreferrer">View release on GitHub</a>
+          </div>
+          <p class="dl-cta-meta">.exe installer<span class="sep">·</span>100 MB<span class="sep">·</span>Windows 10 / 11, 64-bit</p>
+          <p class="dl-cta-alt">On macOS or Linux? Install LivOS directly with the <a href="/#install">one-line installer</a>.</p>
         </header>
 
-        <section class="dl-grid">
-          <a class="dl-card ghost-cta" href="/downloads/livinity-agent-setup-win-x64.exe" download>
-            <div>
-              <div class="platform-name">Windows</div>
-              <div class="platform-meta">x64</div>
-            </div>
-            <span class="platform-cta">Download</span>
-          </a>
-          <a class="dl-card ghost-cta" href="/downloads/Livinity-Agent.dmg" download>
-            <div>
-              <div class="platform-name">macOS</div>
-              <div class="platform-meta">Apple Silicon · Intel</div>
-            </div>
-            <span class="platform-cta">Download</span>
-          </a>
-          <a class="dl-card ghost-cta" href="/downloads/livinity-agent_1.0_amd64.deb" download>
-            <div>
-              <div class="platform-name">Linux</div>
-              <div class="platform-meta">amd64 · .deb</div>
-            </div>
-            <span class="platform-cta">Download</span>
-          </a>
+        <section class="dl-note">
+          <div class="t">A note about Windows SmartScreen</div>
+          <p>Livinity Desktop is a beta and isn't code-signed yet, so Windows may show a SmartScreen prompt the first time you run the installer. Click <strong>More info</strong>, then <strong>Run anyway</strong>. After installation, updates download and apply automatically.</p>
+        </section>
+
+        <section class="dl-req">
+          <h2 class="dl-req-head">System requirements</h2>
+          <div class="dl-req-row"><span class="k">Operating system</span><span class="v">Windows 10 (version 2004 or later) or Windows 11</span></div>
+          <div class="dl-req-row"><span class="k">Architecture</span><span class="v">64-bit (x64)</span></div>
+          <div class="dl-req-row"><span class="k">Virtualization</span><span class="v">Enabled in BIOS/UEFI — on by default on most PCs; the app tells you if it isn't</span></div>
+          <div class="dl-req-row"><span class="k">Disk space</span><span class="v">About 15 GB free</span></div>
+          <div class="dl-req-row"><span class="k">WSL 2</span><span class="v">Required — Livinity Desktop enables it for you, no manual steps</span></div>
         </section>
 
         <section class="dl-steps">
-          <div class="dl-steps-eyebrow">01 · Getting started</div>
-          <h2 class="dl-steps-title">From <em>install</em> to <em>signed in</em>, in three steps.</h2>
+          <div class="dl-steps-eyebrow">01 · How it works</div>
+          <h2 class="dl-steps-title">From <em>download</em> to <em>online</em>, in three steps.</h2>
           <div class="dl-steps-grid">
             <div class="dl-step">
               <span class="n">Step 1</span>
               <h3>Install</h3>
-              <p>Run the installer for your platform. macOS opens a DMG, Windows runs a signed setup, Linux installs via <code>.deb</code>.</p>
+              <p>Run the installer and open Livinity Desktop. No terminal, no configuration files — just a normal Windows app.</p>
             </div>
             <div class="dl-step">
               <span class="n">Step 2</span>
               <h3>Sign in</h3>
-              <p>Use your livinity.io account. The agent registers as a device — manage and revoke from your dashboard.</p>
+              <p>Use your livinity.io account. The app checks your plan and prepares the right setup for you.</p>
             </div>
             <div class="dl-step">
               <span class="n">Step 3</span>
-              <h3>Connect</h3>
-              <p>Your Cloud AI Computer appears in the menu bar. Open files, chat with Liv, launch apps — wherever you are.</p>
+              <h3>Your server comes online</h3>
+              <p>Livinity Desktop enables WSL 2, installs LivOS, and connects your subdomain. Your server stays running — supervised from the tray.</p>
             </div>
           </div>
         </section>
 
-        <p class="dl-fine">Open-source · <a href="https://github.com/utopusc/livinity-io" target="_blank" rel="noreferrer">view source on GitHub</a><span class="sep">·</span><a href="/#install">Self-host the server</a></p>
+        <p class="dl-fine">Open-source · <a href="https://github.com/utopusc/livinity-io" target="_blank" rel="noreferrer">view source on GitHub</a><span class="sep">·</span><a href="/pricing">See plans</a></p>
+
+        <footer class="dl-foot">
+          <span>open-source · <a href="/">livinity.io</a></span>
+          <a href="https://github.com/utopusc/livinity-io/releases" target="_blank" rel="noreferrer">Changelog →</a>
+        </footer>
       </main>
     </div>
 
@@ -323,37 +336,9 @@
     <script type="text/babel">
       const { useState, useEffect } = React;
 
-      const PLATFORMS = [
-        {
-          id: "windows", name: "Windows",
-          url: "/downloads/livinity-agent-setup-win-x64.exe",
-          size: "~60 MB", arch: "x64",
-          icon: <svg className="platform-ic" width="38" height="38" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>,
-        },
-        {
-          id: "macos", name: "macOS",
-          url: "/downloads/Livinity-Agent.dmg",
-          size: "~60 MB", arch: "Apple Silicon · Intel",
-          icon: <svg className="platform-ic" width="38" height="38" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>,
-        },
-        {
-          id: "linux", name: "Linux",
-          url: "/downloads/livinity-agent_1.0_amd64.deb",
-          size: "~60 MB", arch: "amd64 · .deb",
-          icon: <svg className="platform-ic" width="38" height="38" viewBox="0 0 24 24" fill="currentColor"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333.391.778 1.113 1.368 1.884 1.43.868.065 1.157-.41 1.743-.19.44.167.862.534 1.454.726.238.077.51.12.775.093.8-.07 1.398-.836 1.397-1.763 0-.752-.33-1.281-.546-1.726-.065-.135-.108-.298-.123-.46-.022-.27.015-.55.078-.795.246-.96.13-1.72-.023-2.403-.077-.339-.168-.67-.246-.972-.04-.158-.085-.323-.135-.498.217-.165.385-.396.489-.674.155-.381.191-.838.091-1.276a2.8 2.8 0 0 0-.403-.87c-.5-.673-1.228-1.273-2.144-2.164-.756-.723-1.077-1.589-1.264-2.485a8 8 0 0 1-.145-1.283c-.027-.427.016-.858.027-1.282.013-.502.02-.862-.08-1.287C15.856.734 14.2.009 12.504 0z"/></svg>,
-        },
-      ];
-
-      function detectPlatform() {
-        if (typeof navigator === "undefined") return null;
-        const p = (navigator.userAgent || navigator.platform || "").toLowerCase();
-        if (p.includes("win")) return "windows";
-        if (p.includes("mac") || p.includes("iphone") || p.includes("ipad")) return "macos";
-        if (p.includes("linux") || p.includes("android")) return "linux";
-        return null;
-      }
-
-      const Arrow = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v14M6 11l6 6 6-6"/></svg>);
+      const DESKTOP_VERSION = "0.2.0";
+      const DOWNLOAD_URL = "https://github.com/utopusc/livinity-io/releases/download/desktop-v0.2.0/Livinity-Desktop-Setup-0.2.0.exe";
+      const RELEASE_URL = "https://github.com/utopusc/livinity-io/releases/tag/desktop-v0.2.0";
 
       function Nav() {
         const [user, setUser] = useState(null);
@@ -414,32 +399,7 @@
         );
       }
 
-      function DownloadCard({ p, recommended }) {
-        return (
-          <a className={"dl-card" + (recommended ? " recommended" : " ghost-cta")} href={p.url} download>
-            {recommended && <span className="rec-pill">Detected</span>}
-            {p.icon}
-            <div>
-              <div className="platform-name">{p.name}</div>
-              <div className="platform-meta">{p.arch}</div>
-            </div>
-            <div className="platform-meta">{p.size} · stable v1.0</div>
-            <span className="platform-cta">
-              Download <Arrow/>
-            </span>
-          </a>
-        );
-      }
-
       function App() {
-        const [detected, setDetected] = useState(null);
-        useEffect(() => { setDetected(detectPlatform()); }, []);
-
-        // Reorder so detected platform appears first (recommended)
-        const ordered = detected
-          ? [PLATFORMS.find(p => p.id === detected), ...PLATFORMS.filter(p => p.id !== detected)].filter(Boolean)
-          : PLATFORMS;
-
         return (
           <>
             <Nav/>
@@ -447,49 +407,61 @@
 
               <header className="dl-hero">
                 <div className="dl-mark"/>
-                <div className="dl-eyebrow"><span className="ic"/> Livinity Agent · v1.0</div>
+                <div className="dl-eyebrow"><span className="ic"/> Livinity Desktop <span className="dl-beta">v{DESKTOP_VERSION} Beta</span></div>
                 <h1 className="dl-title">
-                  Take your computer <em>with you.</em>
+                  Livinity Desktop <em>for Windows.</em>
                 </h1>
                 <p className="dl-sub">
-                  A small desktop agent that connects your devices to your Cloud AI Computer.
-                  Open files, chat with Liv, launch apps — from anywhere, securely, without exposing ports.
+                  Zero terminal. Sign in, and your personal AI home server installs itself —
+                  Livinity Desktop sets everything up in the background and keeps it running
+                  from the system tray.
                 </p>
-                {detected && (
-                  <div className="dl-detect">
-                    <span className="dot"/>
-                    Detected · {PLATFORMS.find(p => p.id === detected)?.name}
-                    <a href={PLATFORMS.find(p => p.id === detected)?.url} download>Download below ↓</a>
-                  </div>
-                )}
+                <div className="dl-cta-row">
+                  <a className="btn btn-primary" href={DOWNLOAD_URL}>Download for Windows</a>
+                  <a className="btn btn-ghost" href={RELEASE_URL} target="_blank" rel="noreferrer">View release on GitHub</a>
+                </div>
+                <p className="dl-cta-meta">.exe installer<span className="sep">·</span>100 MB<span className="sep">·</span>Windows 10 / 11, 64-bit</p>
+                <p className="dl-cta-alt">On macOS or Linux? Install LivOS directly with the <a href="/#install">one-line installer</a>.</p>
               </header>
 
-              <section className="dl-grid">
-                {ordered.map((p, i) => (
-                  <DownloadCard key={p.id} p={p} recommended={detected ? p.id === detected : i === 0}/>
-                ))}
+              <section className="dl-note">
+                <div className="t">A note about Windows SmartScreen</div>
+                <p>
+                  Livinity Desktop is a beta and isn't code-signed yet, so Windows may show a
+                  SmartScreen prompt the first time you run the installer.
+                  Click <strong>More info</strong>, then <strong>Run anyway</strong>.
+                  After installation, updates download and apply automatically.
+                </p>
+              </section>
+
+              <section className="dl-req">
+                <h2 className="dl-req-head">System requirements</h2>
+                <div className="dl-req-row"><span className="k">Operating system</span><span className="v">Windows 10 (version 2004 or later) or Windows 11</span></div>
+                <div className="dl-req-row"><span className="k">Architecture</span><span className="v">64-bit (x64)</span></div>
+                <div className="dl-req-row"><span className="k">Virtualization</span><span className="v">Enabled in BIOS/UEFI — on by default on most PCs; the app tells you if it isn't</span></div>
+                <div className="dl-req-row"><span className="k">Disk space</span><span className="v">About 15 GB free</span></div>
+                <div className="dl-req-row"><span className="k">WSL 2</span><span className="v">Required — Livinity Desktop enables it for you, no manual steps</span></div>
               </section>
 
               <section className="dl-steps">
-                <div className="dl-steps-eyebrow">01 · Getting started</div>
-                <h2 className="dl-steps-title">From <em>install</em> to <em>signed in</em>, in three steps.</h2>
+                <div className="dl-steps-eyebrow">01 · How it works</div>
+                <h2 className="dl-steps-title">From <em>download</em> to <em>online</em>, in three steps.</h2>
 
                 <div className="dl-steps-grid">
                   <div className="dl-step">
                     <span className="n">Step 1</span>
                     <h3>Install</h3>
-                    <p>Run the installer for your platform. macOS opens a DMG, Windows runs a signed setup, Linux installs via <code>.deb</code>.</p>
+                    <p>Run the installer and open Livinity Desktop. No terminal, no configuration files — just a normal Windows app.</p>
                   </div>
                   <div className="dl-step">
                     <span className="n">Step 2</span>
                     <h3>Sign in</h3>
-                    <p>Use your livinity.io account. The agent registers as a device — manage and revoke from your dashboard.</p>
+                    <p>Use your livinity.io account. The app checks your plan and prepares the right setup for you.</p>
                   </div>
                   <div className="dl-step">
                     <span className="n">Step 3</span>
-                    <h3>Connect</h3>
-                    <p>Your Cloud AI Computer appears in the menu bar. Open files, chat with Liv, launch apps — wherever you are.</p>
-                    <div className="code">livinity-agent --setup-token YOUR_KEY</div>
+                    <h3>Your server comes online</h3>
+                    <p>Livinity Desktop enables WSL 2, installs LivOS, and connects your subdomain. Your server stays running — supervised from the tray.</p>
                   </div>
                 </div>
               </section>
@@ -497,7 +469,7 @@
               <p className="dl-fine">
                 Open-source · <a href="https://github.com/utopusc/livinity-io" target="_blank" rel="noreferrer">view source on GitHub</a>
                 <span className="sep">·</span>
-                <a href="/#install">Self-host the server</a>
+                <a href="/pricing">See plans</a>
               </p>
 
               <footer className="dl-foot">

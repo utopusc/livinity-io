@@ -14,7 +14,7 @@ Install: sign up at https://livinity.io/register, then run the one-line installe
 ## Product
 
 - [Pricing](https://livinity.io/pricing): Free and Pro plans, both self-hosted
-- [Download](https://livinity.io/download): desktop agent for Windows, macOS, and Linux
+- [Download](https://livinity.io/download): Livinity Desktop for Windows (v0.2.0 beta) — sign in and your personal AI home server installs itself; WSL 2 enabled for you, no terminal
 - [Source code](https://github.com/utopusc/livinity-io): open source, AGPL-3.0
 
 ## Legal
