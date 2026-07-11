@@ -56,7 +56,7 @@
 
 import { ipcMain, shell, app, type BrowserWindow } from 'electron';
 import { z } from 'zod';
-import { CHANNELS, type Status, type EngineStatusResult } from '../../../shared/ipc-contract';
+import { CHANNELS, type Status, type EngineStatusResult, type UsageResult } from '../../../shared/ipc-contract';
 import {
   startEngine,
   stopEngine,
@@ -68,6 +68,7 @@ import {
 } from '../supervision/engine';
 import { setStartAtLogin, getStartAtLogin } from '../supervision/login-item';
 import { openDashboardWindow, closeDashboardWindow } from '../dashboard/dashboard-window';
+import { getUsage } from '../supervision/usage-probe';
 import { logSafe } from '../log';
 
 // Per-handler payload schemas (mirror cf.ipc.ts/wsl.ipc.ts). NoPayload =
@@ -85,6 +86,10 @@ const SAFE_STATUS_DEFAULT: EngineStatusResult = {
   lastCheckedAt: null,
   desiredState: 'stopped',
 };
+
+/** Schema-valid, secret-free safe default for engine:getUsage's malformed-payload /
+ * thrown-getUsage branches — matches UsageResultSchema's ok:false member. */
+const SAFE_USAGE_DEFAULT: UsageResult = { ok: false, reason: 'probe-failed' };
 
 export interface EngineIpcDeps {
   /** Used by engine:openDashboard/openInBrowser's D-10 stopped-gate (focus) and by
@@ -161,6 +166,21 @@ export function registerEngineIpc(deps: EngineIpcDeps): void {
     } catch {
       logSafe('engine.getStatus', { exception: true });
       return SAFE_STATUS_DEFAULT;
+    }
+  });
+
+  // engine:getUsage — tray quick-panel addendum. Delegates to usage-probe.ts's
+  // getUsage, which is itself PASSIVE while the engine is not desired-running
+  // (never touches wsl.exe in that case, T-06-07-class discipline). No
+  // renderer payload is ever read.
+  ipcMain.handle(CHANNELS.engineGetUsage, async (_event, raw: unknown) => {
+    const parsed = NoPayload.safeParse(raw);
+    if (!parsed.success) return SAFE_USAGE_DEFAULT;
+    try {
+      return await getUsage();
+    } catch {
+      logSafe('engine.getUsage', { exception: true });
+      return SAFE_USAGE_DEFAULT;
     }
   });
 
