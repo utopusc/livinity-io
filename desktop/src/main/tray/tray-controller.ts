@@ -92,6 +92,11 @@ export interface TrayCallbacks {
   /** UPD-01 (07-04) — the conditional "Restart to update" row's click handler. */
   onRestartToUpdate?: () => void;
   onQuit: () => void;
+  /** Tray-panel addendum (post-Phase-7) — the LEFT-click ("click") handler that
+   *  toggles the compact quick-panel popover. Optional (same D-07 discipline as
+   *  the other non-onOpen/onQuit callbacks) so this stays additive; a missing
+   *  value falls back to the local NOOP (buildContextMenu's existing pattern). */
+  onToggleQuickPanel?: () => void;
 }
 
 /** Single source-of-truth view-model driving both the icon and the D-07 9-row menu. */
@@ -182,6 +187,11 @@ export function createTray(opts: TrayCallbacks): Tray {
   });
   const tray = new Tray(icon);
   tray.on('double-click', opts.onOpen);
+  // Tray-panel addendum: LEFT-click toggles the compact quick-panel popover;
+  // RIGHT-click keeps the existing 9-row context menu (setContextMenu below,
+  // untouched) — wired ONCE here (mirrors 'double-click' above), never
+  // re-registered on every updateTray() menu refresh.
+  tray.on('click', opts.onToggleQuickPanel ?? NOOP);
   updateTray(tray, initialView, opts);
   return tray;
 }
