@@ -126,7 +126,7 @@ describe('holder', () => {
       expect(await isPidAliveAsWsl(4242, deps as never)).toBe(false);
     });
 
-    it("false when tasklist stdout is the locale-safe 'no tasks' fallback line", async () => {
+    it("false when tasklist stdout is the English 'no tasks' INFO line", async () => {
       const deps = makeDeps({
         execFile: vi.fn().mockResolvedValue({
           stdout: 'INFO: No tasks are running which match the specified criteria.',
@@ -135,6 +135,18 @@ describe('holder', () => {
       });
 
       expect(await isPidAliveAsWsl(4242, deps as never)).toBe(false);
+    });
+
+    it('false when the no-match INFO line is locale-translated (NEW-01: non-English Windows, stdout non-empty + exit 0)', async () => {
+      const localizedInfoLines = [
+        'BİLGİ: Belirtilen ölçütlere uyan görev çalıştırılmıyor.', // tr-TR
+        'INFO: Es werden keine Aufgaben mit den angegebenen Kriterien ausgeführt.', // de-DE
+        'INFORMATION: aucune tâche en service ne correspond aux critères spécifiés.', // fr-FR
+      ];
+      for (const stdout of localizedInfoLines) {
+        const deps = makeDeps({ execFile: vi.fn().mockResolvedValue({ stdout, stderr: '' }) });
+        expect(await isPidAliveAsWsl(4242, deps as never)).toBe(false);
+      }
     });
 
     it('false (never throws) when execFile rejects', async () => {

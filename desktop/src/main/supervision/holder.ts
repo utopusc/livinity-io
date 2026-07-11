@@ -121,9 +121,12 @@ export async function readHolderRecord(deps: Partial<HolderDeps> = {}): Promise<
 /**
  * PID-reuse-safe liveness (Pattern 2, T-06-03). `/NH` suppresses the
  * (locale-translated) header row; the `IMAGENAME` column value itself is a
- * literal filename, never translated -- locale-safe, no narrative-text
- * parsing. Never throws past this function: any `execFile` failure (missing
- * binary, access denied) degrades to "not alive."
+ * literal filename, never translated -- so aliveness is decided ONLY by a
+ * positive match on that literal. The no-match case emits a narrative INFO
+ * line that IS locale-translated (and arrives on stdout with exit 0), which
+ * can never contain the image name -- so it needs no parsing at all.
+ * Never throws past this function: any `execFile` failure (missing binary,
+ * access denied) degrades to "not alive."
  */
 export async function isPidAliveAsWsl(pid: number, deps: Partial<HolderDeps> = {}): Promise<boolean> {
   const d = resolveDeps(deps);
@@ -133,7 +136,7 @@ export async function isPidAliveAsWsl(pid: number, deps: Partial<HolderDeps> = {
       ['/FI', `PID eq ${pid}`, '/FI', 'IMAGENAME eq wsl.exe', '/NH'],
       { windowsHide: true }
     );
-    return stdout.trim().length > 0 && !/no tasks/i.test(stdout);
+    return /wsl\.exe/i.test(stdout);
   } catch {
     return false;
   }
