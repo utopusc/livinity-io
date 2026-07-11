@@ -38,6 +38,7 @@ vi.mock('../../src/main/log', () => ({
 }));
 
 import { runInstall } from '../../src/main/wsl/install-invoke';
+import type { WslInstallUpdate } from '../../shared/ipc-contract';
 
 class FakeChild extends EventEmitter {
   stdout = new EventEmitter();
@@ -168,7 +169,9 @@ describe('install-invoke / runInstall', () => {
     await waitForSpawnCall(spawnMock);
     fakeChild.emit('close', code);
     const result = await promise;
-    expect(result).toEqual(expected);
+    // toMatchObject (not toEqual): non-'ok' exits now additionally carry a
+    // D-07 `failureVerdict` (05-06) -- `kind`/`reason` stay byte-identical.
+    expect(result).toMatchObject(expected);
   });
 
   it('exit 1 maps to generic-failure with a redacted reason (never raw secret-bearing output)', async () => {
@@ -259,5 +262,119 @@ describe('install-invoke / runInstall', () => {
       runInstall({ tier: 'pro' }, undefined, { spawn: spawnMock as never })
     ).resolves.toEqual({ kind: 'generic-failure' });
     expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  describe('streaming line-buffered marker parse (INSTALL-02/D-04)', () => {
+    it('pushes a monotonic caption+stepIndex over onUpdate, ignoring an unmatched title and an out-of-order regression', async () => {
+      vaultFixture();
+      const updates: WslInstallUpdate[] = [];
+      const promise = runInstall({ tier: 'pro' }, (u) => updates.push(u), {
+        spawn: spawnMock as never,
+      });
+      await waitForSpawnCall(spawnMock);
+
+      fakeChild.stderr.emit('data', Buffer.from('=== Detecting platform ===\n'));
+      fakeChild.stderr.emit('data', Buffer.from('=== PostgreSQL setup ===\n'));
+      // Unmatched title -- bucketForTitle returns null, must NOT push.
+      fakeChild.stderr.emit('data', Buffer.from('=== Some unmapped umbrella ===\n'));
+      // Out-of-order (earlier bucket after a later one) -- must NOT regress.
+      fakeChild.stderr.emit('data', Buffer.from('=== Detecting platform ===\n'));
+
+      fakeChild.emit('close', 0);
+      await promise;
+
+      const stepUpdates = updates.filter((u) => u.stepIndex !== undefined);
+      expect(stepUpdates).toEqual([
+        { phase: 'installing', caption: 'Getting your system ready', stepIndex: 1, stepTotal: 6 },
+        { phase: 'installing', caption: 'Installing LivOS components', stepIndex: 3, stepTotal: 6 },
+      ]);
+    });
+
+    it('reassembles a step marker split across two stderr data chunks', async () => {
+      vaultFixture();
+      const updates: WslInstallUpdate[] = [];
+      const promise = runInstall({ tier: 'pro' }, (u) => updates.push(u), {
+        spawn: spawnMock as never,
+      });
+      await waitForSpawnCall(spawnMock);
+
+      fakeChild.stderr.emit('data', Buffer.from('=== Postgre'));
+      fakeChild.stderr.emit('data', Buffer.from('SQL setup ===\n'));
+
+      fakeChild.emit('close', 0);
+      await promise;
+
+      const stepUpdates = updates.filter((u) => u.stepIndex !== undefined);
+      expect(stepUpdates).toEqual([
+        { phase: 'installing', caption: 'Installing LivOS components', stepIndex: 3, stepTotal: 6 },
+      ]);
+    });
+  });
+
+  describe('D-07 live path: mapFailure-attached failureVerdict on every non-ok exit', () => {
+    it('exit 75 with a Docker-daemon reason -> failureVerdict.screen generic (not disk, Pitfall 2)', async () => {
+      vaultFixture();
+      const promise = runInstall({ tier: 'pro' }, undefined, { spawn: spawnMock as never });
+      await waitForSpawnCall(spawnMock);
+      fakeChild.stderr.emit('data', Buffer.from('[FAIL] Docker daemon failed to start\n'));
+      fakeChild.emit('close', 75);
+      const result = await promise;
+      expect(result.kind).toBe('disk-too-small');
+      expect(result.failureVerdict?.screen).toBe('generic');
+    });
+
+    it("exit 75 with an 'Only Ngb free on /' reason -> failureVerdict.screen disk", async () => {
+      vaultFixture();
+      const promise = runInstall({ tier: 'pro' }, undefined, { spawn: spawnMock as never });
+      await waitForSpawnCall(spawnMock);
+      fakeChild.stderr.emit('data', Buffer.from('[FAIL] Only 5GB free on /\n'));
+      fakeChild.emit('close', 75);
+      const result = await promise;
+      expect(result.kind).toBe('disk-too-small');
+      expect(result.failureVerdict?.screen).toBe('disk');
+    });
+
+    it("exit 1 with an 'error: 410' reason -> failureVerdict.screen no-tunnel-410 (Pitfall 3 / D-08)", async () => {
+      vaultFixture();
+      const promise = runInstall({ tier: 'pro' }, undefined, { spawn: spawnMock as never });
+      await waitForSpawnCall(spawnMock);
+      fakeChild.stderr.emit('data', Buffer.from('[FAIL] curl: error: 410 Gone\n'));
+      fakeChild.emit('close', 1);
+      const result = await promise;
+      expect(result.kind).toBe('generic-failure');
+      expect(result.failureVerdict?.screen).toBe('no-tunnel-410');
+    });
+
+    it('exit 1 with a network reason -> failureVerdict.screen generic', async () => {
+      vaultFixture();
+      const promise = runInstall({ tier: 'pro' }, undefined, { spawn: spawnMock as never });
+      await waitForSpawnCall(spawnMock);
+      fakeChild.stderr.emit('data', Buffer.from('[FAIL] curl: Could not resolve host\n'));
+      fakeChild.emit('close', 1);
+      const result = await promise;
+      expect(result.kind).toBe('generic-failure');
+      expect(result.failureVerdict?.screen).toBe('generic');
+    });
+
+    it('the attached failReason feeding mapFailure is the redacted tail, never a raw secret', async () => {
+      vaultFixture();
+      const promise = runInstall({ tier: 'pro' }, undefined, { spawn: spawnMock as never });
+      await waitForSpawnCall(spawnMock);
+      fakeChild.stderr.emit('data', Buffer.from(`[FAIL] boom ${FIXTURE_API_KEY} failed\n`));
+      fakeChild.emit('close', 1);
+      const result = await promise;
+      expect(redactSecretLikeMock).toHaveBeenCalled();
+      expect(result.failureVerdict).toBeDefined();
+    });
+
+    it("the 'ok' verdict never carries a failureVerdict", async () => {
+      vaultFixture();
+      const promise = runInstall({ tier: 'pro' }, undefined, { spawn: spawnMock as never });
+      await waitForSpawnCall(spawnMock);
+      fakeChild.emit('close', 0);
+      const result = await promise;
+      expect(result).toEqual({ kind: 'ok' });
+      expect('failureVerdict' in result).toBe(false);
+    });
   });
 });

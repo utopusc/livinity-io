@@ -26,6 +26,17 @@
  * 04-10 (Open Question 1) — automated tests prove the spawn SHAPE, not a real
  * multi-minute Windows/WSL run.
  *
+ * Phase 5 (INSTALL-02/D-04): a SECOND, independent stderr listener streams
+ * each line through the pure marker-parser/map-marker-to-bucket deciders
+ * (05-02) and pushes a monotonic caption+stepIndex over `onUpdate` — never
+ * regressing (Pitfall 1), never rendering raw installer output. Phase 5
+ * (INSTALL-03/D-07, Blocker-1 fix): the exit verdict additionally runs its
+ * redacted [FAIL]-tail reason through the pure `mapFailure` (05-03) on EVERY
+ * non-ok exit and attaches the result as `failureVerdict` — the live wiring
+ * that makes exit-75 disk-disambiguation and the 410 screen reachable. This
+ * module makes NO screen decision itself; it only feeds already-classified,
+ * already-redacted signals into the two pure deciders and attaches output.
+ *
  * Zero imports from ipc/ or tray/ — a main-process orchestration primitive,
  * same isolation rule as cf-provision.ts/distro-install.ts. `vaultGet` reads
  * plaintext secrets main-side ONLY — this module must never be imported from
@@ -37,7 +48,10 @@ import { vaultGet } from '../storage/secrets-vault';
 import { readState } from '../storage/state-store';
 import { mapInstallExit } from './map-install-exit';
 import { logSafe, redactSecretLike } from '../log';
-import type { WslInstallInvokeResult, WslInstallUpdate } from '../../../shared/ipc-contract';
+import { makeLineBuffer, parseMarkerLine, stripAnsi } from '../orchestrator/marker-parser';
+import { bucketForTitle } from '../orchestrator/map-marker-to-bucket';
+import { mapFailure } from '../orchestrator/map-failure';
+import { INSTALL_CAPTIONS, type InstallInvokeResult, type WslInstallUpdate } from '../../../shared/ipc-contract';
 
 /** Injectable IO collaborator — production default is node:child_process's spawn. */
 export interface RunInstallDeps {
@@ -56,12 +70,18 @@ const REASON_TAIL_CHARS = 300;
 let inFlight = false;
 
 function drainInstallChild(
-  child: ChildProcess
+  child: ChildProcess,
+  onUpdate?: (u: WslInstallUpdate) => void
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     let settled = false;
     let stdout = '';
     let stderr = '';
+
+    // Per-run bucket cursor (Pitfall-1 monotonic advance, D-04) — local to
+    // THIS drain call (not module-scoped) so a second sequential install run
+    // always starts fresh at 0; never leaks across runs/tests.
+    let activeBucket = 0;
 
     child.stdout?.on('data', (d: Buffer) => {
       stdout += d.toString('utf8');
@@ -69,6 +89,27 @@ function drainInstallChild(
     child.stderr?.on('data', (d: Buffer) => {
       stderr += d.toString('utf8');
     });
+
+    // A SECOND, independent stderr listener (streaming marker parse,
+    // INSTALL-02/D-04) — never alters `stderr` above, which the exit-time
+    // [FAIL]-tail extraction below still depends on. makeLineBuffer
+    // reassembles a marker split across `data` chunk boundaries; only 'step'
+    // signals advance progress — 'fail' signals are consumed at exit time via
+    // the [FAIL]-tail below, never pushed as a progress caption.
+    const feedLine = makeLineBuffer((rawLine) => {
+      const signal = parseMarkerLine(stripAnsi(rawLine));
+      if (!signal || signal.kind !== 'step') return;
+      const bucket = bucketForTitle(signal.title);
+      if (bucket === null || bucket < activeBucket) return; // Pitfall-1: unmatched or regressive — ignore
+      activeBucket = bucket;
+      onUpdate?.({
+        phase: 'installing',
+        caption: INSTALL_CAPTIONS[bucket - 1],
+        stepIndex: bucket,
+        stepTotal: INSTALL_CAPTIONS.length,
+      });
+    });
+    child.stderr?.on('data', (d: Buffer) => feedLine(d));
 
     child.on('error', (err) => {
       if (settled) return;
@@ -96,7 +137,7 @@ export async function runInstall(
   input: { tier: 'free' | 'pro' },
   onUpdate?: (u: WslInstallUpdate) => void,
   deps: Partial<RunInstallDeps> = {}
-): Promise<WslInstallInvokeResult> {
+): Promise<InstallInvokeResult> {
   if (inFlight) {
     // Already running — a double-click or resume-after-reboot re-entry must
     // never spawn a second concurrent install.sh run (D-11). No dedicated
@@ -182,20 +223,40 @@ export async function runInstall(
     );
     child.unref();
 
-    const result = await drainInstallChild(child);
+    const result = await drainInstallChild(child, onUpdate);
 
     onUpdate?.({ phase: 'starting' });
 
     const verdict = mapInstallExit(result.code);
-    if (verdict.kind === 'generic-failure') {
-      const tail = (result.stderr || result.stdout).trim().slice(-REASON_TAIL_CHARS);
-      const reason = tail ? redactSecretLike(tail) : undefined;
-      logSafe('wsl.installInvoke', { ok: false, code: result.code ?? -1 });
-      return reason ? { kind: 'generic-failure', reason } : { kind: 'generic-failure' };
+
+    if (verdict.kind === 'ok') {
+      logSafe('wsl.installInvoke', { ok: true, code: result.code ?? -1 });
+      return verdict;
     }
 
-    logSafe('wsl.installInvoke', { ok: verdict.kind === 'ok', code: result.code ?? -1 });
-    return verdict;
+    // D-07 live path (Blocker-1 fix): the [FAIL]-tail extraction + redaction
+    // is hoisted OUT of the generic-only branch so a redacted `reason` is
+    // computed for EVERY non-ok exit, then fed into the PURE `mapFailure`
+    // alongside the exit code. This module makes NO screen decision itself —
+    // it only attaches mapFailure's output as `failureVerdict`, which is what
+    // makes exit-75 disk-disambiguation (Pitfall 2) and the 410 screen
+    // (Pitfall 3 / D-08) reachable on the live install path.
+    const tail = (result.stderr || result.stdout).trim().slice(-REASON_TAIL_CHARS);
+    const reason = tail ? redactSecretLike(tail) : undefined;
+    const failureVerdict = mapFailure({
+      surface: 'wsl-install',
+      exitCode: result.code,
+      failReason: reason,
+    });
+
+    logSafe('wsl.installInvoke', { ok: false, code: result.code ?? -1 });
+
+    if (verdict.kind === 'generic-failure') {
+      return reason
+        ? { kind: 'generic-failure', reason, failureVerdict }
+        : { kind: 'generic-failure', failureVerdict };
+    }
+    return { ...verdict, failureVerdict };
   } catch {
     // A thrown vault/state/spawn error must not escape as a rejected promise
     // — the renderer shows the generic-failure screen instead.
