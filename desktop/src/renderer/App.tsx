@@ -570,7 +570,7 @@ export default function App() {
           <span className="brand-mark" aria-hidden="true" />
           <div className="brand-text">
             <span className="brand-name">Livinity Desktop</span>
-            <span className="brand-tag">Debug Shell</span>
+            <span className="brand-tag">Beta</span>
           </div>
         </div>
         {/* UI-SPEC Screen 1: no status badge on the login/loading screens --

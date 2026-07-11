@@ -19,7 +19,7 @@
  *    supervision interval stops when the process itself exits.
  */
 
-import { app, BrowserWindow, shell, Notification, powerMonitor } from 'electron';
+import { app, BrowserWindow, shell, Notification, powerMonitor, nativeTheme } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import {
@@ -89,7 +89,13 @@ function createWindow(): void {
     minWidth: 720,
     minHeight: 600,
     center: true,
-    frame: false,
+    // Standard OS titlebar (operator request): real minimize/maximize/close
+    // controls like every other app. autoHideMenuBar keeps Electron's default
+    // File/Edit menu out of sight (Alt still reveals it). The old frameless
+    // shell shipped no window controls at all.
+    frame: true,
+    autoHideMenuBar: true,
+    title: 'Livinity Desktop',
     backgroundColor: '#050507',
     show: false,
     webPreferences: {
@@ -400,6 +406,9 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    // Dark native titlebar: with frame:true the OS titlebar follows the app
+    // theme; the shell is #050507, so a light titlebar would clash hard.
+    nativeTheme.themeSource = 'dark';
     createWindow();
     writeSpikeMainPid();
 
