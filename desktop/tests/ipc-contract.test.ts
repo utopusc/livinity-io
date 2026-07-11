@@ -24,6 +24,17 @@ import {
   EngineNavigateSchema,
   ENGINE_TRANSITION_LABELS,
   type EngineApi,
+  UpdateUiStateSchema,
+  DiagnosticsExportResultSchema,
+  RemoveOfferSchema,
+  RemoveChoicesSchema,
+  RemoveStepIdSchema,
+  RemoveProgressSchema,
+  RemoveExecuteAckSchema,
+  REMOVE_STEP_LABELS,
+  type UpdateApi,
+  type SupportApi,
+  type RemoveApi,
 } from '../shared/ipc-contract';
 
 describe('VaultKeySchema', () => {
@@ -589,5 +600,202 @@ describe('Phase 6 engine contract', () => {
       )
     ).toBe(false);
     expect(hasSecretKey(EngineNavigateSchema.parse({ screen: 'settings' }))).toBe(false);
+  });
+});
+
+describe('Phase 7 update/support/remove contract', () => {
+  // Same recursive-key leak-guard scan as the Phase 5/6 blocks above, applied to the
+  // new update/support/remove-surface schemas.
+  function hasSecretKey(value: unknown): boolean {
+    if (value === null || typeof value !== 'object') return false;
+    for (const [k, v] of Object.entries(value)) {
+      if (/token|secret|apiKey/i.test(k)) return true;
+      if (hasSecretKey(v)) return true;
+    }
+    return false;
+  }
+
+  it('StateSchema still parses with NO lastUpdateNotifiedVersion (backward compat)', () => {
+    expect(StateSchema.safeParse({ version: 1, currentStep: '' }).success).toBe(true);
+  });
+
+  it('StateSchema round-trips lastUpdateNotifiedVersion', () => {
+    expect(
+      StateSchema.safeParse({
+        version: 1,
+        currentStep: 'welcome',
+        lastUpdateNotifiedVersion: '0.2.0',
+      }).success
+    ).toBe(true);
+  });
+
+  it('StateSchema rejects a non-string lastUpdateNotifiedVersion (type guard)', () => {
+    expect(
+      StateSchema.safeParse({
+        version: 1,
+        currentStep: 'welcome',
+        lastUpdateNotifiedVersion: 123,
+      }).success
+    ).toBe(false);
+  });
+
+  it('defines the update:*/support:*/remove:* channel literals, each keyed correctly', () => {
+    expect(CHANNELS.updateGetState).toBe('update:getState');
+    expect(CHANNELS.updateCheck).toBe('update:check');
+    expect(CHANNELS.updateRestartToInstall).toBe('update:restartToInstall');
+    expect(CHANNELS.updateStatus).toBe('update:status');
+    expect(CHANNELS.supportExportDiagnostics).toBe('support:exportDiagnostics');
+    expect(CHANNELS.removeGetOffer).toBe('remove:getOffer');
+    expect(CHANNELS.removeExecute).toBe('remove:execute');
+    expect(CHANNELS.removeFinish).toBe('remove:finish');
+    expect(CHANNELS.removeProgress).toBe('remove:progress');
+    expect(CHANNELS.removeOpenCfDashboard).toBe('remove:openCfDashboard');
+  });
+
+  it('every update:/support:/remove: CHANNELS value matches its key (drift sanity)', () => {
+    const channels = CHANNELS as Record<string, string>;
+    const prefixes = ['update:', 'support:', 'remove:'];
+    let total = 0;
+    for (const prefix of prefixes) {
+      const keys = Object.keys(channels).filter((k) => channels[k].startsWith(prefix));
+      total += keys.length;
+      for (const key of keys) {
+        const action = channels[key].slice(prefix.length);
+        const namespace = prefix.slice(0, -1); // 'update:' -> 'update'
+        expect(key.toLowerCase()).toBe(`${namespace}${action}`.toLowerCase());
+      }
+    }
+    expect(total).toBe(10); // 4 update + 1 support + 5 remove
+  });
+
+  it('UpdateUiStateSchema parses the ready and idle shapes', () => {
+    expect(
+      UpdateUiStateSchema.safeParse({
+        state: 'ready',
+        readyVersion: '0.2.1',
+        currentVersion: '0.2.0',
+        installBlocked: false,
+      }).success
+    ).toBe(true);
+    expect(
+      UpdateUiStateSchema.safeParse({
+        state: 'idle',
+        readyVersion: null,
+        currentVersion: '0.2.0',
+        installBlocked: false,
+      }).success
+    ).toBe(true);
+  });
+
+  it('UpdateUiStateSchema rejects a state outside the update enum', () => {
+    expect(
+      UpdateUiStateSchema.safeParse({
+        state: 'installing',
+        readyVersion: null,
+        currentVersion: '0.2.0',
+        installBlocked: false,
+      }).success
+    ).toBe(false);
+  });
+
+  it('DiagnosticsExportResultSchema parses every outcome', () => {
+    for (const outcome of ['saved', 'folder-fallback', 'cancelled', 'failed']) {
+      expect(DiagnosticsExportResultSchema.safeParse({ outcome }).success).toBe(true);
+    }
+    expect(DiagnosticsExportResultSchema.safeParse({ outcome: 'bogus' }).success).toBe(false);
+  });
+
+  it('RemoveOfferSchema and RemoveChoicesSchema parse their base shapes', () => {
+    expect(RemoveOfferSchema.safeParse({ offerCfTeardown: false, apexHost: null }).success).toBe(
+      true
+    );
+    expect(
+      RemoveOfferSchema.safeParse({ offerCfTeardown: true, apexHost: 'liv.example.com' }).success
+    ).toBe(true);
+    expect(
+      RemoveChoicesSchema.safeParse({ cf: false, distro: false, clear: false }).success
+    ).toBe(true);
+  });
+
+  it('RemoveStepIdSchema accepts the 4 step ids and rejects an unknown one', () => {
+    for (const id of ['stop-engine', 'cf-teardown', 'distro-remove', 'credential-clear']) {
+      expect(RemoveStepIdSchema.safeParse(id).success).toBe(true);
+    }
+    expect(RemoveStepIdSchema.safeParse('nuke-everything').success).toBe(false);
+  });
+
+  it('RemoveProgressSchema parses a valid step/status pair', () => {
+    expect(
+      RemoveProgressSchema.safeParse({ stepId: 'cf-teardown', status: 'failed' }).success
+    ).toBe(true);
+  });
+
+  it('RemoveExecuteAckSchema parses the blocked-empty and populated shapes, rejects a bad stepId', () => {
+    expect(
+      RemoveExecuteAckSchema.safeParse({ blockedByInstall: true, steps: [] }).success
+    ).toBe(true);
+    expect(
+      RemoveExecuteAckSchema.safeParse({
+        blockedByInstall: false,
+        steps: ['stop-engine', 'cf-teardown'],
+      }).success
+    ).toBe(true);
+    expect(
+      RemoveExecuteAckSchema.safeParse({ blockedByInstall: false, steps: ['bogus'] }).success
+    ).toBe(false);
+  });
+
+  it('REMOVE_STEP_LABELS has exactly the 4 RemoveStepId keys with the exact captions', () => {
+    expect(REMOVE_STEP_LABELS['stop-engine']).toBe('Stopping your server');
+    expect(Object.keys(REMOVE_STEP_LABELS).sort()).toEqual(
+      ['cf-teardown', 'credential-clear', 'distro-remove', 'stop-engine'].sort()
+    );
+  });
+
+  it('compile-time fixture: UpdateApi/SupportApi/RemoveApi surfaces exist', () => {
+    const updateFixture = {
+      updateGetState: async () => ({
+        state: 'idle' as const,
+        readyVersion: null,
+        currentVersion: '0.2.0',
+        installBlocked: false,
+      }),
+      updateCheck: async () => {},
+      updateRestartToInstall: async () => ({ ok: true, blocked: false }),
+      onUpdateStatus: () => () => {},
+    } satisfies UpdateApi;
+    const supportFixture = {
+      supportExportDiagnostics: async () => ({ outcome: 'saved' as const }),
+    } satisfies SupportApi;
+    const removeFixture = {
+      removeGetOffer: async () => ({ offerCfTeardown: false, apexHost: null }),
+      removeExecute: async () => ({ blockedByInstall: false, steps: [] }),
+      removeFinish: async () => {},
+      removeOpenCfDashboard: async () => {},
+      onRemoveProgress: () => () => {},
+    } satisfies RemoveApi;
+    expect(typeof updateFixture.updateRestartToInstall).toBe('function');
+    expect(typeof supportFixture.supportExportDiagnostics).toBe('function');
+    expect(typeof removeFixture.removeExecute).toBe('function');
+  });
+
+  it('no update/support/remove result schema shape carries a token/secret/apiKey key', () => {
+    expect(
+      hasSecretKey(
+        UpdateUiStateSchema.parse({
+          state: 'ready',
+          readyVersion: '0.2.1',
+          currentVersion: '0.2.0',
+          installBlocked: false,
+        })
+      )
+    ).toBe(false);
+    expect(hasSecretKey(DiagnosticsExportResultSchema.parse({ outcome: 'saved' }))).toBe(false);
+    expect(
+      hasSecretKey(RemoveOfferSchema.parse({ offerCfTeardown: true, apexHost: 'liv.example.com' }))
+    ).toBe(false);
+    expect(
+      hasSecretKey(RemoveProgressSchema.parse({ stepId: 'cf-teardown', status: 'active' }))
+    ).toBe(false);
   });
 });
