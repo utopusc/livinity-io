@@ -4,16 +4,19 @@
  * The ONE place `window.api`'s type is declared for the renderer. Widens the
  * Phase-1 `ShellApi & DevSpikeApi` surface to also include `AuthApi` (Plan
  * 01/04), `CfApi` (Phase 3 Cloudflare wizard), `WslApi` (Phase 4 WSL2
- * provisioning), `FlowApi` (Phase 5 install orchestration), and `EngineApi`
- * (Phase 6 tray supervision & embedded dashboard) -- every renderer file
- * (App.tsx, screens/, components/) imports from this ambient declaration
- * instead of redeclaring `Window.api` per file (which would conflict at
- * compile time). The CF screens (CfToken/DomainPicker/...) compile against
- * the 03-01 CfApi contract, the WSL screens (WslEnable/BiosDeadEnd/...)
- * compile against the 04-01 WslApi contract, the Phase-5 orchestrator screens
- * compile against the 05-01 FlowApi contract, and the Phase-6 Settings/tray
- * surfaces compile against the 06-01 EngineApi contract, through this one
- * widening.
+ * provisioning), `FlowApi` (Phase 5 install orchestration), `EngineApi`
+ * (Phase 6 tray supervision & embedded dashboard), and `UpdateApi` /
+ * `SupportApi` / `RemoveApi` (Phase 7 auto-update, diagnostics export, clean
+ * uninstall) -- every renderer file (App.tsx, screens/, components/) imports
+ * from this ambient declaration instead of redeclaring `Window.api` per file
+ * (which would conflict at compile time). The CF screens
+ * (CfToken/DomainPicker/...) compile against the 03-01 CfApi contract, the
+ * WSL screens (WslEnable/BiosDeadEnd/...) compile against the 04-01 WslApi
+ * contract, the Phase-5 orchestrator screens compile against the 05-01
+ * FlowApi contract, the Phase-6 Settings/tray surfaces compile against the
+ * 06-01 EngineApi contract, and the Phase-7 About/Diagnostics/Remove screens
+ * compile against the 07-01 UpdateApi/SupportApi/RemoveApi contract, through
+ * this one widening.
  */
 
 /// <reference types="vite/client" />
@@ -26,11 +29,23 @@ import type {
   WslApi,
   FlowApi,
   EngineApi,
+  UpdateApi,
+  SupportApi,
+  RemoveApi,
 } from '../../shared/ipc-contract';
 
 declare global {
   interface Window {
-    api: ShellApi & DevSpikeApi & AuthApi & CfApi & WslApi & FlowApi & EngineApi;
+    api: ShellApi &
+      DevSpikeApi &
+      AuthApi &
+      CfApi &
+      WslApi &
+      FlowApi &
+      EngineApi &
+      UpdateApi &
+      SupportApi &
+      RemoveApi;
   }
 }
 
