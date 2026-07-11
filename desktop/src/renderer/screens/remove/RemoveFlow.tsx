@@ -60,6 +60,27 @@ const EMPTY_VISIBLE = { cf: false, distro: true, clear: true };
  * the CF line, which this default correctly omits. */
 const SAFE_OFFER: RemoveOffer = { offerCfTeardown: false, apexHost: null };
 
+/** WR-07: the CF best-effort failure note + dashboard link (UI-SPEC §8),
+ * single-sourced so the working list and the hand-off stage render identical
+ * copy — the CF-only removal resolves its LAST step's failure and switches to
+ * 'handoff' within the same tick, so the working-list rendering alone gave
+ * the user a sub-frame flash of exactly the guidance they needed. */
+function CfFailureNote({ style }: { style?: React.CSSProperties }): React.ReactElement {
+  return (
+    <p className="note-line" style={style}>
+      Couldn&apos;t remove everything from Cloudflare — the rest continues. You can remove
+      leftovers from your Cloudflare dashboard.{' '}
+      <button
+        type="button"
+        className="link-mute"
+        onClick={() => void window.api.removeOpenCfDashboard()}
+      >
+        Open Cloudflare dashboard
+      </button>
+    </p>
+  );
+}
+
 /** Copied verbatim from wsl/InstallingProgress.tsx -- the shared step-list done glyph. */
 function CheckGlyph(): React.ReactElement {
   return (
@@ -121,6 +142,10 @@ export default function RemoveFlow({ onDone }: RemoveFlowProps) {
   // whether stop-engine itself is included.
   const isZeroOpt = !choices.cf && !choices.distro && !choices.clear;
   const workingSteps = ackSteps.length > 0 ? ackSteps : (Object.keys(progress) as RemoveStepId[]);
+  // WR-07: derived from the persisted progress map (never reset on the
+  // working -> handoff transition), so the hand-off stage can keep the CF
+  // leftover-cleanup guidance visible.
+  const cfFailed = progress['cf-teardown'] === 'failed';
 
   async function handleConfirmClick(): Promise<void> {
     if (confirming) return;
@@ -362,17 +387,7 @@ export default function RemoveFlow({ onDone }: RemoveFlowProps) {
                     <span>{REMOVE_STEP_LABELS[stepId]}</span>
                   </div>
                   {stepId === 'cf-teardown' && status === 'failed' && (
-                    <p className="note-line" style={{ marginTop: 4, marginLeft: 28 }}>
-                      Couldn&apos;t remove everything from Cloudflare — the rest continues. You can remove
-                      leftovers from your Cloudflare dashboard.{' '}
-                      <button
-                        type="button"
-                        className="link-mute"
-                        onClick={() => void window.api.removeOpenCfDashboard()}
-                      >
-                        Open Cloudflare dashboard
-                      </button>
-                    </p>
+                    <CfFailureNote style={{ marginTop: 4, marginLeft: 28 }} />
                   )}
                 </div>
               );
@@ -388,6 +403,7 @@ export default function RemoveFlow({ onDone }: RemoveFlowProps) {
             The Windows uninstaller opens next to remove the app itself — confirm there and you&apos;re
             done. Livinity Desktop will close now.
           </p>
+          {cfFailed && <CfFailureNote style={{ marginTop: 16 }} />}
           <button
             type="button"
             className="btn btn-primary btn-block"

@@ -205,6 +205,24 @@ describe('RemoveFlow.tsx wiring source-scan (WR-06 — no React runner here; the
     expect(source).toContain('disabled={!offer}');
     expect(source).toMatch(/\.catch\(\(\) => setOffer\(SAFE_OFFER\)\)/);
   });
+
+  it("WR-07: a cf-teardown failure is tracked as a flag derived from progress (survives the working -> handoff transition)", () => {
+    expect(source).toMatch(/progress\['cf-teardown'\] === 'failed'/);
+  });
+
+  it('WR-07: the HANDOFF stage renders the CF-failure note + Open Cloudflare dashboard link when cf-teardown failed (the CF-only case unmounts the working list within the same tick)', () => {
+    const handoff = source.slice(source.indexOf("stage === 'handoff'"));
+    expect(handoff).toContain('cfFailed');
+    expect(handoff).toContain('CfFailureNote');
+  });
+
+  it('WR-07: the note copy + removeOpenCfDashboard link are single-sourced (one CfFailureNote used by BOTH the working list and the handoff stage)', () => {
+    // Exactly one copy of the UI-SPEC §8 note text and one invoke call site…
+    expect(source.split('Couldn&apos;t remove everything from Cloudflare').length - 1).toBe(1);
+    expect(source.split('removeOpenCfDashboard').length - 1).toBe(1);
+    // …rendered from two call sites.
+    expect(source.split('<CfFailureNote').length - 1).toBe(2);
+  });
 });
 
 describe('finalButton (Collision-pattern red gate, distro-only)', () => {
