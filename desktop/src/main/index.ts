@@ -53,6 +53,7 @@ import { syncLoginItem, setStartAtLogin, getStartAtLogin } from './supervision/l
 import { decideAutoBringUp } from './supervision/decide-supervision';
 import { wirePowerEvents } from './supervision/power-events';
 import { openDashboardWindow, closeDashboardWindow } from './dashboard/dashboard-window';
+import { toggleQuickPanel } from './tray/quick-panel';
 import { readState, patchState } from './storage/state-store';
 import { initUpdater, getUpdateState, restartToUpdate } from './update/updater';
 import { isInstallInFlight } from './wsl/install-invoke';
@@ -345,6 +346,10 @@ async function bringUpEngineOnLaunch(): Promise<void> {
 
 const trayCallbacks: TrayCallbacks = {
   onOpen: focusMainWindow,
+  // Tray-panel addendum (post-Phase-7): LEFT-click toggles the compact
+  // quick-panel popover; the existing 9-row RIGHT-click context menu below is
+  // unchanged.
+  onToggleQuickPanel: () => void toggleQuickPanel(),
   onOpenDashboard: () => void openDashboardGated(engineDeps),
   onOpenInBrowser: () => void openInBrowserGated(engineDeps),
   onToggleEngine: () => void handleToggleEngine(),
