@@ -416,6 +416,11 @@ describe('shell-preload Phase-6 engine channel wiring (drift guard vs. shared/ip
     expect(invokeMock).toHaveBeenCalledWith(CHANNELS.engineOpenLogsFolder);
   });
 
+  it('engineGetUsage invokes the canonical engine:getUsage channel with no payload (tray quick-panel addendum)', async () => {
+    await getExposedApi()!.engineGetUsage();
+    expect(invokeMock).toHaveBeenCalledWith(CHANNELS.engineGetUsage);
+  });
+
   it('onEngineNavigate subscribes on the canonical engine:navigate channel', () => {
     const cb = vi.fn();
     getExposedApi()!.onEngineNavigate(cb);
