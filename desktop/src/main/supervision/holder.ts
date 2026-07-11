@@ -142,6 +142,16 @@ export async function isPidAliveAsWsl(pid: number, deps: Partial<HolderDeps> = {
 /**
  * Spawns the detached+unref `wsl.exe` holder (RESEARCH Pattern 1) and
  * persists its `{pid, spawnedAt}` to `holder.json`.
+ *
+ * WR-10: `spawn` reports launch failures (ENOENT/EACCES/EPERM) as an
+ * ASYNCHRONOUS `'error'` event on the child -- with no listener attached that
+ * is an unhandled `'error'` event, i.e. an uncaught exception in the main
+ * process (this spawn runs unattended at login and from every 45s respawn).
+ * The listener swallows it: every liveness path (`isPidAliveAsWsl`) already
+ * treats a failed spawn as a dead holder, and the next supervision tick
+ * retries. On a failed spawn `child.pid` is also `undefined` -- returning 0
+ * (a PID no user process ever has) instead of writing a malformed pidfile
+ * (`JSON.stringify` would silently drop the undefined pid key).
  */
 export async function spawnHolder(deps: Partial<HolderDeps> = {}): Promise<number> {
   const d = resolveDeps(deps);
@@ -150,9 +160,16 @@ export async function spawnHolder(deps: Partial<HolderDeps> = {}): Promise<numbe
     stdio: 'ignore',
     windowsHide: true,
   });
+  child.once('error', () => {
+    // Swallowed by design (WR-10) -- liveness treats a failed spawn as dead.
+  });
   child.unref();
 
-  const record: HolderRecord = { pid: child.pid!, spawnedAt: new Date().toISOString() };
+  if (typeof child.pid !== 'number') {
+    return 0; // spawn failed -- no pidfile write; callers' liveness sees "dead"
+  }
+
+  const record: HolderRecord = { pid: child.pid, spawnedAt: new Date().toISOString() };
   await d.writeFile(holderFilePath(d), JSON.stringify(record));
   return record.pid;
 }

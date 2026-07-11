@@ -78,6 +78,29 @@ describe('holder', () => {
         expect(args.some((a) => a.toLowerCase().includes(secretName.toLowerCase()))).toBe(false);
       }
     });
+
+    it("WR-10 regression: an 'error' listener is attached -- a failed spawn's async 'error' event never becomes an uncaught main-process exception", async () => {
+      const deps = makeDeps();
+
+      await spawnHolder(deps as never);
+
+      // Pre-fix: no listener -> EventEmitter turns an unlistened 'error' emit
+      // into a thrown exception (exactly what a real ENOENT/EACCES would do
+      // to the main process at login / on every 45s respawn).
+      expect(() => deps.fakeChild.emit('error', new Error('spawn wsl.exe ENOENT'))).not.toThrow();
+    });
+
+    it('WR-10 regression: child.pid undefined (spawn failed) => returns 0, writes NO pidfile (never a malformed {spawnedAt}-only record)', async () => {
+      const failedChild = new FakeChild();
+      (failedChild as { pid: number | undefined }).pid = undefined;
+      const deps = makeDeps({ spawn: vi.fn(() => failedChild) });
+
+      const pid = await spawnHolder(deps as never);
+
+      expect(pid).toBe(0);
+      expect(deps.writeFile).not.toHaveBeenCalled();
+      expect(() => failedChild.emit('error', new Error('EACCES'))).not.toThrow();
+    });
   });
 
   describe('isPidAliveAsWsl', () => {
