@@ -35,7 +35,14 @@ import { isAllowedNavigation, decideDashboardOpen, ALLOWED_ORIGIN } from './deci
  */
 export interface DashboardWinLike {
   webContents: {
-    on(event: 'will-navigate', cb: (event: { preventDefault(): void }, url: string) => void): void;
+    on(
+      event: 'will-navigate' | 'will-redirect',
+      cb: (event: { preventDefault(): void }, url: string) => void
+    ): void;
+    on(
+      event: 'will-frame-navigate',
+      cb: (details: { url: string; isMainFrame: boolean; preventDefault(): void }) => void
+    ): void;
     setWindowOpenHandler(handler: (details: { url: string }) => { action: 'deny' | 'allow' }): void;
   };
   loadURL(url: string): Promise<void>;
@@ -90,12 +97,32 @@ function resolveDeps(deps: Partial<DashboardDeps>): DashboardDeps {
  * popups, routing non-allowed URLs externally too. Pure wiring -- the
  * actual allow/deny decision is `decide-dashboard-nav.ts`'s
  * `isAllowedNavigation`, never re-implemented here.
+ *
+ * WR-06 (D-09/T-06-06 completeness): `will-navigate` does NOT fire for
+ * server-side redirects -- a compromised livinityd answering
+ * `302 Location: https://evil.example/` would render attacker content inside
+ * the trusted app-chrome window; `will-redirect` closes that door. Likewise
+ * `will-navigate` covers main-frame navigations only -- `will-frame-navigate`
+ * blocks an injected `<iframe src="...">` from loading a foreign origin
+ * inside the window (subframes are blocked silently, never opened
+ * externally; the main-frame case is already handled above).
  */
 export function wireNavigationGuard(win: DashboardWinLike, openExternal: DashboardDeps['openExternal']): void {
   win.webContents.on('will-navigate', (event, url) => {
     if (!isAllowedNavigation(url)) {
       event.preventDefault();
       void openExternal(url);
+    }
+  });
+  win.webContents.on('will-redirect', (event, url) => {
+    if (!isAllowedNavigation(url)) {
+      event.preventDefault();
+      void openExternal(url);
+    }
+  });
+  win.webContents.on('will-frame-navigate', (details) => {
+    if (!details.isMainFrame && !isAllowedNavigation(details.url)) {
+      details.preventDefault();
     }
   });
   win.webContents.setWindowOpenHandler(({ url }) => {

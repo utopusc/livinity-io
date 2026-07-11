@@ -30,14 +30,25 @@ import { ALLOWED_ORIGIN } from '../../src/main/dashboard/decide-dashboard-nav';
 /** A fake DashboardWinLike that records handlers keyed by event name so tests can drive them manually. */
 function createFakeWin() {
   const willNavigateHandlers: ((event: { preventDefault: () => void }, url: string) => void)[] = [];
+  const willRedirectHandlers: ((event: { preventDefault: () => void }, url: string) => void)[] = [];
+  const willFrameNavigateHandlers: ((details: {
+    url: string;
+    isMainFrame: boolean;
+    preventDefault: () => void;
+  }) => void)[] = [];
   let windowOpenHandler: ((details: { url: string }) => { action: 'deny' | 'allow' }) | null = null;
   let destroyed = false;
 
+  const on = ((event: string, cb: unknown) => {
+    if (event === 'will-navigate') willNavigateHandlers.push(cb as (typeof willNavigateHandlers)[number]);
+    if (event === 'will-redirect') willRedirectHandlers.push(cb as (typeof willRedirectHandlers)[number]);
+    if (event === 'will-frame-navigate')
+      willFrameNavigateHandlers.push(cb as (typeof willFrameNavigateHandlers)[number]);
+  }) as DashboardWinLike['webContents']['on'];
+
   const win: DashboardWinLike = {
     webContents: {
-      on: (event, cb) => {
-        if (event === 'will-navigate') willNavigateHandlers.push(cb);
-      },
+      on,
       setWindowOpenHandler: (handler) => {
         windowOpenHandler = handler;
       },
@@ -57,6 +68,16 @@ function createFakeWin() {
       const event = { preventDefault: vi.fn() };
       for (const cb of willNavigateHandlers) cb(event, url);
       return event;
+    },
+    fireWillRedirect: (url: string) => {
+      const event = { preventDefault: vi.fn() };
+      for (const cb of willRedirectHandlers) cb(event, url);
+      return event;
+    },
+    fireWillFrameNavigate: (url: string, isMainFrame: boolean) => {
+      const details = { url, isMainFrame, preventDefault: vi.fn() };
+      for (const cb of willFrameNavigateHandlers) cb(details);
+      return details;
     },
     fireWindowOpen: (url: string) => windowOpenHandler!({ url }),
   };
@@ -207,6 +228,59 @@ describe('wireNavigationGuard -- allow-list (T-06-06)', () => {
 
     fake.fireWindowOpen('https://evil.example/');
     expect(openExternal).toHaveBeenCalledWith('https://evil.example/');
+  });
+
+  it('WR-06 regression: a server-side redirect (will-redirect) to an external origin is prevented + routed externally', () => {
+    const fake = createFakeWin();
+    const openExternal = vi.fn();
+    wireNavigationGuard(fake.win, openExternal);
+
+    const event = fake.fireWillRedirect('https://evil.example/');
+
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(openExternal).toHaveBeenCalledWith('https://evil.example/');
+  });
+
+  it('WR-06: will-redirect within ALLOWED_ORIGIN is allowed (no preventDefault, no openExternal)', () => {
+    const fake = createFakeWin();
+    const openExternal = vi.fn();
+    wireNavigationGuard(fake.win, openExternal);
+
+    const event = fake.fireWillRedirect(`${ALLOWED_ORIGIN}/login`);
+
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it('WR-06 regression: a SUBFRAME navigation (injected iframe) to an external origin is blocked silently -- never opened externally', () => {
+    const fake = createFakeWin();
+    const openExternal = vi.fn();
+    wireNavigationGuard(fake.win, openExternal);
+
+    const details = fake.fireWillFrameNavigate('https://evil.example/', false);
+
+    expect(details.preventDefault).toHaveBeenCalledOnce();
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it('WR-06: a subframe navigation within ALLOWED_ORIGIN is allowed', () => {
+    const fake = createFakeWin();
+    const openExternal = vi.fn();
+    wireNavigationGuard(fake.win, openExternal);
+
+    const details = fake.fireWillFrameNavigate(`${ALLOWED_ORIGIN}/widget`, false);
+
+    expect(details.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('WR-06: will-frame-navigate leaves MAIN-frame navigations to the will-navigate guard (no double handling)', () => {
+    const fake = createFakeWin();
+    const openExternal = vi.fn();
+    wireNavigationGuard(fake.win, openExternal);
+
+    const details = fake.fireWillFrameNavigate('https://evil.example/', true);
+
+    expect(details.preventDefault).not.toHaveBeenCalled();
   });
 });
 
