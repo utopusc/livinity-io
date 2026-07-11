@@ -17,6 +17,7 @@
  */
 
 import { useState } from 'react';
+import { isTunnel410Resolved } from './no-tunnel-flow';
 
 interface NoTunnel410Props {
   onResolved: () => void;
@@ -31,17 +32,18 @@ export default function NoTunnel410({ onResolved }: NoTunnel410Props) {
     setStillUnresolved(false);
     try {
       const route = await window.api.flowResume();
-      // FlowRouteSchema has no dedicated "no-tunnel-410" kind -- the closest
-      // still-blocked shape it can carry is `cf-reconnect` (map-failure.ts's
-      // comment: exit-1 reasons are disambiguated by text, not exit code, and
-      // a stale-token verdict is a distinct surface that still means "not
-      // resolved yet" from this screen's point of view); a null return (no
-      // route computed) is the same "still stuck" signal. Any other concrete
-      // route means platform-side provisioning has since completed.
-      if (route === null || route.kind === 'cf-reconnect') {
-        setStillUnresolved(true);
-      } else {
+      // WR-02: only a route that POSITIVELY proves progress past the failed
+      // install ('live-success' / 'connected-check') counts as resolved --
+      // the ledger necessarily holds a concrete flowStep by the time this
+      // screen shows, so flow:resume always returns SOME route (typically
+      // wsl-detect) whether or not the account was fixed platform-side;
+      // treating that as "resolved" made every click blindly re-run the
+      // whole multi-minute install pipeline back into the same 410. The
+      // narrow allowlist lives in no-tunnel-flow.ts (pure, unit-tested).
+      if (isTunnel410Resolved(route)) {
         onResolved();
+      } else {
+        setStillUnresolved(true);
       }
     } finally {
       setChecking(false);
