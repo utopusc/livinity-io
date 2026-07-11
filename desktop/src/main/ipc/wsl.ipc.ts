@@ -24,12 +24,17 @@
  * `getVmLaunchError` (04-04) captures a launch-time firmware-block token; the
  * proactive `getVirtualizationEnabled` WMI hint is never a sole gate.
  *
- * D-04 (auto-resume): a successful `wsl:enable` arms
- * `app.setLoginItemSettings({ openAtLogin: true, args: ['--hidden'] })` so
- * the app relaunches hidden-to-tray after the mandatory reboot and resumes
- * the wizard; `wsl:restartNow` re-arms the same settings defensively before
+ * D-04 (auto-resume): a successful `wsl:enable` arms the hidden-resume login
+ * item via `syncLoginItem()` (`supervision/login-item.ts` — the SOLE
+ * `app.setLoginItemSettings` call site in the app, T-06-02) so the app
+ * relaunches hidden-to-tray after the mandatory reboot and resumes the
+ * wizard; `wsl:restartNow` re-arms the same way defensively before
  * triggering the ONLY reboot in this file (USER-INITIATED ONLY — never
- * auto-called).
+ * auto-called). `wsl:detect`'s disarm branch also routes through
+ * `syncLoginItem()` instead of hardcoding `openAtLogin: false`, so a healthy
+ * post-reboot check falls back to the user's real `startAtLogin` preference
+ * rather than silently turning it off (Pitfall 1 / the WR-02-class landmine
+ * this file's three former direct call sites created).
  *
  * D-16 (validate-before-write): `wsl:configApply` runs `validateResourceLimits`
  * BEFORE any `.wslconfig` read/merge/write — an invalid value rejects the
@@ -64,6 +69,7 @@ import { runInstall } from '../wsl/install-invoke';
 import { decideResourceDefaults } from '../wsl/decide-resource-defaults';
 import { parseIni, mergeWsl2Keys, serializeIni, validateResourceLimits } from '../wsl/wslconfig';
 import { readState, patchState } from '../storage/state-store';
+import { syncLoginItem } from '../supervision/login-item';
 import { logSafe } from '../log';
 
 // Per-handler payload schemas (mirror cf.ipc.ts:47-56). NoPayload = z.undefined()
@@ -164,7 +170,7 @@ export function registerWslIpc(deps: WslIpcDeps): void {
         // resume login item wsl:enable/wsl:restartNow armed — its single job
         // (surviving the mandatory reboot) is done.
         await patchState({ wslStep: undefined });
-        app.setLoginItemSettings({ openAtLogin: false });
+        await syncLoginItem();
         needsReboot = false;
       }
 
@@ -205,7 +211,7 @@ export function registerWslIpc(deps: WslIpcDeps): void {
 
       if (ok) {
         await patchState({ wslStep: WSL_RESTART_STEP });
-        app.setLoginItemSettings({ openAtLogin: true, args: ['--hidden'] });
+        await syncLoginItem();
         return { kind: 'needs-reboot' as const };
       }
 
@@ -264,7 +270,7 @@ export function registerWslIpc(deps: WslIpcDeps): void {
     if (!parsed.success) return;
     try {
       await patchState({ wslStep: WSL_RESTART_STEP });
-      app.setLoginItemSettings({ openAtLogin: true, args: ['--hidden'] });
+      await syncLoginItem();
 
       logSafe('wsl.restartNow', { userInitiated: true });
       spawn('shutdown', ['/r', '/t', '0'], { windowsHide: true });

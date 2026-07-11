@@ -4,7 +4,8 @@ import os from 'node:os';
 /**
  * wsl.ipc.test.ts mocks every impure collaborator registerWslIpc composes
  * (wsl-exec, elevate, disk-probe, distro-install, install-invoke, state-
- * store, node:fs, node:child_process) plus the repo's log module, and
+ * store, login-item (syncLoginItem — 06-03 refactor target), node:fs,
+ * node:child_process) plus the repo's log module, and
  * captures each ipcMain.handle registration by channel string — the same
  * captured-handler-callback technique cf.ipc.test.ts uses, mirrored here for
  * the WSL IPC boundary. decide-wsl-state / parse-wsl-list / wslconfig /
@@ -71,6 +72,10 @@ vi.mock('../../src/main/storage/state-store', () => ({
   patchState: vi.fn(),
 }));
 
+vi.mock('../../src/main/supervision/login-item', () => ({
+  syncLoginItem: vi.fn(),
+}));
+
 vi.mock('node:fs', () => ({
   promises: {
     readFile: vi.fn(),
@@ -98,6 +103,7 @@ import { getFreeDiskGb, getVirtualizationEnabled, getVmLaunchError } from '../..
 import { provisionDistro } from '../../src/main/wsl/distro-install';
 import { runInstall } from '../../src/main/wsl/install-invoke';
 import { readState, patchState } from '../../src/main/storage/state-store';
+import { syncLoginItem } from '../../src/main/supervision/login-item';
 import { decideWslState } from '../../src/main/wsl/decide-wsl-state';
 import { registerWslIpc } from '../../src/main/ipc/wsl.ipc';
 import type { WslDownloadUpdate, WslInstallUpdate } from '../../shared/ipc-contract';
@@ -113,6 +119,7 @@ const provisionDistroMock = vi.mocked(provisionDistro);
 const runInstallMock = vi.mocked(runInstall);
 const readStateMock = vi.mocked(readState);
 const patchStateMock = vi.mocked(patchState);
+const syncLoginItemMock = vi.mocked(syncLoginItem);
 const decideWslStateMock = vi.mocked(decideWslState);
 const readFileMock = vi.mocked(fsPromises.readFile);
 const writeFileMock = vi.mocked(fsPromises.writeFile);
@@ -161,6 +168,7 @@ describe('wsl.ipc', () => {
     spawnMock.mockReset();
     openExternalMock.mockClear();
     setLoginItemSettingsMock.mockClear();
+    syncLoginItemMock.mockClear();
     mockWindow = null;
 
     // Sensible defaults so a test that doesn't care about a given
@@ -251,7 +259,8 @@ describe('wsl.ipc', () => {
 
       expect(result).toEqual({ kind: 'ready' });
       expect(patchStateMock).toHaveBeenCalledWith({ wslStep: undefined });
-      expect(setLoginItemSettingsMock).toHaveBeenCalledWith({ openAtLogin: false });
+      expect(syncLoginItemMock).toHaveBeenCalled();
+      expect(setLoginItemSettingsMock).not.toHaveBeenCalled();
     });
 
     it('a persisted wsl-restart flag + clean status but no distro yet clears the flag and proceeds to distro-missing (WR-02 regression)', async () => {
@@ -282,6 +291,7 @@ describe('wsl.ipc', () => {
 
       expect(result).toEqual({ kind: 'needs-enable' });
       expect(patchStateMock).not.toHaveBeenCalled();
+      expect(syncLoginItemMock).not.toHaveBeenCalled();
       expect(setLoginItemSettingsMock).not.toHaveBeenCalled();
     });
 
@@ -359,10 +369,8 @@ describe('wsl.ipc', () => {
       const result = await handler({});
 
       expect(patchStateMock).toHaveBeenCalledWith({ wslStep: 'wsl-restart' });
-      expect(setLoginItemSettingsMock).toHaveBeenCalledWith({
-        openAtLogin: true,
-        args: ['--hidden'],
-      });
+      expect(syncLoginItemMock).toHaveBeenCalled();
+      expect(setLoginItemSettingsMock).not.toHaveBeenCalled();
       expect(result).toEqual({ kind: 'needs-reboot' });
     });
 
@@ -456,10 +464,8 @@ describe('wsl.ipc', () => {
       await handler({});
 
       expect(patchStateMock).toHaveBeenCalledWith({ wslStep: 'wsl-restart' });
-      expect(setLoginItemSettingsMock).toHaveBeenCalledWith({
-        openAtLogin: true,
-        args: ['--hidden'],
-      });
+      expect(syncLoginItemMock).toHaveBeenCalled();
+      expect(setLoginItemSettingsMock).not.toHaveBeenCalled();
       expect(spawnMock).toHaveBeenCalledWith('shutdown', ['/r', '/t', '0'], { windowsHide: true });
     });
 
