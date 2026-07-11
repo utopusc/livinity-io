@@ -151,6 +151,11 @@ export default function App() {
   // auto-resume after the mandatory reboot) -- passed to WslEnable so it
   // shows "Picking up where we left off" instead of the first-run copy.
   const [wslResume, setWslResume] = useState(false);
+  // The signed-in username, fetched when the WSL wizard reaches its terminal
+  // handoff, so the success screen can show the managed-box address
+  // ({username}.livinity.io) for the pro/legacy paths (the byod path derives
+  // its address from cfHolder instead).
+  const [boxUsername, setBoxUsername] = useState<string | null>(null);
 
   // ---- Phase 1 debug shell state (dev-gated below) ----
   const [status, setStatus] = useState<Status>('stopped');
@@ -276,6 +281,20 @@ export default function App() {
       if (cancelled) return;
       const { step } = mapWslDetectResult(result);
       setWslStep(step === 'wsl-restart' ? 'wsl-enable' : step);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [screen, wslStep]);
+
+  // On reaching the terminal handoff (install-invoke returned ok), fetch the
+  // username so the success screen can show the managed-box address. Cheap,
+  // main-side, no secrets; runs once per handoff entry.
+  useEffect(() => {
+    if (screen !== 'wsl-wizard' || wslStep !== 'wsl-handoff') return;
+    let cancelled = false;
+    void window.api.authGetAccount().then((account) => {
+      if (!cancelled) setBoxUsername(account?.username ?? null);
     });
     return () => {
       cancelled = true;
@@ -720,18 +739,41 @@ export default function App() {
               />
             )}
 
-            {wslStep === 'wsl-handoff' && (
-              <section className="card">
-                {/* Phase 4's job ends here -- Phase 5 owns the resumable
-                    install state machine + the "your box is live" success
-                    screen (INSTALL-01/04); this is a placeholder terminal
-                    state only. */}
-                <h1 className="heading">LivOS is installing on your PC</h1>
-                <p className="note-line" style={{ marginTop: 8 }}>
-                  This runs in the background — Livinity will let you know when it's ready.
-                </p>
-              </section>
-            )}
+            {wslStep === 'wsl-handoff' &&
+              (() => {
+                // Reached ONLY after install-invoke returns ok, so this is an
+                // honest completion state, not a spinner. The byod path derives
+                // its address from cfHolder ({subLabel}.{zoneName}); the pro/
+                // legacy managed paths use {username}.livinity.io. Phase 5 owns
+                // the richer live dashboard and Phase 6's tray app adds always-
+                // on background running + one-tap open -- until then this
+                // confirms success, shows the address, and says what's next.
+                const byodAddress =
+                  cfHolder.subLabel && cfHolder.zoneName
+                    ? `${cfHolder.subLabel}.${cfHolder.zoneName}`
+                    : null;
+                const boxAddress =
+                  byodAddress ?? (boxUsername ? `${boxUsername}.livinity.io` : null);
+                return (
+                  <section className="card">
+                    <h1 className="heading">LivOS is set up ✓</h1>
+                    <p className="note-line" style={{ marginTop: 8 }}>
+                      {boxAddress
+                        ? 'Livinity is installed on this PC. Your box lives at:'
+                        : 'Livinity is installed on this PC.'}
+                    </p>
+                    {boxAddress && (
+                      <div className="field-input mono" style={{ marginTop: 12 }}>
+                        {boxAddress}
+                      </div>
+                    )}
+                    <p className="note-line" style={{ marginTop: 16 }}>
+                      Keeping it always-on in the background and opening it in one
+                      tap arrive with the Livinity tray app — the next step.
+                    </p>
+                  </section>
+                );
+              })()}
           </>
         )}
 
