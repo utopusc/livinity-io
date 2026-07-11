@@ -78,6 +78,7 @@ import {
   startSupervision,
   openDashboardGated,
   openInBrowserGated,
+  requestRestartToUpdate,
   __resetHealthMemoryForTests,
 } from '../../src/main/supervision/engine';
 
@@ -790,6 +791,80 @@ describe('engine (Task 2: supervisionTick / runHealthPass / notifications / star
       await openInBrowserGated({ openExternal });
 
       expect(openExternal).not.toHaveBeenCalled();
+    });
+
+    it('IN-02: a non-host-shaped derived address is rejected before openExternal (defense-in-depth)', async () => {
+      readStateMock.mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'running' });
+      deriveAddressMock.mockResolvedValue('bruce.livinity.io/../evil');
+      const openExternal = vi.fn();
+
+      await openInBrowserGated({ openExternal });
+
+      expect(openExternal).not.toHaveBeenCalled();
+      expect(logSafeMock).toHaveBeenCalledWith('engine.openInBrowser', { invalidAddress: true });
+    });
+
+    it('IN-02: a bare host-shaped address (letters/digits/dots/hyphens) still opens normally', async () => {
+      readStateMock.mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'running' });
+      deriveAddressMock.mockResolvedValue('bruce-01.livinity.io');
+      const openExternal = vi.fn();
+
+      await openInBrowserGated({ openExternal });
+
+      expect(openExternal).toHaveBeenCalledWith('https://bruce-01.livinity.io/');
+    });
+  });
+
+  describe('requestRestartToUpdate (D-06 admission gate, UPD-01)', () => {
+    it('isInstallInFlight()=>true => {ok:false, blocked:true}, injected quitAndInstall NEVER called', async () => {
+      const quitAndInstall = vi.fn();
+
+      const result = await requestRestartToUpdate({ isInstallInFlight: () => true, quitAndInstall });
+
+      expect(result).toEqual({ ok: false, blocked: true });
+      expect(quitAndInstall).not.toHaveBeenCalled();
+      expect(logSafeMock).toHaveBeenCalledWith('engine.restartToUpdate', { blockedByInstall: true });
+    });
+
+    it('isInstallInFlight()=>false => injected quitAndInstall called once, returns {ok:true, blocked:false}', async () => {
+      const quitAndInstall = vi.fn();
+
+      const result = await requestRestartToUpdate({ isInstallInFlight: () => false, quitAndInstall });
+
+      expect(result).toEqual({ ok: true, blocked: false });
+      expect(quitAndInstall).toHaveBeenCalledTimes(1);
+    });
+
+    it('queues BEHIND an in-flight startEngine transition (same serialized() mutex, WR-02)', async () => {
+      const order: string[] = [];
+      let releaseBoot: (() => void) | undefined;
+      const bootGate = new Promise<void>((resolve) => {
+        releaseBoot = resolve;
+      });
+      adoptOrSpawnHolderMock.mockImplementation(async () => {
+        order.push('start-begin');
+        await bootGate;
+        order.push('start-end');
+        return 4242;
+      });
+      const quitAndInstall = vi.fn(() => {
+        order.push('quitAndInstall');
+      });
+
+      const startP = startEngine({ setStatus: vi.fn() });
+      await new Promise((r) => setTimeout(r, 0)); // let start begin & hang mid-boot
+      const restartP = requestRestartToUpdate({ isInstallInFlight: () => false, quitAndInstall });
+
+      releaseBoot?.();
+      await Promise.all([startP, restartP]);
+
+      expect(order).toEqual(['start-begin', 'start-end', 'quitAndInstall']);
+    });
+
+    it('source-scan: engine.ts contains "serialized" and does NOT import the third-party update package directly', () => {
+      const source = readFileSync(join(__dirname, '../../src/main/supervision/engine.ts'), 'utf8');
+      expect(source).toContain('serialized');
+      expect(source).not.toMatch(/from ['"]electron-updater['"]/);
     });
   });
 });
