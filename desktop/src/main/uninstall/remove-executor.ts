@@ -91,9 +91,19 @@ export interface RemoveExecutorDeps {
  * THE ONLY distro-unregister call site in `src/main` (source-scanned by
  * remove-executor.test.ts, T-07-12). Routes through the sanctioned execWsl
  * wrapper (windowsHide, never a bare child_process.spawn).
+ *
+ * WR-05: execWsl NEVER rejects -- it resolves {code, stdout, stderr} with
+ * code:null even when wsl.exe itself couldn't spawn -- so a failed
+ * unregister (distro busy/locked, access denied, WSL service wedged,
+ * wsl.exe missing) must be surfaced HERE by throwing on a non-zero/null exit,
+ * or the one destructive, red-gate-confirmed step renders a checkmark over
+ * data that is still on disk. Exit-code-only judgment stays locale-safe --
+ * no output parsing (Phase-4 rule). (The literal flag appears exactly once in
+ * this file by design -- T-07-12's source-scan counts it.)
  */
 async function defaultUnregisterDistro(name: string): Promise<void> {
-  await realExecWsl(['--unregister', name]);
+  const r = await realExecWsl(['--unregister', name]);
+  if (r.code !== 0) throw new Error(`wsl unregister exit ${r.code}`);
 }
 
 /**

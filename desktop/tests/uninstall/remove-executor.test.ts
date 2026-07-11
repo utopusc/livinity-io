@@ -76,14 +76,24 @@ vi.mock('../../src/main/platform/auth-client', () => ({
   getMe: vi.fn(),
 }));
 
+// WR-05: defaultUnregisterDistro routes through execWsl, which NEVER rejects
+// (resolves {code,stdout,stderr}, code:null on spawn failure) — mocked here so
+// the default dep's exit-code judgment is testable through executeRemove.
+vi.mock('../../src/main/wsl/wsl-exec', () => ({
+  execWsl: vi.fn(),
+}));
+
 vi.mock('../../src/main/log', () => ({
   logSafe: vi.fn(),
   log: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
 import { CfApiError } from '../../src/main/cloudflare/cf-http';
+import { execWsl } from '../../src/main/wsl/wsl-exec';
 import { executeRemove, finishRemove, type RemoveExecutorDeps } from '../../src/main/uninstall/remove-executor';
 import type { RemoveChoices, State } from '../../shared/ipc-contract';
+
+const execWslMock = vi.mocked(execWsl);
 
 /** A terminal CfApiError at a given status (404 = success everywhere in this module). */
 function cfErr(status: number): CfApiError {
@@ -271,6 +281,49 @@ describe('executeRemove', () => {
 
     expect(unregisterDistro).toHaveBeenCalledOnce();
     expect(unregisterDistro).toHaveBeenCalledWith('livinity');
+  });
+
+  describe('WR-05: the DEFAULT unregisterDistro surfaces wsl --unregister\'s exit code (execWsl never rejects)', () => {
+    /** baseDeps WITHOUT unregisterDistro, so resolveDeps falls back to
+     * defaultUnregisterDistro -> the mocked execWsl. Distro-only, engine
+     * already stopped => the one step walked is distro-remove. */
+    function depsWithDefaultUnregister(onProgress: ReturnType<typeof vi.fn>) {
+      const deps = baseDeps({
+        onProgress,
+        readState: vi.fn().mockResolvedValue({ ...RECEIPTS_STATE, engineDesiredState: 'stopped' }),
+      });
+      delete deps.unregisterDistro;
+      return deps;
+    }
+
+    it('exit code 0 => distro-remove "ok"', async () => {
+      execWslMock.mockResolvedValue({ code: 0, stdout: '', stderr: '' });
+      const onProgress = vi.fn();
+
+      await executeRemove(choices({ distro: true }), depsWithDefaultUnregister(onProgress));
+
+      expect(execWslMock).toHaveBeenCalledWith(['--unregister', 'livinity']);
+      expect(onProgress).toHaveBeenCalledWith({ stepId: 'distro-remove', status: 'ok' });
+    });
+
+    it('exit code 1 (distro busy/locked/denied) => distro-remove "failed" — never a silent checkmark', async () => {
+      execWslMock.mockResolvedValue({ code: 1, stdout: '', stderr: 'locked' });
+      const onProgress = vi.fn();
+
+      await executeRemove(choices({ distro: true }), depsWithDefaultUnregister(onProgress));
+
+      expect(onProgress).toHaveBeenCalledWith({ stepId: 'distro-remove', status: 'failed' });
+      expect(onProgress).not.toHaveBeenCalledWith({ stepId: 'distro-remove', status: 'ok' });
+    });
+
+    it('code null (wsl.exe itself could not spawn/timed out) => distro-remove "failed"', async () => {
+      execWslMock.mockResolvedValue({ code: null, stdout: '', stderr: 'ENOENT' });
+      const onProgress = vi.fn();
+
+      await executeRemove(choices({ distro: true }), depsWithDefaultUnregister(onProgress));
+
+      expect(onProgress).toHaveBeenCalledWith({ stepId: 'distro-remove', status: 'failed' });
+    });
   });
 
   it('credential-clear calls vaultDelete for every vault key + resetState', async () => {
