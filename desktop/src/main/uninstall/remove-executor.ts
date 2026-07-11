@@ -335,10 +335,25 @@ async function runStep(stepId: RemoveStepId, deps: RemoveExecutorDeps): Promise<
       deps.onProgress({ stepId, status: 'ok' });
       return;
     }
-    // credential-clear
-    for (const key of ALL_VAULT_KEYS) await deps.vaultDelete(key);
-    await deps.resetState();
-    deps.onProgress({ stepId, status: 'ok' });
+    // credential-clear -- WR-04: per-key isolation. One failed vaultDelete
+    // (an IO/DPAPI/lock error rewriting the vault file) must not leave the
+    // LATER keys and state.json intact after the user asked for them to be
+    // cleared -- every delete and the state reset are always attempted; any
+    // individual failure aggregates into one honest 'failed' status.
+    let clearFailed = false;
+    for (const key of ALL_VAULT_KEYS) {
+      try {
+        await deps.vaultDelete(key);
+      } catch {
+        clearFailed = true;
+      }
+    }
+    try {
+      await deps.resetState();
+    } catch {
+      clearFailed = true;
+    }
+    deps.onProgress({ stepId, status: clearFailed ? 'failed' : 'ok' });
   } catch {
     deps.onProgress({ stepId, status: 'failed' });
   }

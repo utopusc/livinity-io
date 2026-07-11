@@ -284,6 +284,32 @@ describe('executeRemove', () => {
     expect(resetState).toHaveBeenCalledOnce();
   });
 
+  it('WR-04: one failed vaultDelete (first key) still attempts EVERY other key AND resetState — step "failed", blast radius minimal', async () => {
+    const vaultDelete = vi.fn().mockImplementation(async (key: string) => {
+      if (key === 'session') throw new Error('vault lock/DPAPI boom');
+    });
+    const resetState = vi.fn().mockResolvedValue(undefined);
+    const onProgress = vi.fn();
+
+    await executeRemove(choices({ clear: true }), baseDeps({ vaultDelete, resetState, onProgress }));
+
+    expect(vaultDelete).toHaveBeenCalledTimes(4);
+    expect(vaultDelete.mock.calls.map((c) => c[0]).sort()).toEqual(['apiKey', 'cfToken', 'session', 'tunnelToken']);
+    expect(resetState).toHaveBeenCalledOnce();
+    expect(onProgress).toHaveBeenCalledWith({ stepId: 'credential-clear', status: 'failed' });
+  });
+
+  it('WR-04: a failing resetState alone (all deletes ok) still reports "failed" — never a phantom checkmark', async () => {
+    const vaultDelete = vi.fn().mockResolvedValue(undefined);
+    const resetState = vi.fn().mockRejectedValue(new Error('state write boom'));
+    const onProgress = vi.fn();
+
+    await executeRemove(choices({ clear: true }), baseDeps({ vaultDelete, resetState, onProgress }));
+
+    expect(vaultDelete).toHaveBeenCalledTimes(4);
+    expect(onProgress).toHaveBeenCalledWith({ stepId: 'credential-clear', status: 'failed' });
+  });
+
   it('onProgress pushes {stepId,status:"active"} then the terminal status, per step', async () => {
     const onProgress = vi.fn();
 
