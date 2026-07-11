@@ -14,6 +14,7 @@
  */
 
 import { Tray, Menu, nativeImage } from 'electron';
+import type { MenuItemConstructorOptions } from 'electron';
 import type { Status } from '../../../shared/ipc-contract';
 
 const COLORS: Record<Status, string> = {
@@ -88,6 +89,8 @@ export interface TrayCallbacks {
   onRestart?: () => void;
   onToggleStartAtLogin?: () => void;
   onOpenSettings?: () => void;
+  /** UPD-01 (07-04) — the conditional "Restart to update" row's click handler. */
+  onRestartToUpdate?: () => void;
   onQuit: () => void;
 }
 
@@ -98,6 +101,12 @@ export interface TrayViewState {
   engineRunning: boolean; // 'Start engine' vs 'Stop engine' row label
   startAtLoginChecked: boolean;
   actionsDisabled: boolean; // true while any transition is in flight (disables toggle+restart)
+  /** UPD-01 (07-04, additive) — non-null only once a download is ready; drives
+   * the conditional "Restart to update (vX.Y.Z)" row (07-UI-SPEC.md §2). */
+  updateReadyVersion?: string | null;
+  /** D-06 install-gate mirror (UpdateUiState.installBlocked) — disables the row
+   * without hiding it while install.sh is in flight. */
+  updateBlocked?: boolean;
 }
 
 const NOOP = () => {};
@@ -107,9 +116,16 @@ const NOOP = () => {};
  * Open Livinity / Open dashboard / Open in browser / (sep) / Status: {text}
  * (disabled) / (sep) / Start|Stop engine / Restart engine / (sep) / Start at
  * login (checkbox) / Settings / (sep) / Quit.
+ *
+ * UPD-01 (07-04, additive, 07-UI-SPEC.md §2): when `view.updateReadyVersion`
+ * is non-null, a conditional "Restart to update (vX.Y.Z)" row is inserted in
+ * the FINAL group, directly above Quit (reusing the existing separator — no
+ * new one is added): `… / Settings / (sep) / Restart to update (vX.Y.Z) /
+ * Quit`. `enabled: !view.updateBlocked` mirrors the D-06 install-gate without
+ * hiding the row while install.sh is in flight.
  */
 function buildContextMenu(view: TrayViewState, cbs: TrayCallbacks) {
-  return Menu.buildFromTemplate([
+  const template: MenuItemConstructorOptions[] = [
     { label: 'Open Livinity', click: cbs.onOpen },
     { label: 'Open dashboard', click: cbs.onOpenDashboard ?? NOOP },
     { label: 'Open in browser', click: cbs.onOpenInBrowser ?? NOOP },
@@ -135,8 +151,16 @@ function buildContextMenu(view: TrayViewState, cbs: TrayCallbacks) {
     },
     { label: 'Settings', click: cbs.onOpenSettings ?? NOOP },
     { type: 'separator' },
-    { label: 'Quit', click: cbs.onQuit },
-  ]);
+  ];
+  if (view.updateReadyVersion != null) {
+    template.push({
+      label: `Restart to update (v${view.updateReadyVersion})`,
+      enabled: !view.updateBlocked,
+      click: cbs.onRestartToUpdate ?? NOOP,
+    });
+  }
+  template.push({ label: 'Quit', click: cbs.onQuit });
+  return Menu.buildFromTemplate(template);
 }
 
 /**

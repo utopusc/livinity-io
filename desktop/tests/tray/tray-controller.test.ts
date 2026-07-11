@@ -200,6 +200,79 @@ describe('tray-controller buildContextMenu (via createTray/updateTray)', () => {
   });
 });
 
+describe('buildContextMenu conditional "Restart to update" row (UPD-01, 07-04)', () => {
+  it('absent by default (updateReadyVersion undefined) -- existing 9-row/13-entry menu unchanged', () => {
+    const cbs = makeCallbacks();
+    const tray = createTray(cbs) as unknown as MockTray;
+    updateTray(tray as never, baseView(), cbs);
+    const template = templateOf(tray);
+    expect(template.find((r) => typeof r.label === 'string' && r.label.startsWith('Restart to update'))).toBeUndefined();
+    expect(template.length).toBe(13);
+  });
+
+  it('absent when updateReadyVersion is explicitly null', () => {
+    const cbs = makeCallbacks();
+    const tray = createTray(cbs) as unknown as MockTray;
+    updateTray(tray as never, baseView({ updateReadyVersion: null }), cbs);
+    expect(rowByLabel(templateOf(tray), 'Restart to update (v0.2.1)')).toBeUndefined();
+  });
+
+  it('present + enabled when updateReadyVersion is set and updateBlocked is false', () => {
+    const cbs = makeCallbacks();
+    const tray = createTray(cbs) as unknown as MockTray;
+    updateTray(tray as never, baseView({ updateReadyVersion: '0.2.1', updateBlocked: false }), cbs);
+    const row = rowByLabel(templateOf(tray), 'Restart to update (v0.2.1)');
+    expect(row).toBeDefined();
+    expect(row!.enabled).not.toBe(false);
+  });
+
+  it('present + disabled when updateBlocked is true (D-06 install-gate)', () => {
+    const cbs = makeCallbacks();
+    const tray = createTray(cbs) as unknown as MockTray;
+    updateTray(tray as never, baseView({ updateReadyVersion: '0.2.1', updateBlocked: true }), cbs);
+    const row = rowByLabel(templateOf(tray), 'Restart to update (v0.2.1)');
+    expect(row).toBeDefined();
+    expect(row!.enabled).toBe(false);
+  });
+
+  it('positioned immediately above Quit -- the FINAL group, reusing the existing separator (14 entries when present)', () => {
+    const cbs = makeCallbacks();
+    const tray = createTray(cbs) as unknown as MockTray;
+    updateTray(tray as never, baseView({ updateReadyVersion: '0.2.1' }), cbs);
+    const template = templateOf(tray);
+    expect(template.length).toBe(14); // 13 + 1 new row, no new separator
+    expect(template.filter((r) => r.type === 'separator').length).toBe(4); // unchanged
+    const quitIdx = template.findIndex((r) => r.label === 'Quit');
+    const restartIdx = template.findIndex(
+      (r) => typeof r.label === 'string' && r.label.startsWith('Restart to update')
+    );
+    expect(restartIdx).toBe(quitIdx - 1);
+  });
+
+  it('wires onRestartToUpdate to the row click handler', () => {
+    const cbs = makeCallbacks();
+    const onRestartToUpdate = vi.fn();
+    const tray = createTray(cbs) as unknown as MockTray;
+    updateTray(tray as never, baseView({ updateReadyVersion: '0.2.1' }), { ...cbs, onRestartToUpdate });
+    rowByLabel(templateOf(tray), 'Restart to update (v0.2.1)')!.click();
+    expect(onRestartToUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('missing onRestartToUpdate callback -> click is a safe no-op (?? NOOP discipline)', () => {
+    const cbs = makeCallbacks();
+    const tray = createTray(cbs) as unknown as MockTray;
+    updateTray(tray as never, baseView({ updateReadyVersion: '0.2.1' }), cbs);
+    expect(() => rowByLabel(templateOf(tray), 'Restart to update (v0.2.1)')!.click()).not.toThrow();
+  });
+
+  it('the deprecated updateTrayStatus shim still compiles/works untouched (optional new fields keep it green)', () => {
+    const cbs = makeCallbacks();
+    const tray = createTray(cbs) as unknown as MockTray;
+    expect(() => updateTrayStatus(tray as never, 'running', cbs.onOpen, cbs.onQuit)).not.toThrow();
+    expect(rowByLabel(templateOf(tray), 'Restart to update (v0.2.1)')).toBeUndefined();
+  });
+});
+
 describe('createTray', () => {
   it('builds with the extended TrayCallbacks and wires double-click to onOpen', () => {
     const cbs = makeCallbacks();
