@@ -1,19 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
- * dashboard-window.ts imports BrowserWindow/app/shell from 'electron' at
- * module load time; mock them so this file never instantiates a real
+ * dashboard-window.ts imports BrowserWindow/app/shell/session from 'electron'
+ * at module load time; mock them so this file never instantiates a real
  * Electron BrowserWindow (RESEARCH.md Validation Architecture -- mirrors
  * tests/platform/oauth-window.test.ts's discipline). Every test injects its
  * own fake `createWindow` via `Partial<DashboardDeps>`, so the mocked
  * `BrowserWindow`/`shell.openExternal` here are never actually invoked --
  * they exist purely so the module's default-dependency expressions resolve
- * without throwing at import time.
+ * without throwing at import time. `session.fromPartition` is a SHARED spy
+ * (hoisted) returning a fixed fake `Session` object with its own spy, so D-17
+ * tests below can assert both which partition string was requested and how
+ * its permission handler behaves.
  */
+const { fromPartitionMock, setPermissionRequestHandlerMock } = vi.hoisted(() => {
+  const setPermissionRequestHandlerMock = vi.fn();
+  const fromPartitionMock = vi.fn(() => ({ setPermissionRequestHandler: setPermissionRequestHandlerMock }));
+  return { fromPartitionMock, setPermissionRequestHandlerMock };
+});
+
 vi.mock('electron', () => ({
   BrowserWindow: class {},
   app: { getAppPath: () => 'FAKE_APP_PATH' },
   shell: { openExternal: vi.fn() },
+  session: { fromPartition: fromPartitionMock },
 }));
 
 import {
@@ -22,6 +34,7 @@ import {
   getDashboardWindow,
   wireNavigationGuard,
   __resetDashboardWindowForTests,
+  DASH_PARTITION,
   type DashboardWinLike,
   type DashboardDeps,
 } from '../../src/main/dashboard/dashboard-window';
@@ -119,6 +132,62 @@ describe('openDashboardWindow -- sandbox contract (D-09/T-06-05)', () => {
       contextIsolation: true,
       nodeIntegration: false,
     });
+  });
+});
+
+describe('openDashboardWindow -- D-17 persist:dashboard session partition (T-07-13)', () => {
+  it('createWindow webPreferences.partition === DASH_PARTITION ("persist:dashboard")', async () => {
+    expect(DASH_PARTITION).toBe('persist:dashboard');
+
+    const createWindow = vi.fn(() => createFakeWin().win);
+    await openDashboardWindow(baseDeps({ createWindow }));
+
+    const options = createWindow.mock.calls[0][0];
+    expect(options.webPreferences?.partition).toBe(DASH_PARTITION);
+  });
+
+  it('session.fromPartition(DASH_PARTITION).setPermissionRequestHandler is registered with a deny-all callback, BEFORE the window is created', async () => {
+    const order: string[] = [];
+    const createWindow = vi.fn(() => {
+      order.push('createWindow');
+      return createFakeWin().win;
+    });
+    fromPartitionMock.mockImplementationOnce((...args: unknown[]) => {
+      order.push('fromPartition');
+      return { setPermissionRequestHandler: setPermissionRequestHandlerMock };
+    });
+
+    await openDashboardWindow(baseDeps({ createWindow }));
+
+    expect(fromPartitionMock).toHaveBeenCalledWith(DASH_PARTITION);
+    expect(order).toEqual(['fromPartition', 'createWindow']);
+
+    expect(setPermissionRequestHandlerMock).toHaveBeenCalledTimes(1);
+    const handler = setPermissionRequestHandlerMock.mock.calls[0][0] as (
+      wc: unknown,
+      perm: string,
+      cb: (allow: boolean) => void
+    ) => void;
+    for (const perm of ['media', 'geolocation', 'notifications', 'camera']) {
+      const cb = vi.fn();
+      handler({}, perm, cb);
+      expect(cb).toHaveBeenCalledWith(false);
+    }
+  });
+
+  it('fromPartition is NEVER called with any argument other than DASH_PARTITION (the default session is never touched)', async () => {
+    const createWindow = vi.fn(() => createFakeWin().win);
+    await openDashboardWindow(baseDeps({ createWindow }));
+
+    for (const call of fromPartitionMock.mock.calls) {
+      expect(call).toEqual([DASH_PARTITION]);
+    }
+  });
+
+  it('source-scan: dashboard-window.ts never references session.defaultSession', () => {
+    const source = readFileSync(join(__dirname, '../../src/main/dashboard/dashboard-window.ts'), 'utf8');
+    expect(source).not.toContain('defaultSession');
+    expect(source).toContain('persist:dashboard');
   });
 });
 
