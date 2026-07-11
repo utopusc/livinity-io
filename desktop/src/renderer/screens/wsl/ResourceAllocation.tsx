@@ -27,7 +27,7 @@ interface ResourceAllocationProps {
   onContinue: () => void;
 }
 
-interface RangeRowProps {
+export interface RangeRowProps {
   id: string;
   label: string;
   value: number;
@@ -42,8 +42,13 @@ interface RangeRowProps {
  * One resource slider row: Label -> mono readout -> native range -> a
  * decorative recommended-value tick. aria-valuetext carries the human
  * readout so a screen reader announces "8 GB of 16 GB", not a bare number.
+ *
+ * Exported (06-09) for verbatim reuse by Settings.tsx's Resource limits
+ * card -- same component, only the pre-fill source differs (current applied
+ * values, not "recommended"). No behavior change to ResourceAllocation
+ * itself.
  */
-function RangeRow({
+export function RangeRow({
   id,
   label,
   value,
