@@ -62,6 +62,10 @@ vi.mock('../../src/main/dashboard/dashboard-window', () => ({
   closeDashboardWindow: vi.fn(),
 }));
 
+vi.mock('../../src/main/supervision/usage-probe', () => ({
+  getUsage: vi.fn(),
+}));
+
 import { CHANNELS } from '../../shared/ipc-contract';
 import type { EngineDeps } from '../../src/main/supervision/engine';
 import {
@@ -74,6 +78,7 @@ import {
 } from '../../src/main/supervision/engine';
 import { setStartAtLogin, getStartAtLogin } from '../../src/main/supervision/login-item';
 import { openDashboardWindow, closeDashboardWindow } from '../../src/main/dashboard/dashboard-window';
+import { getUsage } from '../../src/main/supervision/usage-probe';
 import { registerEngineIpc } from '../../src/main/ipc/engine.ipc';
 
 const startEngineMock = vi.mocked(startEngine);
@@ -86,6 +91,7 @@ const setStartAtLoginMock = vi.mocked(setStartAtLogin);
 const getStartAtLoginMock = vi.mocked(getStartAtLogin);
 const openDashboardWindowMock = vi.mocked(openDashboardWindow);
 const closeDashboardWindowMock = vi.mocked(closeDashboardWindow);
+const getUsageMock = vi.mocked(getUsage);
 
 /**
  * Recursively scans a handler return value for any KEY that looks like a
@@ -135,6 +141,7 @@ describe('engine.ipc', () => {
     getStartAtLoginMock.mockClear().mockResolvedValue(true);
     openDashboardWindowMock.mockClear().mockResolvedValue(undefined);
     closeDashboardWindowMock.mockClear();
+    getUsageMock.mockClear().mockResolvedValue({ ok: false, reason: 'engine-stopped' });
     openExternalMock.mockClear().mockResolvedValue(undefined);
     openPathMock.mockClear().mockResolvedValue(undefined);
     getPathMock.mockClear();
@@ -143,7 +150,7 @@ describe('engine.ipc', () => {
   });
 
   describe('registration', () => {
-    it('registers a handler for each of the 8 engine:* invoke channels', () => {
+    it('registers a handler for each of the 9 engine:* invoke channels', () => {
       for (const channel of [
         CHANNELS.engineStart,
         CHANNELS.engineStop,
@@ -153,6 +160,7 @@ describe('engine.ipc', () => {
         CHANNELS.engineOpenDashboard,
         CHANNELS.engineOpenInBrowser,
         CHANNELS.engineOpenLogsFolder,
+        CHANNELS.engineGetUsage,
       ]) {
         expect(getHandler(channel)).toBeInstanceOf(Function);
       }
@@ -314,6 +322,45 @@ describe('engine.ipc', () => {
     });
   });
 
+  describe('engine:getUsage (delegates to usage-probe.getUsage)', () => {
+    it('delegates to getUsage and returns its result verbatim', async () => {
+      getUsageMock.mockResolvedValueOnce({
+        ok: true,
+        memUsedKb: 1024,
+        memTotalKb: 16384000,
+        load1: 0.52,
+        cpuCount: 8,
+        diskUsedKb: 876543,
+        diskTotalKb: 41943040,
+      });
+      const handler = getHandler(CHANNELS.engineGetUsage)!;
+      const result = await handler({});
+      expect(getUsageMock).toHaveBeenCalled();
+      expect(result).toEqual({
+        ok: true,
+        memUsedKb: 1024,
+        memTotalKb: 16384000,
+        load1: 0.52,
+        cpuCount: 8,
+        diskUsedKb: 876543,
+        diskTotalKb: 41943040,
+      });
+    });
+
+    it('rejects a hostile stray payload WITHOUT calling getUsage (IN-04), returning the safe probe-failed default', async () => {
+      const handler = getHandler(CHANNELS.engineGetUsage)!;
+      const result = await handler({}, { unexpected: 'payload' });
+      expect(getUsageMock).not.toHaveBeenCalled();
+      expect(result).toEqual({ ok: false, reason: 'probe-failed' });
+    });
+
+    it('survives getUsage throwing and returns the safe probe-failed default, never rejects', async () => {
+      const handler = getHandler(CHANNELS.engineGetUsage)!;
+      getUsageMock.mockRejectedValueOnce(new Error('boom'));
+      await expect(handler({})).resolves.toEqual({ ok: false, reason: 'probe-failed' });
+    });
+  });
+
   describe('engine:openDashboard (delegates to openDashboardGated, D-10 stopped-gate)', () => {
     it('delegates to openDashboardGated and resolves to undefined', async () => {
       const handler = getHandler(CHANNELS.engineOpenDashboard)!;
@@ -411,6 +458,7 @@ describe('engine.ipc', () => {
         await getHandler(CHANNELS.engineOpenDashboard)!({}),
         await getHandler(CHANNELS.engineOpenInBrowser)!({}),
         await getHandler(CHANNELS.engineOpenLogsFolder)!({}),
+        await getHandler(CHANNELS.engineGetUsage)!({}),
       ];
 
       for (const result of results) {
