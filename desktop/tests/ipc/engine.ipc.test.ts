@@ -286,23 +286,31 @@ describe('engine.ipc', () => {
     it('takes no renderer payload and calls shell.openPath with the fixed app.getPath("logs") path -- never renderer-derived', async () => {
       const handler = getHandler(CHANNELS.engineOpenLogsFolder)!;
       getPathMock.mockReturnValueOnce('/fixed/logs/path');
+      openPathMock.mockResolvedValueOnce('');
       const result = await handler({});
       expect(getPathMock).toHaveBeenCalledWith('logs');
       expect(openPathMock).toHaveBeenCalledWith('/fixed/logs/path');
-      expect(result).toBeUndefined();
+      expect(result).toEqual({ ok: true });
+    });
+
+    it('IN-03: a non-empty shell.openPath resolution (its real error-string contract) surfaces as {ok:false}', async () => {
+      const handler = getHandler(CHANNELS.engineOpenLogsFolder)!;
+      openPathMock.mockResolvedValueOnce('No application is associated with the specified file');
+      const result = await handler({});
+      expect(result).toEqual({ ok: false });
     });
 
     it('rejects a hostile stray payload (e.g. a renderer-supplied path) WITHOUT calling shell.openPath at all (IN-04)', async () => {
       const handler = getHandler(CHANNELS.engineOpenLogsFolder)!;
       const result = await handler({}, { path: 'C:\\evil\\renderer\\supplied' });
       expect(openPathMock).not.toHaveBeenCalled();
-      expect(result).toBeUndefined();
+      expect(result).toEqual({ ok: false });
     });
 
     it('survives shell.openPath throwing and never rejects', async () => {
       const handler = getHandler(CHANNELS.engineOpenLogsFolder)!;
       openPathMock.mockRejectedValueOnce(new Error('boom'));
-      await expect(handler({})).resolves.toBeUndefined();
+      await expect(handler({})).resolves.toEqual({ ok: false });
     });
   });
 

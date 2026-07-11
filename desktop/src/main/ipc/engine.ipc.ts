@@ -215,13 +215,19 @@ export function registerEngineIpc(deps: EngineIpcDeps): void {
 
   // engine:openLogsFolder — NO renderer payload is ever read; the path is a
   // FIXED app.getPath('logs') (T-06-08), never renderer-derived.
+  // IN-03: shell.openPath RESOLVES (never rejects) with an error STRING on
+  // failure rather than throwing — capture that string instead of discarding
+  // it, so the Diagnostics card (07-09) can show a real "couldn't open"
+  // note instead of a silent no-op.
   ipcMain.handle(CHANNELS.engineOpenLogsFolder, async (_event, raw: unknown) => {
     const parsed = NoPayload.safeParse(raw);
-    if (!parsed.success) return;
+    if (!parsed.success) return { ok: false as const };
     try {
-      await shell.openPath(app.getPath('logs'));
+      const errorMessage = await shell.openPath(app.getPath('logs'));
+      return { ok: errorMessage === '' };
     } catch {
       logSafe('engine.openLogsFolder', { exception: true });
+      return { ok: false as const };
     }
   });
 }

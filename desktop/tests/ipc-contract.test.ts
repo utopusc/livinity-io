@@ -546,7 +546,7 @@ describe('Phase 6 engine contract', () => {
       engineSetStartAtLogin: async (enabled: boolean) => ({ ok: true, startAtLogin: enabled }),
       engineOpenDashboard: async () => {},
       engineOpenInBrowser: async () => {},
-      engineOpenLogsFolder: async () => {},
+      engineOpenLogsFolder: async () => ({ ok: true }),
       onEngineNavigate: () => () => {},
     } satisfies EngineApi;
     expect(typeof fixture.engineOpenInBrowser).toBe('function');

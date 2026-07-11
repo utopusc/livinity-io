@@ -811,7 +811,12 @@ export interface EngineApi {
   /** D-10 stopped-gated "Open in browser" (openInBrowserGated, 06-07 via 06-10). No payload,
    *  no return value — the URL is derived + gated MAIN-SIDE, never renderer-supplied. */
   engineOpenInBrowser(): Promise<void>;
-  engineOpenLogsFolder(): Promise<void>;
+  /** IN-03 (07-07 fold-in): {ok} reflects shell.openPath's resolved error
+   *  string main-side — '' -> {ok:true}, a non-empty error -> {ok:false}.
+   *  Widened additively from Promise<void> (the tsc mismatch the 07-07 plan
+   *  anticipated) — the Diagnostics card (07-09) reads it via the preload
+   *  wrapper. */
+  engineOpenLogsFolder(): Promise<{ ok: boolean }>;
   /** main -> renderer navigation push (tray "Settings"/stopped-open gate). Returns unsubscribe. */
   onEngineNavigate(cb: (nav: EngineNavigate) => void): () => void;
 }
