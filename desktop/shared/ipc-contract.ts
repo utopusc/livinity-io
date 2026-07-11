@@ -85,6 +85,9 @@ export const StateSchema = z.object({
   // already-persisted state.json without these still parses (safeParse tolerates absence).
   engineDesiredState: z.enum(['running', 'stopped']).optional(),
   startAtLogin: z.boolean().optional(), // undefined == D-05 default (true)
+  // Phase 7 (D-05): additive-optional notify-once memory — an already-persisted state.json
+  // without it still parses (safeParse tolerates absence). Written by updater.ts after a toast.
+  lastUpdateNotifiedVersion: z.string().optional(),
 });
 export type State = z.infer<typeof StateSchema>;
 
@@ -164,6 +167,23 @@ export const CHANNELS = {
   engineOpenInBrowser: 'engine:openInBrowser',
   engineOpenLogsFolder: 'engine:openLogsFolder',
   engineNavigate: 'engine:navigate',
+  // update:* — electron-updater surface (UPD-01). getState/check/restartToInstall are invoke;
+  // status is a main -> renderer PUSH (monotonic, mirrors statusChanged/cfProvisionUpdate).
+  updateGetState: 'update:getState',
+  updateCheck: 'update:check',
+  updateRestartToInstall: 'update:restartToInstall',
+  updateStatus: 'update:status',                 // PUSH, not an invoke handler
+  // support:* — diagnostics export (SUP-01)
+  supportExportDiagnostics: 'support:exportDiagnostics',
+  // remove:* — two-layer uninstall (SUP-02). progress is a PUSH.
+  removeGetOffer: 'remove:getOffer',
+  removeExecute: 'remove:execute',
+  removeFinish: 'remove:finish',
+  removeProgress: 'remove:progress',             // PUSH, not an invoke handler
+  // remove:openCfDashboard — enum-allowlisted external open (the CF-failure link, 07-10). NOT a
+  // URL channel: the handler (07-07) maps NoPayload to the FIXED `https://dash.cloudflare.com`
+  // literal, mirroring cf:openExternal's enum-allowlist so a renderer URL can never reach shell.
+  removeOpenCfDashboard: 'remove:openCfDashboard',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -794,6 +814,110 @@ export interface EngineApi {
   engineOpenLogsFolder(): Promise<void>;
   /** main -> renderer navigation push (tray "Settings"/stopped-open gate). Returns unsubscribe. */
   onEngineNavigate(cb: (nav: EngineNavigate) => void): () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Auto-update, diagnostics export, clean uninstall (Phase 7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Same file-level IPC-boundary invariant as every section above: no method on
+ * UpdateApi/SupportApi/RemoveApi, and no schema below, ever returns a secret.
+ * RemoveOffer is booleans + apexHost only (D-12) — never the token/receipt
+ * content that decides `offerCfTeardown`. updateRestartToInstall returns
+ * {ok, blocked}, never a URL/token. remove:openCfDashboard carries NO url —
+ * the handler (07-07) maps NoPayload to the FIXED dash.cloudflare.com literal.
+ */
+
+export const UpdateUiStateSchema = z.object({
+  state: z.enum(['idle', 'checking', 'downloading', 'ready', 'up-to-date', 'failed', 'dev']),
+  readyVersion: z.string().nullable(),   // non-null only in 'ready'
+  currentVersion: z.string(),            // app.getVersion(), main-side
+  installBlocked: z.boolean(),           // D-06 install-gate (isInstallInFlight) — CTA disabled note
+});
+export type UpdateUiState = z.infer<typeof UpdateUiStateSchema>;
+
+export const DiagnosticsExportResultSchema = z.object({
+  outcome: z.enum(['saved', 'folder-fallback', 'cancelled', 'failed']),  // no path/secret carried
+});
+export type DiagnosticsExportResult = z.infer<typeof DiagnosticsExportResultSchema>;
+
+// D-12 secret-free view-model — the renderer NEVER sees the token or receipt content.
+export const RemoveOfferSchema = z.object({
+  offerCfTeardown: z.boolean(),          // free_byod + receipts + cfToken present, computed MAIN-SIDE
+  apexHost: z.string().nullable(),
+});
+export type RemoveOffer = z.infer<typeof RemoveOfferSchema>;
+
+export const RemoveChoicesSchema = z.object({
+  cf: z.boolean(), distro: z.boolean(), clear: z.boolean(),
+});
+export type RemoveChoices = z.infer<typeof RemoveChoicesSchema>;
+
+export const RemoveStepIdSchema = z.enum(['stop-engine', 'cf-teardown', 'distro-remove', 'credential-clear']);
+export type RemoveStepId = z.infer<typeof RemoveStepIdSchema>;
+
+export const RemoveProgressSchema = z.object({
+  stepId: RemoveStepIdSchema,
+  status: z.enum(['active', 'ok', 'skipped', 'failed']),
+});
+export type RemoveProgress = z.infer<typeof RemoveProgressSchema>;
+
+// remove:execute ACK — the single source of truth for the teardown (W3/W4). `steps` is MAIN's
+// removePlan(choices, engineRunning) output, so the renderer renders its working step-list from
+// THIS (mapped through REMOVE_STEP_LABELS) instead of re-computing engineRunning renderer-side —
+// the two can never disagree. `blockedByInstall` is the D-06 install-gate: a teardown requested
+// while install.sh is in flight is REFUSED (steps:[]) so remove never --unregisters a
+// mid-provisioning distro (the WR-05 destruction class) — the renderer shows the calm
+// "Setup is in progress" note instead of a working animation.
+export const RemoveExecuteAckSchema = z.object({
+  blockedByInstall: z.boolean(),
+  steps: z.array(RemoveStepIdSchema),   // [] when blockedByInstall; else the exact ordered plan MAIN walked
+});
+export type RemoveExecuteAck = z.infer<typeof RemoveExecuteAckSchema>;
+
+/**
+ * The single source of truth for the WORKING step-list captions (UI-SPEC §8), importable by
+ * BOTH the main executor (remove-executor.ts, 07-06, for the progress push order) and the
+ * renderer (remove-flow.ts, 07-03, for the caption text) — the INSTALL_CAPTIONS precedent.
+ */
+export const REMOVE_STEP_LABELS: Record<RemoveStepId, string> = {
+  'stop-engine': 'Stopping your server',                          // R-3: shown when CF OR distro stops the engine
+  'cf-teardown': 'Removing the Cloudflare tunnel and DNS records',
+  'distro-remove': 'Deleting the Livinity system',
+  'credential-clear': 'Clearing your sign-in and settings',
+} as const;
+
+/**
+ * UpdateApi — the electron-updater sibling of EngineApi. Same IPC-boundary invariant: no
+ * method here ever returns a secret.
+ */
+export interface UpdateApi {
+  updateGetState(): Promise<UpdateUiState>;
+  updateCheck(): Promise<void>;                                   // background-style; state via push
+  updateRestartToInstall(): Promise<{ ok: boolean; blocked: boolean }>; // blocked==true => install-gate note
+  /** Subscribes to update-state pushes; returns an unsubscribe function (mirrors onEngineNavigate). */
+  onUpdateStatus(cb: (s: UpdateUiState) => void): () => void;
+}
+
+/** SupportApi — the diagnostics-export sibling of UpdateApi. Secret-free result only. */
+export interface SupportApi {
+  supportExportDiagnostics(): Promise<DiagnosticsExportResult>;
+}
+
+/**
+ * RemoveApi — the two-layer-uninstall sibling of SupportApi. Same IPC-boundary invariant:
+ * no method here ever returns a secret.
+ */
+export interface RemoveApi {
+  removeGetOffer(): Promise<RemoveOffer>;                         // booleans only, D-12
+  /** {blockedByInstall, steps}: MAIN owns the step set (W4) + gates a mid-install teardown (W3/D-06); progress still via push */
+  removeExecute(choices: RemoveChoices): Promise<RemoveExecuteAck>;
+  removeFinish(): Promise<void>;                                 // disarm login-item, launch NSIS, quit (07-06/07-11)
+  /** enum-allowlisted open of the FIXED https://dash.cloudflare.com literal (CF-failure link, 07-10) — never a renderer URL */
+  removeOpenCfDashboard(): Promise<void>;
+  /** Subscribes to remove-progress pushes; returns an unsubscribe function (mirrors onEngineNavigate). */
+  onRemoveProgress(cb: (p: RemoveProgress) => void): () => void;
 }
 
 // ---------------------------------------------------------------------------
