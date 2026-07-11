@@ -68,6 +68,8 @@ import { RangeRow } from './wsl/ResourceAllocation';
 
 interface SettingsProps {
   onSignedOut: () => void;
+  /** Navigates App to the Remove-flow screen (07-10 mounts the caller). */
+  onRemove?: () => void;
 }
 
 const COPIED_RESET_MS = 1800;
@@ -173,7 +175,7 @@ function CopyButton({ value, label }: { value: string; label: string }): React.R
   );
 }
 
-export default function Settings({ onSignedOut }: SettingsProps) {
+export default function Settings({ onSignedOut, onRemove }: SettingsProps) {
   // ---- Status / Engine ----
   const [status, setStatus] = useState<EngineStatusResult | null>(null);
   const [transition, setTransition] = useState<Transition>(null);
@@ -744,6 +746,19 @@ export default function Settings({ onSignedOut }: SettingsProps) {
           </div>
         </div>
 
+        {/* ---------- Remove Livinity card (07-09/UI-SPEC §6, always last) ---------- */}
+        <div className="card" style={{ marginTop: 24 }}>
+          <h2 className="card-title">REMOVE LIVINITY</h2>
+          <div className="card-row">
+            <p className="note-line">
+              Removes the Livinity app from this PC. Your server, domain, and data stay unless you
+              choose otherwise.
+            </p>
+            <button type="button" className="btn" onClick={() => onRemove?.()}>
+              Remove Livinity…
+            </button>
+          </div>
+        </div>
       </section>
     </div>
   );

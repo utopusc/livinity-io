@@ -14,7 +14,16 @@
  * re-verifies live state and reuses the existing distro -- there is no
  * distro-removal command and no confirmation-gated red button anywhere
  * on this screen.
+ *
+ * "Export diagnostics…" (07-09/D-10/UI-SPEC §5): the 'our-bug' variant's
+ * former inert placeholder link is now an enabled `.link-mute` calling
+ * the SAME `window.api.supportExportDiagnostics()` exporter as the Settings
+ * Diagnostics card -- one code path, two entry points. Relabelled (not just
+ * enabled): nothing is sent in v1, a file is saved locally, so the prior
+ * "sending" copy would have been a false promise.
  */
+
+import { useState } from 'react';
 
 interface InstallOutcomeProps {
   outcome: 'disk' | 'systemd-retry' | 'our-bug' | 'generic';
@@ -25,6 +34,27 @@ interface InstallOutcomeProps {
 }
 
 export default function InstallOutcome({ outcome, freeGb, driveLetter, reason, onRetry }: InstallOutcomeProps) {
+  const [exporting, setExporting] = useState(false);
+  const [exportOutcome, setExportOutcome] = useState<'saved' | 'failed' | null>(null);
+
+  async function handleExportDiagnostics(): Promise<void> {
+    if (exporting) return;
+    setExporting(true);
+    setExportOutcome(null);
+    try {
+      const result = await window.api.supportExportDiagnostics();
+      if (result.outcome === 'saved' || result.outcome === 'folder-fallback') {
+        setExportOutcome('saved');
+      } else if (result.outcome === 'failed') {
+        setExportOutcome('failed');
+      }
+      // 'cancelled' -- no message, button simply re-enables.
+    } catch {
+      setExportOutcome('failed');
+    } finally {
+      setExporting(false);
+    }
+  }
   return (
     <div className="setup-shell setup-shell--centered">
       <section>
@@ -89,10 +119,26 @@ export default function InstallOutcome({ outcome, freeGb, driveLetter, reason, o
               Try again
             </button>
             <div style={{ marginTop: 16 }}>
-              {/* Reference only -- diagnostics export is Phase 7 / SUP-01. Inert placeholder, not wired. */}
-              <button type="button" className="link-mute" disabled title="Coming soon">
-                Send a report
+              <button
+                type="button"
+                className="link-mute"
+                disabled={exporting}
+                onClick={() => void handleExportDiagnostics()}
+              >
+                {exporting ? 'Exporting…' : 'Export diagnostics…'}
               </button>
+              <div aria-live="polite">
+                {exportOutcome === 'saved' && (
+                  <p className="note-line" style={{ marginTop: 8 }}>
+                    Saved. Attach this file if you contact support.
+                  </p>
+                )}
+                {exportOutcome === 'failed' && (
+                  <p className="error-line" style={{ marginTop: 8 }}>
+                    Couldn't export diagnostics — try again.
+                  </p>
+                )}
+              </div>
             </div>
           </>
         )}
