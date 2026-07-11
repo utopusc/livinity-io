@@ -199,14 +199,45 @@ describe('holder', () => {
   });
 
   describe('killHolder', () => {
-    it('reads the pidfile, best-effort kills the recorded pid, and clears the pidfile', async () => {
+    it('reads the pidfile, verifies the PID still runs as wsl.exe, best-effort kills it, and clears the pidfile', async () => {
       const deps = makeDeps({
         readFile: vi.fn().mockResolvedValue(JSON.stringify({ pid: 777, spawnedAt: '2026-07-11T00:00:00.000Z' })),
+        execFile: vi.fn().mockResolvedValue({ stdout: '"wsl.exe","777","Console","1","1 K"', stderr: '' }),
       });
 
       await killHolder(deps as never);
 
+      expect(deps.execFile).toHaveBeenCalledWith(
+        'tasklist',
+        ['/FI', 'PID eq 777', '/FI', 'IMAGENAME eq wsl.exe', '/NH'],
+        { windowsHide: true }
+      );
       expect(deps.kill).toHaveBeenCalledWith(777);
+      expect(deps.unlink).toHaveBeenCalledTimes(1);
+    });
+
+    it('WR-01 regression: stale pidfile whose PID is NOT running as wsl.exe (reboot/PID-reuse) => kill is NEVER called, pidfile still unlinked', async () => {
+      const deps = makeDeps({
+        readFile: vi.fn().mockResolvedValue(JSON.stringify({ pid: 777, spawnedAt: '2026-07-11T00:00:00.000Z' })),
+        // tasklist filtered on IMAGENAME eq wsl.exe returns nothing -- the PID
+        // is dead, or alive but reused by an unrelated innocent process.
+        execFile: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+      });
+
+      await killHolder(deps as never);
+
+      expect(deps.kill).not.toHaveBeenCalled();
+      expect(deps.unlink).toHaveBeenCalledTimes(1);
+    });
+
+    it('WR-01 regression: tasklist itself failing (execFile rejects) degrades to NOT killing (never a blind pidfile kill)', async () => {
+      const deps = makeDeps({
+        readFile: vi.fn().mockResolvedValue(JSON.stringify({ pid: 777, spawnedAt: '2026-07-11T00:00:00.000Z' })),
+        execFile: vi.fn().mockRejectedValue(new Error('access denied')),
+      });
+
+      await expect(killHolder(deps as never)).resolves.toBeUndefined();
+      expect(deps.kill).not.toHaveBeenCalled();
       expect(deps.unlink).toHaveBeenCalledTimes(1);
     });
 
@@ -217,9 +248,10 @@ describe('holder', () => {
       expect(deps.kill).not.toHaveBeenCalled();
     });
 
-    it('resolves without throwing when kill() itself throws (already-dead pid)', async () => {
+    it('resolves without throwing when kill() itself throws (races an exit after the liveness check)', async () => {
       const deps = makeDeps({
         readFile: vi.fn().mockResolvedValue(JSON.stringify({ pid: 777, spawnedAt: '2026-07-11T00:00:00.000Z' })),
+        execFile: vi.fn().mockResolvedValue({ stdout: '"wsl.exe","777","Console","1","1 K"', stderr: '' }),
         kill: vi.fn(() => {
           throw new Error('ESRCH');
         }),
@@ -231,6 +263,7 @@ describe('holder', () => {
     it('resolves without throwing when unlink() itself rejects (pidfile already gone)', async () => {
       const deps = makeDeps({
         readFile: vi.fn().mockResolvedValue(JSON.stringify({ pid: 777, spawnedAt: '2026-07-11T00:00:00.000Z' })),
+        execFile: vi.fn().mockResolvedValue({ stdout: '"wsl.exe","777","Console","1","1 K"', stderr: '' }),
         unlink: vi.fn().mockRejectedValue(new Error('ENOENT')),
       });
 

@@ -179,11 +179,17 @@ export async function adoptOrSpawnHolder(deps: Partial<HolderDeps> = {}): Promis
  * already-dead PID (kill throws ESRCH-equivalent), or a failed unlink all
  * resolve silently. The caller's `wsl --terminate livinity` (STOP, D-03)
  * tears down the in-distro session regardless of whether this kill succeeds.
+ *
+ * WR-01 (T-06-03, same guard as adoption): a bare pidfile PID is NEVER
+ * sufficient to kill -- Windows reuses PIDs aggressively and `holder.json`
+ * survives reboots, so a stale record could point at an unrelated innocent
+ * process. Kill only when `isPidAliveAsWsl` confirms the PID is still
+ * running as `wsl.exe`; the stale pidfile is unlinked either way.
  */
 export async function killHolder(deps: Partial<HolderDeps> = {}): Promise<void> {
   const d = resolveDeps(deps);
   const record = await readHolderRecord(d);
-  if (record) {
+  if (record && (await isPidAliveAsWsl(record.pid, d))) {
     try {
       d.kill(record.pid);
     } catch {
