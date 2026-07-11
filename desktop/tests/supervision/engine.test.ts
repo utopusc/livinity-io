@@ -714,18 +714,33 @@ describe('engine (Task 2: supervisionTick / runHealthPass / notifications / star
   });
 
   describe('openDashboardGated', () => {
-    it('desiredState !== "running" -> focuses main window + navigates to Settings, never opens the dashboard window', async () => {
+    it('desiredState !== "running" -> shows+focuses main window + navigates to Settings, never opens the dashboard window', async () => {
       readStateMock.mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'stopped' });
       const focus = vi.fn();
-      const getMainWindow = vi.fn(() => ({ focus }));
+      const show = vi.fn();
+      const getMainWindow = vi.fn(() => ({ show, focus }));
       const navigateToSettings = vi.fn();
       const openDashboardWindow = vi.fn();
 
       await openDashboardGated({ getMainWindow, navigateToSettings, openDashboardWindow });
 
+      expect(show).toHaveBeenCalled();
       expect(focus).toHaveBeenCalled();
       expect(navigateToSettings).toHaveBeenCalled();
       expect(openDashboardWindow).not.toHaveBeenCalled();
+    });
+
+    it('WR-07 regression: the D-10 gate calls show() BEFORE focus() -- a close-to-tray hidden window is un-hidden, not silently "focused"', async () => {
+      readStateMock.mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'stopped' });
+      const order: string[] = [];
+      const getMainWindow = vi.fn(() => ({
+        show: vi.fn(() => order.push('show')),
+        focus: vi.fn(() => order.push('focus')),
+      }));
+
+      await openDashboardGated({ getMainWindow, navigateToSettings: vi.fn(), openDashboardWindow: vi.fn() });
+
+      expect(order).toEqual(['show', 'focus']);
     });
 
     it('desiredState === "running" -> opens the dashboard window, never touches Settings navigation', async () => {
@@ -744,12 +759,14 @@ describe('engine (Task 2: supervisionTick / runHealthPass / notifications / star
     it('desiredState !== "running" -> gates the same way as openDashboardGated (no dead tab)', async () => {
       readStateMock.mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'stopped' });
       const focus = vi.fn();
-      const getMainWindow = vi.fn(() => ({ focus }));
+      const show = vi.fn();
+      const getMainWindow = vi.fn(() => ({ show, focus }));
       const navigateToSettings = vi.fn();
       const openExternal = vi.fn();
 
       await openInBrowserGated({ getMainWindow, navigateToSettings, openExternal });
 
+      expect(show).toHaveBeenCalled();
       expect(focus).toHaveBeenCalled();
       expect(navigateToSettings).toHaveBeenCalled();
       expect(openExternal).not.toHaveBeenCalled();

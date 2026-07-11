@@ -116,7 +116,10 @@ export interface EngineDeps {
   notify: (kind: NotifyKind) => void;
   openDashboardWindow: () => Promise<void>;
   closeDashboard: () => void;
-  getMainWindow: () => { focus: () => void } | null;
+  /** WR-07: widened to include show() — the main window may be hidden-to-tray
+   * (SHELL-03 close-to-tray) and BrowserWindow.focus() alone does NOT un-hide
+   * a hidden window on Windows. `BrowserWindow` satisfies this structurally. */
+  getMainWindow: () => { show: () => void; focus: () => void } | null;
   navigateToSettings: () => void;
   openExternal: (url: string) => Promise<void>;
 }
@@ -487,9 +490,15 @@ export function startSupervision(
 // ---------------------------------------------------------------------------
 
 /** D-10: while the engine is not desired-running, focus the main window + navigate to
- * Settings rather than open a doomed connection (no dead localhost:8080 tab/window). */
+ * Settings rather than open a doomed connection (no dead localhost:8080 tab/window).
+ * WR-07: show() FIRST — the primary D-10 user is tray-only (window closed to tray,
+ * engine stopped); focus() on a hidden window is a visible no-op on Windows, so the
+ * gate previously did nothing the user could see. show() is a no-op when already
+ * visible (mirrors the tray's own onOpenSettings row). */
 async function focusSettingsInstead(d: EngineDeps): Promise<void> {
-  d.getMainWindow()?.focus();
+  const w = d.getMainWindow();
+  w?.show();
+  w?.focus();
   d.navigateToSettings();
 }
 
