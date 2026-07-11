@@ -113,31 +113,31 @@ async function defaultGetTier(): Promise<string> {
 const UNINSTALLER_FILE_NAME = 'Uninstall Livinity Desktop.exe';
 
 /**
- * Best-effort resolution of the per-user NSIS uninstaller: primary is beside
- * the running exe (electron-builder's perMachine:false layout, A6); fallback
- * is the HKCU UninstallString the NSIS installer registers (Q7). Neither path
- * is secret -- nothing here is ever logged beyond a found/not-found flag.
+ * WR-02: the HKCU uninstall keys the NSIS installer may have registered, in
+ * probe order. electron-builder (app-builder-lib NsisTarget.js:157) writes the
+ * key as `nsis.guid || UUID.v5(appId, ELECTRON_BUILDER_NS_UUID)` -- with no
+ * `nsis.guid` in electron-builder.yml that is the UUIDv5 constant below
+ * (re-derived from the appId by remove-executor.test.ts so it can never
+ * silently drift). The appId-literal key is probed second so a future
+ * `nsis.guid: io.livinity.desktop` pin keeps working without touching this
+ * file. Neither key is secret.
  */
-async function resolveUninstallerPath(): Promise<string | null> {
-  const primary = path.join(path.dirname(app.getPath('exe')), UNINSTALLER_FILE_NAME);
-  try {
-    await fsPromises.access(primary);
-    return primary;
-  } catch {
-    // fall through to the registry fallback
-  }
+const UNINSTALL_KEY_CANDIDATES = [
+  'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\4a1bc5fe-b486-5da6-ba55-b47522aa4efe',
+  'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\io.livinity.desktop',
+];
+
+interface UninstallerLaunch {
+  file: string;
+  args: string[];
+}
+
+/** One `reg query` for an UninstallString value; resolves null on any miss/
+ * failure (the caller tries the next candidate key). */
+async function queryUninstallString(key: string): Promise<string | null> {
   try {
     const stdout = await new Promise<string>((resolve, reject) => {
-      const child = nodeSpawn(
-        'reg',
-        [
-          'query',
-          'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\io.livinity.desktop',
-          '/v',
-          'UninstallString',
-        ],
-        { windowsHide: true }
-      );
+      const child = nodeSpawn('reg', ['query', key, '/v', 'UninstallString'], { windowsHide: true });
       let out = '';
       child.stdout?.on('data', (d: Buffer) => (out += d.toString('utf8')));
       child.on('error', reject);
@@ -151,18 +151,49 @@ async function resolveUninstallerPath(): Promise<string | null> {
 }
 
 /**
+ * Best-effort resolution of the per-user NSIS uninstaller: primary is beside
+ * the running exe (electron-builder's perMachine:false layout, A6); fallback
+ * is the HKCU UninstallString the NSIS installer registers (Q7). WR-02: NSIS
+ * writes UninstallString as `'"$2" $0'` (installer.nsh:122) -- a QUOTED exe
+ * path plus arguments -- so the registry value is parsed into {file, args}
+ * here; spawning the raw string as a literal filename is always ENOENT.
+ * Neither path is secret -- nothing here is ever logged beyond a
+ * found/not-found flag.
+ */
+async function resolveUninstaller(): Promise<UninstallerLaunch | null> {
+  const primary = path.join(path.dirname(app.getPath('exe')), UNINSTALLER_FILE_NAME);
+  try {
+    await fsPromises.access(primary);
+    return { file: primary, args: [] };
+  } catch {
+    // fall through to the registry fallback
+  }
+  for (const key of UNINSTALL_KEY_CANDIDATES) {
+    const value = await queryUninstallString(key);
+    if (!value) continue;
+    const quoted = /^"([^"]+)"\s*(.*)$/.exec(value);
+    if (quoted) return { file: quoted[1], args: quoted[2] ? quoted[2].split(/\s+/) : [] };
+    return { file: value, args: [] };
+  }
+  return null;
+}
+
+/**
  * Detached+unref launch (mirrors install-invoke.ts's Job-Object-survival
  * shape) so the NSIS uninstaller outlives this process's own quit() call. A
  * missing/unresolvable target is a safe no-op (logged) -- finishRemove still
- * proceeds to quit().
+ * proceeds to quit(). WR-02: the 'error' listener is attached BEFORE unref --
+ * a spawn failure (deleted uninstaller, AV block) must degrade to a logged
+ * breadcrumb, never an uncaught main-process exception racing quit().
  */
 async function defaultLaunchUninstaller(): Promise<void> {
-  const target = await resolveUninstallerPath();
+  const target = await resolveUninstaller();
   if (!target) {
     logSafe('remove.launchUninstaller', { found: false });
     return;
   }
-  const child = nodeSpawn(target, [], { detached: true, stdio: 'ignore', windowsHide: true });
+  const child = nodeSpawn(target.file, target.args, { detached: true, stdio: 'ignore', windowsHide: true });
+  child.on('error', () => logSafe('remove.launchUninstaller', { spawnError: true }));
   child.unref();
   logSafe('remove.launchUninstaller', { found: true });
 }

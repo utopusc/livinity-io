@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { EventEmitter } from 'node:events';
+import { createHash } from 'node:crypto';
 
 /**
  * remove-executor.test.ts mocks every IO collaborator remove-executor.ts imports
@@ -16,6 +18,29 @@ import { join } from 'node:path';
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => 'C:/FAKE/Livinity Desktop.exe'), quit: vi.fn() },
 }));
+
+// WR-02: the default launchUninstaller chain (resolve-beside-exe -> registry
+// fallback -> detached spawn) is exercised through finishRemove with NO
+// launchUninstaller override, so node:fs promises.access and
+// node:child_process spawn are stubbed here. importOriginal keeps
+// readFileSync/readdirSync REAL for the source-scan tests below.
+const { spawnMock, fsAccessMock } = vi.hoisted(() => ({
+  spawnMock: vi.fn(),
+  fsAccessMock: vi.fn(),
+}));
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    promises: { ...actual.promises, access: fsAccessMock },
+  };
+});
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, spawn: spawnMock };
+});
 
 vi.mock('../../src/main/supervision/engine', () => ({
   stopEngine: vi.fn(),
@@ -305,6 +330,127 @@ describe('finishRemove', () => {
     await finishRemove({ setStartAtLogin, launchUninstaller, quit });
 
     expect(order).toEqual(['setStartAtLogin', 'launchUninstaller', 'quit']);
+  });
+});
+
+describe('defaultLaunchUninstaller registry fallback (WR-02)', () => {
+  /** electron-builder's own uninstall-key derivation (app-builder-lib
+   * NsisTarget.js:157): UUID.v5(appId, ELECTRON_BUILDER_NS_UUID) when
+   * nsis.guid is unset. Recomputed here so the constant in
+   * remove-executor.ts can never silently drift from the real key. */
+  function electronBuilderUninstallGuid(appId: string): string {
+    const ns = Buffer.from('50e065bc313411e69bab38c9862bdaf3', 'hex');
+    const hash = createHash('sha1').update(Buffer.concat([ns, Buffer.from(appId, 'utf8')])).digest();
+    const b = Buffer.from(hash.subarray(0, 16));
+    b[6] = (b[6] & 0x0f) | 0x50;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = b.toString('hex');
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+  }
+
+  const EXPECTED_GUID = electronBuilderUninstallGuid('io.livinity.desktop');
+  const UNINSTALLER_PATH = 'C:\\Users\\x\\AppData\\Local\\Programs\\Livinity Desktop\\Uninstall Livinity Desktop.exe';
+  const REG_OUT =
+    'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\key\r\n' +
+    `    UninstallString    REG_SZ    "${UNINSTALLER_PATH}" /currentuser\r\n`;
+
+  class FakeChild extends EventEmitter {
+    stdout = new EventEmitter();
+    unref = vi.fn();
+  }
+
+  /** Routes each spawn: reg queries answer per-key; anything else is the
+   * detached uninstaller launch. Emissions are deferred a microtask so the
+   * production listeners are attached first (real spawn semantics). */
+  function wireSpawn(regByKey: Record<string, { code: number; stdout?: string }>): FakeChild[] {
+    const launches: FakeChild[] = [];
+    spawnMock.mockImplementation((cmd: string, args: string[]) => {
+      const child = new FakeChild();
+      if (cmd === 'reg') {
+        const key = args[1] ?? '';
+        const row = regByKey[key] ?? { code: 1 };
+        queueMicrotask(() => {
+          if (row.stdout) child.stdout.emit('data', Buffer.from(row.stdout, 'utf8'));
+          child.emit('close', row.code);
+        });
+      } else {
+        launches.push(child);
+      }
+      return child;
+    });
+    return launches;
+  }
+
+  function finishDeps() {
+    return {
+      setStartAtLogin: vi.fn().mockResolvedValue(undefined),
+      isInstallInFlight: vi.fn().mockReturnValue(false),
+      quit: vi.fn(),
+    };
+  }
+
+  beforeEach(() => {
+    spawnMock.mockReset();
+    fsAccessMock.mockReset();
+  });
+
+  it("queries electron-builder's REAL uninstall key (UUIDv5 of the appId) first, then the appId-literal key", async () => {
+    fsAccessMock.mockRejectedValue(new Error('ENOENT')); // primary (beside-exe) miss
+    wireSpawn({}); // every reg query misses
+
+    await finishRemove(finishDeps());
+
+    const regKeys = spawnMock.mock.calls.filter((c) => c[0] === 'reg').map((c) => (c[1] as string[])[1]);
+    expect(regKeys).toEqual([
+      `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${EXPECTED_GUID}`,
+      'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\io.livinity.desktop',
+    ]);
+  });
+
+  it('parses the quoted \'"path" args\' UninstallString into file + args before spawn (never the raw string as a filename)', async () => {
+    fsAccessMock.mockRejectedValue(new Error('ENOENT'));
+    const launches = wireSpawn({
+      [`HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${EXPECTED_GUID}`]: {
+        code: 0,
+        stdout: REG_OUT,
+      },
+    });
+    const deps = finishDeps();
+
+    await finishRemove(deps);
+
+    expect(launches).toHaveLength(1);
+    const launchCall = spawnMock.mock.calls.find((c) => c[0] !== 'reg')!;
+    expect(launchCall[0]).toBe(UNINSTALLER_PATH); // unquoted exe path, args stripped
+    expect(launchCall[1]).toEqual(['/currentuser']);
+    expect(launchCall[2]).toMatchObject({ detached: true, windowsHide: true });
+    expect(launches[0].unref).toHaveBeenCalled();
+    expect(deps.quit).toHaveBeenCalledOnce();
+  });
+
+  it("attaches an 'error' listener to the launched child — a spawn failure never becomes an uncaught exception racing quit()", async () => {
+    fsAccessMock.mockResolvedValue(undefined); // primary path hit — no registry involved
+    const launches = wireSpawn({});
+    const deps = finishDeps();
+
+    await finishRemove(deps);
+
+    expect(launches).toHaveLength(1);
+    // Pre-fix: EventEmitter converts an unlistened 'error' emit into a THROWN exception.
+    expect(() => launches[0].emit('error', new Error('ENOENT'))).not.toThrow();
+    expect(deps.quit).toHaveBeenCalledOnce();
+  });
+
+  it('no uninstaller anywhere (primary miss + both registry keys miss) => logged no-op, NO launch spawn, quit still runs', async () => {
+    fsAccessMock.mockRejectedValue(new Error('ENOENT'));
+    const launches = wireSpawn({});
+    const deps = finishDeps();
+
+    await finishRemove(deps);
+
+    expect(launches).toHaveLength(0);
+    expect(spawnMock.mock.calls.every((c) => c[0] === 'reg')).toBe(true);
+    expect(deps.quit).toHaveBeenCalledOnce();
   });
 });
 
