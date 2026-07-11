@@ -272,8 +272,17 @@ export async function getEngineStatus(deps: Partial<EngineDeps> = {}): Promise<E
   try {
     const st = await d.readState();
     const desiredState: 'running' | 'stopped' = st?.engineDesiredState ?? 'stopped';
+    // WR-03: a desired-stopped engine's status is known WITHOUT touching WSL.
+    // The health probe is NOT passive — ANY `wsl -d livinity` exec BOOTS a
+    // terminated distro, so probing here would re-boot the distro (systemd +
+    // enabled services + tunnel) on every tray refresh / Settings mount right
+    // after a Stop, and stall those surfaces the full 15s probe window.
+    if (desiredState === 'stopped') {
+      const address = await d.deriveAddress();
+      return { state: 'stopped', address, lastCheckedAt: Date.now(), desiredState };
+    }
     const [healthy, address] = await Promise.all([d.isInstalledAndHealthy(), d.deriveAddress()]);
-    const state: Status = healthy ? 'running' : desiredState === 'stopped' ? 'stopped' : 'error';
+    const state: Status = healthy ? 'running' : 'error';
     return { state, address, lastCheckedAt: Date.now(), desiredState };
   } catch {
     logSafe('engine.getStatus', { exception: true });

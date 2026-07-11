@@ -253,6 +253,32 @@ describe('engine (Task 1: desired-state lifecycle)', () => {
       expect(result.state).toBe('stopped');
     });
 
+    it('WR-03 regression: desiredState="stopped" => ZERO probe/execWsl calls (the probe would BOOT the distro `--terminate` just killed)', async () => {
+      readStateMock.mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'stopped' });
+      deriveAddressMock.mockResolvedValue('bruce.livinity.io');
+
+      const result = await getEngineStatus();
+
+      expect(isInstalledAndHealthyMock).not.toHaveBeenCalled();
+      expect(execWslMock).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        state: 'stopped',
+        address: 'bruce.livinity.io',
+        lastCheckedAt: expect.any(Number),
+        desiredState: 'stopped',
+      });
+    });
+
+    it('WR-03 regression: never the contradictory wire value {state:"running", desiredState:"stopped"} -- stopped short-circuit wins even if a probe would pass', async () => {
+      readStateMock.mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'stopped' });
+      isInstalledAndHealthyMock.mockResolvedValue(true); // the boot-side-effect false positive
+
+      const result = await getEngineStatus();
+
+      expect(result.state).toBe('stopped');
+      expect(result.desiredState).toBe('stopped');
+    });
+
     it('desiredState=running but unhealthy => state "error" (something is wrong, not an intentional stop)', async () => {
       readStateMock.mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'running' });
       isInstalledAndHealthyMock.mockResolvedValue(false);
