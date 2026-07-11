@@ -8,19 +8,50 @@
  *    business-state connection guard agent-app uses
  *  - the dev-only spike/electron-main.pid write that Plan 04's run-spike.ps1
  *    reads to taskkill the exact Electron main process
+ *  - Phase 6 (06-11): auto-start-at-login (syncLoginItem), the powerMonitor
+ *    resume/unlock self-heal (wirePowerEvents -> runHealthPass), the live
+ *    `engine:*` IPC boundary (registerEngineIpc), the extended 9-row tray
+ *    (TrayViewState driven off getEngineStatus/getStartAtLogin), the periodic
+ *    supervision timer (startSupervision), and engine auto-bring-up on launch
+ *    honoring the persisted `engineDesiredState` (TRAY-01..06/DASH-01..03).
+ *    NO will-quit/process-exit holder cleanup is added anywhere in this file
+ *    (D-04) — the detached holder outlives app.quit(); only the in-process
+ *    supervision interval stops when the process itself exits.
  */
 
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
-import { createTray, updateTrayStatus } from './tray/tray-controller';
+import {
+  createTray,
+  updateTray,
+  statusToLabel,
+  type TrayCallbacks,
+  type TrayViewState,
+} from './tray/tray-controller';
 import { registerShellIpc } from './ipc/shell.ipc';
 import { registerAuthIpc } from './ipc/auth.ipc';
 import { registerCfIpc } from './ipc/cf.ipc';
 import { registerWslIpc } from './ipc/wsl.ipc';
 import { registerFlowIpc } from './ipc/flow.ipc';
+import { registerEngineIpc } from './ipc/engine.ipc';
+import {
+  startEngine,
+  stopEngine,
+  restartEngine,
+  getEngineStatus,
+  openDashboardGated,
+  openInBrowserGated,
+  runHealthPass,
+  startSupervision,
+  type EngineDeps,
+} from './supervision/engine';
+import { syncLoginItem, setStartAtLogin, getStartAtLogin } from './supervision/login-item';
+import { wirePowerEvents } from './supervision/power-events';
+import { openDashboardWindow, closeDashboardWindow } from './dashboard/dashboard-window';
+import { readState } from './storage/state-store';
 import { logSafe, redactSecretLike } from './log';
-import { CHANNELS, type Status } from '../../shared/ipc-contract';
+import { CHANNELS, ENGINE_TRANSITION_LABELS, type Status } from '../../shared/ipc-contract';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: ReturnType<typeof createTray> | null = null;
@@ -120,7 +151,7 @@ function createWindow(): void {
     mainWindow.loadURL('http://localhost:5173');
   } else {
     // WR-04: use app.getAppPath() (the project/app root) rather than a
-    // __dirname-relative dot-dot chain -- the compiled output depth
+    // __dirname-relative dot-dot chain — the compiled output depth
     // (dist/main/src/main/, per tsconfig.main.json's rootDir: ".") makes a
     // literal relative chain fragile to get right, exactly as
     // writeSpikeMainPid's own comment below already warns against for this
@@ -179,6 +210,136 @@ function handleQuit(): void {
   app.quit();
 }
 
+// ---------------------------------------------------------------------------
+// Phase 6 (06-11): tray view-model + engine wiring
+// ---------------------------------------------------------------------------
+
+function focusMainWindow(): void {
+  mainWindow?.show();
+  mainWindow?.focus();
+}
+
+/** main -> renderer push (mirrors engine.ipc.ts's own navigateToSettings helper) --
+ * the tray "Settings" row below does its own show()+focus()+send (per plan interface),
+ * this minimal variant is what the D-10 stopped-gate (openDashboardGated/
+ * openInBrowserGated, engine.ts) drives after it has already focused the window. */
+function navigateToSettings(): void {
+  mainWindow?.webContents.send(CHANNELS.engineNavigate, { screen: 'settings' });
+}
+
+let lastStatus: Status = 'stopped';
+let engineTransition: 'starting' | 'stopping' | 'restarting' | null = null;
+
+function setStatus(status: Status): void {
+  lastStatus = status;
+  void refreshTrayView(status);
+  mainWindow?.webContents.send(CHANNELS.statusChanged, status);
+}
+
+// The 6 collaborators engine.ts's own defaultDeps has NO real production
+// default for (mirrors engine.ipc.ts's identical construction, 06-10) --
+// every other EngineDeps field (state-store/wsl-exec/connected-probe/
+// holder.ts/Notification) already resolves to its genuine default inside
+// engine.ts, so this file never re-wires them.
+const engineDeps: Partial<EngineDeps> = {
+  setStatus,
+  getMainWindow,
+  navigateToSettings,
+  openDashboardWindow,
+  closeDashboard: closeDashboardWindow,
+  openExternal: (url: string) => shell.openExternal(url),
+};
+
+/** Pure-ish D-07 view-model builder: current icon Status + a live getEngineStatus()/
+ * getStartAtLogin() read. Any in-flight transition label comes from the SAME
+ * ENGINE_TRANSITION_LABELS const settings-flow.ts (06-04) imports -- the tray and
+ * Settings screen can never drift (INFO-4). */
+async function buildTrayView(status: Status): Promise<TrayViewState> {
+  const [engineStatus, startAtLoginChecked] = await Promise.all([
+    getEngineStatus(engineDeps),
+    getStartAtLogin(),
+  ]);
+  return {
+    status,
+    statusText: engineTransition ? ENGINE_TRANSITION_LABELS[engineTransition] : statusToLabel(status),
+    engineRunning: engineStatus.desiredState === 'running',
+    startAtLoginChecked,
+    actionsDisabled: engineTransition !== null,
+  };
+}
+
+async function refreshTrayView(status: Status): Promise<void> {
+  if (!tray) return;
+  const view = await buildTrayView(status);
+  updateTray(tray, view, trayCallbacks);
+}
+
+/** Sets the in-flight transition BEFORE the action runs (so the tray shows
+ * "Starting…"/"Stopping…"/"Restarting…" immediately), runs the SAME engine.ts
+ * function the IPC handlers call, then clears the transition and refreshes
+ * again regardless of outcome. */
+async function runEngineTransition(
+  kind: 'starting' | 'stopping' | 'restarting',
+  action: () => Promise<void>
+): Promise<void> {
+  engineTransition = kind;
+  await refreshTrayView(lastStatus);
+  try {
+    await action();
+  } finally {
+    engineTransition = null;
+    await refreshTrayView(lastStatus);
+  }
+}
+
+async function handleToggleEngine(): Promise<void> {
+  const st = await getEngineStatus(engineDeps);
+  if (st.desiredState === 'running') {
+    await runEngineTransition('stopping', () => stopEngine(engineDeps));
+  } else {
+    await runEngineTransition('starting', () => startEngine(engineDeps));
+  }
+}
+
+async function handleRestart(): Promise<void> {
+  await runEngineTransition('restarting', () => restartEngine(engineDeps));
+}
+
+async function handleToggleStartAtLogin(): Promise<void> {
+  const enabled = await getStartAtLogin();
+  await setStartAtLogin(!enabled);
+  await refreshTrayView(lastStatus);
+}
+
+/** TRAY-01 engine auto-bring-up: runs on EVERY launch (incl. --hidden). A
+ * persisted `engineDesiredState: 'stopped'` does NOTHING (honors the user's own
+ * STOP -- never silently starts an engine they explicitly stopped). Anything else
+ * (incl. undefined on a fresh install) adopts-or-spawns the holder + health-verifies
+ * via the SAME startEngine() the tray/Settings Start button calls. */
+async function bringUpEngineOnLaunch(): Promise<void> {
+  const st = await readState();
+  if (st?.engineDesiredState === 'stopped') {
+    logSafe('engine.autoBringUp', { skipped: true });
+    return;
+  }
+  await startEngine(engineDeps);
+}
+
+const trayCallbacks: TrayCallbacks = {
+  onOpen: focusMainWindow,
+  onOpenDashboard: () => void openDashboardGated(engineDeps),
+  onOpenInBrowser: () => void openInBrowserGated(engineDeps),
+  onToggleEngine: () => void handleToggleEngine(),
+  onRestart: () => void handleRestart(),
+  onToggleStartAtLogin: () => void handleToggleStartAtLogin(),
+  onOpenSettings: () => {
+    mainWindow?.show();
+    mainWindow?.focus();
+    mainWindow?.webContents.send(CHANNELS.engineNavigate, { screen: 'settings' });
+  },
+  onQuit: handleQuit,
+};
+
 const gotLock = app.requestSingleInstanceLock();
 
 if (!gotLock) {
@@ -211,30 +372,16 @@ if (!gotLock) {
     createWindow();
     writeSpikeMainPid();
 
-    tray = createTray({
-      onOpen: () => {
-        mainWindow?.show();
-        mainWindow?.focus();
-      },
-      onQuit: handleQuit,
-    });
+    // Pitfall 6: unconditional, idempotent -- required for Windows Action
+    // Center notifications (engine.ts's `notify`) to be attributed to this
+    // app rather than a generic Electron identity.
+    app.setAppUserModelId('io.livinity.desktop');
+
+    tray = createTray(trayCallbacks);
 
     registerShellIpc({
       getMainWindow,
-      setStatus: (status: Status) => {
-        if (tray) {
-          updateTrayStatus(
-            tray,
-            status,
-            () => {
-              mainWindow?.show();
-              mainWindow?.focus();
-            },
-            handleQuit
-          );
-        }
-        mainWindow?.webContents.send(CHANNELS.statusChanged, status);
-      },
+      setStatus,
       onQuit: handleQuit,
     });
 
@@ -256,8 +403,31 @@ if (!gotLock) {
     // App-level seams wired in 05-09.
     registerFlowIpc();
 
+    // Tray supervision + embedded dashboard IPC (Phase 6, 06-10). The SAME
+    // getMainWindow/setStatus closures registerShellIpc already uses --
+    // window.api.engine* is now LIVE end-to-end.
+    registerEngineIpc({ getMainWindow, setStatus });
+
+    // TRAY-01: reconciles the persisted startAtLogin preference with any
+    // pending-reboot need (login-item.ts is the SOLE setLoginItemSettings
+    // owner). Fire-and-forget -- app startup never blocks on this.
+    void syncLoginItem();
+
+    // TRAY-03: one debounced health pass per real resume/unlock-screen wake
+    // event, driving the SAME runHealthPass (06-07) the supervision tick's
+    // 'heal' outcome uses.
+    wirePowerEvents(() => void runHealthPass(engineDeps));
+
+    // TRAY-02: the periodic supervision timer. Intentionally never stopped
+    // anywhere in this file (D-04) -- the interval simply stops existing when
+    // the process itself exits; no will-quit/process.on('exit') cleanup is
+    // ever added here.
+    startSupervision(engineDeps, { intervalMs: 45_000 });
+
+    // Engine auto-bring-up: honors the persisted desiredState (incl. a
+    // --hidden login launch) -- a desired-stopped engine stays stopped.
+    void bringUpEngineOnLaunch();
+
     logSafe('app.ready', {});
   });
-
-  // TODO(phase-6): auto-start-at-login attaches here (app.setLoginItemSettings)
 }
