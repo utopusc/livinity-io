@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decideSupervisionAction } from '../../src/main/supervision/decide-supervision';
+import { decideSupervisionAction, decideAutoBringUp } from '../../src/main/supervision/decide-supervision';
 
 /**
  * Flat table, one `it` per <behavior> row (mirrors tests/wsl/decide-wsl-state.test.ts).
@@ -95,5 +95,48 @@ describe('decideSupervisionAction', () => {
         healthy: true,
       })
     ).toBe('ok');
+  });
+});
+
+/**
+ * WR-08 table: launch-time auto-bring-up must be gated on install evidence.
+ * The trap row is the FRESH MACHINE (nothing persisted): pre-fix the
+ * "undefined => bring-up" default started a doomed engine before any
+ * login/CF/WSL existed -- red "Error" tray at first launch + 'running'
+ * persisted pre-install + a doomed respawn every 45s, forever.
+ */
+describe('decideAutoBringUp (WR-08)', () => {
+  it('FRESH MACHINE trap row: desiredState undefined + no flowStep => skip-never-installed (never a doomed pre-install start)', () => {
+    expect(decideAutoBringUp({ engineDesiredState: undefined, flowStep: undefined })).toBe(
+      'skip-never-installed'
+    );
+  });
+
+  it('desiredState="stopped" => skip-stopped (honors the user STOP), regardless of flowStep', () => {
+    expect(decideAutoBringUp({ engineDesiredState: 'stopped', flowStep: 'live-success' })).toBe('skip-stopped');
+    expect(decideAutoBringUp({ engineDesiredState: 'stopped', flowStep: undefined })).toBe('skip-stopped');
+  });
+
+  it('desiredState="running" => start (only startEngine ever persists it -- itself install evidence)', () => {
+    expect(decideAutoBringUp({ engineDesiredState: 'running', flowStep: undefined })).toBe('start');
+  });
+
+  it('undefined desiredState + post-install flowStep ("live-success"/"connected-check") => start', () => {
+    expect(decideAutoBringUp({ engineDesiredState: undefined, flowStep: 'live-success' })).toBe('start');
+    expect(decideAutoBringUp({ engineDesiredState: undefined, flowStep: 'connected-check' })).toBe('start');
+  });
+
+  it('undefined desiredState + PRE-install flowStep (wizard mid-journey) => skip-never-installed', () => {
+    for (const step of ['wsl-detect', 'cf-wizard', 'cf-reconnect']) {
+      expect(decideAutoBringUp({ engineDesiredState: undefined, flowStep: step })).toBe(
+        'skip-never-installed'
+      );
+    }
+  });
+
+  it('undefined desiredState + flowStep="installing" (relaunch mid-install) => skip -- never boot-and-heal a half-provisioned distro', () => {
+    expect(decideAutoBringUp({ engineDesiredState: undefined, flowStep: 'installing' })).toBe(
+      'skip-never-installed'
+    );
   });
 });

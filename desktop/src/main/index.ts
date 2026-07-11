@@ -47,6 +47,7 @@ import {
   type EngineDeps,
 } from './supervision/engine';
 import { syncLoginItem, setStartAtLogin, getStartAtLogin } from './supervision/login-item';
+import { decideAutoBringUp } from './supervision/decide-supervision';
 import { wirePowerEvents } from './supervision/power-events';
 import { openDashboardWindow, closeDashboardWindow } from './dashboard/dashboard-window';
 import { readState } from './storage/state-store';
@@ -313,13 +314,20 @@ async function handleToggleStartAtLogin(): Promise<void> {
 
 /** TRAY-01 engine auto-bring-up: runs on EVERY launch (incl. --hidden). A
  * persisted `engineDesiredState: 'stopped'` does NOTHING (honors the user's own
- * STOP -- never silently starts an engine they explicitly stopped). Anything else
- * (incl. undefined on a fresh install) adopts-or-spawns the holder + health-verifies
- * via the SAME startEngine() the tray/Settings Start button calls. */
+ * STOP -- never silently starts an engine they explicitly stopped). WR-08: on a
+ * machine with NO install evidence (fresh state: desiredState never persisted
+ * AND no post-install flowStep) it also does nothing -- a first launch must not
+ * paint a red "Error" tray, persist 'running' pre-install, or churn a doomed
+ * holder respawn every 45s through the login/CF/WSL wizard. The decision lives
+ * in the pure `decideAutoBringUp` (decide-supervision.ts), never inline here. */
 async function bringUpEngineOnLaunch(): Promise<void> {
   const st = await readState();
-  if (st?.engineDesiredState === 'stopped') {
-    logSafe('engine.autoBringUp', { skipped: true });
+  const decision = decideAutoBringUp({
+    engineDesiredState: st?.engineDesiredState,
+    flowStep: st?.flowStep,
+  });
+  if (decision !== 'start') {
+    logSafe('engine.autoBringUp', { skipped: true, decision });
     return;
   }
   await startEngine(engineDeps);
