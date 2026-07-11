@@ -327,9 +327,46 @@ describe('finishRemove', () => {
       order.push('quit');
     });
 
-    await finishRemove({ setStartAtLogin, launchUninstaller, quit });
+    await finishRemove({ setStartAtLogin, launchUninstaller, quit, isInstallInFlight: () => false });
 
     expect(order).toEqual(['setStartAtLogin', 'launchUninstaller', 'quit']);
+  });
+
+  it('WR-03: refuses the whole hand-off while isInstallInFlight() — no login disarm, no uninstaller launch, NO quit', async () => {
+    const setStartAtLogin = vi.fn();
+    const launchUninstaller = vi.fn();
+    const quit = vi.fn();
+
+    await finishRemove({ setStartAtLogin, launchUninstaller, quit, isInstallInFlight: () => true });
+
+    expect(setStartAtLogin).not.toHaveBeenCalled();
+    expect(launchUninstaller).not.toHaveBeenCalled();
+    expect(quit).not.toHaveBeenCalled();
+  });
+
+  it('WR-03: a THROWING setStartAtLogin no longer aborts the sequence — uninstaller still launches, quit still runs', async () => {
+    const setStartAtLogin = vi.fn().mockRejectedValue(new Error('registry boom'));
+    const launchUninstaller = vi.fn().mockResolvedValue(undefined);
+    const quit = vi.fn();
+
+    await finishRemove({ setStartAtLogin, launchUninstaller, quit, isInstallInFlight: () => false });
+
+    expect(launchUninstaller).toHaveBeenCalledOnce();
+    expect(quit).toHaveBeenCalledOnce();
+  });
+
+  it('WR-03: a THROWING launchUninstaller still reaches quit()', async () => {
+    const launchUninstaller = vi.fn().mockRejectedValue(new Error('spawn boom'));
+    const quit = vi.fn();
+
+    await finishRemove({
+      setStartAtLogin: vi.fn().mockResolvedValue(undefined),
+      launchUninstaller,
+      quit,
+      isInstallInFlight: () => false,
+    });
+
+    expect(quit).toHaveBeenCalledOnce();
   });
 });
 

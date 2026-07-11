@@ -380,10 +380,30 @@ export async function executeRemove(
  * Disarms the login item (W1: `setStartAtLogin(false)`, NEVER the zero-arg
  * `syncLoginItem` -- it has no `false` form), launches the per-user NSIS
  * uninstaller detached, then quits. The app's ONLY self-quit call site.
+ *
+ * WR-03: (a) the SAME isInstallInFlight() gate executeRemove runs, first line
+ * -- quitting the process that owns the install pipe mid-`install.sh` is the
+ * WR-05 destruction class, and this was the one quit path without the check
+ * (the remove:finish IPC handler double-checks it, W3 defense-in-depth).
+ * (b) Once admitted, the sequence is best-effort: a thrown setStartAtLogin
+ * (registry/setLoginItemSettings failure) or launchUninstaller must never
+ * strand the user mid-hand-off -- quit() is ALWAYS reached.
  */
 export async function finishRemove(depsIn: Partial<RemoveExecutorDeps> = {}): Promise<void> {
   const deps = resolveDeps(depsIn);
-  await deps.setStartAtLogin(false);
-  await deps.launchUninstaller();
+  if (deps.isInstallInFlight()) {
+    logSafe('remove.finish', { blockedByInstall: true });
+    return;
+  }
+  try {
+    await deps.setStartAtLogin(false);
+  } catch {
+    logSafe('remove.finish', { loginDisarmFailed: true });
+  }
+  try {
+    await deps.launchUninstaller();
+  } catch {
+    logSafe('remove.finish', { launchFailed: true });
+  }
   deps.quit();
 }

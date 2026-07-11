@@ -316,6 +316,16 @@ describe('support.ipc', () => {
       expect(result).toBeUndefined();
     });
 
+    it('WR-03: refuses to finish while isInstallInFlight() — finishRemove NEVER called (mirrors the remove:execute W3 gate)', async () => {
+      const handler = getHandler(CHANNELS.removeFinish)!;
+      isInstallInFlightMock.mockReturnValue(true);
+
+      const result = await handler({});
+
+      expect(finishRemoveMock).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
+    });
+
     it('rejects a hostile stray payload WITHOUT calling finishRemove (IN-04)', async () => {
       const handler = getHandler(CHANNELS.removeFinish)!;
 

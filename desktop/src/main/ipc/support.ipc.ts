@@ -194,9 +194,21 @@ export function registerSupportIpc(deps: SupportIpcDeps): SupportIpcHandles {
     }
   });
 
+  // remove:finish — WR-03: the SAME W3 defense-in-depth gate remove:execute
+  // runs. This handler quits the process that owns the install pipe (login
+  // disarm -> NSIS uninstaller -> quit), so a single unguarded IPC call while
+  // install.sh is mid-run would be the WR-05 destruction class; finishRemove
+  // double-checks the identical gate internally.
   ipcMain.handle(CHANNELS.removeFinish, async (_event, raw: unknown) => {
     const parsed = NoPayload.safeParse(raw);
     if (!parsed.success) return;
+
+    const isInstallInFlight = deps.removeDeps?.isInstallInFlight ?? realIsInstallInFlight;
+    if (isInstallInFlight()) {
+      logSafe('remove.finish', { blockedByInstall: true });
+      return;
+    }
+
     try {
       await finishRemove(deps.removeDeps ?? {});
     } catch {
