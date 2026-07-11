@@ -80,6 +80,58 @@ describe('decideResumePoint', () => {
     ).toEqual({ kind: 'cf-wizard' });
   });
 
+  // CR-01 regression: the cf-handoff -> WSL entry seam. Without the
+  // cfComplete gate on Rule 3b, this signal combination (CF entered AND
+  // finished, ledger not yet at WSL) bounced back to cf-wizard forever --
+  // the Free/BYOD user could never reach WSL provisioning.
+  it('cfWasEntered=true + cfComplete=true (tunnelId persisted) + no ledger -> wsl-detect, NEVER back into cf-wizard', () => {
+    expect(
+      decideResumePoint({
+        installedHealthy: false,
+        cfWasEntered: true,
+        cfComplete: true,
+        ledgerFlowStep: undefined,
+        cfVerify: 'ok',
+      })
+    ).toEqual({ kind: 'wsl-detect', resume: false });
+  });
+
+  it('cfComplete=true + a WSL ledger step still resumes the WSL sub-flow (resume:true)', () => {
+    expect(
+      decideResumePoint({
+        installedHealthy: false,
+        cfWasEntered: true,
+        cfComplete: true,
+        ledgerFlowStep: 'wsl-detect',
+        cfVerify: 'ok',
+      })
+    ).toEqual({ kind: 'wsl-detect', resume: true });
+  });
+
+  it('cfComplete=true does NOT gate Rule 3a: a stale token after CF completed still routes to cf-reconnect', () => {
+    expect(
+      decideResumePoint({
+        installedHealthy: false,
+        cfWasEntered: true,
+        cfComplete: true,
+        ledgerFlowStep: undefined,
+        cfVerify: 'token-invalid',
+      })
+    ).toEqual({ kind: 'cf-reconnect' });
+  });
+
+  it('cfComplete=false (mid-CF-wizard, e.g. domain picked but provisioning unfinished) still re-enters cf-wizard', () => {
+    expect(
+      decideResumePoint({
+        installedHealthy: false,
+        cfWasEntered: true,
+        cfComplete: false,
+        ledgerFlowStep: undefined,
+        cfVerify: 'ok',
+      })
+    ).toEqual({ kind: 'cf-wizard' });
+  });
+
   it('ledgerFlowStep=connected-check (killed mid-probe, install had exited 0) -> connected-check', () => {
     expect(
       decideResumePoint({

@@ -42,7 +42,11 @@ export type CfVerifyVerdict = 'ok' | 'token-invalid' | null;
  * string, not a strict enum -- mirrors how `wslStep` itself is loosely typed
  * so new step names never require a schema migration); `cfWasEntered` is the
  * tier proxy (subLabel/zoneName present -- a Pro/legacy sign-in never sets
- * these); `installedHealthy` is the D-03 live probe result; `cfVerify` is the
+ * these); `cfComplete` marks the CF sub-flow as genuinely FINISHED -- derived
+ * from the already-persisted provisioning fact (`tunnelId`, written by
+ * cf-provision.ts only when provisioning succeeded), so Rule 3b never bounces
+ * a CF-completed user back into the wizard (the cf-handoff -> WSL entry seam);
+ * `installedHealthy` is the D-03 live probe result; `cfVerify` is the
  * live re-verify outcome of a re-checked CF token, only meaningful when
  * `cfWasEntered`; `installMidRun` is a LIVE probe of an actively-running
  * install child process (distinct from the ledger hint that a PAST run left
@@ -55,6 +59,12 @@ export type CfVerifyVerdict = 'ok' | 'token-invalid' | null;
 export interface ResumePointSignals {
   ledgerFlowStep: string | undefined;
   cfWasEntered: boolean;
+  /**
+   * CF provisioning finished (tunnelId persisted by cf-provision) -- Rule 3b
+   * must not bounce a completed CF sub-flow back into the wizard. Optional
+   * (like installMidRun) so the interface stays additive; absent === false.
+   */
+  cfComplete?: boolean;
   installedHealthy: boolean;
   cfVerify: CfVerifyVerdict;
   installMidRun?: boolean;
@@ -91,10 +101,14 @@ export function decideResumePoint(signals: ResumePointSignals): FlowRoute {
     if (signals.cfVerify === 'token-invalid') {
       return { kind: 'cf-reconnect' };
     }
-    // Rule 3b -- CF was entered, not yet re-verified stale, and the ledger
-    // has not yet reached WSL/install/beyond -- still in (or re-entering)
-    // the CF sub-flow.
-    if (!WSL_OR_LATER.has(signals.ledgerFlowStep ?? '')) {
+    // Rule 3b -- only re-enter the CF wizard when the sub-flow is genuinely
+    // UNFINISHED (no tunnelId persisted yet). A CF-completed user
+    // (cfComplete=true) falls through to Rule 4/5 -- the cf-handoff Continue
+    // must advance into WSL provisioning, never bounce back into the wizard
+    // (which would dead-end the whole Free/BYOD flow). Note Rule 3a above
+    // stays deliberately UN-gated: a token can go stale after the CF sub-flow
+    // completed, and that still needs a re-connect.
+    if (!signals.cfComplete && !WSL_OR_LATER.has(signals.ledgerFlowStep ?? '')) {
       return { kind: 'cf-wizard' };
     }
   }

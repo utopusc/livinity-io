@@ -112,6 +112,26 @@ describe('flow (enterFlow / resumeFlow)', () => {
     expect(verifyAndProbeMock).not.toHaveBeenCalled();
   });
 
+  // CR-01 regression: the cf-handoff Continue seam. A CF-COMPLETED state
+  // (subLabel+zoneName+tunnelId all persisted by cf-provision, no flowStep
+  // yet) must advance past the CF wizard into WSL provisioning -- before the
+  // cfComplete signal existed, this exact fixture bounced back to cf-wizard
+  // forever and dead-ended the whole Free/BYOD flow.
+  it('CR-01: a CF-completed entry (tunnelId persisted, verified token, no ledger) advances to wsl-detect, never cf-wizard', async () => {
+    readStateMock.mockResolvedValue({
+      version: 1,
+      currentStep: 'x',
+      subLabel: 'liv',
+      zoneName: 'example.com',
+      tunnelId: 'tun-123',
+    });
+    vaultGetMock.mockImplementation((key: string) => Promise.resolve(key === 'cfToken' ? 'fake-token' : null));
+    verifyAndProbeMock.mockResolvedValue({ kind: 'verified', accountId: 'a1' });
+    const route = await enterFlow();
+    expect(route).toEqual({ kind: 'wsl-detect', resume: false });
+    expect(route.kind).not.toBe('cf-wizard');
+  });
+
   it('a stale CF token re-check (cfWasEntered + about to skip CF) routes to cf-reconnect', async () => {
     readStateMock.mockResolvedValue({
       version: 1,

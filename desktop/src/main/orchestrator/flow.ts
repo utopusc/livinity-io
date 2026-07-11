@@ -111,6 +111,12 @@ async function gatherSignals(deps: Partial<FlowDeps>): Promise<ResumePointSignal
   const st = await readStateFn();
   const ledgerFlowStep = st?.flowStep;
   const cfWasEntered = Boolean(st?.subLabel && st?.zoneName);
+  // CF sub-flow COMPLETE (not merely entered): cf-provision.ts persists
+  // tunnelId only when provisioning succeeded, so its presence is the
+  // already-persisted "CF finished" fact the decider's Rule 3b gates on --
+  // without it the cf-handoff Continue would bounce straight back into the
+  // CF wizard forever (the Free/BYOD dead-end).
+  const cfComplete = cfWasEntered && Boolean(st?.tunnelId);
   const installMidRun = isInstallInFlightFn();
 
   const [installedHealthy, address] = await Promise.all([isInstalledAndHealthyFn(), deriveAddressFn()]);
@@ -125,7 +131,7 @@ async function gatherSignals(deps: Partial<FlowDeps>): Promise<ResumePointSignal
     }
   }
 
-  return { ledgerFlowStep, cfWasEntered, installedHealthy, cfVerify, installMidRun, address };
+  return { ledgerFlowStep, cfWasEntered, cfComplete, installedHealthy, cfVerify, installMidRun, address };
 }
 
 /**
