@@ -18,6 +18,7 @@ import { registerShellIpc } from './ipc/shell.ipc';
 import { registerAuthIpc } from './ipc/auth.ipc';
 import { registerCfIpc } from './ipc/cf.ipc';
 import { registerWslIpc } from './ipc/wsl.ipc';
+import { registerFlowIpc } from './ipc/flow.ipc';
 import { logSafe, redactSecretLike } from './log';
 import { CHANNELS, type Status } from '../../shared/ipc-contract';
 
@@ -249,6 +250,11 @@ if (!gotLock) {
     // wsl:installInvoke forward progress pushes; inert until the App WSL
     // sub-router calls them.
     registerWslIpc({ getMainWindow });
+
+    // Install orchestration IPC (Phase 5). No deps -- there is no flow:*Update
+    // push channel (05-08); window.api.flow* is now LIVE, reachable from the
+    // App-level seams wired in 05-09.
+    registerFlowIpc();
 
     logSafe('app.ready', {});
   });
