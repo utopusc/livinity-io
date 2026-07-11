@@ -289,6 +289,38 @@ describe('createTray', () => {
   });
 });
 
+describe('createTray -- left-click quick-panel toggle (tray-panel addendum)', () => {
+  it('wires the tray "click" event to onToggleQuickPanel', () => {
+    const cbs = makeCallbacks();
+    const onToggleQuickPanel = vi.fn();
+    const tray = createTray({ ...cbs, onToggleQuickPanel }) as unknown as MockTray;
+    tray.listeners['click']();
+    expect(onToggleQuickPanel).toHaveBeenCalledTimes(1);
+  });
+
+  it('missing onToggleQuickPanel callback -> left-click is a safe no-op (?? NOOP discipline)', () => {
+    const cbs = makeCallbacks();
+    const tray = createTray(cbs) as unknown as MockTray;
+    expect(() => tray.listeners['click']()).not.toThrow();
+  });
+
+  it('left-click ("click") wiring does not affect the existing double-click -> onOpen wiring', () => {
+    const cbs = makeCallbacks();
+    const onToggleQuickPanel = vi.fn();
+    const tray = createTray({ ...cbs, onToggleQuickPanel }) as unknown as MockTray;
+    tray.listeners['double-click']();
+    expect(cbs.onOpen).toHaveBeenCalledTimes(1);
+    expect(onToggleQuickPanel).not.toHaveBeenCalled();
+  });
+
+  it('right-click context menu (setContextMenu) is still populated -- left-click wiring is additive, not a replacement', () => {
+    const cbs = makeCallbacks();
+    const tray = createTray(cbs) as unknown as MockTray;
+    expect(tray.contextMenu).toBeDefined();
+    expect(rowByLabel(templateOf(tray), 'Quit')).toBeDefined();
+  });
+});
+
 describe('updateTrayStatus (legacy shim, Phase-1 callers)', () => {
   it('still updates the tray via the new view-model without throwing', () => {
     const cbs = makeCallbacks();
