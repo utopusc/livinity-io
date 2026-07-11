@@ -20,13 +20,25 @@
  * `DashboardWinLike` with ZERO real `BrowserWindow` ever instantiated in
  * tests (mirrors `src/main/platform/oauth-window.ts`'s `OAuthWinLike`
  * discipline).
+ *
+ * D-17 (06-SECURITY NEW-02, T-07-13): the window's `webPreferences` also
+ * carries `partition: DASH_PARTITION` (`'persist:dashboard'`), and that
+ * partition's session gets a deny-all `setPermissionRequestHandler`
+ * registered before the window is created -- a compromised box UI can never
+ * obtain camera/mic/geolocation. The app's default (unnamed) session is
+ * never referenced anywhere in this file, so the renderer's existing
+ * clipboard-sanitized-write keeps working unchanged.
  */
 
-import { BrowserWindow, app, shell } from 'electron';
+import { BrowserWindow, app, shell, session } from 'electron';
 import type { BrowserWindowConstructorOptions } from 'electron';
 import path from 'node:path';
 import { isInstalledAndHealthy as realIsInstalledAndHealthy } from '../orchestrator/connected-probe';
 import { isAllowedNavigation, decideDashboardOpen, ALLOWED_ORIGIN } from './decide-dashboard-nav';
+
+/** D-17: the dashboard window's OWN session partition -- distinct from the default
+ * session, so a deny-all permission handler here never affects any other window. */
+export const DASH_PARTITION = 'persist:dashboard';
 
 /**
  * The minimal BrowserWindow surface this module needs -- kept as an
@@ -196,11 +208,23 @@ export function __resetDashboardWindowForTests(): void {
 }
 
 /**
+ * D-17: registers a deny-all permission handler on the dashboard's OWN
+ * `DASH_PARTITION` session, before the window is created. Idempotent --
+ * `session.fromPartition` returns the SAME `Session` object for a given
+ * partition string, so re-registering the (structurally identical) handler
+ * on a later call is harmless. The default session is never referenced here.
+ */
+function denyAllDashboardPermissions(): void {
+  session.fromPartition(DASH_PARTITION).setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+}
+
+/**
  * Opens the sandboxed dashboard window (D-09: `webPreferences` has NO
  * `preload` key at all, plus `sandbox:true`/`contextIsolation:true`/
- * `nodeIntegration:false`), wires the navigation allow-list, and runs the
- * probe-then-open sequence. Focuses the existing window instead of spawning
- * a duplicate if one is already open (module-level single reference).
+ * `nodeIntegration:false`, and D-17's own `persist:dashboard` partition),
+ * wires the navigation allow-list, and runs the probe-then-open sequence.
+ * Focuses the existing window instead of spawning a duplicate if one is
+ * already open (module-level single reference).
  */
 export async function openDashboardWindow(depsIn: Partial<DashboardDeps> = {}): Promise<void> {
   const existing = getDashboardWindow();
@@ -210,6 +234,8 @@ export async function openDashboardWindow(depsIn: Partial<DashboardDeps> = {}): 
   }
 
   const deps = resolveDeps(depsIn);
+
+  denyAllDashboardPermissions();
 
   const win = deps.createWindow({
     width: 1280,
@@ -225,6 +251,7 @@ export async function openDashboardWindow(depsIn: Partial<DashboardDeps> = {}): 
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      partition: DASH_PARTITION,
       // NO `preload` key at all -- the literal mechanism giving this window
       // zero IPC/secret reach (D-09, T-06-05).
     },
