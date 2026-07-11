@@ -167,6 +167,10 @@ export const CHANNELS = {
   engineOpenInBrowser: 'engine:openInBrowser',
   engineOpenLogsFolder: 'engine:openLogsFolder',
   engineNavigate: 'engine:navigate',
+  // engineGetUsage — tray quick-panel addendum (post-Phase-7): PASSIVE-while-not-running
+  // numeric usage facts (RAM/CPU/disk), mirrors engineGetStatus's WR-03 no-wsl-touch-
+  // while-stopped discipline. See UsageResultSchema below.
+  engineGetUsage: 'engine:getUsage',
   // update:* — electron-updater surface (UPD-01). getState/check/restartToInstall are invoke;
   // status is a main -> renderer PUSH (monotonic, mirrors statusChanged/cfProvisionUpdate).
   updateGetState: 'update:getState',
@@ -786,6 +790,31 @@ export const EngineNavigateSchema = z.object({ screen: z.enum(['settings']) });
 export type EngineNavigate = z.infer<typeof EngineNavigateSchema>;
 
 /**
+ * Result of `engine:getUsage` (tray quick-panel addendum). PASSIVE discipline
+ * mirrors `engineGetStatus`'s WR-03 rule: `'engine-stopped'` is returned
+ * WITHOUT ever touching wsl.exe when the engine is not desired-running (ANY
+ * `wsl -d livinity` exec would BOOT a terminated distro). `'probe-failed'`
+ * covers any exec/parse failure while running. Secret-free by construction —
+ * numeric usage facts only, never a path/token.
+ */
+export const UsageResultSchema = z.discriminatedUnion('ok', [
+  z.object({
+    ok: z.literal(true),
+    memUsedKb: z.number(),
+    memTotalKb: z.number(),
+    load1: z.number(),
+    cpuCount: z.number(),
+    diskUsedKb: z.number(),
+    diskTotalKb: z.number(),
+  }),
+  z.object({
+    ok: z.literal(false),
+    reason: z.enum(['engine-stopped', 'probe-failed']),
+  }),
+]);
+export type UsageResult = z.infer<typeof UsageResultSchema>;
+
+/**
  * The single shared source of truth for the three engine-transition button/status
  * labels (INFO-4: shared/ is importable by BOTH main and renderer) — 06-04's
  * settings-flow.ts and 06-11's buildTrayView both import this instead of
@@ -819,6 +848,9 @@ export interface EngineApi {
   engineOpenLogsFolder(): Promise<{ ok: boolean }>;
   /** main -> renderer navigation push (tray "Settings"/stopped-open gate). Returns unsubscribe. */
   onEngineNavigate(cb: (nav: EngineNavigate) => void): () => void;
+  /** Tray quick-panel usage probe (addendum) — PASSIVE while not desired-running (mirrors
+   *  engineGetStatus's WR-03 rule), never touches wsl.exe in that case. */
+  engineGetUsage(): Promise<UsageResult>;
 }
 
 // ---------------------------------------------------------------------------
