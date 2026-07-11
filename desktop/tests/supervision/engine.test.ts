@@ -354,6 +354,42 @@ describe('engine (Task 2: supervisionTick / runHealthPass / notifications / star
   });
 
   describe('runHealthPass (D-06 self-heal, shared by tick "heal" + resume/unlock onWake)', () => {
+    // CR-01: every non-gate test runs against a desired-RUNNING engine --
+    // runHealthPass now enforces the same two first-line gates the tick has.
+    beforeEach(() => {
+      readStateMock.mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'running' });
+    });
+
+    it('CR-01 regression: engineDesiredState="stopped" -> ZERO probe/execWsl calls (a wake never restarts a deliberately-stopped engine)', async () => {
+      readStateMock.mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'stopped' });
+
+      await runHealthPass();
+
+      expect(isInstalledAndHealthyMock).not.toHaveBeenCalled();
+      expect(execWslMock).not.toHaveBeenCalled();
+      expect(notificationCtorMock).not.toHaveBeenCalled();
+    });
+
+    it('CR-01 regression: engineDesiredState never persisted (readState null) -> same gate, ZERO probe/execWsl calls', async () => {
+      readStateMock.mockResolvedValue(null);
+
+      await runHealthPass();
+
+      expect(isInstalledAndHealthyMock).not.toHaveBeenCalled();
+      expect(execWslMock).not.toHaveBeenCalled();
+    });
+
+    it('CR-01 regression: isInstallInFlight()=true -> ZERO collaborator calls (a wake never interleaves a heal with a live install.sh)', async () => {
+      isInstallInFlightMock.mockReturnValue(true);
+
+      await runHealthPass();
+
+      expect(readStateMock).not.toHaveBeenCalled();
+      expect(isInstalledAndHealthyMock).not.toHaveBeenCalled();
+      expect(execWslMock).not.toHaveBeenCalled();
+      expect(notificationCtorMock).not.toHaveBeenCalled();
+    });
+
     it('unhealthy -> self-heal -> re-probe still down -> notifies "offline" (first-time down edge)', async () => {
       isInstalledAndHealthyMock.mockResolvedValue(false);
 

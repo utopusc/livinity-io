@@ -283,6 +283,16 @@ function concludeNotify(d: EngineDeps, nowHealthy: boolean, repaired: boolean): 
 export async function runHealthPass(deps: Partial<EngineDeps> = {}): Promise<void> {
   const d = resolveDeps(deps);
   try {
+    // CR-01: the SAME two first-line gates supervisionTick enforces. This
+    // function has a SECOND production entry point (the resume/unlock onWake
+    // handler, index.ts) that must never restart a deliberately-STOPPED
+    // engine on laptop wake (D-03: stopped stays stopped -- the probe itself
+    // BOOTS a terminated distro) nor interleave a systemctl restart with a
+    // live install.sh run (IN-06). Harmlessly redundant when the tick's
+    // 'heal' branch calls in (its gates already passed an instant ago).
+    if (d.isInstallInFlight()) return;
+    const st = await d.readState();
+    if (st?.engineDesiredState !== 'running') return;
     let healthy = await d.isInstalledAndHealthy();
     let repaired = false;
     if (!healthy) {
