@@ -5,9 +5,21 @@
  * Step 6 of the D-07 Test-B harness (RESEARCH Q8) -- the Phase-1
  * spike/watcher.js pattern generalized from the spike's plain pidfile
  * (`candidate-a.pid`) to the REAL production holder record shape:
- * `%APPDATA%\Livinity Desktop\holder.json` (`{pid, spawnedAt}`,
+ * `%APPDATA%\livinity-desktop\holder.json` (`{pid, spawnedAt}`,
  * src/main/supervision/holder.ts). This is what makes the harness a
  * re-verification of the ACTUAL shipped holder, not a simulated stand-in.
+ *
+ * PATH CORRECTION (07-11 execution-time finding, empirically verified):
+ * `app.getPath('userData')` resolves from package.json's `"name"` field
+ * ("livinity-desktop") -- there is no `productName` field in package.json
+ * (only in electron-builder.yml, which Electron's own userData resolution
+ * never reads) and no `app.setName()` call anywhere in src/main/. This is
+ * NOT `%APPDATA%\Livinity Desktop\` (RESEARCH Q8's assumed literal) --
+ * confirmed live by extracting the packaged app.asar's package.json (no
+ * productName key) AND by observing holder.json/state.json/vault.bin/
+ * lockfile all present under the lowercase path on this machine. It also
+ * means dev and packaged/installed builds share the SAME userData dir
+ * (Pitfall 9's "shared userData" concern is literal, not just close-enough).
  *
  * Run this MANUALLY from a separate terminal -- it must NOT be a child of
  * the Electron app, or it would share the Job Object under test and the
@@ -33,12 +45,13 @@ const LOG_PATH = path.join(import.meta.dirname, 'watcher-log.jsonl');
 const POLL_INTERVAL_MS = 2000;
 
 function holderFilePath() {
-  // Mirrors app.getPath('userData') for productName "Livinity Desktop" --
-  // %APPDATA%\Livinity Desktop\holder.json. APPDATA is always set on
+  // Mirrors app.getPath('userData') -- resolves from package.json's "name"
+  // field ("livinity-desktop"), empirically confirmed (see module docstring)
+  // -- NOT the electron-builder productName. APPDATA is always set on
   // Windows; the os.homedir() fallback only matters for a --check syntax
   // run on a non-Windows machine.
   const appData = process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming');
-  return path.join(appData, 'Livinity Desktop', 'holder.json');
+  return path.join(appData, 'livinity-desktop', 'holder.json');
 }
 
 function appendLog(entry) {

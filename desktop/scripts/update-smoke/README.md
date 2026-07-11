@@ -13,9 +13,39 @@ Zero reboot. Never touches the public `desktop-latest` feed, the `v*`/
 `<live_smoke_rules>` for the full allowed/forbidden envelope.
 
 **Never run this harness while a dev instance of the app is running** — the
-packaged smoke build SHARES `%APPDATA%\Livinity Desktop\{state.json,vault,
-holder.json}` with dev runs (Pitfall 9). The single-instance lock helps, but
-the state.json backup below is the real guarantee.
+packaged smoke build SHARES `%APPDATA%\livinity-desktop\{state.json,vault.bin,
+holder.json,lockfile}` with dev runs (Pitfall 9). **Close any running dev
+instance (`npm run dev` / `npm start`) FIRST** — since userData is literally
+shared, a dev instance already holding the single-instance lockfile will make
+the installed build's OWN launch get silently denied (immediate quit) rather
+than actually starting, which breaks step 5 onward. The state.json backup in
+step 5 is the data-safety guarantee; closing the dev instance is what makes
+step 5 onward actually able to run at all.
+
+> **PATH CORRECTION (07-11 execution-time finding):** `app.getPath('userData')`
+> resolves from `package.json`'s `"name"` field (`livinity-desktop`) — there
+> is no `productName` field in `package.json` (only in `electron-builder.yml`,
+> which Electron's own userData resolution never reads) and no
+> `app.setName()` call anywhere in `src/main/`. The real path is
+> `%APPDATA%\livinity-desktop\` (all-lowercase, hyphenated) — NOT
+> `%APPDATA%\Livinity Desktop\` as RESEARCH Q8 assumed. Verified live: the
+> packaged `app.asar`'s `package.json` has no `productName` key, and
+> `holder.json`/`state.json`/`vault.bin`/`lockfile` were all observed present
+> under the lowercase path on the execution machine.
+>
+> **The install directory is ALSO lowercase** — empirically observed at
+> execution as `%LOCALAPPDATA%\Programs\livinity-desktop\` (the HKCU
+> Uninstall registry key's `InstallLocation`/`UninstallString`), not
+> `...\Programs\Livinity Desktop\` as originally assumed — NSIS/
+> electron-builder's default per-user install directory also derives from
+> `package.json`'s `"name"`, not `productName`. Only the **executable
+> filename** (`Livinity Desktop.exe`), the **uninstaller filename**
+> (`Uninstall Livinity Desktop.exe`), and the Start-Menu/Programs-list
+> **DisplayName** (`Livinity Desktop 0.0.1`) use `productName` — the folder
+> itself does not. This is a documentation-only correction: the real
+> `remove-executor.ts` Layer-1 uninstaller launch already derives the
+> install dir dynamically via `path.dirname(app.getPath('exe'))` rather than
+> a hardcoded path, so no production code is affected.
 
 ## The 9-step procedure
 
@@ -43,7 +73,7 @@ Run the version-A installer silently:
 
 This is a **local build with no Mark-of-the-Web** (Q1) — no SmartScreen
 prompt by construction, and `oneClick + perMachine:false` installs to
-`%LOCALAPPDATA%\Programs\Livinity Desktop\` with no UAC.
+`%LOCALAPPDATA%\Programs\livinity-desktop\` with no UAC.
 
 ### 3. Override the installed app's update feed
 
@@ -76,14 +106,14 @@ happy-path noise, not a failure).
 ### 5. Back up state.json, then launch A + bring the engine up
 
 ```
-copy "%APPDATA%\Livinity Desktop\state.json" "%APPDATA%\Livinity Desktop\state.json.smoke-backup"
+copy "%APPDATA%\livinity-desktop\state.json" "%APPDATA%\livinity-desktop\state.json.smoke-backup"
 ```
 
 (Pitfall 9 — the packaged smoke app SHARES userData with dev runs; this
 backup is mandatory and is restored in step 9.)
 
 Launch the installed A (`Livinity Desktop.exe` in
-`%LOCALAPPDATA%\Programs\Livinity Desktop\`), sign in / let the engine come
+`%LOCALAPPDATA%\Programs\livinity-desktop\`), sign in / let the engine come
 up against the REAL `livinity` distro via the normal supervised path (no
 manual WSL commands — the app's own auto-bring-up + supervision does this).
 
@@ -93,7 +123,7 @@ manual WSL commands — the app's own auto-bring-up + supervision does this).
 node scripts/update-smoke/watcher.mjs
 ```
 
-Reads the REAL holder PID from `%APPDATA%\Livinity Desktop\holder.json`
+Reads the REAL holder PID from `%APPDATA%\livinity-desktop\holder.json`
 (`{pid, spawnedAt}`, `src/main/supervision/holder.ts`) and polls `tasklist`
 every 2s, independent of the app process (never a child of it — run it from
 its own terminal). Logs to `scripts/update-smoke/watcher-log.jsonl`.
@@ -144,12 +174,12 @@ From the watcher log + manual checks, record:
 
 - Run the installed uninstaller silently:
   ```
-  "%LOCALAPPDATA%\Programs\Livinity Desktop\Uninstall Livinity Desktop.exe" /S
+  "%LOCALAPPDATA%\Programs\livinity-desktop\Uninstall Livinity Desktop.exe" /S
   ```
 - Delete the updater cache: `%LOCALAPPDATA%\livinity-desktop-updater\`
 - Restore the state.json backup:
   ```
-  move /Y "%APPDATA%\Livinity Desktop\state.json.smoke-backup" "%APPDATA%\Livinity Desktop\state.json"
+  move /Y "%APPDATA%\livinity-desktop\state.json.smoke-backup" "%APPDATA%\livinity-desktop\state.json"
   ```
 - Stop `serve.mjs` and `watcher.mjs` (Ctrl+C in each terminal).
 - `scripts/update-smoke/.smoke/` and `watcher-log.jsonl` are local, disposable,
