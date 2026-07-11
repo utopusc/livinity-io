@@ -377,6 +377,50 @@ describe('engine (Task 2: supervisionTick / runHealthPass / notifications / star
       await expect(supervisionTick()).resolves.toBeUndefined();
       expect(logSafeMock).toHaveBeenCalledWith('engine.tick', { exception: true });
     });
+
+    it('WR-04 regression: the "ok" outcome drives the setStatus rail with "running" (tray/Settings converge on the supervision signal)', async () => {
+      readStateMock.mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'running' });
+      isInstalledAndHealthyMock.mockResolvedValue(true);
+      const setStatus = vi.fn();
+
+      await supervisionTick({ setStatus });
+
+      expect(setStatus).toHaveBeenCalledWith('running');
+    });
+
+    it('WR-04 regression: a failed respawn drives setStatus("error") -- the tray no longer stays green while the engine is down', async () => {
+      readStateMock.mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'running' });
+      readHolderRecordMock.mockResolvedValue(null); // holder dead
+      isInstalledAndHealthyMock.mockResolvedValue(false); // respawn does not recover
+      const setStatus = vi.fn();
+
+      await supervisionTick({ setStatus });
+
+      expect(setStatus).toHaveBeenCalledWith('error');
+    });
+
+    it('WR-04 regression: a successful respawn drives setStatus("running")', async () => {
+      readStateMock.mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'running' });
+      readHolderRecordMock.mockResolvedValue(null); // holder dead
+      isInstalledAndHealthyMock.mockResolvedValue(true); // healthy right after respawn
+      const setStatus = vi.fn();
+
+      await supervisionTick({ setStatus });
+
+      expect(setStatus).toHaveBeenCalledWith('running');
+    });
+
+    it('WR-04 regression: the "heal" outcome (via runHealthPass body) ends with setStatus reflecting the re-probe verdict', async () => {
+      readStateMock.mockResolvedValue({ version: 1, currentStep: 'x', engineDesiredState: 'running' });
+      readHolderRecordMock.mockResolvedValue({ pid: 4242, spawnedAt: '2026-01-01T00:00:00.000Z' });
+      isPidAliveAsWslMock.mockResolvedValue(true);
+      isInstalledAndHealthyMock.mockResolvedValue(false); // unhealthy, heal fails too
+      const setStatus = vi.fn();
+
+      await supervisionTick({ setStatus });
+
+      expect(setStatus).toHaveBeenCalledWith('error');
+    });
   });
 
   describe('runHealthPass (D-06 self-heal, shared by tick "heal" + resume/unlock onWake)', () => {
@@ -482,6 +526,24 @@ describe('engine (Task 2: supervisionTick / runHealthPass / notifications / star
 
       await expect(runHealthPass()).resolves.toBeUndefined();
       expect(logSafeMock).toHaveBeenCalledWith('engine.healthPass', { exception: true });
+    });
+
+    it('WR-04 regression: a wake pass that finds the engine down (heal fails) drives setStatus("error")', async () => {
+      isInstalledAndHealthyMock.mockResolvedValue(false);
+      const setStatus = vi.fn();
+
+      await runHealthPass({ setStatus });
+
+      expect(setStatus).toHaveBeenCalledWith('error');
+    });
+
+    it('WR-04 regression: a healthy wake pass drives setStatus("running")', async () => {
+      isInstalledAndHealthyMock.mockResolvedValue(true);
+      const setStatus = vi.fn();
+
+      await runHealthPass({ setStatus });
+
+      expect(setStatus).toHaveBeenCalledWith('running');
     });
   });
 

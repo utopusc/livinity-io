@@ -356,6 +356,11 @@ async function runHealthPassBody(d: EngineDeps): Promise<void> {
       healthy = await d.isInstalledAndHealthy(); // re-probe
     }
     concludeNotify(d, healthy, repaired);
+    // WR-04: conclude with a status write reflecting the OBSERVATION — the
+    // tray icon / status:changed rail must converge on a health edge, not
+    // stay frozen at the last user lifecycle action. Idempotent against the
+    // existing rail; only reachable while desired-running (gates above).
+    d.setStatus(healthy ? 'running' : 'error');
   } catch {
     logSafe('engine.healthPass', { exception: true });
   }
@@ -412,6 +417,8 @@ async function supervisionTickBody(d: EngineDeps): Promise<void> {
         // memory. A respawn IS an active repair (notify-edges.ts's own "respawn/
         // self-heal" definition of `repaired`).
         applyNotifyDecision(d, false, postHealthy, true);
+        // WR-04: reflect the post-respawn observation on the status rail.
+        d.setStatus(postHealthy ? 'running' : 'error');
         return;
       }
       case 'heal':
@@ -420,6 +427,9 @@ async function supervisionTickBody(d: EngineDeps): Promise<void> {
         return;
       case 'ok':
         concludeNotify(d, true, false);
+        // WR-04: a healthy observation re-converges the rail (heals a tray
+        // stuck on 'error' after a transient failure, no-op otherwise).
+        d.setStatus('running');
         return;
     }
   } catch {
