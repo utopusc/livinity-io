@@ -76,6 +76,11 @@ export const StateSchema = z.object({
   wslResourceMemoryGb: z.number().optional(),
   wslResourceProcessors: z.number().optional(),
   wslResourceDiskGb: z.number().optional(),
+  // Phase 5 (INSTALL-01): the top-level orchestrator resume pointer — a plain
+  // non-secret string (like wslStep) so new step names never need a schema
+  // migration. A hint only: resume NEVER trusts this alone, it re-verifies
+  // against live state before skipping or re-running a step (D-02).
+  flowStep: z.string().optional(),
 });
 export type State = z.infer<typeof StateSchema>;
 
@@ -132,6 +137,14 @@ export const CHANNELS = {
   wslOpenExternal: 'wsl:openExternal',
   wslDownloadUpdate: 'wsl:downloadUpdate',
   wslInstallUpdate: 'wsl:installUpdate',
+  // Install orchestration (Phase 5). Same duplication discipline as the cf:*/wsl:*
+  // blocks above: these literals are duplicated in the sandboxed preload (05-04+)
+  // and kept in sync by the drift-guard test.
+  flowEnter: 'flow:enter',
+  flowResume: 'flow:resume',
+  flowConnectedCheck: 'flow:connectedCheck',
+  flowOpenBox: 'flow:openBox',
+  flowOpenExternal: 'flow:openExternal',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -548,12 +561,17 @@ export const WslDownloadUpdateSchema = z.object({
 export type WslDownloadUpdate = z.infer<typeof WslDownloadUpdateSchema>;
 
 /**
- * Progress pushed main -> renderer on CHANNELS.wslInstallUpdate (Screen 5). Coarse
- * Phase-4 step-list; Phase 5 enriches with parsed install.sh step markers without a
- * schema change.
+ * Progress pushed main -> renderer on CHANNELS.wslInstallUpdate (Screen 5). The
+ * `phase` enum stays closed for backward compat with Phase-4 consumers; Phase 5
+ * (D-04) ADDS optional `caption`/`stepIndex`/`stepTotal` fields carrying the
+ * parsed install.sh step-marker readout (INSTALL_CAPTIONS below) — a genuine
+ * additive schema extension, not a replacement of the existing enum.
  */
 export const WslInstallUpdateSchema = z.object({
   phase: z.enum(['preparing', 'installing', 'starting']),
+  caption: z.string().optional(), // Phase 5 (D-04): the parsed human caption
+  stepIndex: z.number().optional(), // 1..6 monotonic bucket index
+  stepTotal: z.number().optional(), // 6
 });
 export type WslInstallUpdate = z.infer<typeof WslInstallUpdateSchema>;
 
@@ -570,7 +588,13 @@ export interface WslApi {
    * auto-called; the main handler also arms `openAtLogin --hidden` resume per D-04. */
   wslRestartNow(): Promise<void>;
   wslDistroInstall(): Promise<WslDistroInstallResult>;
-  wslInstallInvoke(): Promise<WslInstallInvokeResult>;
+  /**
+   * Phase 5 (D-07): the resolved value is `InstallInvokeResult` — a TYPE-only
+   * widen of WslInstallInvokeResult (defined below, in the Phase-5 section)
+   * carrying an optional `failureVerdict`. Third existing-type touch this
+   * plan makes (alongside StateSchema.flowStep and WslInstallUpdateSchema).
+   */
+  wslInstallInvoke(): Promise<InstallInvokeResult>;
   wslConfigGet(): Promise<WslResourceInfo>;
   wslConfigApply(limits: {
     memoryGb?: number;
@@ -583,6 +607,115 @@ export interface WslApi {
   onDownloadUpdate(cb: (u: WslDownloadUpdate) => void): () => void;
   /** Subscribes to install-progress pushes; returns an unsubscribe function (mirrors onProvisionUpdate). */
   onInstallUpdate(cb: (u: WslInstallUpdate) => void): () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Install orchestration (Phase 5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Same file-level IPC-boundary invariant as every section above: no FlowApi
+ * method, and no schema below, ever returns a token/secret. `failureVerdict`
+ * (see InstallInvokeResult) carries only a screen enum + already-redacted
+ * copy (install-invoke.ts redacts before attaching, 05-06) — never a raw
+ * secret-bearing tail.
+ */
+
+/** The single source of truth for the 6 Phase-5 progress captions (D-04) —
+ * imported by map-marker-to-bucket.ts + install-invoke.ts main-side AND
+ * InstallingProgress.tsx renderer-side, so both tsconfigs share one array. */
+export const INSTALL_CAPTIONS = [
+  'Getting your system ready',
+  'Connecting your domain',
+  'Installing LivOS components',
+  'Configuring your server',
+  'Starting Livinity',
+  'Finishing up',
+] as const;
+
+/**
+ * The orchestrator-level position union (Claude's Discretion per D-13) — the
+ * concrete starting set. A drift-guard test in 05-08 pins the flow:* channel
+ * literals, not this union.
+ */
+export type FlowStep =
+  | 'routing'
+  | 'cf-token'
+  | 'cf-wizard'
+  | 'wsl-detect'
+  | 'resource'
+  | 'installing'
+  | 'connected-check'
+  | 'live-success';
+
+/**
+ * D-07 map-failure output. `retryStep` re-enters the state machine AT the
+ * failed step — never a blind full-flow restart.
+ */
+export const FailureVerdictSchema = z.object({
+  screen: z.enum([
+    'cf-reconnect',
+    'no-tunnel-410',
+    'login',
+    'no-entitlement',
+    'disk',
+    'systemd-retry',
+    'our-bug',
+    'generic',
+  ]),
+  copy: z.string().optional(),
+  retryStep: z.string(), // a FlowStep string
+});
+export type FailureVerdict = z.infer<typeof FailureVerdictSchema>;
+
+/**
+ * The wsl:installInvoke result enriched MAIN-SIDE with the D-07 mapFailure verdict
+ * (install-invoke.ts attaches it on every non-ok exit, 05-06). TYPE-only: no runtime
+ * schema edit, so no const-before-declaration cycle with FailureVerdictSchema and the
+ * 5-member WslInstallInvokeResult union stays intact for its existing consumers.
+ * failureVerdict is NON-SECRET (a screen enum + already-redacted copy). App.tsx
+ * dispatches InstallOutcome vs NoTunnel410 vs UnifiedError on failureVerdict.screen;
+ * a MISSING failureVerdict falls back to the existing kind->screen mapping (05-09).
+ */
+export type InstallInvokeResult = WslInstallInvokeResult & { failureVerdict?: FailureVerdict };
+
+/**
+ * What flow:enter / flow:resume return — the renderer switches on `kind` to pick a
+ * screen. `address` is the non-secret box address for display; `resume` marks a
+ * "picking up where we left off" entry.
+ */
+export const FlowRouteSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('cf-wizard') }), // BYOD, enter/resume CF sub-flow
+  z.object({ kind: z.literal('wsl-detect'), resume: z.boolean() }), // enter/resume WSL sub-flow
+  z.object({ kind: z.literal('installing') }), // install.sh was mid-run — re-enter InstallingProgress
+  z.object({ kind: z.literal('connected-check') }), // installed, confirm reachability
+  z.object({ kind: z.literal('live-success'), address: z.string().nullable() }), // D-03 fast-path / healthy
+  z.object({ kind: z.literal('cf-reconnect') }), // stale token/zone on resume -> UnifiedError CF variant
+]);
+export type FlowRoute = z.infer<typeof FlowRouteSchema>;
+
+/** D-05, 3-probe verdict. `address` is non-secret, for display only. */
+export const ConnectedProbeResultSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('connected'), address: z.string().nullable() }),
+  z.object({ kind: z.literal('still-confirming'), address: z.string().nullable() }),
+]);
+export type ConnectedProbeResult = z.infer<typeof ConnectedProbeResultSchema>;
+
+/**
+ * FlowApi — the install-orchestration sibling of WslApi. Same IPC-boundary
+ * invariant: no method here ever returns a secret.
+ */
+export interface FlowApi {
+  /** Resume-point compute on a wizard entry (replaces enterWslWizard's blind jump). Live re-verify inside. */
+  flowEnter(): Promise<FlowRoute>;
+  /** Resume-point compute on app launch (D-09) — every launch re-verifies live state. */
+  flowResume(): Promise<FlowRoute | null>;
+  /** Runs the D-05 three-probe connected verdict (bounded retry). */
+  flowConnectedCheck(): Promise<ConnectedProbeResult>;
+  /** Opens the user's live box URL in the system browser — address derived MAIN-SIDE from state (never a renderer URL). */
+  flowOpenBox(): Promise<void>;
+  /** enum-allowlisted external open (system browser), mirrors wslOpenExternal. */
+  flowOpenExternal(target: 'support'): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
