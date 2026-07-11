@@ -13,14 +13,20 @@
  *       dist/ + node_modules/ + package.json -- no spike/, src/ (raw TS),
  *       tests/, .planning/, scripts/, build/ dev trees leaked in (defense
  *       in depth over the electron-builder.yml `files` prune)
- *   (c) no HIGH-SIGNAL secret literals anywhere in the unpacked text
- *       content -- the literal oracles `liv_k_` (Livinity API key prefix)
- *       and `eyJ` (JWT / CF connector-token JSON prefix) ONLY. Deliberately
- *       NOT the generic 24+ char "looks like a secret" run regex
- *       (SECRET_LIKE_RUN in src/main/log.ts) -- that regex false-positives
- *       constantly on ordinary minified-JS identifiers/hashes (W5) and is
- *       non-exported besides. These two fixed prefixes ARE the whole oracle
- *       here, by design.
+ *   (c) no HIGH-SIGNAL secret literals in OUR shipped output (dist/ only,
+ *       deliberately -- node_modules is third-party code we do not write,
+ *       and scanning it is pure noise: e.g. zod's own test suite bundles a
+ *       well-known PUBLIC example JWT fixture, which is not a secret. The
+ *       actual risk this gate mitigates is OUR compiled/bundled code
+ *       accidentally baking in a real credential). The oracles require a
+ *       plausible token BODY after the prefix, not the bare prefix string
+ *       -- our own source legitimately contains the literal 'liv_k_' for
+ *       format validation (e.g. `key.startsWith('liv_k_')` in
+ *       KeyChoice.tsx), which is not a leaked secret. Deliberately NOT the
+ *       generic 24+ char "looks like a secret" run regex (SECRET_LIKE_RUN
+ *       in src/main/log.ts) -- that regex false-positives constantly on
+ *       ordinary minified-JS identifiers/hashes (W5) and is non-exported
+ *       besides.
  *   (d) the built .exe artifact filename has no spaces (Pitfall 6 -- GitHub
  *       silently rewrites spaces to dots in uploaded release-asset names,
  *       which breaks the generic-provider feed's exact filename match)
@@ -37,11 +43,10 @@
  */
 
 import asarPkg from '@electron/asar';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readdirSync, statSync } from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
 
-const { listPackage, extractAll } = asarPkg;
+const { listPackage, extractFile } = asarPkg;
 
 const ALLOWED_TOP_LEVEL = new Set(['dist', 'node_modules', 'package.json']);
 const BINARY_EXTENSIONS = new Set([
@@ -49,9 +54,13 @@ const BINARY_EXTENSIONS = new Set([
   '.woff', '.woff2', '.ttf', '.otf', '.eot',
   '.node', '.exe', '.dll', '.so', '.dylib', '.map',
 ]);
+// Prefix + a plausible real token body (real liv_k_ keys are
+// `liv_k_` + a 20-char nanoid; real JWTs are dot-separated base64url
+// segments) -- NOT the bare prefix, which our own validation code
+// legitimately contains as a string literal.
 const SECRET_ORACLES = [
-  { name: 'liv_k_ (Livinity API key prefix)', re: /liv_k_/ },
-  { name: 'eyJ (JWT / CF connector-token JSON prefix)', re: /eyJ/ },
+  { name: 'liv_k_ install-key value (prefix + real token body)', re: /liv_k_[A-Za-z0-9_-]{16,}/ },
+  { name: 'eyJ JWT-shaped value (base64url header.payload)', re: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/ },
 ];
 
 const failures = [];
@@ -61,12 +70,14 @@ function normalize(entryPath) {
   return entryPath.replace(/\\/g, '/').replace(/^\/+/, '');
 }
 
-function walk(dir, onFile) {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) walk(full, onFile);
-    else onFile(full);
-  }
+// @electron/asar's extractFile/getNode expects a path with NO leading
+// separator (it splits on path.sep starting from the archive root; a
+// leading separator produces a spurious empty first segment that breaks
+// the internal tree lookup). listPackage's own paths always have a
+// leading separator (built via path.join('/', ...)), so every entry must
+// be stripped before being fed back into extractFile.
+function stripLeadingSep(entryPath) {
+  return entryPath.replace(/^[\\/]+/, '');
 }
 
 function main() {
@@ -108,26 +119,31 @@ function main() {
     fail(`unexpected top-level entries in app.asar (dev-file leakage): ${unexpectedTopLevel.join(', ')}`);
   }
 
-  // --- (c) high-signal secret literal scan over unpacked file contents ---
-  const scratch = mkdtempSync(join(tmpdir(), 'livinity-check-artifact-'));
-  try {
-    extractAll(asarPath, scratch);
-    walk(scratch, (filePath) => {
-      if (BINARY_EXTENSIONS.has(extname(filePath).toLowerCase())) return;
-      let text;
-      try {
-        text = readFileSync(filePath, 'utf8');
-      } catch {
-        return; // unreadable / not actually text despite extension -- skip
+  // --- (c) high-signal secret literal scan, scoped to OUR dist/ output ---
+  const distEntries = rawEntries.filter((raw) => {
+    const norm = normalize(raw);
+    return norm === 'dist' || norm.startsWith('dist/');
+  });
+  for (const raw of distEntries) {
+    const norm = normalize(raw);
+    if (BINARY_EXTENSIONS.has(extname(norm).toLowerCase())) continue;
+    let buf;
+    try {
+      buf = extractFile(asarPath, stripLeadingSep(raw));
+    } catch {
+      continue; // directory or symlink entry -- nothing to extract
+    }
+    let text;
+    try {
+      text = buf.toString('utf8');
+    } catch {
+      continue;
+    }
+    for (const oracle of SECRET_ORACLES) {
+      if (oracle.re.test(text)) {
+        fail(`possible secret literal (${oracle.name}) found in ${norm}`);
       }
-      for (const oracle of SECRET_ORACLES) {
-        if (oracle.re.test(text)) {
-          fail(`possible secret literal (${oracle.name}) found in ${filePath.slice(scratch.length + 1).replace(/\\/g, '/')}`);
-        }
-      }
-    });
-  } finally {
-    rmSync(scratch, { recursive: true, force: true });
+    }
   }
 
   // --- (d) no spaces in the built .exe artifact filename ---
@@ -158,7 +174,7 @@ function report(fails, ctx) {
     console.log(`  asar: ${ctx.asarPath}`);
     console.log('  electron-updater present: yes');
     console.log('  dev-file leakage: none');
-    console.log('  secret literals: none');
+    console.log('  secret literals: none (dist/ scanned)');
     console.log(`  exe artifact(s): ${(ctx.exeFiles ?? []).join(', ')}`);
   } else {
     console.error('check-artifact: FAIL');
