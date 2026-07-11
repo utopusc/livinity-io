@@ -29,6 +29,14 @@
  *    promise chain (`serialized()`) — no two lifecycle operations ever
  *    interleave, and a user STOP always queues BEHIND (never lands inside)
  *    an in-flight tick's readState->holderAlive window.
+ * 5. D-06 (`requestRestartToUpdate` admission gate, UPD-01): the ONLY
+ *    additive export in this Wave-3 plan — it runs INSIDE the SAME
+ *    `serialized()` mutex as #4 (never a second promise chain) and is gated
+ *    on `isInstallInFlight()` first, so an update apply can never interleave
+ *    a live install.sh run or land in the middle of an in-flight start/stop/
+ *    restart. `quitAndInstall` is injected (default: `updater.ts`'s own
+ *    wrapper, Task 1 of this plan) — this file still never imports the
+ *    third-party update package directly.
  *
  * Every collaborator is injected via `Partial<EngineDeps>` (mirrors
  * `flow.ts`'s `FlowDeps`); `resolveDeps` merges the caller's overrides over
@@ -72,6 +80,7 @@ import {
 } from './holder';
 import { decideSupervisionAction } from './decide-supervision';
 import { decideNotification, type NotifyKind } from './notify-edges';
+import { restartToUpdate as realQuitAndInstall } from '../update/updater';
 import { logSafe } from '../log';
 import type { EngineStatusResult, Status } from '../../../shared/ipc-contract';
 
@@ -84,6 +93,11 @@ const SELF_HEAL_ARGS = ['-d', 'livinity', '-u', 'root', '--', 'systemctl', 'rest
 /** ~30-60s range (06-11-PLAN.md, Claude's discretion) — used only when the caller omits
  * `intervalMs`; production wiring (06-11) always passes an explicit value. */
 const DEFAULT_TICK_INTERVAL_MS = 45_000;
+
+/** IN-02 fold-in — a bare host-shape run (letters/digits/dots/hyphens only),
+ * used as a defense-in-depth guard on `openInBrowserGated`'s MAIN-derived
+ * address before it ever reaches shell.openExternal. */
+const HOST_SHAPE_RE = /^[a-z0-9.-]+$/i;
 
 const NOTIFY_COPY: Record<NotifyKind, { title: string; body: string }> = {
   offline: { title: 'Livinity is offline', body: "Your box stopped responding — we'll keep checking." },
@@ -486,6 +500,50 @@ export function startSupervision(
 }
 
 // ---------------------------------------------------------------------------
+// requestRestartToUpdate — D-06 admission gate (UPD-01), the SAME serialized()
+// mutex as every other lifecycle operation above (never a second chain).
+// ---------------------------------------------------------------------------
+
+export interface RestartDeps {
+  isInstallInFlight: () => boolean;
+  /** Injected so this file never imports the third-party update package
+   * directly — production default is `updater.ts`'s own wrapper, which
+   * always calls the real quitAndInstall(true, true) (Q1.3). */
+  quitAndInstall: () => void;
+}
+
+const defaultRestartDeps: RestartDeps = {
+  isInstallInFlight: realIsInstallInFlight,
+  quitAndInstall: realQuitAndInstall,
+};
+
+function resolveRestartDeps(deps: Partial<RestartDeps>): RestartDeps {
+  return { ...defaultRestartDeps, ...deps };
+}
+
+/**
+ * The "Restart to update" admission gate (D-06). Runs inside the SAME
+ * `serialized()` mutex as start/stop/restart/tick/heal — a pending engine
+ * transition queues this call behind it rather than letting it interleave;
+ * `isInstallInFlight()` is checked FIRST inside the mutex body (mirrors
+ * every other lifecycle gate in this file) so a live install.sh run always
+ * blocks the restart, never races it.
+ */
+export function requestRestartToUpdate(
+  deps: Partial<RestartDeps> = {}
+): Promise<{ ok: boolean; blocked: boolean }> {
+  const d = resolveRestartDeps(deps);
+  return serialized(async () => {
+    if (d.isInstallInFlight()) {
+      logSafe('engine.restartToUpdate', { blockedByInstall: true });
+      return { ok: false, blocked: true };
+    }
+    d.quitAndInstall();
+    return { ok: true, blocked: false };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // openDashboardGated / openInBrowserGated — D-10 stopped-gate
 // ---------------------------------------------------------------------------
 
@@ -534,6 +592,14 @@ export async function openInBrowserGated(deps: Partial<EngineDeps> = {}): Promis
     }
     const address = await d.deriveAddress();
     if (!address) return;
+    // IN-02 fold-in (security-auditor): defense-in-depth assertion that the
+    // MAIN-derived address is host-shaped (a bare `[a-z0-9.-]+` run) before
+    // it ever reaches shell.openExternal — a corrupted/malformed value from
+    // an upstream collaborator is refused rather than trusted unconditionally.
+    if (!HOST_SHAPE_RE.test(address)) {
+      logSafe('engine.openInBrowser', { invalidAddress: true });
+      return;
+    }
     await d.openExternal(`https://${address}/`);
   } catch {
     logSafe('engine.openInBrowser', { exception: true });
