@@ -38,10 +38,32 @@ export const createContextWss = async ({livinityd, logger, req}: {livinityd: Liv
 							role: dbUser.role,
 						}
 					}
+				} else if (payload) {
+					// Backups-v2 P0 (review F1): legacy (no-userId) tokens must get the
+					// same admin mapping over ws that isAuthenticated gives them over
+					// HTTP — otherwise every adminProcedure is FORBIDDEN on legacy
+					// single-user sessions riding the ws link (all authed UI calls do).
+					try {
+						const {getAdminUser} = await import('../../database/index.js')
+						const adminUser = await getAdminUser()
+						if (adminUser) {
+							ctx.currentUser = {
+								id: adminUser.id,
+								username: adminUser.username,
+								role: adminUser.role,
+							}
+						} else {
+							ctx.legacySingleUser = true
+						}
+					} catch {
+						// Genuine single-user mode (no DB) — explicit admin-equivalent
+						// flag, mirroring isAuthenticated's Phase 256-04 fix E semantics.
+						ctx.legacySingleUser = true
+					}
 				}
 			}
 		} catch {
-			// Non-fatal: legacy tokens without userId still work
+			// Non-fatal: an undecodable token just yields an unauthenticated ctx
 		}
 	}
 

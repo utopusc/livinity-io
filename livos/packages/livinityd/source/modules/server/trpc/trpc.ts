@@ -2,7 +2,7 @@ import {ZodError} from 'zod'
 import {initTRPC} from '@trpc/server'
 
 import {type Context} from './context.js'
-import {isAuthenticated, isAuthenticatedIfUserExists, requireRole} from './is-authenticated.js'
+import {isAuthenticated, isAuthenticatedIfUserExists, requireRole, requireRoleIfUserExists} from './is-authenticated.js'
 import {websocketLogger} from './websocket-logger.js'
 
 // `t` is exported (not just internal) so v29.4 Phase 47 Plan 05 can call
@@ -33,3 +33,7 @@ export const privateProcedure = baseProcedure.use(isAuthenticated)
 export const publicProcedureWhenNoUserExists = baseProcedure.use(isAuthenticatedIfUserExists)
 // Admin-only procedure: requires authentication + admin role
 export const adminProcedure = privateProcedure.use(requireRole('admin'))
+// Backups-v2 P0 (D10): admin once any user exists, open pre-first-user — for
+// the onboarding-restore procedures that must work on a fresh box but were
+// previously callable by ANY authenticated user afterwards.
+export const adminProcedureWhenNoUserExists = publicProcedureWhenNoUserExists.use(requireRoleIfUserExists('admin'))

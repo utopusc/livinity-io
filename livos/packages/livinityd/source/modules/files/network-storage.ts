@@ -39,12 +39,19 @@ const SMB_SHARE_RE = /^[a-zA-Z0-9._$ ()'-]+$/
 const CRED_INJECTION_RE = /[\n\r,=]/
 
 /**
- * Block loopback / RFC1918 / link-local (incl. 169.254.169.254 metadata) /
- * IPv6-private literals so the SMB host param cannot probe internal services.
- * Replicates webapps/url-validator.ts's syntactic range checks (no DNS
- * resolution — mDNS `<host>.local` names from discoverServers must keep
+ * Block loopback / link-local (incl. 169.254.169.254 cloud metadata) /
+ * IPv6-loopback literals so the SMB host param cannot probe box-internal
+ * services. Replicates webapps/url-validator.ts's syntactic range checks (no
+ * DNS resolution — mDNS `<host>.local` names from discoverServers must keep
  * working). `LIVOS_ALLOW_PRIVATE_SMB_HOSTS=1` is a test-harness escape used by
  * the integration suite, which mounts a samba server on localhost.
+ *
+ * Backups-v2 P0 (D11): RFC1918 ranges are deliberately ALLOWED — a home NAS
+ * lives at 192.168.x/10.x by definition, and the original blanket-private
+ * block made "add NAS by IP" (and therefore NAS backups) fail with
+ * [invalid-smb-host] for every home-LAN user. The SSRF targets that matter
+ * from the box's own perspective stay blocked: loopback and the link-local
+ * metadata range.
  */
 function isPrivateSmbHost(host: string): boolean {
 	if (process.env.LIVOS_ALLOW_PRIVATE_SMB_HOSTS === '1') return false
@@ -56,13 +63,10 @@ function isPrivateSmbHost(host: string): boolean {
 		const b = Number(m[2])
 		if (a > 255 || b > 255 || Number(m[3]) > 255 || Number(m[4]) > 255) return true // malformed → reject
 		if (a === 127) return true // loopback
-		if (a === 10) return true // RFC1918
-		if (a === 172 && b >= 16 && b <= 31) return true // RFC1918
-		if (a === 192 && b === 168) return true // RFC1918
 		if (a === 169 && b === 254) return true // link-local + cloud metadata
 	}
-	// IPv6 loopback / ULA (SMB_HOST_RE already rejects `:`, defence-in-depth).
-	if (lower === '::1' || /^f[cd][0-9a-f]{0,2}:/.test(lower)) return true
+	// IPv6 loopback (SMB_HOST_RE already rejects `:`, defence-in-depth).
+	if (lower === '::1') return true
 	return false
 }
 

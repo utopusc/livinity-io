@@ -151,6 +151,23 @@ export const isAuthenticatedIfUserExists = async ({ctx, next}: MiddlewareOptions
  * Middleware factory that requires a specific role.
  * Must be used AFTER isAuthenticated.
  */
+/**
+ * Backups-v2 P0 (D10) — role gate that opens ONLY pre-first-user.
+ * Composes after isAuthenticatedIfUserExists: while no user exists (fresh-box
+ * onboarding restore) the request passes; the moment any user exists the full
+ * requireRole check applies. Without this, restoreBackup (full-box restore +
+ * reboot) was callable by ANY authenticated user.
+ */
+export const requireRoleIfUserExists = (requiredRole: string) => {
+	return async ({ctx, next}: MiddlewareOptions) => {
+		// ctx.user! — same runtime guarantee as isAuthenticatedIfUserExists above;
+		// the `!` keeps this NEW middleware off the ctx-partial tsc baseline.
+		const userExists = await ctx.user!.exists()
+		if (!userExists) return next()
+		return requireRole(requiredRole)({ctx, next})
+	}
+}
+
 export const requireRole = (requiredRole: string) => {
 	return async ({ctx, next}: MiddlewareOptions) => {
 		// Phase 256-04 (LIVOS-004): never INFER legacy/admin from an absent

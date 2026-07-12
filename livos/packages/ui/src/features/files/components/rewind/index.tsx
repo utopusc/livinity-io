@@ -20,6 +20,7 @@ import {useFilesOperations} from '@/features/files/hooks/use-files-operations'
 import {useRewind} from '@/features/files/hooks/use-rewind'
 import {useFilesStore} from '@/features/files/store/use-files-store'
 import {formatFilesystemDate} from '@/features/files/utils/format-filesystem-date'
+import {useCurrentUser} from '@/hooks/use-current-user'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useLanguage} from '@/hooks/use-language'
 import {useWallpaper} from '@/providers/wallpaper'
@@ -38,6 +39,14 @@ import {groupRestoreByDestination} from './restore-grouping'
 
 export function SidebarRewind() {
 	const {setRepoOpen} = useRewindOverlay()
+
+	// Backups-v2 P0 (D10): snapshots carry the WHOLE data directory — every
+	// user's files — and the backend procedures Rewind depends on
+	// (listBackups/mountBackup/unmountBackup) are admin-gated now. Hide the
+	// entry point for non-admins instead of dead-ending them in FORBIDDEN
+	// toasts. Per-user-scoped Rewind is planned (backups-v2 P5).
+	const {isAdmin, isLoading: isLoadingUser} = useCurrentUser()
+	if (isLoadingUser || !isAdmin) return null
 
 	return (
 		<div className='mr-4 mt-2 flex flex-col rounded-xl'>
