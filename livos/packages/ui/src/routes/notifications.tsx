@@ -5,6 +5,7 @@ import {useNavigate} from 'react-router-dom'
 
 import {BackupDeviceIcon} from '@/features/backups/components/backup-device-icon'
 import {getDeviceNameFromPath} from '@/features/backups/utils/backup-location-helpers'
+import {useCurrentUser} from '@/hooks/use-current-user'
 import {useNotifications} from '@/hooks/use-notifications'
 import {
 	AlertDialog,
@@ -173,11 +174,21 @@ export function Notifications() {
 		enabled: hasBackupNotification,
 	})
 
+	// Backups-v2 P0: these two are ADMIN-actionable only (their CTAs lead to
+	// admin-gated screens/mutations). Non-admins must neither see them nor be
+	// able to snooze them away from the admin — filter WITHOUT clearing, so the
+	// notification stays queued for the admin's session.
+	const ADMIN_ONLY_NOTIFICATIONS = ['backups-engine-unavailable', 'backups-not-configured']
+	const {isAdmin, isLoading: isLoadingUser} = useCurrentUser()
+	const canSeeAdminNotifications = !isLoadingUser && isAdmin
+
 	// Phase 30 hot-patch round 3: WhatsNewModal removed (Umbrel-leftover content).
 	// `livos-updated` notification is silently cleared — the new
 	// `<UpdateNotification />` desktop card already conveys "you just updated" via its
 	// commit message, and the bottom-right card disappears once .deployed-sha == HEAD.
-	const standardNotifications = notifications.filter((n) => n !== 'livos-updated')
+	const standardNotifications = notifications
+		.filter((n) => n !== 'livos-updated')
+		.filter((n) => canSeeAdminNotifications || !ADMIN_ONLY_NOTIFICATIONS.includes(n))
 	const showWhatsNew = notifications.includes('livos-updated')
 
 	useEffect(() => {
@@ -198,6 +209,60 @@ export function Notifications() {
 				clearNotification(notification)
 			}
 			return getBackupFailingContent(notification, backupRepositoriesQuery, onGoToBackups, onClearNotification)
+		}
+
+		// Backups-v2 P0: the kopia engine is missing/outdated — nothing can back
+		// up until an update fixes it. Surfaced instead of the old silent no-op.
+		if (notification === 'backups-engine-unavailable') {
+			return {
+				title: 'Backups are not working',
+				description:
+					'The backup engine on this device is missing or outdated, so no backups can run.\nUpdate LivOS from Settings → Software Update — the engine is installed automatically with the update.',
+				action: (
+					<>
+						<Button variant='default' size='dialog' onClick={() => clearNotification(notification)} tabIndex={-1}>
+							{t('ok')}
+						</Button>
+						<AlertDialogAction
+							variant='primary'
+							onClick={() => {
+								clearNotification(notification)
+								navigate('/settings')
+							}}
+							tabIndex={0}
+						>
+							Open Settings
+						</AlertDialogAction>
+					</>
+				),
+			}
+		}
+
+		// Backups-v2 P0: weekly reminder that the box has no backup destination.
+		// Dismissing snoozes it — the backend re-adds it after a week without one.
+		if (notification === 'backups-not-configured') {
+			return {
+				title: 'This device is not backed up',
+				description:
+					"No backup location is set up, so your apps, files and settings aren't protected yet.\nConnect a USB drive or a network share (NAS) and set up automatic backups — it takes about a minute.",
+				action: (
+					<>
+						<Button variant='default' size='dialog' onClick={() => clearNotification(notification)} tabIndex={-1}>
+							Remind me later
+						</Button>
+						<AlertDialogAction
+							variant='primary'
+							onClick={() => {
+								clearNotification(notification)
+								navigate('/settings/backups/setup')
+							}}
+							tabIndex={0}
+						>
+							Set up backups
+						</AlertDialogAction>
+					</>
+				),
+			}
 		}
 
 		// Default fallback for unknown notifications

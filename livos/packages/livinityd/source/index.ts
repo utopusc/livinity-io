@@ -346,6 +346,8 @@ type StoreSchema = {
 			systemDatabase: boolean
 			livAssistantData: boolean
 		}
+		// Backups-v2 P0 — last time we nagged about having zero destinations.
+		noDestinationNagTime?: number
 	}
 }
 

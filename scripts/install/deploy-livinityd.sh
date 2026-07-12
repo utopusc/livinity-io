@@ -176,6 +176,45 @@ _dld_install_system_packages() {
         bubblewrap tinyproxy
     ok "System packages installed"
 
+    # ── Backups-v2 P0: kopia backup engine ────────────────────────────────
+    # The backups module shells out to `kopia`; umbrelOS ships it inside their
+    # OS image but LivOS runs on stock Ubuntu, so the deploy must install it.
+    # Pinned release binary + sha256 verification (no third-party apt source).
+    # warn-not-fail: a failed download must never brick a deploy — livinityd's
+    # boot preflight surfaces a missing engine as a RED Backups card and
+    # self-installs the same pinned version on the next boot.
+    KOPIA_VERSION="0.23.1"
+    case "$(uname -m)" in
+        x86_64)  _kopia_arch="x64";   _kopia_sha256="416d0f84a3dbb321a8b2d8f0997b1a0a6e915babe79ee76fa6e4d2bd1e1c5178" ;;
+        aarch64) _kopia_arch="arm64"; _kopia_sha256="a4ffbc019e0b0f932e2632054e73ec521dc1e80172a00095369c53ecf4e5a6cb" ;;
+        *)       _kopia_arch="" ;;
+    esac
+    _kopia_current="$(kopia --version 2>/dev/null | awk '{print $1}' || true)"
+    if [[ -z "$_kopia_arch" ]]; then
+        warn "kopia: unsupported arch $(uname -m) — backup engine not installed"
+    elif [[ -n "$_kopia_current" ]] && dpkg --compare-versions "$_kopia_current" ge "$KOPIA_VERSION" 2>/dev/null; then
+        # >= not ==: never DOWNGRADE a newer kopia (a newer binary may have
+        # upgraded the repository format — downgrading would lock it out).
+        ok "kopia $_kopia_current already installed (>= $KOPIA_VERSION)"
+    else
+        info "Installing kopia $KOPIA_VERSION (backup engine)"
+        # mktemp lives inside the shielded chain: this whole block is
+        # warn-not-fail, and a bare failing assignment would abort the entire
+        # deploy under the parent's set -e.
+        if _kopia_tmp="$(mktemp -d 2>/dev/null)" \
+            && curl -fsSL --retry 3 -o "$_kopia_tmp/kopia.tgz" \
+                "https://github.com/kopia/kopia/releases/download/v${KOPIA_VERSION}/kopia-${KOPIA_VERSION}-linux-${_kopia_arch}.tar.gz" \
+            && echo "${_kopia_sha256}  $_kopia_tmp/kopia.tgz" | sha256sum -c --quiet - \
+            && tar -xzf "$_kopia_tmp/kopia.tgz" -C "$_kopia_tmp" \
+            && install -m 0755 "$_kopia_tmp"/kopia-*/kopia /usr/local/bin/kopia; then
+            ok "kopia installed: $(kopia --version 2>/dev/null | head -1)"
+        else
+            warn "kopia install FAILED — backups stay disabled until livinityd's boot self-heal succeeds"
+        fi
+        { [[ -n "${_kopia_tmp:-}" ]] && rm -rf "$_kopia_tmp"; } || true
+    fi
+    mkdir -p /kopia/config /kopia/cache
+
     # ── Phase 256-01 (WS-A): egress allowlist proxy for the bwrap'd agent ──────
     # tinyproxy default-deny + hostname allowlist. The agent's bwrap child gets
     # HTTPS_PROXY=http://127.0.0.1:13128 (set in sandbox.ts buildScrubbedEnv) so

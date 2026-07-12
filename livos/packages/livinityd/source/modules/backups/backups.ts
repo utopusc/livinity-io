@@ -9,6 +9,7 @@ import prettyBytes from 'pretty-bytes'
 
 import randomToken from '../../modules/utilities/random-token.js'
 import {captureSystemState, DEFAULT_BACKUP_SCOPE, type BackupScope} from './system-state.js'
+import {detectEngine, installEngine, KOPIA_MINIMUM_VERSION, type EngineStatus} from './engine.js'
 import {copyWithProgress} from '../utilities/copy-with-progress.js'
 
 // TODO: These should be refactored into proper livinityd modules
@@ -41,6 +42,9 @@ export type RestoreStatus = ProgressStatus & {
 
 export type BackupsInProgress = BackupProgress[]
 
+// P0 backups-v2: how often we re-nag about a box with zero backup destinations.
+const NO_DESTINATION_NAG_INTERVAL = 1000 * 60 * 60 * 24 * 7 // 7 days
+
 export default class Backups {
 	#livinityd: Livinityd
 	logger: Livinityd['logger']
@@ -61,6 +65,11 @@ export default class Backups {
 	kopiaQueue = new pQueue({concurrency: 1})
 	backupDirectoryName = 'Livinity Backup.backup'
 	runningKopiaProcesses: ExecaChildProcess[] = []
+	// P0 backups-v2: kopia engine preflight state. Starts pessimistic; start()
+	// and every interval / engineStatus query re-detect, so it self-heals the
+	// moment an update (or the self-installer) puts kopia in place.
+	engineStatus: EngineStatus = {available: false, reason: 'unknown', minimumVersion: KOPIA_MINIMUM_VERSION}
+	#engineInstallInFlight = false
 
 	constructor(livinityd: Livinityd) {
 		this.#livinityd = livinityd
@@ -77,6 +86,21 @@ export default class Backups {
 
 		// Cleanup any left over backup mounts
 		await this.unmountAll().catch((error) => this.logger.error('Error unmounting backups', error))
+
+		// P0 backups-v2: engine preflight. If kopia is missing/outdated, kick a
+		// background self-install (deploy covers fresh installs; update.sh never
+		// runs the deploy script, so existing boxes get the engine HERE). Both
+		// are non-blocking — boot must never wait on a GitHub download. The
+		// hourly interval below re-detects AND re-attempts the install, so a
+		// boot while offline is retried, not lost.
+		await this.checkEngine().catch((error) => this.logger.error('Engine preflight failed', error))
+		await this.syncEngineNotification().catch(() => {})
+		if (!this.engineStatus.available) {
+			void (async () => {
+				await this.retryEngineInstall()
+				await this.syncEngineNotification()
+			})().catch((error) => this.logger.error('Engine self-install failed', error))
+		}
 
 		// Fire off background backup process
 		this.backupJobPromise = this.backupOnInterval().catch((error) =>
@@ -129,6 +153,36 @@ export default class Backups {
 				this.logger.error('Error getting repositories', error)
 				return []
 			})
+			// P0 backups-v2: say how much this interval actually protects — the
+			// original line-pair ("Running…"/"…complete") looked identical whether
+			// it backed up everything or nothing, which hid a fully dead feature.
+			this.logger.log(`Backups interval: ${repositories.length} repositories configured`)
+
+			// P0 backups-v2: re-detect the engine each interval and, if it's
+			// still missing, RETRY the self-install (a box that booted offline
+			// must heal once connectivity returns, not wait for a restart).
+			// The notification is re-asserted every interval while unavailable —
+			// same idiom as the hourly backups-failing re-add — so one dismissal
+			// never silences a dead engine for good.
+			const engine = await this.checkEngine().catch(() => this.engineStatus)
+			if (!engine.available) {
+				this.logger.error(`Backup engine unavailable (${engine.reason ?? 'unknown'}) — retrying self-install`)
+				await this.retryEngineInstall()
+			}
+			await this.syncEngineNotification().catch(() => {})
+
+			// P0 backups-v2: zero repositories = zero protection. Nag weekly
+			// instead of silently completing forever.
+			if (repositories.length === 0) {
+				await this.maybeNagNoDestination().catch((error) => this.logger.error('No-destination nag failed', error))
+				this.logger.log('Backups interval complete')
+				continue
+			}
+
+			// NOTE: when the engine is unavailable we still fall through to the
+			// repo loop — backup() throws [engine-unavailable] immediately per
+			// repository, which keeps the pre-existing >24h 'backups-failing'
+			// alerts firing (an engine outage must never mute them).
 
 			// Run each backup
 			for (const repository of repositories) {
@@ -158,6 +212,84 @@ export default class Backups {
 		}
 	}
 
+	// ── Engine preflight (P0 backups-v2) ────────────────────────────────
+	// Pure detection: probe the binary + update cached state. NO notification
+	// writes here — this runs from the tRPC engineStatus query (every Settings
+	// load) and from guards; notification maintenance lives in
+	// syncEngineNotification(), called only from start() + the hourly interval.
+	async checkEngine(): Promise<EngineStatus> {
+		const wasAvailable = this.engineStatus.available
+		this.engineStatus = await detectEngine()
+		if (this.engineStatus.available && !wasAvailable) {
+			this.logger.log(`Backup engine available: kopia ${this.engineStatus.version}`)
+		} else if (!this.engineStatus.available && wasAvailable) {
+			this.logger.error(`Backup engine LOST: kopia ${this.engineStatus.reason ?? 'unknown'}`)
+		}
+		return this.engineStatus
+	}
+
+	// Keep the persistent 'backups-engine-unavailable' notification honest.
+	// While unavailable it is re-added EVERY interval (hourly re-nag, matching
+	// the backups-failing idiom — one dismissal must never silence a dead
+	// engine); once available it is cleared even across daemon restarts (the
+	// presence check makes clears state-based, not transition-based).
+	private async syncEngineNotification() {
+		if (!this.engineStatus.available) {
+			await this.#livinityd.notifications.add('backups-engine-unavailable').catch(() => {})
+			return
+		}
+		const notifications = await this.#livinityd.notifications.get().catch(() => [] as string[])
+		if (notifications.includes('backups-engine-unavailable')) {
+			await this.#livinityd.notifications.clear('backups-engine-unavailable').catch(() => {})
+		}
+	}
+
+	// Attempt the pinned-version self-install (at most one attempt in flight).
+	// Called at boot and re-tried every interval while the engine is missing.
+	private async retryEngineInstall() {
+		if (this.#engineInstallInFlight || this.engineStatus.available) return
+		this.#engineInstallInFlight = true
+		try {
+			const installed = await installEngine({
+				log: (m) => this.logger.log(m),
+				error: (m, e) => this.logger.error(m, e as Error),
+			})
+			if (installed) await this.checkEngine()
+		} catch (error) {
+			this.logger.error('Engine self-install attempt failed', error)
+		} finally {
+			this.#engineInstallInFlight = false
+		}
+	}
+
+	// Throw a typed error instead of letting kopia calls die with a raw ENOENT.
+	private assertEngineAvailable() {
+		if (!this.engineStatus.available) {
+			throw new Error('[engine-unavailable] Backup engine (kopia) is missing or outdated — update LivOS and try again')
+		}
+	}
+
+	// Refresh a stale-unavailable status, then assert. Used by every kopia
+	// entry point so a binary installed mid-run (manual install, deploy without
+	// restart) is picked up immediately instead of after the next hourly tick.
+	private async ensureEngine() {
+		if (!this.engineStatus.available) await this.checkEngine()
+		this.assertEngineAvailable()
+	}
+
+	// P0 backups-v2: weekly reminder that the box has no backup destination.
+	// Dismissing the notification snoozes it for NO_DESTINATION_NAG_INTERVAL.
+	private async maybeNagNoDestination() {
+		const userExists = await this.#livinityd.user.exists()
+		if (!userExists) return
+		const lastNag = await this.#livinityd.store.get('backups.noDestinationNagTime').catch(() => undefined)
+		if (lastNag && Date.now() - lastNag < NO_DESTINATION_NAG_INTERVAL) return
+		await this.#livinityd.notifications.add('backups-not-configured').catch(() => {})
+		await this.#livinityd.store.getWriteLock(async ({set}) => {
+			await set('backups.noDestinationNagTime', Date.now())
+		})
+	}
+
 	// Get repositories
 	async getRepositories() {
 		return (await this.#livinityd.store.get('backups.repositories')) || []
@@ -180,6 +312,14 @@ export default class Backups {
 	) {
 		// Refuse to spawn new kopia processes if we're shutting down
 		if (!this.running) throw new Error('[shutting-down] Refusing to spawn new kopia processes')
+
+		// P0 backups-v2: a missing engine must never surface as a raw
+		// spawn-ENOENT (or as a silently EMPTY backup list through per-repo
+		// catches in listAllBackups). Re-detect once, then throw typed.
+		if (!this.engineStatus.available) {
+			await this.checkEngine()
+			this.assertEngineAvailable()
+		}
 
 		const spawnKopiaProcess = async () => {
 			// Spawn process
@@ -228,6 +368,11 @@ export default class Backups {
 	// Add a repository to the store and connect to it
 	// Conditionally creates a new repository if createNew is true
 	async addRepository(virtualPath: string, password: string, createNew = true) {
+		// P0 backups-v2: fail with a clear typed error instead of a raw kopia
+		// ENOENT deep inside the wizard. Re-checks live so a just-installed
+		// engine is picked up without waiting for the hourly interval.
+		await this.ensureEngine()
+
 		virtualPath = nodePath.join(virtualPath, this.backupDirectoryName)
 
 		// Check we have either a network share or external drive
@@ -299,6 +444,11 @@ export default class Backups {
 		})
 
 		this.logger.log(`Connected to repository ${id}`)
+
+		// P0 backups-v2: the box now has a destination — clear the weekly
+		// "backups are not set up" nag if it's showing.
+		await this.#livinityd.notifications.clear('backups-not-configured').catch(() => {})
+
 		return id
 	}
 
@@ -436,6 +586,10 @@ export default class Backups {
 			// continue to backup, kopia will see these as backups originating from
 			// different machines.
 			'--override-hostname=livinity',
+			// P0 backups-v2: cap the local cache so it can never eat the system
+			// disk (umbrelOS shipped exactly that bug — getumbrel/umbrel#2099).
+			'--content-cache-size-mb=2000',
+			'--metadata-cache-size-mb=1000',
 		])
 	}
 
@@ -473,6 +627,7 @@ export default class Backups {
 
 	// Backup the livinity data directory to a repository
 	async backup(repositoryId: string) {
+		await this.ensureEngine()
 		const repository = await this.getRepository(repositoryId)
 		this.logger.log(`Backing up to ${repository.path}`)
 
@@ -756,6 +911,7 @@ export default class Backups {
 
 	// Mount backup
 	async mountBackup(backupId: string) {
+		await this.ensureEngine()
 		const {repositoryId, snapshotId} = this.parseBackupId(backupId)
 
 		// Get the backup time for directory naming

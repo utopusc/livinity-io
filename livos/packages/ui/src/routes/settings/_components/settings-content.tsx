@@ -3,6 +3,7 @@ import {AnimatePresence, motion} from 'motion/react'
 import React, {Suspense, useEffect, useRef, useState} from 'react'
 import {FaRegSave} from 'react-icons/fa'
 import {
+	RiErrorWarningFill,
 	RiExpandRightFill,
 } from 'react-icons/ri'
 import {
@@ -1186,6 +1187,11 @@ function BackupsSection() {
 	const [showSetupWizard, setShowSetupWizard] = useState(false)
 	const [showRestoreWizard, setShowRestoreWizard] = useState(false)
 
+	// Backups-v2 P0: live kopia engine preflight — if the engine is missing or
+	// outdated NOTHING can back up, and that must be loud, not silent.
+	const engineStatusQuery = trpcReact.backups.engineStatus.useQuery(undefined, {staleTime: 30_000})
+	const engineUnavailable = engineStatusQuery.data ? !engineStatusQuery.data.available : false
+
 	if (isLoadingBackups) {
 		return (
 			<div className='flex items-center justify-center py-12'>
@@ -1234,6 +1240,25 @@ function BackupsSection() {
 
 	return (
 		<div className='space-y-4'>
+			{/* Backups-v2 P0: engine unavailable = RED, never silent */}
+			{engineUnavailable && (
+				<div className='rounded-radius-md border border-red-500/30 bg-red-500/10 p-4'>
+					<div className='flex items-center gap-3'>
+						<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-red-500/20'>
+							<RiErrorWarningFill className='h-5 w-5 text-red-400' />
+						</div>
+						<div className='flex-1'>
+							<div className='text-body font-medium text-red-400'>Backup engine unavailable</div>
+							<div className='text-caption text-text-secondary'>
+								{engineStatusQuery.data?.reason === 'outdated'
+									? `The backup engine (kopia ${engineStatusQuery.data?.version}) is older than the required ${engineStatusQuery.data?.minimumVersion}. Update LivOS to fix this.`
+									: 'The backup engine (kopia) is not installed on this device. Update LivOS to fix this — no backups can run until then.'}
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* Tab Navigation */}
 			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'status' | 'restore' | 'migration')}>
 				<TabsList className='grid w-full grid-cols-3'>
