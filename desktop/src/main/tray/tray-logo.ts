@@ -1,0 +1,11 @@
+/**
+ * src/main/tray/tray-logo.ts
+ *
+ * The Livinity brand mark as a 32x32 PNG, base64-embedded so the tray icon
+ * needs no packaged asset file (works identically in dev and inside the
+ * asar). Generated from build/icon.png (the same source electron-builder
+ * uses for the installer/app icon) at 32px — Windows scales the tray image
+ * per-DPI from this.
+ */
+export const TRAY_LOGO_PNG_B64 =
+  'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAALWSURBVFhH7VZNaxNRFH1JkJlz3jSVoCCC0EhBGk0Xgl8bUVwJ7hSXIsFCV0baUpQaaTdqClZQEKGIuHDjHxLpQoWi6MIuukiphpE7TErmTmYmTSO46IGzyOTee867M/e9Z8w+dg/ruu4FkjWSDQCPST4keRvAWWMMdMJQAOAcgFWS6yR9a22M8pzkV5KvSJ7WNQaC67rHSL7viIYiqezEAXhL8oiu2TdIXiP5s19hzTBv3Vp7RdfOBMlbgwr34B8A17VGIkheHaJ4h23XdS9qrRgAHCX5q0eBPVEWBOB7sVgsac0ISH74B6sPGJpY1Zo7kNHRSUk0xkSYy+ViMQlsj4yMnNDaAQC8SVu9/Oc4TiA4OTnpz8zM+M1m06/X636lUgmeu64by9M1SD7X2gIC+KETuini+Xw+EN3e3va70Wq1/MXFxb5MkPxsjDkQUQ+3Vx0YoRRfXl6OCGs0Go0gTudqWmtPRQyQvJPWfll5tVrVejFIZ8bHx/1CoRCr0SUuXbqpDTxKMyCrmp+f13o9MT09ndqFcBruRQwAeJJlYGVlRWv1xNLSUqYBkg8iBuRozTIwOzurtXpiamoq0wCAujZQSzMg38DExITfbre1XgQyDWNjY5nfAIAbEQNymdCBmrIqGbU0SJfSVt+h53mViAGZRADfdGA3Zb6luIza5uZmRHhjY8Ofm5vrdx9YM8YUtAF5Da/TXkO3CRk1edcLCwt+rVbzy+VyX+Jh+5taO4C1tqoTkijfhAh2KL91TAJ/O45zXGvvAMC7rC4MyrDuS60Zged5h+RMGLaJsN6XUqlU1JoxOI5zSY5NXWSP3AJwRmslQu5wcpfbayfC/JZc87RGJqy1l+WeP6iJMG8NwHldu294nndYxnM33Qjjtki+GB0dPahrDgQ5v0k+I/mpI6IZGvhorX2aeO0aAgqyX8heLgcKyfsA7so3Y609aYzJ64T/Gn8BvveSo40Z5yMAAAAASUVORK5CYII=';

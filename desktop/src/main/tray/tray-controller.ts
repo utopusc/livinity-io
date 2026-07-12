@@ -14,8 +14,11 @@
  */
 
 import { Tray, Menu, nativeImage } from 'electron';
-import type { MenuItemConstructorOptions } from 'electron';
+import type { MenuItemConstructorOptions, NativeImage } from 'electron';
 import type { Status } from '../../../shared/ipc-contract';
+import { TRAY_LOGO_PNG_B64 } from './tray-logo';
+
+const TRAY_LOGO_PNG = Buffer.from(TRAY_LOGO_PNG_B64, 'base64');
 
 const COLORS: Record<Status, string> = {
   installing: '#eab308',
@@ -69,6 +72,68 @@ export function createTrayIcon(color: string): Buffer {
     nativeImage.createFromBitmap(pixels, { width: 16, height: 16 }).toPNG(),
     { width: 16, height: 16 }
   ).toPNG();
+}
+
+/**
+ * Pure BGRA pixel math: paints a status dot (with a dark ring matching the
+ * shell background, so it separates cleanly from the logo underneath) into
+ * the bottom-right corner of a square bitmap. Returns a COPY — the input
+ * buffer is never mutated. Geometry is proportional so any square size works.
+ */
+export function overlayStatusDot(bitmap: Buffer, size: number, color: string): Buffer {
+  const out = Buffer.from(bitmap);
+  const r = parseInt(color.slice(1, 3), 16);
+  const g = parseInt(color.slice(3, 5), 16);
+  const b = parseInt(color.slice(5, 7), 16);
+  const cx = size * 0.78;
+  const cy = size * 0.78;
+  const dotR = size * 0.17;
+  const ringR = size * 0.235;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dist = Math.hypot(x - cx, y - cy);
+      if (dist >= ringR + 1) continue;
+      const idx = (y * size + x) * 4;
+      let pb = 7;
+      let pg = 5;
+      let pr = 5;
+      let alpha = 1;
+      if (dist < dotR) {
+        pb = b;
+        pg = g;
+        pr = r;
+      } else if (dist >= ringR) {
+        alpha = ringR + 1 - dist;
+      }
+      out[idx] = Math.round(pb * alpha + out[idx] * (1 - alpha));
+      out[idx + 1] = Math.round(pg * alpha + out[idx + 1] * (1 - alpha));
+      out[idx + 2] = Math.round(pr * alpha + out[idx + 2] * (1 - alpha));
+      out[idx + 3] = Math.max(out[idx + 3], Math.round(255 * alpha));
+    }
+  }
+  return out;
+}
+
+/**
+ * The tray image: the Livinity brand mark with a status dot in the corner
+ * (operator request — the plain colored circle read as a placeholder). Falls
+ * back to the legacy circle if the embedded logo can't be decoded in this
+ * environment (also what keeps unit tests with a minimal nativeImage mock
+ * on the old, fully-covered path).
+ */
+export function brandTrayImage(status: Status): NativeImage {
+  try {
+    const logo = nativeImage.createFromBuffer(TRAY_LOGO_PNG);
+    const { width, height } = logo.getSize();
+    if (!width || width !== height) throw new Error('unexpected logo shape');
+    const composited = overlayStatusDot(logo.toBitmap(), width, statusToColor(status));
+    return nativeImage.createFromBitmap(composited, { width, height });
+  } catch {
+    return nativeImage.createFromBuffer(createTrayIcon(statusToColor(status)), {
+      width: 16,
+      height: 16,
+    });
+  }
 }
 
 /**
@@ -181,10 +246,7 @@ export function createTray(opts: TrayCallbacks): Tray {
     startAtLoginChecked: false,
     actionsDisabled: false,
   };
-  const icon = nativeImage.createFromBuffer(createTrayIcon(statusToColor(initialView.status)), {
-    width: 16,
-    height: 16,
-  });
+  const icon = brandTrayImage(initialView.status);
   const tray = new Tray(icon);
   tray.on('double-click', opts.onOpen);
   // Tray-panel addendum: LEFT-click toggles the compact quick-panel popover;
@@ -198,9 +260,7 @@ export function createTray(opts: TrayCallbacks): Tray {
 
 /** Swaps the tray icon color/tooltip/menu to reflect the new TrayViewState. */
 export function updateTray(tray: Tray, view: TrayViewState, cbs: TrayCallbacks): void {
-  tray.setImage(
-    nativeImage.createFromBuffer(createTrayIcon(statusToColor(view.status)), { width: 16, height: 16 })
-  );
+  tray.setImage(brandTrayImage(view.status));
   tray.setToolTip(`Livinity Desktop – ${view.statusText}`);
   tray.setContextMenu(buildContextMenu(view, cbs));
 }
