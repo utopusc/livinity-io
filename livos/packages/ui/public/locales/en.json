@@ -866,7 +866,6 @@
   "software-update.rollback.confirm.submitting": "Rolling back…",
   "software-update.rollback.confirm.title": "Roll back to {{name}}?",
   "software-update.rollback.description": "Restore the previous version if this update caused problems.",
-  "software-update.rollback.unavailable": "No last-good snapshot available yet — this box hasn't completed an update.",
   "software-update.see-whats-new": "See <linked>what's new</linked>",
   "software-update.title": "Software update",
   "software-update.updating-to": "Updating to {{name}}",

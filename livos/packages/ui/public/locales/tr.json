@@ -840,7 +840,6 @@
   "software-update.rollback.confirm.submitting": "Geri alınıyor…",
   "software-update.rollback.confirm.title": "{{name}} sürümüne geri dönülsün mü?",
   "software-update.rollback.description": "Bu güncelleme sorun çıkardıysa önceki sürümü geri yükleyin.",
-  "software-update.rollback.unavailable": "Henüz son iyi anlık görüntü yok — bu kutu bir güncellemeyi tamamlamadı.",
   "software-update.see-whats-new": "Bak, <linked>neler yeni</linked>",
   "software-update.title": "Yazılım güncellemesi",
   "software-update.updating-to": "{{name}} sürümüne güncelleniyor",
