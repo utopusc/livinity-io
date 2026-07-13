@@ -176,6 +176,25 @@ describe('notifications/dispatch Dispatcher', () => {
 		expect(h.recorded.length).toBe(1)
 	})
 
+	test('MED-03 CONCURRENT FLOOR RMW: two different keys dispatched concurrently both persist (no lost update)', async () => {
+		// Fire-and-forget dispatches for two independent keys race: each awaits
+		// floorStore.load() (a microtask yield) before saving. Without the floor
+		// critical section, the second save would clobber the first key. The
+		// serialized RMW must preserve BOTH entries.
+		const channels = [ch('ch-a', 'liv:telegram', 'chatA')]
+		const h = makeHarness({channels, now: () => 1000})
+
+		await Promise.all([
+			h.dispatcher.dispatch('backups-failing:repo1', 'warning'),
+			h.dispatcher.dispatch('disk-critical', 'critical'),
+		])
+
+		const floor = h.getFloor()
+		expect(Object.keys(floor).sort()).toEqual(['backups-failing', 'disk-critical'])
+		expect(floor['backups-failing']).toMatchObject({severity: 'warning'})
+		expect(floor['disk-critical']).toMatchObject({severity: 'critical'})
+	})
+
 	test('SEVERITY FILTER: a channel only receives alerts whose severity is in its filter', async () => {
 		const channels = [
 			ch('crit', 'liv:telegram', 'chatCrit', ['critical']),

@@ -79,9 +79,27 @@ export class Dispatcher {
 	readonly #pending = new Map<string, PendingItem[]>()
 	readonly #timers = new Map<string, unknown>()
 	readonly #testCooldowns = new Map<string, number>()
+	// MED-03: serializes the floor load→mutate→save cycle. The load() and save()
+	// are two separate FileStore calls, so concurrent fire-and-forget dispatches
+	// for DIFFERENT keys could each load, then clobber each other's write (lost
+	// update → a suppressed key re-storms). livinityd is single-process, so a
+	// simple in-memory promise-chain critical section closes the window.
+	#floorChain: Promise<unknown> = Promise.resolve()
 
 	constructor(deps: DispatcherDeps) {
 		this.deps = deps
+	}
+
+	// Run `fn` after any in-flight floor critical section completes, chaining the
+	// next one behind it. Errors are isolated so one failed section never wedges
+	// the chain.
+	#withFloorLock<T>(fn: () => Promise<T>): Promise<T> {
+		const run = this.#floorChain.then(fn, fn)
+		this.#floorChain = run.then(
+			() => undefined,
+			() => undefined,
+		)
+		return run
 	}
 
 	/** Floor-check → enqueue into the burst window (schedules a flush timer). */
@@ -94,17 +112,25 @@ export class Dispatcher {
 		// always passes and resets the floor (a warning→critical escalation on the
 		// same id must never be swallowed). Same-or-lower severity inside the window
 		// is suppressed (anti-storm — the original protection is preserved).
-		const floor = await this.deps.floorStore.load()
-		const prev = floor[key]
-		if (
-			prev !== undefined &&
-			now - prev.at < RESEND_FLOOR_MS &&
-			severityRank(severity) <= severityRank(prev.severity)
-		) {
-			return
-		}
-		floor[key] = {at: now, severity}
-		await this.deps.floorStore.save(floor)
+		//
+		// MED-03: the whole load→decide→save cycle runs inside the floor critical
+		// section so concurrent dispatches for different keys can't lose each
+		// other's writes.
+		const suppressed = await this.#withFloorLock(async () => {
+			const floor = await this.deps.floorStore.load()
+			const prev = floor[key]
+			if (
+				prev !== undefined &&
+				now - prev.at < RESEND_FLOOR_MS &&
+				severityRank(severity) <= severityRank(prev.severity)
+			) {
+				return true
+			}
+			floor[key] = {at: now, severity}
+			await this.deps.floorStore.save(floor)
+			return false
+		})
+		if (suppressed) return
 
 		const channels = (await this.deps.getChannels()).filter(
 			(c) => c.enabled && c.severityFilter.includes(severity),
