@@ -11,6 +11,7 @@ import {listContainers, pruneImages, isProtectedContainer} from '../docker/docke
 import {listGitStacks, updateGitStackSyncSha, controlStack} from '../docker/stacks.js'
 import {syncRepo, copyComposeToStackDir} from '../docker/git-deploy.js'
 import {aiResourceWatchHandler} from '../docker/ai-resource-watch.js'
+import {getSystemDiskUsage} from '../system/system.js'
 import {volumeBackupHandler} from './backup.js'
 import type {BuiltInJobHandler, JobType} from './types.js'
 
@@ -257,9 +258,54 @@ export const gitStackSyncHandler: BuiltInJobHandler = async (job, ctx) => {
 }
 
 // =========================================================================
+// disk-critical-watch — Phase 310 ALERT-02.
+// Server-side low-disk detection (the UI's isDiskLow/isDiskFull thresholds
+// only run in the browser, so nothing fires when no one has Settings open).
+// Reaches the daemon EXCLUSIVELY through ctx.livinityd (the optional ref
+// Plan 02 threaded into the scheduler handler ctx via runJob). Fires the
+// 'disk-critical' external alert when free space crosses a byte threshold,
+// clears it on recovery, and NEVER throws out of the scheduler tick.
+// =========================================================================
+
+// Pure, exported so the threshold logic is unit-testable without disk I/O.
+// 100MB / 1GB are the EXACT byte constants ported from ui/src/utils/system.ts
+// (isDiskFull / isDiskLow) — one product-wide definition of "disk full/low".
+export function diskSeverityFor(available: number): 'critical' | 'warning' | null {
+	if (available < 100_000_000) return 'critical' // < 100MB remaining → disk full
+	if (available < 1_000_000_000) return 'warning' // < 1GB remaining → disk low
+	return null
+}
+
+export const diskCriticalWatchHandler: BuiltInJobHandler = async (job, ctx) => {
+	// Guard: no daemon ref (isolated unit test / Scheduler built without
+	// livinityd) → skip cleanly, never throw.
+	if (!ctx.livinityd) {
+		ctx.logger.log(`[scheduler/disk-critical-watch] no daemon reference — skipping job ${job.name}`)
+		return {status: 'skipped', error: 'daemon reference unavailable'}
+	}
+	try {
+		ctx.logger.log(`[scheduler/disk-critical-watch] running job ${job.name}`)
+		const {available} = await getSystemDiskUsage(ctx.livinityd)
+		const severity = diskSeverityFor(available)
+		if (severity) {
+			// Fire-and-forget: a notification/dispatch failure must not fail the tick.
+			await ctx.livinityd.notifications.add('disk-critical', {severity, external: true}).catch(() => {})
+		} else {
+			// Clear-on-recovery (mirrors backups.ts syncEngineNotification()).
+			await ctx.livinityd.notifications.clear('disk-critical').catch(() => {})
+		}
+		return {status: 'success', output: {available, severity}}
+	} catch (err) {
+		// NOTE: 'failure', NOT 'error' — JobRunResult.status has no 'error' member.
+		return {status: 'failure', error: err instanceof Error ? err.message : String(err)}
+	}
+}
+
+// =========================================================================
 // Registry: jobType -> handler mapping.
 // volume-backup wired by Plan 20-02 (alpine-tar streaming to S3/SFTP/local).
 // ai-resource-watch wired by Plan 23-02 (Phase 23 AID-02 proactive alerts).
+// disk-critical-watch wired by Plan 310-03 (Phase 310 ALERT-02 low-disk alert).
 // =========================================================================
 export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'image-prune': imagePruneHandler,
@@ -267,6 +313,7 @@ export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'git-stack-sync': gitStackSyncHandler,
 	'volume-backup': volumeBackupHandler,
 	'ai-resource-watch': aiResourceWatchHandler,
+	'disk-critical-watch': diskCriticalWatchHandler,
 }
 
 // =========================================================================
@@ -293,4 +340,8 @@ export const DEFAULT_JOB_DEFINITIONS: Array<{
 	// this default only takes effect on fresh installs (same default-flip
 	// pattern as Plan 21-02 git-stack-sync).
 	{name: 'ai-resource-watch', schedule: '*/5 * * * *', type: 'ai-resource-watch', enabled: false},
+	// Phase 310 ALERT-02 — server-side low-disk watch. Default enabled=true: a
+	// byte-threshold check is free (no LLM spend, unlike ai-resource-watch), and
+	// low disk is a box-operator concern that must fire even with no Settings open.
+	{name: 'disk-critical-watch', schedule: '*/15 * * * *', type: 'disk-critical-watch', enabled: true},
 ]

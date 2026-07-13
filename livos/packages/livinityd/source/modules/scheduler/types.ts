@@ -10,6 +10,7 @@ export type JobType =
 	| 'git-stack-sync'
 	| 'volume-backup'
 	| 'ai-resource-watch' // Phase 23 AID-02 — proactive Kimi-generated resource alerts
+	| 'disk-critical-watch' // Phase 310 ALERT-02 — server-side low-disk detection → external alert
 
 export type JobRunStatus = 'success' | 'failure' | 'skipped' | 'running'
 
