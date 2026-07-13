@@ -3,7 +3,7 @@ import {z} from 'zod'
 
 import {adminProcedure, privateProcedure, router} from '../server/trpc/trpc.js'
 import {getNetworkStats, getDiskIO, getProcesses} from './monitoring.js'
-import {listDrives, getDrive, runSelfTest} from './smart.js'
+import {listDrives, getDrive, runSelfTest, DEVICE_ID_RE} from './smart.js'
 import {listSmartAlerts, dismissSmartAlert} from './smart-alerts.js'
 
 export default router({
@@ -60,7 +60,7 @@ export default router({
 		}),
 
 		get: privateProcedure
-			.input(z.object({deviceId: z.string().regex(/^(sd[a-z]+|nvme\d+n\d+|mmcblk\d+)$/, 'invalid device id')}))
+			.input(z.object({deviceId: z.string().regex(DEVICE_ID_RE, 'invalid device id')}))
 			.query(async ({input}) => {
 				try {
 					return await getDrive(input.deviceId)
@@ -77,7 +77,7 @@ export default router({
 		runSelfTest: adminProcedure
 			.input(
 				z.object({
-					deviceId: z.string().regex(/^(sd[a-z]+|nvme\d+n\d+|mmcblk\d+)$/, 'invalid device id'),
+					deviceId: z.string().regex(DEVICE_ID_RE, 'invalid device id'),
 					mode: z.enum(['short', 'long']),
 				}),
 			)

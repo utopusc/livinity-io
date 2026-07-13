@@ -251,11 +251,12 @@ export function evaluateTemperature(celsius: number | null | undefined): SmartTe
 // Runtime layer: smartctl invocation + defensive detection chain + assembly.
 // =========================================================================
 
-// copied from files/external-storage.ts:36 — canonical kernel-device-name guard.
-// Validated BEFORE every privileged smartctl argv is built (defence-in-depth
-// against sudoers-glob argument injection; the sudoers /dev/* glob only
-// constrains literal argument text, not a crafted id).
-const DEVICE_ID_RE = /^(sd[a-z]+|nvme\d+n\d+|mmcblk\d+)$/
+// Canonical kernel-device-name guard (mirrors files/external-storage.ts:36).
+// Validated BEFORE every privileged smartctl argv is built (defence-in-depth on
+// top of the wrapper's own root-side re-validation). EXPORTED (L-01) as the single
+// source of truth for the monitoring domain so the tRPC boundary in routes.ts
+// reuses this exact pattern instead of re-typing it — no cross-file drift.
+export const DEVICE_ID_RE = /^(sd[a-z]+|nvme\d+n\d+|mmcblk\d+)$/
 
 // A smartctl read "resolved" iff the JSON carries at least one health surface.
 // NOTE (H-02): this is a REACHABILITY signal only ("smartctl returned a health
