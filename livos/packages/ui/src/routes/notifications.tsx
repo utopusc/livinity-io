@@ -182,11 +182,21 @@ export function Notifications() {
 		enabled: hasBackupNotification,
 	})
 
-	// Backups-v2 P0: these two are ADMIN-actionable only (their CTAs lead to
-	// admin-gated screens/mutations). Non-admins must neither see them nor be
-	// able to snooze them away from the admin — filter WITHOUT clearing, so the
-	// notification stays queued for the admin's session.
-	const ADMIN_ONLY_NOTIFICATIONS = ['backups-engine-unavailable', 'backups-not-configured', 'update-failed', 'disk-critical']
+	// Backups-v2 P0 + Phase 313 SMART: these are ADMIN-actionable only (their CTAs
+	// lead to admin-gated screens/mutations, and a self-test is adminProcedure).
+	// Non-admins must neither see them nor be able to snooze them away from the
+	// admin — filter WITHOUT clearing, so the notification stays queued for the
+	// admin's session. Entries are BASE KINDS (no ':'-suffix); the membership test
+	// below collapses any suffixed id to its base kind first.
+	const ADMIN_ONLY_NOTIFICATIONS = [
+		'backups-engine-unavailable',
+		'backups-not-configured',
+		'update-failed',
+		'disk-critical',
+		'smart-failing',
+		'smart-unavailable',
+		'smart-permission-denied',
+	]
 	const {isAdmin, isLoading: isLoadingUser} = useCurrentUser()
 	const canSeeAdminNotifications = !isLoadingUser && isAdmin
 
@@ -196,7 +206,14 @@ export function Notifications() {
 	// commit message, and the bottom-right card disappears once .deployed-sha == HEAD.
 	const standardNotifications = notifications
 		.filter((n) => n !== 'livos-updated')
-		.filter((n) => canSeeAdminNotifications || !ADMIN_ONLY_NOTIFICATIONS.includes(n))
+		// WARNING-3: collapse any ':'-suffixed id to its base kind before the
+		// admin-gate membership test — the SMART scan raises smart-failing:<deviceId>
+		// / smart-unavailable:<deviceId> (suffixed), so a bare list entry would never
+		// match and a non-admin would still see them. Same prefix-collapse the
+		// backend uses in channel-types.ts floorKey (id.split(':')[0]). The bare
+		// entries (backups-*, update-failed, disk-critical, smart-permission-denied)
+		// carry no ':', so split is a no-op and they stay gated exactly as before.
+		.filter((n) => canSeeAdminNotifications || !ADMIN_ONLY_NOTIFICATIONS.includes(n.split(':')[0]))
 	const showWhatsNew = notifications.includes('livos-updated')
 
 	useEffect(() => {
@@ -332,7 +349,87 @@ export function Notifications() {
 			}
 		}
 
-		return getDefaultNotificationContent(notification)
+			// Phase 313-04 (SMART-01/SMART-03) — a drive is predicted to fail
+			// (SATA Backblaze-5 / NVMe critical). Admin-only, per-device id
+			// (smart-failing:<deviceId>) → deep-link to Settings > Storage.
+			if (notification === 'smart-failing' || notification.startsWith('smart-failing:')) {
+				return {
+					title: t('notifications.smart-failing.title'),
+					description: t('notifications.smart-failing.description'),
+					action: (
+						<>
+							<Button variant='default' size='dialog' onClick={() => clearNotification(notification)} tabIndex={-1}>
+								{t('ok')}
+							</Button>
+							<AlertDialogAction
+								variant='primary'
+								onClick={() => {
+									clearNotification(notification)
+									navigate('/settings/storage')
+								}}
+								tabIndex={0}
+							>
+								Open Storage settings
+							</AlertDialogAction>
+						</>
+					),
+				}
+			}
+
+			// Phase 313-04 (SMART-04) — SMART could not be read for a drive (e.g. a
+			// USB bridge that doesn't pass SMART through). Admin-only, per-device id
+			// (smart-unavailable:<deviceId>). Honest — NOT a failure claim.
+			if (notification === 'smart-unavailable' || notification.startsWith('smart-unavailable:')) {
+				return {
+					title: t('notifications.smart-unavailable.title'),
+					description: t('notifications.smart-unavailable.description'),
+					action: (
+						<>
+							<Button variant='default' size='dialog' onClick={() => clearNotification(notification)} tabIndex={-1}>
+								{t('ok')}
+							</Button>
+							<AlertDialogAction
+								variant='primary'
+								onClick={() => {
+									clearNotification(notification)
+									navigate('/settings/storage')
+								}}
+								tabIndex={0}
+							>
+								Open Storage settings
+							</AlertDialogAction>
+						</>
+					),
+				}
+			}
+
+			// Phase 313-04 (SMART-04) — smartctl reads were denied (the privileged
+			// sudoers grant is missing on this box). Bare, system-level id. Admin-only.
+			if (notification === 'smart-permission-denied') {
+				return {
+					title: t('notifications.smart-permission-denied.title'),
+					description: t('notifications.smart-permission-denied.description'),
+					action: (
+						<>
+							<Button variant='default' size='dialog' onClick={() => clearNotification(notification)} tabIndex={-1}>
+								{t('ok')}
+							</Button>
+							<AlertDialogAction
+								variant='primary'
+								onClick={() => {
+									clearNotification(notification)
+									navigate('/settings/storage')
+								}}
+								tabIndex={0}
+							>
+								Open Storage settings
+							</AlertDialogAction>
+						</>
+					),
+				}
+			}
+
+			return getDefaultNotificationContent(notification)
 	}
 
 	return (
