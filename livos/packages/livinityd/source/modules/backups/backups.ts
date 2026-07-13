@@ -204,7 +204,9 @@ export default class Backups {
 				const hoursSinceLastBackup = (Date.now() - (lastBackup || this.startedAt!)) / (1000 * 60 * 60)
 				if (hoursSinceLastBackup > 24) {
 					this.logger.error(`Backup for ${repository.path} has not run in over 24 hours`)
-					await this.#livinityd.notifications.add(`backups-failing:${repository.id}`).catch(() => {})
+					await this.#livinityd.notifications
+						.add(`backups-failing:${repository.id}`, {severity: 'warning', external: true})
+						.catch(() => {})
 				}
 			}
 
@@ -235,7 +237,9 @@ export default class Backups {
 	// presence check makes clears state-based, not transition-based).
 	private async syncEngineNotification() {
 		if (!this.engineStatus.available) {
-			await this.#livinityd.notifications.add('backups-engine-unavailable').catch(() => {})
+			await this.#livinityd.notifications
+				.add('backups-engine-unavailable', {severity: 'warning', external: true})
+				.catch(() => {})
 			return
 		}
 		const notifications = await this.#livinityd.notifications.get().catch(() => [] as string[])
@@ -284,7 +288,9 @@ export default class Backups {
 		if (!userExists) return
 		const lastNag = await this.#livinityd.store.get('backups.noDestinationNagTime').catch(() => undefined)
 		if (lastNag && Date.now() - lastNag < NO_DESTINATION_NAG_INTERVAL) return
-		await this.#livinityd.notifications.add('backups-not-configured').catch(() => {})
+		await this.#livinityd.notifications
+			.add('backups-not-configured', {severity: 'info', external: true})
+			.catch(() => {})
 		await this.#livinityd.store.getWriteLock(async ({set}) => {
 			await set('backups.noDestinationNagTime', Date.now())
 		})
