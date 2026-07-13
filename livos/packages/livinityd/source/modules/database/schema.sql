@@ -314,6 +314,26 @@ CREATE INDEX IF NOT EXISTS idx_ai_alerts_dedupe
   WHERE dismissed_at IS NULL;
 
 -- =========================================================================
+-- SMART Alerts (Phase 313 SMART-02/03) — persisted disk-health alert history.
+-- One row per NEW failing/unavailable condition. Dedupe at insert-time via
+-- findRecentSmartAlert (6h window) so a daily scan does not re-insert. The
+-- external-channel dispatch itself is the Phase-310 notifications bridge; this
+-- table is the dismissable audit list only (NOT a second dispatch path).
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS smart_alerts (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  device_id     TEXT NOT NULL,
+  severity      TEXT NOT NULL CHECK (severity IN ('info','warning','critical')),
+  kind          TEXT NOT NULL CHECK (kind IN ('sata-attribute','nvme-critical','unavailable','permission-denied','self-test-failed','other')),
+  message       TEXT NOT NULL,
+  payload_json  JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  dismissed_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_smart_alerts_undismissed ON smart_alerts(dismissed_at, created_at DESC) WHERE dismissed_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_smart_alerts_dedupe ON smart_alerts(device_id, kind, created_at DESC) WHERE dismissed_at IS NULL;
+
+-- =========================================================================
 -- Broker Usage (Phase 44 FR-DASH-01)
 -- One row per broker request that completes (sync or SSE). Captured by the
 -- usage-tracking capture middleware which wraps /u/:userId/v1/* OUTSIDE the
