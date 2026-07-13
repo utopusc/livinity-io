@@ -54,3 +54,28 @@ test.sequential('notifications.add(notification) moves duplicate notifications t
 		'notification-2',
 	])
 })
+
+// Phase 310-02 — the new backward-compatible add() opts param. The 1-arg form
+// above is untouched and still passes; these prove the FileStore/in-app-bell path
+// is identical whether or not the second arg is passed, and that opting into
+// external dispatch never throws / never blocks the bell write.
+
+test.sequential('notifications.add(notification, {external:false}) still writes the in-app bell', async () => {
+	// external:false must behave EXACTLY like the 1-arg form (bell only, no dispatch)
+	await livinityd.instance.notifications.add('two-arg-notification', {
+		severity: 'warning',
+		external: false,
+	})
+	const bell = await livinityd.client.notifications.get.query()
+	expect(bell).toContain('two-arg-notification')
+})
+
+test.sequential('notifications.add(notification, {external:true}) is non-fatal with no channels and still writes the bell', async () => {
+	// With zero channels configured the dispatch is a fire-and-forget no-op; add()
+	// must still resolve true and the notification must still reach the bell.
+	await expect(
+		livinityd.instance.notifications.add('ext-notification', {severity: 'critical', external: true}),
+	).resolves.toBe(true)
+	const bell = await livinityd.client.notifications.get.query()
+	expect(bell).toContain('ext-notification')
+})
