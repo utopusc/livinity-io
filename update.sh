@@ -1122,9 +1122,19 @@ RELEASE_TAG=""
 if [[ "$_LIVOS_RELEASE_CHANNEL" == "beta" ]]; then
     # Beta channel: resolve the semver-MAX PUBLISHED release (prereleases
     # included, drafts filtered) from the FULL list endpoint — NOT the first
-    # entry / raw API order. `sort -V` is the POSIX-available semver-ish max for
-    # the current simple vXX.Y / vXX.Y.Z tag shapes (documented limitation for
-    # future -alpha.N suffixes — RESEARCH.md).
+    # entry / raw API order.
+    #
+    # Phase 311 CR-01 FIX: raw `sort -V` is NOT semver-prerelease-aware — it
+    # ranks "v44.2-beta.1" AFTER "v44.2" (treats -beta.1 as a LATER component),
+    # the OPPOSITE of semver precedence, so on the promotion case (a beta cut,
+    # then its final release) it would pick the OLDER beta while the UI's
+    # pickMaxReleaseTag correctly shows the final → perpetual non-actionable
+    # "update available" nag. GNU `sort -V` DOES honor a Debian "~" as sorting
+    # BEFORE the release, which is exactly semver prerelease precedence. So map
+    # the FIRST "-" (the prerelease separator) to "~" before sort, take tail -1,
+    # then map it back — making this shell selector AGREE with pickMaxReleaseTag
+    # on the same input (empirically: v44.1/v44.2-beta.1/v44.2 -> v44.2; proven
+    # by update.beta-selector.test.sh). Stable channel path below is untouched.
     _REL_JSON=$(curl -fsSL --max-time 10 \
         -H "User-Agent: LivOS-update" \
         -H "Accept: application/vnd.github+json" \
@@ -1133,11 +1143,11 @@ if [[ "$_LIVOS_RELEASE_CHANNEL" == "beta" ]]; then
         if command -v jq >/dev/null 2>&1; then
             RELEASE_TAG=$(echo "$_REL_JSON" \
                 | jq -r '[.[] | select(.draft==false) | .tag_name] | .[]' 2>/dev/null \
-                | sort -V | tail -1 || echo "")
+                | sed 's/-/~/' | sort -V | tail -1 | sed 's/~/-/' || echo "")
         else
             RELEASE_TAG=$(echo "$_REL_JSON" | grep '"tag_name"' \
                 | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' \
-                | sort -V | tail -1 || echo "")
+                | sed 's/-/~/' | sort -V | tail -1 | sed 's/~/-/' || echo "")
         fi
     fi
 else

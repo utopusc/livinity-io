@@ -56,17 +56,42 @@ const releasesCache = new Map<'stable' | 'beta', ReleaseCacheSlot>()
 // non-strict tags (e.g. "v44.1", which lacks a patch segment) via the SAME
 // `semver.valid || semver.coerce` idiom used at apps.ts:593. Tags that cannot
 // be coerced are dropped (never throws); the ORIGINAL tag string of the
-// greatest coerced version is returned (NOT the first list entry / API order),
-// or null when no tag coerces. This is the explicit anti-first-index guard
-// RESEARCH.md mandates over the raw GitHub response ordering.
+// greatest version is returned (NOT the first list entry / API order), or null
+// when no tag coerces. This is the explicit anti-first-index guard RESEARCH.md
+// mandates over the raw GitHub response ordering.
+//
+// Phase 311 CR-01 FIX: honor semver PRERELEASE precedence so a promoted final
+// release outranks its own beta (v44.2 > v44.2-beta.1), regardless of API/list
+// order. Raw `semver.coerce` STRIPS the prerelease suffix — so "v44.2-beta.1"
+// and "v44.2" both coerce to "44.2.0" and tie, and the winner then depends on
+// array order (a silent bug: the shell's `sort -V` and this selector could
+// disagree on the promotion case). We instead normalize each tag to a full
+// semver that KEEPS its prerelease (see normalizeReleaseTag) so `semver.gt`
+// applies true prerelease precedence and the result is order-independent. This
+// makes the TS selector AGREE with update.sh's (tilde-mapped) `sort -V` on the
+// same input — proven by update.beta-selector.test.sh + the cross-selector
+// cases in update.beta.unit.test.ts.
+function normalizeReleaseTag(tag: string): string | null {
+	// Already a fully-valid semver (may itself carry a -prerelease)? Trust it.
+	const direct = semver.valid(tag)
+	if (direct) return direct
+	// LivOS's patch-less shape ("v44.2" / "v44.2-beta.1"): coerce the numeric
+	// base (adds the missing patch), then re-attach any prerelease suffix that
+	// coerce discarded so PRERELEASE precedence survives the max comparison.
+	const base = semver.valid(semver.coerce(tag))
+	if (!base) return null
+	const pre = tag.match(/^v?\d+(?:\.\d+)*-([0-9A-Za-z.-]+?)(?:\+[0-9A-Za-z.-]+)?$/)
+	return pre ? semver.valid(`${base}-${pre[1]}`) : base
+}
+
 export function pickMaxReleaseTag(tags: string[]): string | null {
 	let bestTag: string | null = null
 	let bestVersion: string | null = null
 	for (const tag of tags) {
-		const valid = semver.valid(tag) || semver.valid(semver.coerce(tag))
-		if (!valid) continue
-		if (bestVersion === null || semver.gt(valid, bestVersion)) {
-			bestVersion = valid
+		const normalized = normalizeReleaseTag(tag)
+		if (!normalized) continue
+		if (bestVersion === null || semver.gt(normalized, bestVersion)) {
+			bestVersion = normalized
 			bestTag = tag
 		}
 	}
