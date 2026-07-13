@@ -2877,6 +2877,31 @@ step "Phase 313 (SMART): disk-health provisioning (sudoers.d/livos-smart + smart
 
 _set_desktop_identity   # Phase 277.1 — self-derive the desktop user (no literal bruce)
 
+# --- (a0) livos-smartctl.sh wrapper (code-review HIGH-01) — install BEFORE the grant ---
+# The livos-smart grant (a) is on this ONE root-owned binary; the wrapper validates
+# the device id + mode enum and hardcodes the smartctl argv, so no caller flag can be
+# appended (the old `/dev/*` glob hole). smart.ts invokes `sudo -n <wrapper> ...`, so
+# the wrapper must exist on day-2 boxes too. Idempotent (content-diffed), fail-tolerant.
+_SMART_WRAP_SRC="$LIVOS_DIR/scripts/install/livos-smartctl.sh"
+if [[ ! -f "$_SMART_WRAP_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _SMART_WRAP_SRC="$TEMP_DIR/scripts/install/livos-smartctl.sh"
+fi
+_SMART_WRAP_DST="/usr/local/lib/livos/livos-smartctl.sh"
+if [[ -f "$_SMART_WRAP_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_SMART_WRAP_DST" ]] || ! cmp -s "$_SMART_WRAP_SRC" "$_SMART_WRAP_DST"; then
+        if install -m 0755 -o root -g root "$_SMART_WRAP_SRC" "$_SMART_WRAP_DST"; then
+            ok "livos-smartctl.sh installed at $_SMART_WRAP_DST"
+        else
+            warn "Failed to install livos-smartctl.sh (non-fatal — SMART reads unavailable until fixed)"
+        fi
+    else
+        info "livos-smartctl.sh already current"
+    fi
+else
+    info "livos-smartctl.sh source not found — skipping (SMART reads unavailable)"
+fi
+
 # --- (a) sudoers.d/livos-smart — install + template the subject to the desktop user ---
 _SMART_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-smart"
 if [[ ! -f "$_SMART_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then

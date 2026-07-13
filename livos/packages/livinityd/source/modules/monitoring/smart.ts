@@ -22,7 +22,14 @@ import {getBlockDevices} from '../files/external-storage.js'
 // scheduler/jobs.ts:diskSeverityFor (exported pure fn, no I/O).
 // =========================================================================
 
+// The underlying binary the wrapper wraps (documented for reference).
 export const SMARTCTL_BIN = '/usr/sbin/smartctl'
+// HIGH-01: livinityd invokes smartctl ONLY through this root-owned wrapper, never
+// the raw binary. The wrapper validates the device id + a fixed mode enum and
+// builds the smartctl argv itself, so the sudoers grant carries no argument glob
+// and no caller flag can reach smartctl. Installed by deploy-livinityd.sh +
+// update.sh; granted NOPASSWD via sudoers.d/livos-smart.
+export const SMARTCTL_WRAPPER = '/usr/local/lib/livos/livos-smartctl.sh'
 
 export type SmartHealthStatus = 'healthy' | 'failing' | 'unavailable'
 export type SmartSeverity = 'warning' | 'critical'
@@ -288,18 +295,19 @@ interface SmartctlJson {
 	nvme_self_test_log?: {current_self_test_operation?: {value?: number}; table?: {self_test_result?: {string?: string}}[]}
 }
 
-// Invoke `sudo -n /usr/sbin/smartctl -a -j [-d sat] /dev/<id>` and classify the
-// outcome. argv ORDER IS LOAD-BEARING: it must match the Plan-03 sudoers
-// Cmnd_Alias exactly (`-a -j /dev/*` / `-a -j -d sat /dev/*`). Never emits
-// `-d nvme` — NVMe is read via auto-detect.
+// Invoke `sudo -n <wrapper> <id> read [sat]` and classify the outcome. The wrapper
+// (HIGH-01) internally runs `smartctl -a -j [-d sat] /dev/<id>` — the argv shape is
+// now hardcoded root-side, not passed as sudo args, so no flag can be appended.
+// Never requests `-d nvme` — NVMe is read via auto-detect (the wrapper's `read` mode).
 async function readSmart(
 	id: string,
 	dPassthrough?: 'sat',
 ): Promise<{json: SmartctlJson | null; sudoDenied: boolean; toolError: boolean}> {
-	// Shape guard BEFORE any argv construction (T-313-01).
+	// Shape guard BEFORE any argv construction (T-313-01). The wrapper re-validates
+	// the same regex root-side (defense-in-depth), but we never rely on that alone.
 	if (!DEVICE_ID_RE.test(id)) throw new Error('[invalid-device-id]')
 
-	const args = ['-n', SMARTCTL_BIN, '-a', '-j', ...(dPassthrough ? ['-d', dPassthrough] : []), `/dev/${id}`]
+	const args = ['-n', SMARTCTL_WRAPPER, id, 'read', ...(dPassthrough ? [dPassthrough] : [])]
 
 	let stdout = ''
 	let stderr = ''
@@ -501,8 +509,10 @@ export async function runSelfTest(deviceId: string, mode: 'short' | 'long'): Pro
 	const drive = await getDrive(deviceId).catch(() => null)
 	const needsSat = drive?.detectionMethod === 'sat'
 
-	// argv ORDER IS LOAD-BEARING (matches Plan-03 sudoers `-t short|long [-d sat]`).
-	const args = ['-n', SMARTCTL_BIN, '-t', mode, ...(needsSat ? ['-d', 'sat'] : []), `/dev/${deviceId}`]
+	// Wrapper mode enum (HIGH-01): the wrapper maps this to `smartctl -t short|long
+	// [-d sat] /dev/<id>` root-side. No smartctl flag is passed through sudo.
+	const wrapperMode = mode === 'short' ? 'selftest-short' : 'selftest-long'
+	const args = ['-n', SMARTCTL_WRAPPER, deviceId, wrapperMode, ...(needsSat ? ['sat'] : [])]
 
 	let stdout = ''
 	let stderr = ''

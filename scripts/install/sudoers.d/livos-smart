@@ -1,37 +1,27 @@
-# Phase 313 (SMART-01..04) — sudoers grant for smartctl(8) disk-health reads.
+# Phase 313 (SMART-01..04) — sudoers grant for the smartctl(8) disk-health wrapper.
 #
 # Grants the desktop/livinityd user (templated from `bruce` to the resolved
-# desktop user at install/update time) permission to run ONLY the exact read
-# and self-test-trigger command shapes livinityd's smart.ts constructs. Drop
-# at /etc/sudoers.d/livos-smart (mode 0440, root:root).
+# desktop user at install/update time) permission to run ONLY the root-owned
+# smartctl wrapper. Drop at /etc/sudoers.d/livos-smart (mode 0440, root:root).
 #
-# Security model (matches sudoers.d/livinityd + livos-native):
-# - NO blanket `/usr/sbin/smartctl`-wildcard grant. A bare argument wildcard
-#   would expose firmware-affecting operations (SMART enable/disable toggles,
-#   attribute-autosave writes, feature-set changes, self-test-log aborts, etc.)
-#   to a compromised daemon. Only the read shapes (-a -j, optionally -d sat)
-#   and the self-test-trigger shapes (-t short|long, optionally -d sat) below
-#   are permitted; every other flag or subcommand is rejected by sudoers.
-# - The `/dev/*` glob constrains only the final argument position. smart.ts
-#   ALSO validates every device id against DEVICE_ID_RE before the argv is
-#   built, so a crafted id can never reach this boundary (defense-in-depth).
+# Security model (code-review HIGH-01 fix — matches sudoers.d/livos-desktop-password):
+# - The grant is on ONE explicit binary path with NO glob and NO argument wildcard.
+#   The wrapper (/usr/local/lib/livos/livos-smartctl.sh, root-owned 0755) validates
+#   its device id against DEVICE_ID_RE + a fixed mode enum {read|selftest-short|
+#   selftest-long}, then builds the exact smartctl argv itself. No caller-supplied
+#   flag can reach smartctl, so the previous `/dev/*` trailing-wildcard hole — where
+#   sudoers' `*` (which does not stop at whitespace) let extra flags like `-s off`
+#   or `-t vendor,0x40` be appended after the device path — is closed.
+# - Because the desktop user cannot rewrite the root-owned wrapper, it cannot hijack
+#   the grant. To change a permitted operation, EDIT THE WRAPPER — do NOT broaden
+#   this grant back to a raw `smartctl` path or add a glob.
 #
-# To add a permitted operation: extend the LIVINITYD_SMARTCTL Cmnd_Alias — do
-# NOT broaden the runas spec to ALL. (Mirrors the LIVINITYD_FAIL2BAN "exact
-# subcommand shapes only, never a bare grant" precedent in sudoers.d/livinityd.)
+# NVMe is read via smartctl auto-detect (the wrapper's `read` mode emits `-a -j`,
+# NOT a `-d nvme` passthrough), so no NVMe-specific shape is needed here.
 #
-# argv contract source: 313-01-SUMMARY.md (order is load-bearing). NVMe is read
-# via auto-detect (-a -j /dev/nvmeXnY), NOT a `-d nvme` passthrough — smart.ts
-# never emits `-d nvme`, so this grant intentionally carries no such shape.
-#
-# Deploy (fresh): deploy-livinityd.sh; day-2: update.sh (content-diff + visudo
-# validate-or-remove). Both sed-template the `bruce` subject to the resolved
-# desktop user.
-Cmnd_Alias LIVINITYD_SMARTCTL = /usr/sbin/smartctl -a -j /dev/*, \
-  /usr/sbin/smartctl -a -j -d sat /dev/*, \
-  /usr/sbin/smartctl -t short /dev/*, \
-  /usr/sbin/smartctl -t short -d sat /dev/*, \
-  /usr/sbin/smartctl -t long /dev/*, \
-  /usr/sbin/smartctl -t long -d sat /dev/*
+# Deploy (fresh): deploy-livinityd.sh installs the wrapper THEN this fragment;
+# day-2: update.sh Step 7.10b (content-diff + visudo validate-or-remove). Both
+# sed-template the `bruce` subject to the resolved desktop user.
+Cmnd_Alias LIVINITYD_SMARTCTL = /usr/local/lib/livos/livos-smartctl.sh
 
 bruce ALL=(root) NOPASSWD: LIVINITYD_SMARTCTL

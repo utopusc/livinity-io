@@ -2943,6 +2943,27 @@ _dld_template_app_units() {
         info "sudoers.d/livos-native source not found — skipping (native apt installs unavailable)"
     fi
 
+    # 2a-smart. Phase 313 (SMART, HIGH-01) — root-owned smartctl wrapper. The
+    # livos-smart sudoers grant (2b below) is on THIS binary only; the wrapper
+    # validates the device id + mode enum and builds the smartctl argv itself, so
+    # no caller flag can reach smartctl. Install it BEFORE the grant so the grant
+    # target exists. Idempotent (content-diffed), mirrors set-desktop-password.sh.
+    local _smartwrap_src="${_DLD_STAGE_DIR}/scripts/install/livos-smartctl.sh"
+    [[ -f "$_smartwrap_src" ]] || _smartwrap_src="${_DLD_LIVOS_DIR}/scripts/install/livos-smartctl.sh"
+    local _smartwrap_dst="/usr/local/lib/livos/livos-smartctl.sh"
+    if [[ -f "$_smartwrap_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_smartwrap_dst" ]] || ! cmp -s "$_smartwrap_src" "$_smartwrap_dst"; then
+            if install -m 0755 -o root -g root "$_smartwrap_src" "$_smartwrap_dst"; then
+                ok "livos-smartctl.sh installed at $_smartwrap_dst"
+            else
+                warn "Failed to install livos-smartctl.sh (non-fatal; SMART reads unavailable until fixed)"
+            fi
+        fi
+    else
+        info "livos-smartctl.sh source not found — skipping (SMART reads unavailable)"
+    fi
+
     # 2b. Phase 313 (SMART) — sudoers.d/livos-smart (smartctl disk-health grant) —
     # install + template. Byte-for-byte parallel to the livos-native block above,
     # retargeted at livos-smart. Runs on EVERY deploy (idempotent, content-diffed).
