@@ -12,6 +12,8 @@ import {listGitStacks, updateGitStackSyncSha, controlStack} from '../docker/stac
 import {syncRepo, copyComposeToStackDir} from '../docker/git-deploy.js'
 import {aiResourceWatchHandler} from '../docker/ai-resource-watch.js'
 import {getSystemDiskUsage} from '../system/system.js'
+import {listDrives, runSelfTest} from '../monitoring/smart.js'
+import {insertSmartAlert, findRecentSmartAlert} from '../monitoring/smart-alerts.js'
 import {volumeBackupHandler} from './backup.js'
 import type {BuiltInJobHandler, JobType} from './types.js'
 
@@ -302,6 +304,124 @@ export const diskCriticalWatchHandler: BuiltInJobHandler = async (job, ctx) => {
 }
 
 // =========================================================================
+// smart-health-scan — Phase 313 SMART-02/03.
+// Daily per-drive SMART evaluation. Reaches the daemon EXCLUSIVELY through
+// ctx.livinityd (same seam as disk-critical-watch). Failing/unavailable/
+// permission-denied conditions route ONLY through the Phase-310 bridge
+// (notifications.add/clear) — never a second dispatch path. A deduped audit
+// row is persisted per NEW condition (findRecentSmartAlert 6h window) so a
+// daily scan does not spam smart_alerts. NEVER throws out of the tick.
+// =========================================================================
+export const smartHealthScanHandler: BuiltInJobHandler = async (job, ctx) => {
+	if (!ctx.livinityd) {
+		ctx.logger.log(`[scheduler/smart-health-scan] no daemon reference — skipping job ${job.name}`)
+		return {status: 'skipped', error: 'daemon reference unavailable'}
+	}
+	try {
+		ctx.logger.log(`[scheduler/smart-health-scan] running job ${job.name}`)
+		const drives = await listDrives()
+		let failing = 0
+		let anyPermissionDenied = false
+
+		for (const d of drives) {
+			const failId = `smart-failing:${d.deviceId}`
+			const unavailId = `smart-unavailable:${d.deviceId}`
+
+			if (d.healthStatus === 'failing') {
+				failing++
+				// Fire-and-forget: a dispatch failure must not fail the tick.
+				await ctx.livinityd.notifications
+					.add(failId, {severity: d.severity ?? 'warning', external: true})
+					.catch(() => {})
+				await ctx.livinityd.notifications.clear(unavailId).catch(() => {})
+				// Dedupe persist: one row per NEW failing condition (6h window).
+				const kind = d.detectionMethod === 'nvme' ? 'nvme-critical' : 'sata-attribute'
+				if (!(await findRecentSmartAlert(d.deviceId, kind, 360))) {
+					await insertSmartAlert({
+						deviceId: d.deviceId,
+						severity: d.severity ?? 'warning',
+						kind,
+						message: d.reasons.join('; ') || 'SMART failure',
+						payload: {reasons: d.reasons},
+					}).catch(() => null)
+				}
+			} else if (d.healthStatus === 'unavailable' && d.detectionMethod === 'permission-denied') {
+				// Install/config defect on an INTERNAL drive — surface distinctly so a
+				// broken sudoers grant is never a silent no-op (RESEARCH Pitfall 1 / T-313-14).
+				anyPermissionDenied = true
+				await ctx.livinityd.notifications
+					.add('smart-permission-denied', {severity: 'warning', external: true})
+					.catch(() => {})
+				await ctx.livinityd.notifications.clear(failId).catch(() => {})
+				await ctx.livinityd.notifications.clear(unavailId).catch(() => {})
+			} else if (d.healthStatus === 'unavailable') {
+				// Genuine enclosure/unsupported case (USB SAT swallowed) — honest, non-red.
+				await ctx.livinityd.notifications
+					.add(unavailId, {severity: 'warning', external: true})
+					.catch(() => {})
+				await ctx.livinityd.notifications.clear(failId).catch(() => {})
+				if (!(await findRecentSmartAlert(d.deviceId, 'unavailable', 360))) {
+					await insertSmartAlert({
+						deviceId: d.deviceId,
+						severity: 'warning',
+						kind: 'unavailable',
+						message: 'SMART unavailable through this enclosure',
+					}).catch(() => null)
+				}
+			} else {
+				// healthy — clear both per-drive alerts on recovery.
+				await ctx.livinityd.notifications.clear(failId).catch(() => {})
+				await ctx.livinityd.notifications.clear(unavailId).catch(() => {})
+			}
+		}
+
+		// If NO internal drive is permission-denied this scan, clear the system-level
+		// notice so a fixed sudoers grant un-sticks the alert (WARNING-4 / T-313-14).
+		if (!anyPermissionDenied) {
+			await ctx.livinityd.notifications.clear('smart-permission-denied').catch(() => {})
+		}
+
+		return {status: 'success', output: {scanned: drives.length, failing}}
+	} catch (err) {
+		// NOTE: 'failure', NOT 'error' — JobRunResult.status has no 'error' member.
+		return {status: 'failure', error: err instanceof Error ? err.message : String(err)}
+	}
+}
+
+// =========================================================================
+// smart-self-test-short — Phase 313 SMART-02.
+// Weekly short self-test trigger. DoS-guarded: skips any unreadable drive and
+// any drive already mid-test (selfTestInProgress) — a self-test is I/O heavy
+// and must never be re-triggered on top of a running one (T-313-04). The
+// smartctl -t short call is firmware-resident and returns immediately; the
+// RESULT is read back by the next smart-health-scan, not here. NEVER throws.
+// =========================================================================
+export const smartSelfTestShortHandler: BuiltInJobHandler = async (job, ctx) => {
+	if (!ctx.livinityd) {
+		ctx.logger.log(`[scheduler/smart-self-test-short] no daemon reference — skipping job ${job.name}`)
+		return {status: 'skipped', error: 'daemon reference unavailable'}
+	}
+	try {
+		ctx.logger.log(`[scheduler/smart-self-test-short] running job ${job.name}`)
+		const drives = await listDrives()
+		let triggered = 0
+		for (const d of drives) {
+			// Can't self-test an unreadable drive (unsupported / permission-denied).
+			if (!['ata', 'nvme', 'sat'].includes(d.detectionMethod)) continue
+			// NOT-WHILE-RUNNING guard (DoS mitigation).
+			if (d.selfTestInProgress) continue
+			// Fire-and-forget: the test runs asynchronously in drive firmware.
+			await runSelfTest(d.deviceId, 'short').catch(() => {})
+			triggered++
+		}
+		return {status: 'success', output: {triggered}}
+	} catch (err) {
+		// NOTE: 'failure', NOT 'error' — JobRunResult.status has no 'error' member.
+		return {status: 'failure', error: err instanceof Error ? err.message : String(err)}
+	}
+}
+
+// =========================================================================
 // Registry: jobType -> handler mapping.
 // volume-backup wired by Plan 20-02 (alpine-tar streaming to S3/SFTP/local).
 // ai-resource-watch wired by Plan 23-02 (Phase 23 AID-02 proactive alerts).
@@ -314,6 +434,8 @@ export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'volume-backup': volumeBackupHandler,
 	'ai-resource-watch': aiResourceWatchHandler,
 	'disk-critical-watch': diskCriticalWatchHandler,
+	'smart-health-scan': smartHealthScanHandler,
+	'smart-self-test-short': smartSelfTestShortHandler,
 }
 
 // =========================================================================
@@ -344,4 +466,12 @@ export const DEFAULT_JOB_DEFINITIONS: Array<{
 	// byte-threshold check is free (no LLM spend, unlike ai-resource-watch), and
 	// low disk is a box-operator concern that must fire even with no Settings open.
 	{name: 'disk-critical-watch', schedule: '*/15 * * * *', type: 'disk-critical-watch', enabled: true},
+	// Phase 313 SMART-02 — daily disk-health scan. enabled=true: a smartctl read is
+	// a few seconds of I/O per drive, no LLM spend, and a failing drive must alert
+	// even with no Settings tab open (same rationale as disk-critical-watch).
+	{name: 'smart-health-scan', schedule: '0 5 * * *', type: 'smart-health-scan', enabled: true},
+	// Phase 313 SMART-02 — weekly short self-test. enabled=true: a short test is
+	// ~2min and does not saturate the drive; the handler skips any drive already
+	// mid-test (not-while-running DoS guard). Long tests stay admin-triggered only.
+	{name: 'smart-self-test-short', schedule: '0 6 * * 0', type: 'smart-self-test-short', enabled: true},
 ]

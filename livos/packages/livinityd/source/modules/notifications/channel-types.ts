@@ -63,6 +63,10 @@ const DESCRIPTIONS: Record<string, string> = {
 	'backups-engine-unavailable': 'Backup engine is unavailable — no backups can run',
 	'backups-not-configured': 'No backup destination is configured',
 	'update-failed': 'A system update failed',
+	// Phase 313 SMART-02/03 — floorKey collapses smart-failing:<id> to the base key.
+	'smart-failing': 'A drive is showing pre-failure SMART indicators',
+	'smart-unavailable': 'SMART could not be read for a drive (enclosure limitation)',
+	'smart-permission-denied': 'SMART monitoring is not configured correctly — drive health cannot be read',
 }
 
 // MED-04: `disk-critical` fires at two tiers (jobs.ts diskSeverityFor): warning

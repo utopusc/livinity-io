@@ -11,6 +11,8 @@ export type JobType =
 	| 'volume-backup'
 	| 'ai-resource-watch' // Phase 23 AID-02 — proactive Kimi-generated resource alerts
 	| 'disk-critical-watch' // Phase 310 ALERT-02 — server-side low-disk detection → external alert
+	| 'smart-health-scan' // Phase 313 SMART-02 — daily per-drive SMART scan → external alert
+	| 'smart-self-test-short' // Phase 313 SMART-02 — weekly short self-test (DoS-guarded)
 
 export type JobRunStatus = 'success' | 'failure' | 'skipped' | 'running'
 
