@@ -214,8 +214,10 @@ function isTimeout(err: unknown): boolean {
  * The real HTTP transport. Copies the ai-diagnostics bracketed-error convention
  * with alert-specific tags. NEVER interpolates chatId/text/url/token into an
  * error string or a log line, and NEVER interpolates alert text into a header.
+ *
+ * Exported so the SSRF redirect-refusal behaviour (HIGH-01) is unit-testable.
  */
-const defaultTransport: AlertTransport = {
+export const defaultTransport: AlertTransport = {
 	async sendLiv(livId, chatId, text) {
 		const url = `${getNexusApiUrl()}/api/channels/${livId}/send`
 		let response: Response
@@ -245,6 +247,13 @@ const defaultTransport: AlertTransport = {
 		try {
 			response = await fetch(url, {
 				method: 'POST',
+				// HIGH-01: the SSRF guard validates only the INITIAL url. `fetch`
+				// defaults to redirect:'follow', which would transparently chase a
+				// 3xx Location to an unvetted host (169.254.169.254 / RFC1918 / …),
+				// fully defeating the guard. Webhook receivers legitimately never
+				// need a redirect, so we refuse to follow and treat any 3xx as a
+				// delivery failure (see the 3xx check below).
+				redirect: 'manual',
 				headers: {'Content-Type': 'application/json'},
 				// Carry BOTH `text` (Slack/generic receivers) and `content` (Discord).
 				body: JSON.stringify({
@@ -260,6 +269,11 @@ const defaultTransport: AlertTransport = {
 			if (isTimeout(err)) throw new Error('[alert-timeout] webhook delivery exceeded 15s')
 			throw new Error('[alert-unavailable] webhook delivery could not connect')
 		}
+		if (isRedirect(response)) {
+			// Never follow — a 3xx here is an SSRF-guard bypass attempt or a
+			// misconfigured receiver. Refuse rather than chase the Location.
+			throw new Error('[alert-error] webhook delivery redirected — refusing to follow (SSRF guard)')
+		}
 		if (response.status >= 500 || !response.ok) {
 			// Generic — never leak the url.
 			throw new Error(`[alert-error] webhook delivery failed (${response.status})`)
@@ -272,6 +286,9 @@ const defaultTransport: AlertTransport = {
 		try {
 			response = await fetch(url, {
 				method: 'POST',
+				// HIGH-01: same rationale as sendWebhook — never let `fetch` follow a
+				// redirect to an unvetted host past the one-shot SSRF guard.
+				redirect: 'manual',
 				// Metadata headers are FIXED server strings — alert text is NEVER
 				// interpolated into a header (header-injection guard).
 				headers: {
@@ -286,9 +303,23 @@ const defaultTransport: AlertTransport = {
 			if (isTimeout(err)) throw new Error('[alert-timeout] ntfy delivery exceeded 15s')
 			throw new Error('[alert-unavailable] ntfy delivery could not connect')
 		}
+		if (isRedirect(response)) {
+			throw new Error('[alert-error] ntfy delivery redirected — refusing to follow (SSRF guard)')
+		}
 		if (response.status >= 500 || !response.ok) {
 			// Generic — never leak the url/token.
 			throw new Error(`[alert-error] ntfy delivery failed (${response.status})`)
 		}
 	},
+}
+
+// HIGH-01 helper: with redirect:'manual', a redirect surfaces as either an
+// explicit 3xx status (Node ≥22 undici) or an opaque-redirect filtered response
+// (status 0, type 'opaqueredirect', per the fetch spec). Treat BOTH as a redirect
+// so the refusal is robust across Node/undici versions.
+function isRedirect(response: Response): boolean {
+	return (
+		response.type === 'opaqueredirect' ||
+		(response.status >= 300 && response.status < 400)
+	)
 }
