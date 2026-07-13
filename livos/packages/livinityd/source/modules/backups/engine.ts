@@ -96,6 +96,17 @@ async function sha256File(filePath: string): Promise<string> {
  */
 export async function installEngine(logger: EngineLogger): Promise<boolean> {
 	if (process.platform !== 'linux') return false
+
+	// livinityd runs as an unprivileged service user (Phase 192) and cannot
+	// write /usr/local/bin — attempting the install would download ~20MB and
+	// then EACCES on every retry. Skip cleanly and defer to the root install
+	// paths (deploy-livinityd.sh on fresh installs, update.sh Step 1c on
+	// existing boxes — both reached by the normal "Update LivOS" flow).
+	if (typeof process.getuid === 'function' && process.getuid() !== 0) {
+		logger.log('[engine] kopia missing and livinityd is not root — deferring install to the next LivOS update (update.sh runs as root)')
+		return false
+	}
+
 	const arch = process.arch === 'arm64' ? 'arm64' : process.arch === 'x64' ? 'x64' : undefined
 	if (!arch) {
 		logger.error(`[engine] unsupported arch ${process.arch} — cannot self-install kopia`)

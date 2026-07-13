@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-import {afterEach, beforeEach, expect, test, vi} from 'vitest'
+import {afterAll, afterEach, beforeEach, expect, test, vi} from 'vitest'
 
 // Record execa invocations; let tests script each command's behaviour.
 const calls: string[][] = []
@@ -22,12 +22,23 @@ const {detectEngine, installEngine, isVersionAtLeast, parseKopiaVersion, KOPIA_M
 
 const logger = {log: () => {}, error: () => {}}
 
+// process.getuid is absent on Windows (win32), so spyOn can't wrap it. Install
+// a stub descriptor once and let each test set the return value directly.
+const originalGetuid = Object.getOwnPropertyDescriptor(process, 'getuid')
+let getuidValue = 0
+Object.defineProperty(process, 'getuid', {configurable: true, value: () => getuidValue})
+
 beforeEach(() => {
 	calls.length = 0
 	execaImpl = null
+	getuidValue = 0 // default: root, so install-path tests exercise the download
 })
 afterEach(() => {
 	vi.restoreAllMocks()
+})
+afterAll(() => {
+	if (originalGetuid) Object.defineProperty(process, 'getuid', originalGetuid)
+	else delete (process as {getuid?: unknown}).getuid
 })
 
 // ── parseKopiaVersion ────────────────────────────────────────────────────
@@ -89,6 +100,15 @@ test('installEngine refuses on non-linux platforms', async () => {
 	expect(await installEngine(logger)).toBe(false)
 	expect(calls.length).toBe(0)
 	platform.mockRestore()
+})
+
+test('installEngine defers (no download) when livinityd is not root', async () => {
+	vi.spyOn(process, 'platform', 'get').mockReturnValue('linux' as NodeJS.Platform)
+	vi.spyOn(process, 'arch', 'get').mockReturnValue('x64' as NodeJS.Architecture)
+	getuidValue = 1000
+	expect(await installEngine(logger)).toBe(false)
+	// Critically: no curl — a non-root box must NOT download 20MB hourly.
+	expect(calls.length).toBe(0)
 })
 
 test('installEngine refuses on unsupported arch', async () => {

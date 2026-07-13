@@ -1150,6 +1150,45 @@ else
     info "apt-get not available — skipping streaming subsystem install"
 fi
 
+# ── Step 1c: Backups-v2 P0 — kopia backup engine ──────────
+# The backups module shells out to `kopia`. umbrelOS ships it inside their OS
+# image; LivOS runs livinityd on stock Ubuntu, so nothing ever installed it —
+# backups have been silently dead on every existing box. livinityd runs as the
+# unprivileged service user and CANNOT write /usr/local/bin, so its boot
+# self-heal EACCESes; update.sh runs as ROOT (LIVINITYD_UPDATE sudoers grant)
+# and is the durable install path for existing boxes. Pinned release + sha256
+# (no third-party apt source). Warn-not-fail: a download hiccup must never
+# abort a deploy — the RED Backups card + boot retry cover it.
+_kopia_version="0.23.1"
+case "$(uname -m)" in
+    x86_64)  _kopia_arch="x64";   _kopia_sha256="416d0f84a3dbb321a8b2d8f0997b1a0a6e915babe79ee76fa6e4d2bd1e1c5178" ;;
+    aarch64) _kopia_arch="arm64"; _kopia_sha256="a4ffbc019e0b0f932e2632054e73ec521dc1e80172a00095369c53ecf4e5a6cb" ;;
+    *)       _kopia_arch="" ;;
+esac
+_kopia_current="$(kopia --version 2>/dev/null | awk '{print $1}' || true)"
+if [[ -z "$_kopia_arch" ]]; then
+    warn "kopia: unsupported arch $(uname -m) — backup engine not installed"
+elif [[ -n "$_kopia_current" ]] && dpkg --compare-versions "$_kopia_current" ge "$_kopia_version" 2>/dev/null; then
+    # >= not ==: never downgrade a newer kopia (repo-format lockout risk).
+    ok "kopia $_kopia_current already installed (>= $_kopia_version)"
+else
+    info "Installing kopia $_kopia_version (backup engine)..."
+    # mktemp shielded inside the && chain so a failure here can't abort the
+    # deploy under set -e; every downstream step is warn-not-fail too.
+    if _kopia_tmp="$(mktemp -d 2>/dev/null)" \
+        && curl -fsSL --retry 3 -o "$_kopia_tmp/kopia.tgz" \
+            "https://github.com/kopia/kopia/releases/download/v${_kopia_version}/kopia-${_kopia_version}-linux-${_kopia_arch}.tar.gz" \
+        && echo "${_kopia_sha256}  $_kopia_tmp/kopia.tgz" | sha256sum -c --quiet - \
+        && tar -xzf "$_kopia_tmp/kopia.tgz" -C "$_kopia_tmp" \
+        && install -m 0755 "$_kopia_tmp"/kopia-*/kopia /usr/local/bin/kopia; then
+        ok "kopia installed: $(kopia --version 2>/dev/null | head -1)"
+    else
+        warn "kopia install FAILED — backups stay disabled until the next attempt"
+    fi
+    { [[ -n "${_kopia_tmp:-}" ]] && rm -rf "$_kopia_tmp"; } || true
+fi
+mkdir -p /kopia/config /kopia/cache 2>/dev/null || true
+
 # ── Step 2: Update LivOS source files ─────────────────────
 step "Updating LivOS source files"
 
