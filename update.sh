@@ -1181,8 +1181,24 @@ livos_verify_fetched_ref() {
     local maintainer_key="$TEMP_DIR/scripts/install/maintainer.gpg"
     local expected="" expected_source="" had_pin_material=0
 
+    # ── Phase 311-04 (UPDSAFE-02): WARN-ONLY signature verification ─────────────
+    # This function NEVER calls fail()/exit on a pin or signature mismatch. Every
+    # former "Refusing to deploy" abort is now warn() + telemetry vars + return 0.
+    # Shipping scripts/install/EXPECTED_RELEASE + maintainer.gpg therefore CANNOT
+    # activate fail-closed enforcement — that flip is Phase 312 (a LATER release),
+    # gated on one full release cycle of the warn-only telemetry emitted below.
+    # A future maintainer MUST NOT re-introduce a fail()/exit path here; the
+    # fail-closed change belongs in Phase 312's own update.sh edit, not this one.
+    # These four vars are module-level (no `local`) so phase33_finalize's EXIT-trap
+    # JSON heredoc can read them; init empty so a run that skips a branch is clean.
+    _LIVOS_SIGVERIFY_STATUS=""
+    _LIVOS_SIGVERIFY_SOURCE=""
+    _LIVOS_SIGVERIFY_EXPECTED=""
+    _LIVOS_SIGVERIFY_ACTUAL=""
+
     if [[ -z "$to_sha" ]]; then
         warn "update.sh: could not resolve fetched HEAD SHA — cannot verify pin (proceeding unverified)"
+        _LIVOS_SIGVERIFY_STATUS="no-head-sha"
         return 0
     fi
 
@@ -1218,31 +1234,44 @@ livos_verify_fetched_ref() {
             if GNUPGHOME="$gnupg_tmp" gpg --quiet --import "$maintainer_key" 2>/dev/null \
                && GNUPGHOME="$gnupg_tmp" git -C "$TEMP_DIR" -c gpg.program=gpg verify-tag "$head_tag" 2>/dev/null; then
                 ok "update.sh: signed tag ${head_tag} verified against shipped maintainer key"
+                _LIVOS_SIGVERIFY_STATUS="ok"; _LIVOS_SIGVERIFY_SOURCE="maintainer.gpg"; _LIVOS_SIGVERIFY_EXPECTED="${head_tag}"; _LIVOS_SIGVERIFY_ACTUAL="${to_sha}"
                 rm -rf "$gnupg_tmp" 2>/dev/null || true
                 return 0
             fi
             rm -rf "$gnupg_tmp" 2>/dev/null || true
-            fail "Refusing to deploy: signed-tag verification of ${head_tag} (HEAD ${to_sha}) failed against the shipped maintainer key"
+            warn "SIGNATURE-WARN (non-blocking, Phase 311 warn-only): signed-tag verification of ${head_tag} (HEAD ${to_sha}) failed against the shipped maintainer key"
+            _LIVOS_SIGVERIFY_STATUS="gpg-fail"; _LIVOS_SIGVERIFY_SOURCE="maintainer.gpg"; _LIVOS_SIGVERIFY_EXPECTED="${head_tag}"; _LIVOS_SIGVERIFY_ACTUAL="${to_sha}"
+            return 0
         else
-            fail "Refusing to deploy: a maintainer key is shipped but the fetched HEAD ${to_sha} is not an annotated tag (cannot verify-tag)"
+            warn "SIGNATURE-WARN (non-blocking, Phase 311 warn-only): a maintainer key is shipped but the fetched HEAD ${to_sha} is not an annotated tag (cannot verify-tag)"
+            _LIVOS_SIGVERIFY_STATUS="not-a-tag"; _LIVOS_SIGVERIFY_SOURCE="maintainer.gpg"; _LIVOS_SIGVERIFY_EXPECTED=""; _LIVOS_SIGVERIFY_ACTUAL="${to_sha}"
+            return 0
         fi
     fi
 
     if [[ -n "$expected" ]]; then
         if [[ "$to_sha" != "$expected" ]]; then
-            fail "Refusing to deploy: fetched HEAD ${to_sha} does not match the expected pinned ref ${expected} (source: ${expected_source})"
+            warn "SIGNATURE-WARN (non-blocking, Phase 311 warn-only): fetched HEAD ${to_sha} does not match the expected pinned ref ${expected} (source: ${expected_source})"
+            _LIVOS_SIGVERIFY_STATUS="mismatch"; _LIVOS_SIGVERIFY_SOURCE="${expected_source}"; _LIVOS_SIGVERIFY_EXPECTED="${expected}"; _LIVOS_SIGVERIFY_ACTUAL="${to_sha}"
+            return 0
         fi
         ok "update.sh: fetched HEAD ${to_sha} matches the expected pinned ref (source: ${expected_source})"
+        _LIVOS_SIGVERIFY_STATUS="ok"; _LIVOS_SIGVERIFY_SOURCE="${expected_source}"; _LIVOS_SIGVERIFY_EXPECTED="${expected}"; _LIVOS_SIGVERIFY_ACTUAL="${to_sha}"
         return 0
     fi
 
     if (( had_pin_material == 0 )); then
         warn "update.sh: no commit pin / signature available — deploying unverified HEAD ${to_sha} (set LIVOS_EXPECTED_SHA or ship scripts/install/EXPECTED_RELEASE to enforce)"
+        _LIVOS_SIGVERIFY_STATUS="no-pin-material"; _LIVOS_SIGVERIFY_SOURCE=""; _LIVOS_SIGVERIFY_EXPECTED=""; _LIVOS_SIGVERIFY_ACTUAL="${to_sha}"
         return 0
     fi
 
-    # Pin material was present but did not yield an expected SHA (e.g. unresolvable tag)
-    fail "Refusing to deploy: pin material present but no expected SHA could be resolved (HEAD ${to_sha})"
+    # Pin material was present but did not yield an expected SHA (e.g. unresolvable
+    # tag, or the pre-tag sentinel pin that has not yet been bumped to a real tag).
+    # WARN-ONLY: record telemetry and proceed — never abort (Phase 312 owns the flip).
+    warn "SIGNATURE-WARN (non-blocking, Phase 311 warn-only): pin material present but no expected SHA could be resolved (HEAD ${to_sha})"
+    _LIVOS_SIGVERIFY_STATUS="unresolvable"; _LIVOS_SIGVERIFY_SOURCE="${expected_source}"; _LIVOS_SIGVERIFY_EXPECTED="${expected}"; _LIVOS_SIGVERIFY_ACTUAL="${to_sha}"
+    return 0
 }
 livos_verify_fetched_ref
 
