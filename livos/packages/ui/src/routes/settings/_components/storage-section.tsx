@@ -7,6 +7,8 @@ import {SettingsPageHeader} from '@/components/settings-page-header'
 import AddNetworkShareDialog from '@/features/files/components/dialogs/add-network-share-dialog'
 import {useExternalStorage} from '@/features/files/hooks/use-external-storage'
 import {useNetworkStorage} from '@/features/files/hooks/use-network-storage'
+import {useSmartDrives} from '@/features/files/hooks/use-smart-drives'
+import {useCurrentUser} from '@/hooks/use-current-user'
 import {useSystemDiskForUi} from '@/hooks/use-disk'
 import {
 	AlertDialog,
@@ -23,6 +25,7 @@ import {Input} from '@/shadcn-components/ui/input'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/shadcn-components/ui/select'
 import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
+import {t} from '@/utils/i18n'
 import {maybePrettyBytes} from '@/utils/pretty-bytes'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -56,6 +59,8 @@ export function StorageDrivesSection() {
 			/>
 
 			<OverallDiskUsageCard disk={disk} />
+
+			<DriveHealthBlock />
 
 			<UsbDrivesBlock />
 
@@ -106,6 +111,166 @@ function OverallDiskUsageCard({disk}: {disk: ReturnType<typeof useSystemDiskForU
 					}
 				/>
 			</FieldCard>
+		</section>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BLOCK A0 — Drive health (SMART) — Phase 313 SMART-01 / SMART-04
+// ─────────────────────────────────────────────────────────────────────────────
+
+// The drive shape returned by monitoring.diskHealth.list (inferred from tRPC —
+// no cross-package type import needed).
+type SmartDriveUi = NonNullable<ReturnType<typeof useSmartDrives>['drives']>[number]
+
+// Map an honest SMART state → dot color + label.
+// ★ SMART-04 (no false-healthy): 'unavailable'/'permission-denied' get a MUTED
+// (--fg-faint) dot — explicitly NOT red, and never the healthy neutral — so
+// "can't read this drive through this enclosure" reads visually + textually
+// distinct from both "healthy" and "failing". It is NEVER a green/healthy badge.
+function driveHealthBadge(drive: SmartDriveUi): {dotClass: string; textClass: string; label: string} {
+	if (drive.healthStatus === 'healthy') {
+		return {
+			dotClass: 'bg-[color:var(--fg)]',
+			textClass: 'text-[color:var(--fg-mute)]',
+			label: t('storage.drive-health.status.healthy'),
+		}
+	}
+	if (drive.healthStatus === 'failing') {
+		if (drive.severity === 'critical') {
+			return {
+				dotClass: 'bg-[color:var(--red,#dc2626)]',
+				textClass: 'text-[color:var(--red,#dc2626)]',
+				label: t('storage.drive-health.status.failing-critical'),
+			}
+		}
+		return {
+			dotClass: 'bg-[color:#d97706]',
+			textClass: 'text-[color:#d97706]',
+			label: t('storage.drive-health.status.failing-warning'),
+		}
+	}
+	// healthStatus === 'unavailable' — muted, honest, never green, never omitted.
+	return {
+		dotClass: 'bg-[color:var(--fg-faint)]',
+		textClass: 'text-[color:var(--fg-faint)]',
+		label:
+			drive.detectionMethod === 'permission-denied'
+				? t('storage.drive-health.permission-denied')
+				: t('storage.drive-health.unavailable-enclosure'),
+	}
+}
+
+// Temperature is DISPLAY-ONLY (never a failing/alert state) — just colored.
+function driveTempClass(status: SmartDriveUi['temperatureStatus']): string {
+	if (status === 'hot') return 'text-[color:var(--red,#dc2626)]'
+	if (status === 'warm') return 'text-[color:#d97706]'
+	return 'text-[color:var(--fg-faint)]'
+}
+
+function driveAttrClass(status: SmartDriveUi['attributes'][number]['status']): string {
+	if (status === 'critical') return 'text-[color:var(--red,#dc2626)] border-[color:var(--red,#dc2626)]'
+	if (status === 'warning') return 'text-[color:#d97706] border-[color:#d97706]'
+	return 'text-[color:var(--fg-faint)] border-line'
+}
+
+function DriveHealthBlock() {
+	const {drives, isLoading, runSelfTest, isSelfTesting} = useSmartDrives()
+	const {isAdmin} = useCurrentUser()
+
+	return (
+		<section className='flex flex-col gap-3'>
+			<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--fg-faint)]'>
+				{t('storage.drive-health.title')}
+			</span>
+
+			{isLoading ? (
+				<FieldCard>
+					<div className='flex items-center justify-center gap-2 py-8 text-[color:var(--fg-faint)]'>
+						<Loader2 className='size-4 animate-spin' />
+						<span className='text-[13px]'>{t('storage.drive-health.scanning')}</span>
+					</div>
+				</FieldCard>
+			) : (drives?.length ?? 0) === 0 ? (
+				<FieldCard>
+					<FieldRow
+						label={t('storage.drive-health.title')}
+						value={<span className='text-[color:var(--fg-faint)]'>{t('storage.drive-health.none')}</span>}
+					/>
+				</FieldCard>
+			) : (
+				<FieldCard>
+					{/* ★ SMART-04: EVERY drive is rendered — unavailable/permission-denied
+					    drives are NEVER filtered out (an omitted drive reads as "healthy /
+					    not monitored", a false-healthy-adjacent failure). */}
+					{drives!.map((drive) => {
+						const badge = driveHealthBadge(drive)
+						// A drive we could not read cannot be self-tested — hide the trigger
+						// (but still render the row with its honest badge, above).
+						const canSelfTest = isAdmin && drive.healthStatus !== 'unavailable'
+						const selfTestDisabled = drive.selfTestInProgress || isSelfTesting
+						return (
+							<FieldRow
+								key={drive.deviceId}
+								label={
+									<div className='flex flex-col gap-1'>
+										<span className='inline-flex items-center gap-2'>
+											<span className={cn('inline-block size-2 shrink-0 rounded-full', badge.dotClass)} />
+											<span className={cn('text-[13px] font-medium', badge.textClass)}>{badge.label}</span>
+										</span>
+										<span
+											className='truncate text-[12px] text-[color:var(--fg-faint)]'
+											title={`${drive.model} · /dev/${drive.deviceId}`}
+										>
+											{drive.model || 'Drive'} · /dev/{drive.deviceId}
+										</span>
+									</div>
+								}
+								value={
+									<div className='flex flex-col gap-1.5'>
+										{drive.temperature !== null && (
+											<span className={cn('text-[12px]', driveTempClass(drive.temperatureStatus))}>
+												{t('storage.drive-health.temperature')}: {drive.temperature}°C
+											</span>
+										)}
+										{drive.attributes.length > 0 && (
+											<div className='flex flex-wrap gap-1.5'>
+												{drive.attributes.map((attr) => (
+													<span
+														key={attr.key}
+														title={attr.label}
+														className={cn(
+															'rounded-[3px] border px-1.5 py-0.5 text-[11px] leading-none',
+															driveAttrClass(attr.status),
+														)}
+													>
+														{attr.label}: {attr.raw}
+													</span>
+												))}
+											</div>
+										)}
+									</div>
+								}
+								trailing={
+									canSelfTest ? (
+										<Button
+											variant='v36-ghost'
+											size='v36-pill-sm'
+											disabled={selfTestDisabled}
+											onClick={() => {
+												runSelfTest({deviceId: drive.deviceId, mode: 'short'}).catch(() => {})
+											}}
+										>
+											{drive.selfTestInProgress && <Loader2 className='h-3.5 w-3.5 animate-spin' />}
+											{t('storage.drive-health.run-self-test')}
+										</Button>
+									) : undefined
+								}
+							/>
+						)
+					})}
+				</FieldCard>
+			)}
 		</section>
 	)
 }
