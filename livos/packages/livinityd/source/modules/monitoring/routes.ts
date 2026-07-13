@@ -1,8 +1,9 @@
 import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 
-import {privateProcedure, router} from '../server/trpc/trpc.js'
+import {adminProcedure, privateProcedure, router} from '../server/trpc/trpc.js'
 import {getNetworkStats, getDiskIO, getProcesses} from './monitoring.js'
+import {listDrives, getDrive, runSelfTest} from './smart.js'
 
 export default router({
 	networkStats: privateProcedure.query(async () => {
@@ -39,4 +40,55 @@ export default router({
 				})
 			}
 		}),
+
+	// Phase 313 SMART-01/SMART-04 — per-drive SMART health, nested under the
+	// existing `monitoring` namespace (no new top-level namespace). Reads are
+	// privateProcedure; the side-effecting self-test is adminProcedure. Every
+	// deviceId input is regex-validated at THIS boundary (defense-in-depth on top
+	// of smart.ts's own DEVICE_ID_RE guard) — T-313-11.
+	diskHealth: router({
+		list: privateProcedure.query(async () => {
+			try {
+				return await listDrives()
+			} catch (err: any) {
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: err.message || 'Failed to list drive health',
+				})
+			}
+		}),
+
+		get: privateProcedure
+			.input(z.object({deviceId: z.string().regex(/^(sd[a-z]+|nvme\d+n\d+|mmcblk\d+)$/, 'invalid device id')}))
+			.query(async ({input}) => {
+				try {
+					return await getDrive(input.deviceId)
+				} catch (err: any) {
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: err.message || 'Failed to get drive health',
+					})
+				}
+			}),
+
+		// adminProcedure (T-313-12): a self-test kicks off drive firmware I/O — a
+		// non-admin must not be able to trigger it.
+		runSelfTest: adminProcedure
+			.input(
+				z.object({
+					deviceId: z.string().regex(/^(sd[a-z]+|nvme\d+n\d+|mmcblk\d+)$/, 'invalid device id'),
+					mode: z.enum(['short', 'long']),
+				}),
+			)
+			.mutation(async ({input}) => {
+				try {
+					return await runSelfTest(input.deviceId, input.mode)
+				} catch (err: any) {
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: err.message || 'Failed to start self-test',
+					})
+				}
+			}),
+	}),
 })
