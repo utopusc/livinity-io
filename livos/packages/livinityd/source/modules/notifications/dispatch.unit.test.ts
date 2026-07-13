@@ -14,7 +14,7 @@ import type {
 	NotificationChannel,
 	NotificationChannelKind,
 } from './channel-types.js'
-import {type AlertTransport, type DispatcherDeps, Dispatcher} from './dispatch.js'
+import {type AlertTransport, type DispatcherDeps, type FloorMap, Dispatcher} from './dispatch.js'
 
 function ch(
 	id: string,
@@ -35,7 +35,7 @@ function makeHarness(opts: {
 }) {
 	const recorded: Recorded[] = []
 	const timers: Array<{fn: () => void; ms: number}> = []
-	let floor: Record<string, number> = {}
+	let floor: FloorMap = {}
 
 	const transport: AlertTransport = {
 		async sendLiv(livId, chatId, text) {
@@ -73,7 +73,7 @@ function makeHarness(opts: {
 		},
 	}
 
-	return {dispatcher: new Dispatcher(deps), recorded, timers, logger}
+	return {dispatcher: new Dispatcher(deps), recorded, timers, logger, getFloor: () => floor}
 }
 
 describe('notifications/dispatch Dispatcher', () => {
@@ -122,6 +122,57 @@ describe('notifications/dispatch Dispatcher', () => {
 		await h.dispatcher.dispatch('backups-engine-unavailable', 'warning')
 		await h.dispatcher.flushChannel('ch-a')
 		expect(h.recorded.length).toBe(2)
+	})
+
+	test('HIGH-02 (a) ESCALATION: warning then critical on the same id within the floor → critical is delivered', async () => {
+		let clock = 1000
+		// One channel subscribed to critical ONLY — it never saw the earlier warning.
+		const channels = [ch('crit', 'liv:telegram', 'chatCrit', ['critical'])]
+		const h = makeHarness({channels, now: () => clock})
+
+		// t0: warning fires. The crit-only channel gets nothing (severity filter),
+		// but the floor is set at warning.
+		await h.dispatcher.dispatch('disk-critical', 'warning')
+		await h.dispatcher.flushChannel('crit')
+		expect(h.recorded.length).toBe(0)
+
+		// +20min (well inside the 6h floor): disk gets objectively worse → critical,
+		// SAME id. This MUST NOT be suppressed by the warning-tier floor.
+		clock += 20 * 60 * 1000
+		await h.dispatcher.dispatch('disk-critical', 'critical')
+		await h.dispatcher.flushChannel('crit')
+		expect(h.recorded.filter((r) => r.target === 'chatCrit').length).toBe(1)
+	})
+
+	test('HIGH-02 (b) NO DOWNGRADE STORM: critical then warning on the same id within the floor → warning is suppressed', async () => {
+		let clock = 1000
+		const channels = [ch('any', 'liv:telegram', 'chatAny', ['warning', 'critical'])]
+		const h = makeHarness({channels, now: () => clock})
+
+		await h.dispatcher.dispatch('disk-critical', 'critical')
+		await h.dispatcher.flushChannel('any')
+		expect(h.recorded.length).toBe(1)
+
+		// A lower severity within the window must NOT re-storm the channel.
+		clock += 20 * 60 * 1000
+		await h.dispatcher.dispatch('disk-critical', 'warning')
+		await h.dispatcher.flushChannel('any')
+		expect(h.recorded.length).toBe(1)
+	})
+
+	test('HIGH-02 (c) STORM PREVENTION INTACT: same severity repeated within the floor is suppressed', async () => {
+		let clock = 1000
+		const channels = [ch('any', 'liv:telegram', 'chatAny', ['warning', 'critical'])]
+		const h = makeHarness({channels, now: () => clock})
+
+		await h.dispatcher.dispatch('disk-critical', 'critical')
+		await h.dispatcher.flushChannel('any')
+		expect(h.recorded.length).toBe(1)
+
+		clock += 20 * 60 * 1000
+		await h.dispatcher.dispatch('disk-critical', 'critical')
+		await h.dispatcher.flushChannel('any')
+		expect(h.recorded.length).toBe(1)
 	})
 
 	test('SEVERITY FILTER: a channel only receives alerts whose severity is in its filter', async () => {

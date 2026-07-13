@@ -348,7 +348,7 @@ type StoreSchema = {
 			enabled: boolean
 			severityFilter: string[]
 		}[]
-		dispatchFloor: Record<string, number>
+		dispatchFloor: Record<string, {at: number; severity: 'critical' | 'warning' | 'info'}>
 	}
 	backups: {
 		repositories: {

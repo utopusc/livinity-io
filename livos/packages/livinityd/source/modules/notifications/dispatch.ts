@@ -47,12 +47,22 @@ export interface AlertTransport {
 	sendNtfy(url: string, text: string, severity: AlertSeverity, token?: string): Promise<void>
 }
 
+// HIGH-02: the resend floor records the last-delivered timestamp AND severity per
+// key. Keying by timestamp only let a genuine warning→critical escalation on the
+// SAME id (exactly what disk-critical-watch produces) get swallowed for the full
+// 6h floor. Carrying the severity lets a STRICTLY HIGHER severity bypass the floor.
+export interface FloorRecord {
+	at: number
+	severity: AlertSeverity
+}
+export type FloorMap = Record<string, FloorRecord>
+
 export interface DispatcherDeps {
 	getChannels: () => Promise<NotificationChannel[]>
 	getSecret: (channelId: string, field: 'webhookUrl' | 'ntfyToken') => Promise<string | undefined>
 	floorStore: {
-		load: () => Promise<Record<string, number>>
-		save: (r: Record<string, number>) => Promise<void>
+		load: () => Promise<FloorMap>
+		save: (r: FloorMap) => Promise<void>
 	}
 	logger: {log: (...a: unknown[]) => void; error: (...a: unknown[]) => void}
 	transport?: AlertTransport // injectable for tests; defaults to the real HTTP transport
@@ -79,12 +89,21 @@ export class Dispatcher {
 		const key = floorKey(notificationId)
 		const now = (this.deps.now ?? Date.now)()
 
-		// Resend-floor: suppress a re-dispatch of the same key within the floor.
+		// Resend-floor (HIGH-02): suppress a re-dispatch of the same key within the
+		// floor window, BUT a strictly higher severity than the last-floored one
+		// always passes and resets the floor (a warning→critical escalation on the
+		// same id must never be swallowed). Same-or-lower severity inside the window
+		// is suppressed (anti-storm — the original protection is preserved).
 		const floor = await this.deps.floorStore.load()
-		if (floor[key] !== undefined && now - floor[key] < RESEND_FLOOR_MS) {
+		const prev = floor[key]
+		if (
+			prev !== undefined &&
+			now - prev.at < RESEND_FLOOR_MS &&
+			severityRank(severity) <= severityRank(prev.severity)
+		) {
 			return
 		}
-		floor[key] = now
+		floor[key] = {at: now, severity}
 		await this.deps.floorStore.save(floor)
 
 		const channels = (await this.deps.getChannels()).filter(
@@ -201,6 +220,11 @@ function highestSeverity(severities: AlertSeverity[]): AlertSeverity {
 	if (severities.includes('critical')) return 'critical'
 	if (severities.includes('warning')) return 'warning'
 	return 'info'
+}
+
+// Ordinal for severity comparison in the resend floor (critical > warning > info).
+function severityRank(severity: AlertSeverity): number {
+	return severity === 'critical' ? 3 : severity === 'warning' ? 2 : 1
 }
 
 // Map an AbortError/TimeoutError to the [alert-timeout] tag, any other fetch

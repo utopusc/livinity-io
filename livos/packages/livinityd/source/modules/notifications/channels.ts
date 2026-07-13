@@ -27,7 +27,7 @@ import {
 	DISPATCH_FLOOR_STORE_KEY,
 } from './channel-types.js'
 import {createChannelSecretStore, type ChannelSecretStore} from './channel-secrets.js'
-import {Dispatcher} from './dispatch.js'
+import {Dispatcher, type FloorMap} from './dispatch.js'
 import {assertResolvedHostSafe} from './ssrf-guard.js'
 
 // Lazy own-Redis singleton — mirrors docker/ai-diagnostics.ts getRedis() so this
@@ -79,11 +79,13 @@ export default class NotificationChannels {
 				((await this.#livinityd.store.get(CHANNELS_STORE_KEY)) as NotificationChannel[]) || [],
 			getSecret: async (id, field) => (await this.#secrets.getSecrets(id))[field],
 			floorStore: {
+				// A legacy Record<string, number> value (pre-HIGH-02) self-heals:
+				// prev.at is undefined for a bare number, `now - undefined` is NaN,
+				// `NaN < RESEND_FLOOR_MS` is false → not suppressed → overwritten with
+				// the new {at, severity} shape on the next dispatch. Fails safe (never
+				// over-suppresses).
 				load: async () =>
-					((await this.#livinityd.store.get(DISPATCH_FLOOR_STORE_KEY)) as Record<
-						string,
-						number
-					>) || {},
+					((await this.#livinityd.store.get(DISPATCH_FLOOR_STORE_KEY)) as FloorMap) || {},
 				save: async (r) =>
 					this.#livinityd.store.getWriteLock(async ({set}) => {
 						await set(DISPATCH_FLOOR_STORE_KEY, r)
