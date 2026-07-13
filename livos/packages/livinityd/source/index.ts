@@ -17,6 +17,7 @@ import AppStore from './modules/apps/app-store.js'
 import Apps from './modules/apps/apps.js'
 import Files from './modules/files/files.js'
 import Notifications from './modules/notifications/notifications.js'
+import NotificationChannels from './modules/notifications/channels.js'
 import EventBus from './modules/event-bus/event-bus.js'
 import Dbus from './modules/dbus/dbus.js'
 import Backups from './modules/backups/backups.js'
@@ -333,6 +334,22 @@ type StoreSchema = {
 		}[]
 	}
 	notifications: string[]
+	// Phase 310-02 (ALERT-01/02/03) — external alert-channel bridge state.
+	// `channels` = non-secret routing config; the secret (webhook URL / ntfy
+	// token) lives ONLY in the DEK-encrypted Redis vault, NEVER here.
+	// `dispatchFloor` = per-key lastDispatchedAt resend-floor map. Kept under a
+	// dedicated `alerts` key (NOT nested under the `notifications` bell array,
+	// which dot-prop would corrupt — see channel-types.ts).
+	alerts: {
+		channels: {
+			id: string
+			kind: string
+			target: string
+			enabled: boolean
+			severityFilter: string[]
+		}[]
+		dispatchFloor: Record<string, number>
+	}
 	backups: {
 		repositories: {
 			id: string
@@ -374,6 +391,10 @@ export default class Livinityd {
 	apps: Apps
 	files: Files
 	notifications: Notifications
+	// Phase 310-02 — external alert-channel bridge (config CRUD + secret vault +
+	// live Dispatcher). Public so the notifications tRPC sub-router reaches it via
+	// ctx.livinityd.notificationChannels and Notifications.add() can dispatch.
+	notificationChannels: NotificationChannels
 	eventBus: EventBus
 	dbus: Dbus
 	backups: Backups
@@ -472,10 +493,15 @@ export default class Livinityd {
 		this.apps = new Apps(this)
 		this.files = new Files(this)
 		this.notifications = new Notifications(this)
+		this.notificationChannels = new NotificationChannels(this)
 		this.eventBus = new EventBus(this)
 		this.dbus = new Dbus(this)
 		this.backups = new Backups(this)
-		this.scheduler = new Scheduler({logger: this.logger})
+		// Phase 310-02 — pass `this` so a built-in scheduler job handler can reach
+		// the daemon via ctx.livinityd (Plan 03's disk-critical-watch consumes it).
+		// `this.notifications`/`this.notificationChannels` are already set above;
+		// handlers only read ctx.livinityd when a cron job FIRES (long after boot).
+		this.scheduler = new Scheduler({logger: this.logger, livinityd: this})
 		this.ai = new RedisModule({livinityd: this})
 		// TunnelClient is initialized in start() after ai.start() creates the Redis connection
 		this.tunnelClient = null as unknown as TunnelClient

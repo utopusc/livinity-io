@@ -31,9 +31,16 @@ export interface NotificationChannel {
 }
 
 // FileStore key holding the non-secret channel routing config (array).
-export const CHANNELS_STORE_KEY = 'notifications.channels'
+//
+// NOTE (Phase 310-02): these are dot-prop paths under a DEDICATED top-level
+// `alerts` object — NOT nested under the `notifications` bell array. dot-prop
+// treats '.' as a path separator, so the original 'notifications.channels' would
+// have been read/written as `store.notifications.channels`, colliding with the
+// `notifications: string[]` in-app-bell array (js-yaml drops props set on an
+// array → the config would never persist). `alerts.*` avoids that collision.
+export const CHANNELS_STORE_KEY = 'alerts.channels'
 // FileStore key holding the per-key `lastDispatchedAt` resend-floor map.
-export const DISPATCH_FLOOR_STORE_KEY = 'notifications.dispatch-floor'
+export const DISPATCH_FLOOR_STORE_KEY = 'alerts.dispatchFloor'
 
 // Coalescing burst window: N dispatch() calls within this window collapse into
 // ONE combined message per channel (cascading-failure protection).

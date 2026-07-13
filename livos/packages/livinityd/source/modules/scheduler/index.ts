@@ -7,6 +7,8 @@
 
 import * as cron from 'node-cron'
 
+import type Livinityd from '../../index.js'
+
 import {BUILT_IN_HANDLERS} from './jobs.js'
 import {getJob, listEnabledJobs, recordRunResult, seedDefaults} from './store.js'
 import type {ScheduledJob, SchedulerLogger} from './types.js'
@@ -20,9 +22,13 @@ export default class Scheduler {
 	private tasks = new Map<string, cron.ScheduledTask>()
 	private inFlight = new Set<string>() // job IDs currently running (mutex)
 	private started = false
+	// Phase 310-02 — the running daemon, threaded into every built-in handler's
+	// ctx (see runJob). Optional: unit tests + non-daemon callers omit it.
+	private livinityd?: Livinityd
 
-	constructor({logger}: {logger: CreateLoggerLike}) {
+	constructor({logger, livinityd}: {logger: CreateLoggerLike; livinityd?: Livinityd}) {
 		this.logger = logger.createChildLogger('scheduler')
+		this.livinityd = livinityd
 	}
 
 	async start(): Promise<void> {
@@ -115,7 +121,7 @@ export default class Scheduler {
 			}
 
 			try {
-				const result = await handler(fresh, {logger: this.logger})
+				const result = await handler(fresh, {logger: this.logger, livinityd: this.livinityd})
 				await recordRunResult(job.id, {
 					status: result.status,
 					error: result.error ?? null,

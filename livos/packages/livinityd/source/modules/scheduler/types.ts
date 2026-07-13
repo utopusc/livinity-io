@@ -1,5 +1,9 @@
 // Phase 20 — Scheduler module shared types
 
+// `import type` is compile-time-erased → it CANNOT create a runtime cycle
+// (system.ts:10 uses this exact form for getSystemDiskUsage(livinityd)).
+import type Livinityd from '../../index.js'
+
 export type JobType =
 	| 'image-prune'
 	| 'container-update-check'
@@ -56,7 +60,10 @@ export interface SchedulerLogger {
 
 export type BuiltInJobHandler = (
 	job: ScheduledJob,
-	ctx: {logger: SchedulerLogger},
+	// Phase 310-02 — `livinityd?` is OPTIONAL so the 5 existing handlers (which
+	// only read ctx.logger) compile with ZERO edits; Plan 03's disk-critical-watch
+	// handler reads ctx.livinityd for getSystemDiskUsage() + notifications.add().
+	ctx: {logger: SchedulerLogger; livinityd?: Livinityd},
 ) => Promise<JobRunResult>
 
 // Helper: snake_case row -> camelCase domain
