@@ -845,19 +845,57 @@ rm -rf "$TEMP_DIR"
 # unreachable, fall back to master so a release-less repo / offline box still
 # updates (no regression). jq-optional: grep/sed extracts .tag_name when jq is
 # absent (fresh boxes may not have jq during early bootstrap).
+# ── Phase 311 UPDSAFE-01 — release channel (settings.releaseChannel) ───────
+# Read the box's opted-in channel from the FileStore YAML — the SAME key the
+# UI's setReleaseChannel persists and update.ts's getLatestRelease reads, so the
+# UI and the deployed artifact never disagree. Fail-safe to "stable" so a parse
+# miss can NEVER falsely activate beta. Mirrors the _resolve_operator_domain()
+# bash-reads-box-state idiom. js-yaml dump = 2-space indent, unquoted scalar.
+_LIVOS_RELEASE_CHANNEL="stable"
+if [[ -f /opt/livos/data/livinity.yaml ]]; then
+    _chan=$(grep -A0 -E '^\s*releaseChannel:\s*' /opt/livos/data/livinity.yaml 2>/dev/null \
+        | tail -1 | sed -E 's/^\s*releaseChannel:\s*//; s/["'\'']//g; s/\s+$//')
+    [[ "$_chan" == "beta" ]] && _LIVOS_RELEASE_CHANNEL="beta"
+fi
+
 RELEASE_TAG=""
-_REL_JSON=$(curl -fsSL --max-time 10 \
-    -H "User-Agent: LivOS-update" \
-    -H "Accept: application/vnd.github+json" \
-    https://api.github.com/repos/utopusc/livinity-io/releases/latest 2>/dev/null || echo "")
-if [[ -n "$_REL_JSON" ]]; then
-    if command -v jq >/dev/null 2>&1; then
-        RELEASE_TAG=$(echo "$_REL_JSON" | jq -r '.tag_name // empty' 2>/dev/null || echo "")
-    else
-        RELEASE_TAG=$(echo "$_REL_JSON" | grep -m1 '"tag_name"' \
-            | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' || echo "")
+if [[ "$_LIVOS_RELEASE_CHANNEL" == "beta" ]]; then
+    # Beta channel: resolve the semver-MAX PUBLISHED release (prereleases
+    # included, drafts filtered) from the FULL list endpoint — NOT the first
+    # entry / raw API order. `sort -V` is the POSIX-available semver-ish max for
+    # the current simple vXX.Y / vXX.Y.Z tag shapes (documented limitation for
+    # future -alpha.N suffixes — RESEARCH.md).
+    _REL_JSON=$(curl -fsSL --max-time 10 \
+        -H "User-Agent: LivOS-update" \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/utopusc/livinity-io/releases?per_page=100" 2>/dev/null || echo "")
+    if [[ -n "$_REL_JSON" ]]; then
+        if command -v jq >/dev/null 2>&1; then
+            RELEASE_TAG=$(echo "$_REL_JSON" \
+                | jq -r '[.[] | select(.draft==false) | .tag_name] | .[]' 2>/dev/null \
+                | sort -V | tail -1 || echo "")
+        else
+            RELEASE_TAG=$(echo "$_REL_JSON" | grep '"tag_name"' \
+                | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' \
+                | sort -V | tail -1 || echo "")
+        fi
+    fi
+else
+    # Stable channel (default): byte-unchanged /releases/latest resolution.
+    _REL_JSON=$(curl -fsSL --max-time 10 \
+        -H "User-Agent: LivOS-update" \
+        -H "Accept: application/vnd.github+json" \
+        https://api.github.com/repos/utopusc/livinity-io/releases/latest 2>/dev/null || echo "")
+    if [[ -n "$_REL_JSON" ]]; then
+        if command -v jq >/dev/null 2>&1; then
+            RELEASE_TAG=$(echo "$_REL_JSON" | jq -r '.tag_name // empty' 2>/dev/null || echo "")
+        else
+            RELEASE_TAG=$(echo "$_REL_JSON" | grep -m1 '"tag_name"' \
+                | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' || echo "")
+        fi
     fi
 fi
+info "Release channel: ${_LIVOS_RELEASE_CHANNEL} — resolved tag ${RELEASE_TAG:-<none>}"
 
 if [[ -n "$RELEASE_TAG" ]]; then
     info "Latest GitHub Release: $RELEASE_TAG — deploying that tag (not bare master)"
