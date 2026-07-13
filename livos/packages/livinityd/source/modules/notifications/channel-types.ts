@@ -51,9 +51,24 @@ export const RESEND_FLOOR_MS = 6 * 60 * 60 * 1000 // 6h — RESEARCH A1: configu
 // Per-channel test-send cooldown (outbound-relay DoS cap).
 export const TEST_COOLDOWN_MS = 10_000
 
-// Collapse `backups-failing:<repoId>` → `backups-failing` for the floor + description keys.
+// Collapse `backups-failing:<repoId>` → `backups-failing` for the DESCRIPTION key
+// (human text lookup) + the admin-gating family match. NOT used for the resend
+// floor — see floorBucketKey.
 export function floorKey(notificationId: string): string {
 	return notificationId.split(':')[0]
+}
+
+// M-01: the resend-floor bucket key. UNLIKE floorKey (which collapses `family:<id>`
+// to the bare `family`), the floor must key by the FULL id so per-INSTANCE alerts
+// page INDEPENDENTLY: a second failing drive (smart-failing:sdb) must never be
+// suppressed by the first (smart-failing:sda)'s 6h floor — two failing drives is
+// strictly worse than one and each must reach an external channel. Non-suffixed
+// system alerts (disk-critical, smart-permission-denied) are unaffected: their full
+// id already equals their base, so single-instance floor behavior is preserved. The
+// same exact condition re-firing (identical full id) is still floored, so the
+// anti-storm protection is intact.
+export function floorBucketKey(notificationId: string): string {
+	return notificationId
 }
 
 // Server-side human text for external channels (the in-app bell renders via UI

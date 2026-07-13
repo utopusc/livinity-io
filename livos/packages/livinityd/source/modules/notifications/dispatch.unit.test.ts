@@ -189,10 +189,38 @@ describe('notifications/dispatch Dispatcher', () => {
 			h.dispatcher.dispatch('disk-critical', 'critical'),
 		])
 
+		// M-01: the floor now keys by the FULL id (floorBucketKey), so a suffixed
+		// id keeps its instance suffix in its own bucket.
 		const floor = h.getFloor()
-		expect(Object.keys(floor).sort()).toEqual(['backups-failing', 'disk-critical'])
-		expect(floor['backups-failing']).toMatchObject({severity: 'warning'})
+		expect(Object.keys(floor).sort()).toEqual(['backups-failing:repo1', 'disk-critical'])
+		expect(floor['backups-failing:repo1']).toMatchObject({severity: 'warning'})
 		expect(floor['disk-critical']).toMatchObject({severity: 'critical'})
+	})
+
+	test('M-01 PER-DEVICE FLOOR: a second failing drive pages independently and is NOT suppressed by the first', async () => {
+		// The core SMART regression: two DIFFERENT drives failing within the 6h floor
+		// must each reach an external channel (per-device bucket), while the SAME drive
+		// re-firing is still floored (anti-storm intact).
+		const channels = [ch('ch-a', 'liv:telegram', 'chatA')]
+		const h = makeHarness({channels, now: () => 1000})
+
+		// sda fails → paged.
+		await h.dispatcher.dispatch('smart-failing:sda', 'critical')
+		await h.dispatcher.flushChannel('ch-a')
+		expect(h.recorded.length).toBe(1)
+
+		// sdb (a DIFFERENT drive) fails inside the floor → must ALSO page (its own bucket).
+		await h.dispatcher.dispatch('smart-failing:sdb', 'critical')
+		await h.dispatcher.flushChannel('ch-a')
+		expect(h.recorded.length).toBe(2)
+
+		// sda re-firing at the same severity inside the floor is STILL suppressed.
+		await h.dispatcher.dispatch('smart-failing:sda', 'critical')
+		await h.dispatcher.flushChannel('ch-a')
+		expect(h.recorded.length).toBe(2)
+
+		// Both device ids have their own floor bucket — neither collapsed to a shared key.
+		expect(Object.keys(h.getFloor()).sort()).toEqual(['smart-failing:sda', 'smart-failing:sdb'])
 	})
 
 	test('SEVERITY FILTER: a channel only receives alerts whose severity is in its filter', async () => {

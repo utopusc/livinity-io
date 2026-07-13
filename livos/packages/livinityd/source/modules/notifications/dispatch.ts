@@ -24,7 +24,7 @@ import {
 	RESEND_FLOOR_MS,
 	TEST_COOLDOWN_MS,
 	describeNotification,
-	floorKey,
+	floorBucketKey,
 	livChannelId,
 	ntfyPriority,
 } from './channel-types.js'
@@ -104,7 +104,10 @@ export class Dispatcher {
 
 	/** Floor-check → enqueue into the burst window (schedules a flush timer). */
 	async dispatch(notificationId: string, severity: AlertSeverity): Promise<void> {
-		const key = floorKey(notificationId)
+		// M-01: floor per FULL id so per-device families (smart-failing:<dev>,
+		// smart-unavailable:<dev>) page independently. describeNotification still
+		// collapses to the base for the human text (via floorKey internally).
+		const key = floorBucketKey(notificationId)
 		const now = (this.deps.now ?? Date.now)()
 
 		// Resend-floor (HIGH-02): suppress a re-dispatch of the same key within the
