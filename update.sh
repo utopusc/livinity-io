@@ -247,6 +247,168 @@ GUARD_EOF
     fi
 }
 
+# ── Phase 311-02 (UPDSAFE-04): operator manual-rollback script installer ──────
+# Ships a standalone, self-contained /opt/livos/livos-manual-rollback.sh via the
+# SAME heredoc-install idiom as install_deploy_guard (mktemp -> cmp -s idempotent
+# install -> chmod +x). The emitted script does NOT source update.sh (matches
+# Layer-B's anti-source precedent); it duplicates restore_last_good's body (incl.
+# the node_modules + systemd restore + non-hardcoded run-user chown), does flock
+# single-flight on the SAME lock update.sh/Layer-B use, restarts + probes
+# livos.service, and writes a rolled-back history JSON. 311-03's admin-gated tRPC
+# mutation shells out to it via `sudo -n`. QUOTED heredoc => nothing expands at
+# install time; every $var / $(...) is literal in the emitted script.
+MANUAL_ROLLBACK_SCRIPT="/opt/livos/livos-manual-rollback.sh"
+install_manual_rollback_script() {
+    local tmp; tmp=$(mktemp)
+    cat > "$tmp" <<'ROLLBACK_EOF'
+#!/usr/bin/env bash
+# LivOS manual rollback (UPDSAFE-04, Phase 311-02) — operator-triggered restore to
+# the last-good snapshot. Self-contained (does NOT source update.sh): own flock
+# single-flight, own restore body, own probe, own history JSON. Invoked as
+# `sudo -n bash /opt/livos/livos-manual-rollback.sh` from the admin-gated tRPC
+# mutation shipped in 311-03. Refuses (non-zero) if no snapshot exists. Restores
+# CODE + node_modules + systemd units only — it performs NO DB rollback (the
+# additive-only-schema invariant makes the live schema forward-compatible).
+set -uo pipefail
+
+LAST_GOOD_DIR="/opt/.livos-last-good"
+LIVOS_DIR="/opt/livos"
+LIV_DIR="/opt/liv"
+HISTORY_DIR="/opt/livos/data/update-history"
+LOCK="/run/lock/livos-update.lock"
+log() { echo "[livos-manual-rollback] $*"; }
+
+# 0. Refuse when there is no snapshot to roll back to.
+if [[ ! -d "$LAST_GOOD_DIR/livinityd-source" ]]; then
+    log "ERROR: no last-good snapshot at $LAST_GOOD_DIR — nothing to roll back to"
+    exit 2
+fi
+
+# 1. Single-flight: take the SAME lock update.sh/Layer-B hold, so a manual
+#    rollback can never race a concurrent auto-update (which would corrupt rsync).
+exec 9>"$LOCK" 2>/dev/null || exec 9>/tmp/livos-update.lock 2>/dev/null || true
+if command -v flock >/dev/null 2>&1; then
+    if ! flock -n 9; then
+        log "ERROR: an update or rollback is already in progress (lock held) — aborting"
+        exit 3
+    fi
+fi
+
+START_ISO_FS=$(date -u +%Y-%m-%dT%H-%M-%SZ)
+START_ISO_JSON=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+FROM_SHA=$(cat /opt/livos/.deployed-sha 2>/dev/null | tr -d '[:space:]')
+TO_SHA=$(sed -E 's/.*"sha"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/' "$LAST_GOOD_DIR/manifest.json" 2>/dev/null)
+[[ "$TO_SHA" == *"{"* ]] && TO_SHA=""
+
+# 2. Restore the load-bearing runtime (duplicated restore_last_good body).
+log "Restoring last-good source + UI dist + liv-core dist + node_modules + systemd units..."
+rsync -a --delete "$LAST_GOOD_DIR/livinityd-source/" "$LIVOS_DIR/packages/livinityd/source/" 2>/dev/null || true
+if [[ -d "$LAST_GOOD_DIR/ui-dist" ]]; then
+    rm -rf "$LIVOS_DIR/packages/ui/dist" 2>/dev/null || true
+    rsync -a "$LAST_GOOD_DIR/ui-dist/" "$LIVOS_DIR/packages/ui/dist/" 2>/dev/null || true
+    ln -sf "$LIVOS_DIR/packages/ui/dist" "$LIVOS_DIR/packages/livinityd/ui" 2>/dev/null || true
+fi
+if [[ -d "$LAST_GOOD_DIR/liv-core-dist" && -d "$LIV_DIR/packages/core" ]]; then
+    rm -rf "$LIV_DIR/packages/core/dist" 2>/dev/null || true
+    rsync -a "$LAST_GOOD_DIR/liv-core-dist/" "$LIV_DIR/packages/core/dist/" 2>/dev/null || true
+    for store_dir in /opt/livos/node_modules/.pnpm/@liv+core*/; do
+        [[ -d "$store_dir" ]] || continue
+        tgt="${store_dir}node_modules/@liv/core/dist"
+        mkdir -p "$(dirname "$tgt")" 2>/dev/null || true
+        rm -rf "$tgt" 2>/dev/null || true
+        cp -r "$LAST_GOOD_DIR/liv-core-dist" "$tgt" 2>/dev/null || true
+    done
+fi
+# node_modules restore (paired with the code so old code never runs against
+# forward-mutated deps).
+if [[ -d "$LAST_GOOD_DIR/node_modules" ]]; then
+    rsync -a --delete "$LAST_GOOD_DIR/node_modules/" "$LIVOS_DIR/node_modules/" 2>/dev/null || true
+fi
+# systemd units restore (cmp -s per unit; single daemon-reload + restart changed).
+if [[ -d "$LAST_GOOD_DIR/systemd" ]]; then
+    _sd_changed=0; _sd_restart=""
+    for _sd_unit in "$LAST_GOOD_DIR/systemd"/*.service; do
+        [[ -f "$_sd_unit" ]] || continue
+        _sd_base=$(basename "$_sd_unit")
+        _sd_live="/etc/systemd/system/$_sd_base"
+        if ! cmp -s "$_sd_unit" "$_sd_live" 2>/dev/null; then
+            cp -a "$_sd_unit" "$_sd_live" 2>/dev/null || true
+            _sd_changed=1; _sd_restart="$_sd_restart $_sd_base"
+        fi
+    done
+    if [[ -d "$LAST_GOOD_DIR/systemd/livos.service.d" ]]; then
+        if ! diff -rq "$LAST_GOOD_DIR/systemd/livos.service.d" /etc/systemd/system/livos.service.d >/dev/null 2>&1; then
+            rm -rf /etc/systemd/system/livos.service.d 2>/dev/null || true
+            cp -a "$LAST_GOOD_DIR/systemd/livos.service.d" /etc/systemd/system/livos.service.d 2>/dev/null || true
+            _sd_changed=1
+        fi
+    fi
+    if [[ "$_sd_changed" == "1" ]]; then
+        systemctl daemon-reload 2>/dev/null || true
+        for _sd_base in $_sd_restart; do systemctl restart "$_sd_base" 2>/dev/null || true; done
+    fi
+fi
+# Non-hardcoded run-user chown — derive the run user from livos.service User=
+# (a hardcoded owner would crash-loop boxes installed under other accounts).
+_LIVOS_RUN_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1)
+[ -z "$_LIVOS_RUN_USER" ] && _LIVOS_RUN_USER=$(stat -c '%U' /opt/livos 2>/dev/null)
+if id "$_LIVOS_RUN_USER" >/dev/null 2>&1; then
+    chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIVOS_DIR/packages/livinityd/source" "$LIVOS_DIR/packages/ui/dist" 2>/dev/null || true
+    [[ -d "$LIV_DIR/packages/core/dist" ]] && chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIV_DIR/packages/core/dist" 2>/dev/null || true
+fi
+log "last-good restored"
+
+# 3. Restart livinityd + probe :8080/ then :8080/healthz/full (same shape/budgets
+#    as health_probe_or_rollback). A non-200-but-non-503 /healthz/full is treated
+#    as "probe not applicable" (pre-A2 build) — never a rollback-loop trigger.
+responding() {
+    local code
+    code=$(curl -s -o /dev/null -w '%{http_code}' -m 4 http://127.0.0.1:8080/ 2>/dev/null || echo 000)
+    [[ "$code" =~ ^(2|3)[0-9][0-9]$ || "$code" == "401" || "$code" == "403" ]]
+}
+systemctl reset-failed livos.service 2>/dev/null || true
+systemctl restart livos.service 2>/dev/null || true
+rolled_ok=0
+for _ in $(seq 1 40); do
+    if responding; then rolled_ok=1; break; fi
+    sleep 3
+done
+if [[ "$rolled_ok" == "1" ]]; then
+    for _ in $(seq 1 40); do
+        fcode=$(curl -s -o /dev/null -w '%{http_code}' -m 4 http://127.0.0.1:8080/healthz/full 2>/dev/null || echo 000)
+        [[ "$fcode" == "503" ]] || break
+        sleep 3
+    done
+fi
+
+# 4. Record a rolled-back history JSON (phase33_finalize schema + trigger=manual).
+#    'rolled-back' is already wired to a destructive badge in past-deploys-table.tsx.
+mkdir -p "$HISTORY_DIR" 2>/dev/null || true
+json_path="${HISTORY_DIR}/${START_ISO_FS}-rollback.json"
+from_field=""; [[ -n "$FROM_SHA" ]] && from_field=", \"from_sha\": \"$FROM_SHA\""
+to_field="";   [[ -n "$TO_SHA" ]] && to_field=", \"to_sha\": \"$TO_SHA\""
+reason="Operator manual rollback to last-good (code + deps + systemd units restored; DB schema NOT reverted)"
+[[ "$rolled_ok" == "1" ]] || reason="Manual rollback ran but :8080 did not recover — manual recovery may be needed"
+cat > "$json_path" 2>/dev/null <<JSON
+{
+  "timestamp": "${START_ISO_JSON}",
+  "status": "rolled-back"${from_field}${to_field},
+  "trigger": "manual",
+  "reason": "${reason}"
+}
+JSON
+chmod 644 "$json_path" 2>/dev/null || true
+log "manual rollback complete (rolled_ok=$rolled_ok) — wrote $json_path"
+[[ "$rolled_ok" == "1" ]] && exit 0 || exit 1
+ROLLBACK_EOF
+    if [[ ! -f "$MANUAL_ROLLBACK_SCRIPT" ]] || ! cmp -s "$tmp" "$MANUAL_ROLLBACK_SCRIPT"; then
+        mv "$tmp" "$MANUAL_ROLLBACK_SCRIPT" 2>/dev/null || { rm -f "$tmp"; return 0; }
+        chmod +x "$MANUAL_ROLLBACK_SCRIPT" 2>/dev/null || true
+    else
+        rm -f "$tmp"
+    fi
+}
+
 # Arm the guard right before the risky restart. Writes the sentinel (deploy
 # metadata for the failed.json) and a one-shot system.slice transient unit.
 arm_deploy_guard() {
@@ -911,6 +1073,10 @@ if [[ ! -f "$LIVOS_DIR/.env" ]]; then
 fi
 
 ok "Pre-flight passed"
+
+# Phase 311-02 (UPDSAFE-04): keep the operator manual-rollback script current on
+# disk every run (idempotent cmp -s install), even if no rollback is triggered.
+install_manual_rollback_script
 
 # Phase 32 REL-01 call site
 precheck
