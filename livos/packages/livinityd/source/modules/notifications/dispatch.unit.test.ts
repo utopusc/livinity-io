@@ -97,7 +97,8 @@ describe('notifications/dispatch Dispatcher', () => {
 			expect(calls.length).toBe(1)
 			expect(calls[0].text).toContain('2 new alerts')
 			expect(calls[0].text).toContain('- Backups have not run in over 24 hours')
-			expect(calls[0].text).toContain('- Disk space is critically low')
+			// disk-critical dispatched at 'warning' → the copy reflects the tier (MED-04).
+			expect(calls[0].text).toContain('- Disk space is running low')
 		}
 	})
 

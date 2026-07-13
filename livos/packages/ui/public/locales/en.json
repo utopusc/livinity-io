@@ -733,6 +733,8 @@
   "notifications.cpu.too-hot": "High CPU temperature",
   "notifications.disk-critical.description": "This device is almost out of storage. Free up space to keep backups and apps working.",
   "notifications.disk-critical.title": "Disk space critically low",
+  "notifications.disk-low.description": "This device is running low on storage. Free up some space to keep backups and apps working smoothly.",
+  "notifications.disk-low.title": "Disk space running low",
   "notifications.memory.low": "Your device's memory is low",
   "notifications.new-version-available": "{{update}} is now available to install",
   "notifications.storage.full": "Your device's storage is full",

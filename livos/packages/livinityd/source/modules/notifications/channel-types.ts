@@ -63,11 +63,19 @@ const DESCRIPTIONS: Record<string, string> = {
 	'backups-engine-unavailable': 'Backup engine is unavailable — no backups can run',
 	'backups-not-configured': 'No backup destination is configured',
 	'update-failed': 'A system update failed',
-	'disk-critical': 'Disk space is critically low',
 }
 
-export function describeNotification(notificationId: string): string {
-	return DESCRIPTIONS[floorKey(notificationId)] ?? notificationId
+// MED-04: `disk-critical` fires at two tiers (jobs.ts diskSeverityFor): warning
+// (<1GB free) and critical (<100MB free). The external message must reflect the
+// tier that actually fired — a warning must NOT read "critically low". Severity
+// is threaded from the Dispatcher (which always has it); an unknown/critical
+// severity keeps the more urgent wording (fail-loud default).
+export function describeNotification(notificationId: string, severity?: AlertSeverity): string {
+	const key = floorKey(notificationId)
+	if (key === 'disk-critical') {
+		return severity === 'warning' ? 'Disk space is running low' : 'Disk space is critically low'
+	}
+	return DESCRIPTIONS[key] ?? notificationId
 }
 
 // Map livinityd channel kind → Liv ChannelId (strip 'liv:' prefix); null for webhook/ntfy.

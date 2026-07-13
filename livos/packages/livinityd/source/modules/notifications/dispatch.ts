@@ -111,7 +111,7 @@ export class Dispatcher {
 		)
 		if (channels.length === 0) return
 
-		const text = describeNotification(notificationId)
+		const text = describeNotification(notificationId, severity)
 		const schedule =
 			this.deps.setTimer ?? ((fn: () => void, ms: number) => setTimeout(fn, ms))
 

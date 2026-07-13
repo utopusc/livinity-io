@@ -707,6 +707,8 @@
   "notifications.cpu.too-hot": "Yüksek CPU sıcaklığı",
   "notifications.disk-critical.description": "Bu cihazın depolama alanı neredeyse doldu. Yedeklemelerin ve uygulamaların çalışmaya devam etmesi için yer açın.",
   "notifications.disk-critical.title": "Disk alanı kritik seviyede düşük",
+  "notifications.disk-low.description": "Bu cihazın depolama alanı azalıyor. Yedeklemelerin ve uygulamaların sorunsuz çalışmaya devam etmesi için biraz yer açın.",
+  "notifications.disk-low.title": "Disk alanı azalıyor",
   "notifications.memory.low": "Cihazınızın belleği düşük",
   "notifications.new-version-available": "{{update}} artık indirilebilir",
   "notifications.storage.full": "Cihazınızın depolama alanı dolu",

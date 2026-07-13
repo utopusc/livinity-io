@@ -6,6 +6,7 @@ import {useNavigate} from 'react-router-dom'
 import {BackupDeviceIcon} from '@/features/backups/components/backup-device-icon'
 import {getDeviceNameFromPath} from '@/features/backups/utils/backup-location-helpers'
 import {useCurrentUser} from '@/hooks/use-current-user'
+import {useSystemDisk} from '@/hooks/use-disk'
 import {useNotifications} from '@/hooks/use-notifications'
 import {
 	AlertDialog,
@@ -164,6 +165,13 @@ export function Notifications() {
 	const {notifications, clearNotification} = useNotifications()
 	const navigate = useNavigate()
 
+	// MED-04: the 'disk-critical' notification id carries no tier, but the disk
+	// alert fires at two tiers (warning <1GB, critical <100MB). Read the live
+	// system-disk state so the dialog copy reflects the tier that actually fired —
+	// a mere warning must not read "critically low". If the reading is unavailable
+	// we fall back to the more urgent critical wording (fail-loud).
+	const {isDiskLow: diskIsLow, isDiskFull: diskIsFull} = useSystemDisk()
+
 	// Determine if we need to query backup repositories
 	// TODO: remove support for legacy "backups-failing" notification format
 	// that was used in LivOS 1.5 beta 1 and beta 2 (with no repo ID)
@@ -293,12 +301,17 @@ export function Notifications() {
 			}
 		}
 
-		// Phase 310-04 (ALERT-02) — disk space critically low (server-side
-		// scheduled check). Critical/warning, admin-only.
+		// Phase 310-04 (ALERT-02) — disk space low (server-side scheduled check).
+		// Critical/warning, admin-only. MED-04: reflect the ACTUAL tier — only the
+		// warning tier (low but not full) softens the copy; anything else (full, or
+		// an unavailable reading) keeps the urgent "critically low" wording.
 		if (notification === 'disk-critical') {
+			const isWarningTier = diskIsLow && !diskIsFull
 			return {
-				title: t('notifications.disk-critical.title'),
-				description: t('notifications.disk-critical.description'),
+				title: isWarningTier ? t('notifications.disk-low.title') : t('notifications.disk-critical.title'),
+				description: isWarningTier
+					? t('notifications.disk-low.description')
+					: t('notifications.disk-critical.description'),
 				action: (
 					<>
 						<Button variant='default' size='dialog' onClick={() => clearNotification(notification)} tabIndex={-1}>
