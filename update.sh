@@ -628,6 +628,29 @@ MANIFEST
     fi
 }
 
+# ── Phase 311-02 (UPDSAFE-04): pre-update systemd-unit capture ────────────────
+# livos-egress.service + ydotoold.service are rewritten UNCONDITIONALLY in Step 1b
+# (below), which runs BEFORE snapshot_last_good()'s call site — so a capture taken
+# at/after that point would record the NEW (this-run) units, not the genuine
+# pre-update ones. This function is therefore called EARLY (before Step 1b) and
+# writes to the SIBLING dir "$LAST_GOOD_DIR.systemd-pre" (NOT a child of
+# $LAST_GOOD_DIR), so snapshot_last_good()'s `rm -rf "$LAST_GOOD_DIR"` cannot wipe
+# it; it is folded into $LAST_GOOD_DIR/systemd right after that rm -rf. Explicit
+# path list (never a glob) — small text files, plain cp -a. Best-effort.
+snapshot_systemd_units() {
+    mkdir -p "$LAST_GOOD_DIR.systemd-pre" 2>/dev/null || true
+    local f
+    for f in /etc/systemd/system/livos.service \
+             /etc/systemd/system/livos-egress.service \
+             /etc/systemd/system/ydotoold.service \
+             /etc/systemd/system/livos-app-liv-ai.service \
+             /etc/systemd/system/liv-claw-gateway.service \
+             /etc/systemd/system/liv-assistant.service; do
+        [[ -f "$f" ]] && cp -a "$f" "$LAST_GOOD_DIR.systemd-pre/$(basename "$f")" 2>/dev/null
+    done
+    [[ -d /etc/systemd/system/livos.service.d ]] && cp -a /etc/systemd/system/livos.service.d "$LAST_GOOD_DIR.systemd-pre/livos.service.d" 2>/dev/null
+}
+
 # Restore the load-bearing runtime from the snapshot. Returns 1 (no rollback
 # possible) when no snapshot exists.
 restore_last_good() {
@@ -662,6 +685,36 @@ restore_last_good() {
     if [[ -d "$LAST_GOOD_DIR/node_modules" ]]; then
         rsync -a --delete "$LAST_GOOD_DIR/node_modules/" "$LIVOS_DIR/node_modules/" 2>/dev/null \
             || warn "node_modules restore failed — a rollback pnpm install may be required"
+    fi
+    # ── Phase 311-02 (UPDSAFE-04): restore captured systemd units (if any) ──
+    # Captured pre-update into $LAST_GOOD_DIR/systemd (see snapshot_systemd_units).
+    # Only touch a unit whose content actually differs (cmp -s), then a SINGLE
+    # daemon-reload + restart ONLY the changed units — avoid needless bounces.
+    if [[ -d "$LAST_GOOD_DIR/systemd" ]]; then
+        local _sd_changed=0 _sd_unit _sd_base _sd_live _sd_restart=""
+        for _sd_unit in "$LAST_GOOD_DIR/systemd"/*.service; do
+            [[ -f "$_sd_unit" ]] || continue
+            _sd_base=$(basename "$_sd_unit")
+            _sd_live="/etc/systemd/system/$_sd_base"
+            if ! cmp -s "$_sd_unit" "$_sd_live" 2>/dev/null; then
+                cp -a "$_sd_unit" "$_sd_live" 2>/dev/null || true
+                _sd_changed=1
+                _sd_restart="$_sd_restart $_sd_base"
+            fi
+        done
+        if [[ -d "$LAST_GOOD_DIR/systemd/livos.service.d" ]]; then
+            if ! diff -rq "$LAST_GOOD_DIR/systemd/livos.service.d" /etc/systemd/system/livos.service.d >/dev/null 2>&1; then
+                rm -rf /etc/systemd/system/livos.service.d 2>/dev/null || true
+                cp -a "$LAST_GOOD_DIR/systemd/livos.service.d" /etc/systemd/system/livos.service.d 2>/dev/null || true
+                _sd_changed=1
+            fi
+        fi
+        if (( _sd_changed == 1 )); then
+            systemctl daemon-reload 2>/dev/null || true
+            for _sd_base in $_sd_restart; do
+                systemctl restart "$_sd_base" 2>/dev/null || true
+            done
+        fi
     fi
     # livos.service runs as the LivOS desktop user — derive it (NOT hardcoded bruce,
     # which crash-loops non-bruce accounts) and restore ownership so it can read the tree.
@@ -1033,6 +1086,13 @@ livos_verify_fetched_ref
 # Locked decision D-93-07: "Install.sh ile bu butun servisler kurulmali"
 # applies to both install.sh (fresh) AND update.sh (incremental).
 # apt-get install -y -qq is a no-op on already-installed packages.
+# ── Phase 311-02 (UPDSAFE-04): EARLY systemd capture — MUST precede Step 1b ────
+# Step 1b below rewrites livos-egress.service + ydotoold.service UNCONDITIONALLY,
+# BEFORE snapshot_last_good()'s call site (Step 2). Capture the genuine pre-update
+# units NOW into the sibling $LAST_GOOD_DIR.systemd-pre; it is folded into
+# $LAST_GOOD_DIR/systemd right after snapshot_last_good()'s rm -rf. This bare call
+# MUST stay above the egress/ydotoold heredoc writes (the line-order proof pins it).
+snapshot_systemd_units
 step "Phase 93: streaming subsystem dependencies"
 if [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
     info "Ensuring streaming subsystem apt packages are installed..."
@@ -1264,6 +1324,13 @@ step "Updating LivOS source files"
 # in-place rsync, so Step 8's health probe can roll back if the new code can't
 # boot. Must run before ANY overwrite below.
 snapshot_last_good
+
+# ── Phase 311-02 (UPDSAFE-04): fold the EARLY systemd capture into the snapshot ─
+# snapshot_last_good() just did `rm -rf "$LAST_GOOD_DIR"` + mkdir, so the sibling
+# .systemd-pre (captured before Step 1b overwrote the units) is now safe to move
+# in as $LAST_GOOD_DIR/systemd — the ONLY point that has BOTH the fresh snapshot
+# dir AND the genuine pre-update units.
+mv "$LAST_GOOD_DIR.systemd-pre" "$LAST_GOOD_DIR/systemd" 2>/dev/null || true
 
 # Update livinityd source (tsx runs directly, no compile needed)
 info "Updating livinityd source..."
