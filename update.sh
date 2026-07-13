@@ -859,6 +859,12 @@ MANIFEST
 # it; it is folded into $LAST_GOOD_DIR/systemd right after that rm -rf. Explicit
 # path list (never a glob) — small text files, plain cp -a. Best-effort.
 snapshot_systemd_units() {
+    # Phase 311 IN-02 — clear the sibling capture dir before repopulating, so a
+    # unit that was deliberately UNINSTALLED between runs cannot linger here (the
+    # cp -a loop below only touches units that still exist on disk) and get folded
+    # into $LAST_GOOD_DIR/systemd + resurrected by a later rollback. Mirrors
+    # snapshot_last_good()'s own `rm -rf "$LAST_GOOD_DIR"` reset.
+    rm -rf "$LAST_GOOD_DIR.systemd-pre" 2>/dev/null || true
     mkdir -p "$LAST_GOOD_DIR.systemd-pre" 2>/dev/null || true
     local f
     for f in /etc/systemd/system/livos.service \
