@@ -1,0 +1,37 @@
+# Phase 313 (SMART-01..04) — sudoers grant for smartctl(8) disk-health reads.
+#
+# Grants the desktop/livinityd user (templated from `bruce` to the resolved
+# desktop user at install/update time) permission to run ONLY the exact read
+# and self-test-trigger command shapes livinityd's smart.ts constructs. Drop
+# at /etc/sudoers.d/livos-smart (mode 0440, root:root).
+#
+# Security model (matches sudoers.d/livinityd + livos-native):
+# - NO blanket `/usr/sbin/smartctl`-wildcard grant. A bare argument wildcard
+#   would expose firmware-affecting operations (SMART enable/disable toggles,
+#   attribute-autosave writes, feature-set changes, self-test-log aborts, etc.)
+#   to a compromised daemon. Only the read shapes (-a -j, optionally -d sat)
+#   and the self-test-trigger shapes (-t short|long, optionally -d sat) below
+#   are permitted; every other flag or subcommand is rejected by sudoers.
+# - The `/dev/*` glob constrains only the final argument position. smart.ts
+#   ALSO validates every device id against DEVICE_ID_RE before the argv is
+#   built, so a crafted id can never reach this boundary (defense-in-depth).
+#
+# To add a permitted operation: extend the LIVINITYD_SMARTCTL Cmnd_Alias — do
+# NOT broaden the runas spec to ALL. (Mirrors the LIVINITYD_FAIL2BAN "exact
+# subcommand shapes only, never a bare grant" precedent in sudoers.d/livinityd.)
+#
+# argv contract source: 313-01-SUMMARY.md (order is load-bearing). NVMe is read
+# via auto-detect (-a -j /dev/nvmeXnY), NOT a `-d nvme` passthrough — smart.ts
+# never emits `-d nvme`, so this grant intentionally carries no such shape.
+#
+# Deploy (fresh): deploy-livinityd.sh; day-2: update.sh (content-diff + visudo
+# validate-or-remove). Both sed-template the `bruce` subject to the resolved
+# desktop user.
+Cmnd_Alias LIVINITYD_SMARTCTL = /usr/sbin/smartctl -a -j /dev/*, \
+  /usr/sbin/smartctl -a -j -d sat /dev/*, \
+  /usr/sbin/smartctl -t short /dev/*, \
+  /usr/sbin/smartctl -t short -d sat /dev/*, \
+  /usr/sbin/smartctl -t long /dev/*, \
+  /usr/sbin/smartctl -t long -d sat /dev/*
+
+bruce ALL=(root) NOPASSWD: LIVINITYD_SMARTCTL
