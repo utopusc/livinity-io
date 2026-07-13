@@ -1,3 +1,7 @@
+import {execa} from 'execa'
+
+import {getBlockDevices} from '../files/external-storage.js'
+
 // =========================================================================
 // SMART disk-health core (Phase 313 SMART-01 / SMART-04).
 //
@@ -213,4 +217,260 @@ export function evaluateTemperature(celsius: number | null | undefined): SmartTe
 	if (celsius >= 65) return 'hot'
 	if (celsius >= 55) return 'warm'
 	return 'ok'
+}
+
+// =========================================================================
+// Runtime layer: smartctl invocation + defensive detection chain + assembly.
+// =========================================================================
+
+// copied from files/external-storage.ts:36 — canonical kernel-device-name guard.
+// Validated BEFORE every privileged smartctl argv is built (defence-in-depth
+// against sudoers-glob argument injection; the sudoers /dev/* glob only
+// constrains literal argument text, not a crafted id).
+const DEVICE_ID_RE = /^(sd[a-z]+|nvme\d+n\d+|mmcblk\d+)$/
+
+// A smartctl read "succeeded" iff the JSON carries at least one health surface.
+function readSucceeded(json: SmartctlJson | null): boolean {
+	return (
+		!!json &&
+		(json.smart_status !== undefined ||
+			json.ata_smart_attributes !== undefined ||
+			json.nvme_smart_health_information_log !== undefined)
+	)
+}
+
+interface SmartctlJson {
+	smart_status?: {passed?: boolean}
+	ata_smart_attributes?: {table?: SataAttrRow[]}
+	nvme_smart_health_information_log?: {
+		critical_warning?: number
+		percentage_used?: number
+		media_errors?: number
+		available_spare?: number
+		available_spare_threshold?: number
+	}
+	temperature?: number | {current?: number}
+	smartctl?: {exit_status?: number; messages?: {string?: string; severity?: string}[]}
+	ata_smart_self_test_log?: {standard?: {table?: {status?: {string?: string; remaining_percent?: number}}[]}}
+	nvme_self_test_log?: {current_self_test_operation?: {value?: number}; table?: {self_test_result?: {string?: string}}[]}
+}
+
+// Invoke `sudo -n /usr/sbin/smartctl -a -j [-d sat] /dev/<id>` and classify the
+// outcome. argv ORDER IS LOAD-BEARING: it must match the Plan-03 sudoers
+// Cmnd_Alias exactly (`-a -j /dev/*` / `-a -j -d sat /dev/*`). Never emits
+// `-d nvme` — NVMe is read via auto-detect.
+async function readSmart(
+	id: string,
+	dPassthrough?: 'sat',
+): Promise<{json: SmartctlJson | null; sudoDenied: boolean; toolError: boolean}> {
+	// Shape guard BEFORE any argv construction (T-313-01).
+	if (!DEVICE_ID_RE.test(id)) throw new Error('[invalid-device-id]')
+
+	const args = ['-n', SMARTCTL_BIN, '-a', '-j', ...(dPassthrough ? ['-d', dPassthrough] : []), `/dev/${id}`]
+
+	let stdout = ''
+	let stderr = ''
+	try {
+		// exit status is a bitmask — NEVER reject on nonzero; parse the body regardless.
+		const res = await execa('sudo', args, {timeout: 20_000, reject: false})
+		stdout = res.stdout ?? ''
+		stderr = res.stderr ?? ''
+	} catch (err) {
+		stderr = err instanceof Error ? err.message : String(err)
+	}
+
+	// Distinguish a sudo/permission failure from a genuine device/tool error.
+	const haystack = `${stderr}\n${stdout}`.toLowerCase()
+	if (haystack.includes('sudo:') || haystack.includes('a password is required') || haystack.includes('not allowed to execute')) {
+		return {json: null, sudoDenied: true, toolError: false}
+	}
+
+	let json: SmartctlJson | null = null
+	try {
+		json = JSON.parse(stdout) as SmartctlJson
+	} catch {
+		return {json: null, sudoDenied: false, toolError: true}
+	}
+
+	// Unresolved-enclosure signal: check smartctl.messages[] BEFORE trusting the
+	// health fields exist ("Unknown USB bridge ... please try -d sat", etc.).
+	const messages = Array.isArray(json?.smartctl?.messages) ? json.smartctl!.messages! : []
+	const unresolved = messages.some(
+		(m) => typeof m?.string === 'string' && /unknown usb bridge|unsupported|please try/i.test(m.string),
+	)
+	if (unresolved && !readSucceeded(json)) {
+		return {json, sudoDenied: false, toolError: true}
+	}
+
+	return {json, sudoDenied: false, toolError: false}
+}
+
+// Defensive self-test-log read. Field names are MEDIUM-confidence (RESEARCH
+// Open Q3) — every access is optional-chained; missing fields yield
+// {selfTestInProgress:false, lastSelfTest:null} and NEVER throw.
+function readSelfTest(
+	json: SmartctlJson,
+	isNvme: boolean,
+): {selfTestInProgress: boolean; lastSelfTest: {status: string; passed: boolean | null} | null} {
+	const classify = (statusStr: string): boolean | null => {
+		if (/without error|completed without/i.test(statusStr)) return true
+		if (/error|fail/i.test(statusStr)) return false
+		return null
+	}
+	try {
+		if (isNvme) {
+			const current = json?.nvme_self_test_log?.current_self_test_operation?.value
+			const selfTestInProgress = typeof current === 'number' && current !== 0
+			const statusStr = json?.nvme_self_test_log?.table?.[0]?.self_test_result?.string
+			const lastSelfTest = typeof statusStr === 'string' ? {status: statusStr, passed: classify(statusStr)} : null
+			return {selfTestInProgress, lastSelfTest}
+		}
+		const row = json?.ata_smart_self_test_log?.standard?.table?.[0]
+		const statusStr = row?.status?.string
+		const remaining = row?.status?.remaining_percent
+		const inProgress =
+			(typeof statusStr === 'string' && /in progress/i.test(statusStr)) || (typeof remaining === 'number' && remaining > 0)
+		const lastSelfTest =
+			typeof statusStr === 'string' && !/in progress/i.test(statusStr) ? {status: statusStr, passed: classify(statusStr)} : null
+		return {selfTestInProgress: inProgress, lastSelfTest}
+	} catch {
+		return {selfTestInProgress: false, lastSelfTest: null}
+	}
+}
+
+// Map one enumerated block device to its honest SmartDrive shape.
+async function assembleDrive(dev: {id: string; name: string; transport: string}): Promise<SmartDrive> {
+	const deviceId = dev.id
+	const transport = dev.transport // raw lsblk string ('usb' reliable; else internal)
+	const model = dev.name
+
+	// Defaults represent the failure posture: nothing is 'healthy' until proven.
+	const base: SmartDrive = {
+		deviceId,
+		transport,
+		model,
+		healthStatus: 'unavailable',
+		severity: null,
+		temperature: null,
+		temperatureStatus: 'ok',
+		detectionMethod: 'unsupported',
+		reasons: [],
+		attributes: [],
+		selfTestInProgress: false,
+		lastSelfTest: null,
+	}
+
+	// 1) auto-detect (correct for all direct-attached SATA/NVMe).
+	const first = await readSmart(deviceId)
+	let json: SmartctlJson | null = first.json
+	let detectionMethod: SmartDetectionMethod
+
+	if (readSucceeded(json)) {
+		detectionMethod = json!.nvme_smart_health_information_log !== undefined ? 'nvme' : 'ata'
+	} else if (transport === 'usb') {
+		// 2) USB-SATA bridge fallback — the ONLY case that warrants `-d sat`.
+		const retry = await readSmart(deviceId, 'sat')
+		if (readSucceeded(retry.json)) {
+			json = retry.json
+			detectionMethod = 'sat'
+		} else {
+			// Genuinely unreadable enclosure ⇒ honest 'unavailable' (NEVER healthy).
+			return {...base, detectionMethod: 'unsupported', healthStatus: 'unavailable'}
+		}
+	} else {
+		// Internal drive first-read failure: most likely the sudoers grant is
+		// missing ⇒ 'permission-denied'; else a genuine unsupported device.
+		// Either way 'unavailable' (NEVER healthy).
+		return {...base, detectionMethod: first.sudoDenied ? 'permission-denied' : 'unsupported', healthStatus: 'unavailable'}
+	}
+
+	// ── SUCCESS BRANCH ────────────────────────────────────────────────────
+	// A SMART read genuinely resolved. This is the ONLY place a drive may be
+	// declared 'healthy' (SMART-04). Run the matching pure evaluator.
+	const isNvme = detectionMethod === 'nvme'
+	const evalResult: SmartHealthEval = isNvme
+		? evaluateNvmeHealth(json!.nvme_smart_health_information_log)
+		: evaluateSataHealth({smart_status: json!.smart_status, ata_smart_attributes: json!.ata_smart_attributes})
+
+	const rawTemp = json!.temperature
+	const tempCelsius =
+		typeof rawTemp === 'number'
+			? rawTemp
+			: typeof rawTemp === 'object' && typeof rawTemp?.current === 'number'
+				? rawTemp.current
+				: null
+
+	const {selfTestInProgress, lastSelfTest} = readSelfTest(json!, isNvme)
+
+	const drive: SmartDrive = {
+		deviceId,
+		transport,
+		model,
+		healthStatus: 'healthy', // ★ SMART-04: the ONE and ONLY 'healthy' assignment —
+		// reachable solely inside this success branch, after a resolved read.
+		severity: null,
+		temperature: tempCelsius,
+		temperatureStatus: evaluateTemperature(tempCelsius),
+		detectionMethod,
+		reasons: evalResult.reasons,
+		attributes: evalResult.attributes,
+		selfTestInProgress,
+		lastSelfTest,
+	}
+
+	if (evalResult.severity) {
+		drive.healthStatus = 'failing'
+		drive.severity = evalResult.severity
+	}
+
+	return drive
+}
+
+// ── Exported surface (mirrors monitoring.ts — plain async fns) ──────────────
+
+// Enumerate every block device (reusing getBlockDevices) and evaluate each.
+export async function listDrives(): Promise<SmartDrive[]> {
+	const devices = await getBlockDevices()
+	const drives: SmartDrive[] = []
+	// Sequential: privileged smartctl calls should not be fired in a burst.
+	for (const dev of devices) {
+		drives.push(await assembleDrive(dev))
+	}
+	return drives
+}
+
+export async function getDrive(deviceId: string): Promise<SmartDrive> {
+	if (!DEVICE_ID_RE.test(deviceId)) throw new Error('[invalid-device-id]')
+	const devices = await getBlockDevices()
+	const dev = devices.find((device) => device.id === deviceId)
+	if (!dev) throw new Error('[unknown-device]')
+	return assembleDrive(dev)
+}
+
+// Trigger a firmware self-test (fire-and-forget — the test runs async in the
+// drive; its RESULT is read back later via a subsequent listDrives scan).
+export async function runSelfTest(deviceId: string, mode: 'short' | 'long'): Promise<{started: boolean}> {
+	if (!DEVICE_ID_RE.test(deviceId)) throw new Error('[invalid-device-id]')
+
+	// Reuse the drive's resolved detectionMethod to decide the `-d sat` need.
+	const drive = await getDrive(deviceId).catch(() => null)
+	const needsSat = drive?.detectionMethod === 'sat'
+
+	// argv ORDER IS LOAD-BEARING (matches Plan-03 sudoers `-t short|long [-d sat]`).
+	const args = ['-n', SMARTCTL_BIN, '-t', mode, ...(needsSat ? ['-d', 'sat'] : []), `/dev/${deviceId}`]
+
+	let stdout = ''
+	let stderr = ''
+	let exitCode = 1
+	try {
+		const res = await execa('sudo', args, {timeout: 20_000, reject: false})
+		stdout = res.stdout ?? ''
+		stderr = res.stderr ?? ''
+		exitCode = res.exitCode ?? 0
+	} catch {
+		return {started: false}
+	}
+
+	const started = exitCode === 0 && !/already .* in progress/i.test(`${stderr}\n${stdout}`)
+	return {started}
 }
