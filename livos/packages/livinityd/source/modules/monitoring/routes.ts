@@ -4,6 +4,7 @@ import {z} from 'zod'
 import {adminProcedure, privateProcedure, router} from '../server/trpc/trpc.js'
 import {getNetworkStats, getDiskIO, getProcesses} from './monitoring.js'
 import {listDrives, getDrive, runSelfTest} from './smart.js'
+import {listSmartAlerts, dismissSmartAlert} from './smart-alerts.js'
 
 export default router({
 	networkStats: privateProcedure.query(async () => {
@@ -90,5 +91,47 @@ export default router({
 					})
 				}
 			}),
+
+		// M-02 — the dismissable smart_alerts AUDIT list. listSmartAlerts /
+		// dismissSmartAlert were exported + unit-tested but wired to no route, so the
+		// table was write-only in production. list is privateProcedure (a read);
+		// dismiss is adminProcedure (it mutates the row's dismissed_at state).
+		alerts: router({
+			list: privateProcedure
+				.input(
+					z
+						.object({
+							includeDismissed: z.boolean().optional(),
+							limit: z.number().int().min(1).max(200).optional(),
+						})
+						.optional(),
+				)
+				.query(async ({input}) => {
+					try {
+						return await listSmartAlerts({
+							includeDismissed: input?.includeDismissed,
+							limit: input?.limit,
+						})
+					} catch (err: any) {
+						throw new TRPCError({
+							code: 'INTERNAL_SERVER_ERROR',
+							message: err.message || 'Failed to list SMART alerts',
+						})
+					}
+				}),
+
+			dismiss: adminProcedure
+				.input(z.object({id: z.string().uuid('invalid alert id')}))
+				.mutation(async ({input}) => {
+					try {
+						return await dismissSmartAlert(input.id)
+					} catch (err: any) {
+						throw new TRPCError({
+							code: 'INTERNAL_SERVER_ERROR',
+							message: err.message || 'Failed to dismiss SMART alert',
+						})
+					}
+				}),
+		}),
 	}),
 })
