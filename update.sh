@@ -813,6 +813,18 @@ snapshot_last_good() {
     # metadata-only clone (no byte copy, near-instant) — it pairs the OLD deps
     # with the OLD code on rollback, so a restore never runs last-good source
     # against a `pnpm install`-mutated node_modules (Pitfall 4 point 1).
+    #
+    # Phase 311 WR-02 — SHARED-INODE ASSUMPTION (documented): `cp -al` hardlinks,
+    # so the snapshot and the live tree share the SAME inode for every file until
+    # one side replaces the directory entry. This is safe against pnpm's
+    # unlink+recreate / content-addressable-store repointing (a NEW inode), which
+    # leaves the snapshot's hardlink pointing at the old content untouched. It is
+    # NOT safe against an IN-PLACE write to an existing path (e.g. a native
+    # postinstall/node-gyp rewriting build/Release/*.node at a fixed path), which
+    # would mutate the shared inode and silently poison the last-good copy. No
+    # such in-place-write step exists in this repo's dependency tree today; if one
+    # is ever added, switch this to a full `cp -a` (correctness over snapshot
+    # speed) — see 311-REVIEW WR-02 / deferred-items.md.
     if [[ -d "$LIVOS_DIR/node_modules" ]]; then
         rm -rf "$LAST_GOOD_DIR/node_modules" 2>/dev/null || true
         cp -al "$LIVOS_DIR/node_modules" "$LAST_GOOD_DIR/node_modules" 2>/dev/null \
