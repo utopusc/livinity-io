@@ -599,6 +599,28 @@ snapshot_last_good() {
     if [[ -d "$LIV_DIR/packages/core/dist" ]]; then
         rsync -a --delete "$LIV_DIR/packages/core/dist/" "$LAST_GOOD_DIR/liv-core-dist/" 2>/dev/null || true
     fi
+    # ── Phase 311-02 (UPDSAFE-04): widen scope — node_modules + a UI manifest ──
+    # node_modules hardlink snapshot: /opt is a single mount, so `cp -al` is a
+    # metadata-only clone (no byte copy, near-instant) — it pairs the OLD deps
+    # with the OLD code on rollback, so a restore never runs last-good source
+    # against a `pnpm install`-mutated node_modules (Pitfall 4 point 1).
+    if [[ -d "$LIVOS_DIR/node_modules" ]]; then
+        rm -rf "$LAST_GOOD_DIR/node_modules" 2>/dev/null || true
+        cp -al "$LIVOS_DIR/node_modules" "$LAST_GOOD_DIR/node_modules" 2>/dev/null \
+            || warn "node_modules hardlink snapshot failed (rollback will re-run pnpm install)"
+    fi
+    # manifest.json — lets the UI label the rollback target. Capture the CURRENTLY-
+    # deployed sha/tag: these files still hold the OLD values at snapshot time
+    # (.deployed-sha is advanced only on success, much later at "Recording deployed
+    # SHA"), plus a schema fingerprint (sha256 digest, NOT schema content) for
+    # telemetry / the rollback-time schema-drift warning (311-03).
+    local _lg_sha _lg_tag _lg_schema
+    _lg_sha=$(cat /opt/livos/.deployed-sha 2>/dev/null | tr -d '[:space:]')
+    _lg_tag=$(cat /opt/livos/.deployed-release 2>/dev/null | tr -d '[:space:]')
+    _lg_schema=$(sha256sum "$LIVOS_DIR/packages/livinityd/source/modules/database/schema.sql" 2>/dev/null | cut -d' ' -f1)
+    cat > "$LAST_GOOD_DIR/manifest.json" <<MANIFEST 2>/dev/null || true
+{"sha": "${_lg_sha}", "tag": "${_lg_tag}", "snapshotted_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "schema_hash": "${_lg_schema}"}
+MANIFEST
     if (( have_src == 1 )); then
         ok "Last-good snapshot saved to $LAST_GOOD_DIR"
     else
@@ -632,6 +654,14 @@ restore_last_good() {
             rm -rf "$tgt" 2>/dev/null || true
             cp -r "$LAST_GOOD_DIR/liv-core-dist" "$tgt" 2>/dev/null || true
         done
+    fi
+    # ── Phase 311-02 (UPDSAFE-04): restore node_modules alongside the code ──
+    # Paired with the source restore so a rollback never runs old code against a
+    # forward-mutated node_modules. Best-effort; a failure just means the operator
+    # may need a manual `pnpm install` on the rolled-back tree.
+    if [[ -d "$LAST_GOOD_DIR/node_modules" ]]; then
+        rsync -a --delete "$LAST_GOOD_DIR/node_modules/" "$LIVOS_DIR/node_modules/" 2>/dev/null \
+            || warn "node_modules restore failed — a rollback pnpm install may be required"
     fi
     # livos.service runs as the LivOS desktop user — derive it (NOT hardcoded bruce,
     # which crash-loops non-bruce accounts) and restore ownership so it can read the tree.
