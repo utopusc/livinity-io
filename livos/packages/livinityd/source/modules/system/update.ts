@@ -528,3 +528,77 @@ export async function performUpdate(livinityd: Livinityd): Promise<boolean> {
 	setUpdateStatus({running: false, progress: 100, description: 'Updated', error: false})
 	return true
 }
+
+// Phase 311 UPDSAFE-04 — operator-triggered manual rollback to the last-good
+// snapshot. Mirrors performUpdate's detached-spawn + `sudo -n` shell-out shape
+// EXACTLY, but targets /opt/livos/livos-manual-rollback.sh (heredoc-installed
+// on-box by update.sh in Phase 311-02) instead of update.sh. The script restores
+// CODE + node_modules + systemd units and restarts services — it NEVER reverts the
+// Postgres schema (see the operator-locked warning in RollbackConfirmModal).
+//
+// Exit-code contract (311-02): 0 = restored + serving on :8080; 1 = restored but
+// :8080 did not come back; 2 = no last-good snapshot (refused); 3 = lock held (a
+// concurrent update/rollback). execa throws on any non-zero exit, so 1/2/3 land in
+// the catch and are mapped to an operator-legible message on updateStatus.error —
+// the mutation's onError toast is the feedback path. We deliberately do NOT fire a
+// NEW external notification here (avoids dragging in notifications.tsx/i18n; the
+// operator triggered this and is watching the modal) and do NOT reuse the
+// existing update-failure notification key (that would misattribute a manual
+// rollback to a forward-update failure in the alert-coalescing surface).
+export async function performRollback(livinityd: Livinityd): Promise<boolean> {
+	setUpdateStatus({running: true, progress: 5, description: 'Rolling back...', error: false})
+
+	try {
+		// Detached spawn + `sudo -n` for the SAME reasons performUpdate uses them:
+		// the script runs `systemctl restart livos.service`, which would otherwise
+		// kill this process (livinityd) mid-run; setsid() via detached puts it in its
+		// own process group so livinityd's restart doesn't propagate, and bruce's
+		// NOPASSWD sudoers entry makes the privileged invocation non-interactive.
+		const proc = $({cwd: '/opt/livos', detached: true})`sudo -n bash /opt/livos/livos-manual-rollback.sh`
+
+		const handleOutput = (chunk: Buffer) => {
+			const text = stripAnsi(chunk.toString())
+			for (const line of text.split('\n')) {
+				const sectionMatch = line.match(/━━━\s+(.+?)\s+━━━/)
+				if (sectionMatch && SECTION_PROGRESS[sectionMatch[1]] !== undefined) {
+					setUpdateStatus({
+						progress: SECTION_PROGRESS[sectionMatch[1]],
+						description: sectionMatch[1],
+					})
+				}
+			}
+		}
+
+		proc.stdout?.on('data', handleOutput)
+		proc.stderr?.on('data', handleOutput)
+		await proc
+	} catch (error) {
+		// Map the 311-02 exit-code contract to an operator-legible message.
+		const exitCode = (error as {exitCode?: number}).exitCode
+		let errMessage: string
+		switch (exitCode) {
+			case 1:
+				errMessage =
+					'Rollback restored the previous version but LivOS did not come back on :8080. Check the box before retrying.'
+				break
+			case 2:
+				errMessage = 'No last-good snapshot exists to roll back to on this box.'
+				break
+			case 3:
+				errMessage = 'An update or rollback is already in progress. Wait for it to finish and retry.'
+				break
+			default:
+				errMessage = (error as Error).message ?? 'Rollback failed'
+		}
+		if (!updateStatus.error) setUpdateStatus({error: errMessage})
+		// Reset state but preserve the error so the UI toast can surface it.
+		const errorStatus = updateStatus.error
+		resetUpdateStatus()
+		setUpdateStatus({error: errorStatus})
+		livinityd.logger.error('livos-manual-rollback.sh failed', error)
+		return false
+	}
+
+	setUpdateStatus({running: false, progress: 100, description: 'Rolled back', error: false})
+	return true
+}

@@ -8,7 +8,7 @@ import stripAnsi from 'strip-ansi'
 
 import type {ProgressStatus} from '../apps/schema.js'
 import {getResetStatus, performFactoryReset, factoryResetInputSchema} from './factory-reset.js'
-import {getUpdateStatus, performUpdate, getLatestRelease, readDeployedSha, resolveVersionLabel} from './update.js'
+import {getUpdateStatus, performUpdate, performRollback, getLatestRelease, readDeployedSha, resolveVersionLabel} from './update.js'
 import {
 	getCpuTemperature,
 	getSystemDiskUsage,
@@ -199,6 +199,65 @@ export default router({
 		}
 		return success
 	}),
+	// ─────────────────────────────────────────────────────────────────────
+	// Phase 311 UPDSAFE-04 — operator-triggered manual rollback to last-good.
+	//   adminProcedure (NOT privateProcedure): a manual rollback is MORE
+	//   destructive than a forward update, so it matches factoryReset's admin
+	//   gate — a non-admin member must not be able to roll the box back
+	//   (T-311-03-01). The SAME systemStatus==='updating' CONFLICT guard as
+	//   `update` prevents a rollback racing a live update from corrupting the
+	//   tree (T-311-03-02; the 311-02 script's flock is the second, independent
+	//   guard). performRollback shells out to /opt/livos/livos-manual-rollback.sh.
+	// ─────────────────────────────────────────────────────────────────────
+	rollbackToPrevious: adminProcedure.mutation(async ({ctx}) => {
+		if (systemStatus === 'updating') {
+			throw new TRPCError({code: 'CONFLICT', message: 'An update or rollback is already in progress'})
+		}
+		// Reuse the SAME 'updating' status enum value — the UI already polls
+		// system.status to know when a long-running deploy is in flight.
+		systemStatus = 'updating'
+		let success = false
+		try {
+			success = await performRollback(ctx.livinityd!)
+		} finally {
+			systemStatus = 'running'
+		}
+		return success
+	}),
+	// Phase 311 UPDSAFE-04 — does a last-good snapshot exist to roll back to, and
+	// what is its target label? adminProcedure (matches the mutation's gate). NEVER
+	// throws (mirrors readDeployedSha's ENOENT discipline): the UI HIDES the button
+	// when unavailable, so a box that never completed an update never offers a
+	// rollback that would fail (RESEARCH A.2). The 311-02 manifest carries only
+	// tag/shortSha/snapshottedAt — no secrets reach the client (T-311-03-04).
+	//   • no snapshot dir            → {available: false}
+	//   • snapshot + parseable manifest → {available: true, tag?, shortSha?, snapshottedAt?}
+	//   • snapshot but absent/corrupt manifest → {available: true} (no label)
+	canRollback: adminProcedure.query(
+		async (): Promise<{available: boolean; tag?: string; shortSha?: string; snapshottedAt?: string}> => {
+			const SNAPSHOT_DIR = '/opt/.livos-last-good'
+			try {
+				await fs.access(`${SNAPSHOT_DIR}/livinityd-source`)
+			} catch {
+				return {available: false}
+			}
+			try {
+				const raw = await fs.readFile(`${SNAPSHOT_DIR}/manifest.json`, 'utf8')
+				// 311-02 manifest schema: {sha, tag, snapshotted_at, schema_hash} (snake_case).
+				const manifest = JSON.parse(raw) as {sha?: string; tag?: string; snapshotted_at?: string}
+				return {
+					available: true,
+					tag: manifest.tag || undefined,
+					shortSha: manifest.sha ? manifest.sha.slice(0, 7) : undefined,
+					snapshottedAt: manifest.snapshotted_at || undefined,
+				}
+			} catch {
+				// Snapshot exists but the manifest is absent/corrupt — still
+				// rollback-able, just without a friendly target label.
+				return {available: true}
+			}
+		},
+	),
 	// ─────────────────────────────────────────────────────────────────────
 	// Phase 33 OBS-02 — list last N deploy history entries
 	//   Reads /opt/livos/data/update-history/*.json (Phase 32 schema:
