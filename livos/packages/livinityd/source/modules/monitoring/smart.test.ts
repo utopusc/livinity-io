@@ -1,6 +1,19 @@
-import {describe, expect, test} from 'vitest'
+import {beforeEach, describe, expect, test, vi} from 'vitest'
 
-import {evaluateNvmeHealth, evaluateSataHealth, evaluateTemperature} from './smart.js'
+import {execa} from 'execa'
+
+import {getBlockDevices} from '../files/external-storage.js'
+
+import {evaluateNvmeHealth, evaluateSataHealth, evaluateTemperature, listDrives} from './smart.js'
+
+// Fully isolate the pipeline: no real subprocess, no real lsblk/sudo.
+vi.mock('execa', () => ({execa: vi.fn()}))
+vi.mock('../files/external-storage.js', () => ({getBlockDevices: vi.fn()}))
+
+beforeEach(() => {
+	vi.mocked(execa).mockReset()
+	vi.mocked(getBlockDevices).mockReset()
+})
 
 // ─────────────────────────────────────────────────────────────────────────
 // Task 1 — PURE threshold evaluators (no disk I/O, no subprocess).
@@ -118,5 +131,127 @@ describe('evaluateTemperature (display-only)', () => {
 	test('null/undefined → ok (never throws)', () => {
 		expect(evaluateTemperature(null)).toBe('ok')
 		expect(evaluateTemperature(undefined)).toBe('ok')
+	})
+})
+
+// ─────────────────────────────────────────────────────────────────────────
+// Task 3 — FIXTURE-driven assembly pipeline (all 5 detection outcomes).
+// execa + getBlockDevices are mocked so no real disk/sudo is ever touched.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Canned smartctl -a -j JSON fixtures.
+const SATA_HEALTHY = {
+	smart_status: {passed: true},
+	ata_smart_attributes: {
+		table: [
+			{id: 5, name: 'Reallocated_Sector_Ct', raw: {value: 0}, when_failed: ''},
+			{id: 187, name: 'Reported_Uncorrect', raw: {value: 0}, when_failed: ''},
+			{id: 197, name: 'Current_Pending_Sector', raw: {value: 0}, when_failed: ''},
+			{id: 198, name: 'Offline_Uncorrectable', raw: {value: 0}, when_failed: ''},
+		],
+	},
+	temperature: {current: 38},
+}
+
+const SATA_FAILING = {
+	smart_status: {passed: false},
+	ata_smart_attributes: {
+		table: [{id: 5, name: 'Reallocated_Sector_Ct', raw: {value: 120}, when_failed: ''}],
+	},
+	temperature: {current: 44},
+}
+
+const NVME_CRITICAL = {
+	nvme_smart_health_information_log: {
+		critical_warning: 4,
+		percentage_used: 97,
+		media_errors: 0,
+		available_spare: 80,
+		available_spare_threshold: 5,
+	},
+	temperature: 50,
+}
+
+// USB-SATA bridge that smartctl cannot resolve — no health fields, only an error.
+const USB_BRIDGE_UNRESOLVED = {
+	smartctl: {
+		exit_status: 4,
+		messages: [{string: "Unknown USB bridge [0x1234:0x5678 (0x0100)]. Please try adding '-d sat'.", severity: 'error'}],
+	},
+}
+
+// device-list fixtures (only {id,name,transport} are read by assembleDrive).
+const dev = (id: string, name: string, transport: string) => ({
+	id,
+	name,
+	transport,
+	size: 1_000_204_886_016,
+	isMounted: false,
+	isFormatting: false,
+	partitions: [],
+})
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const asExeca = (result: {stdout?: string; stderr?: string; exitCode?: number}): any => ({
+	stdout: result.stdout ?? '',
+	stderr: result.stderr ?? '',
+	exitCode: result.exitCode ?? 0,
+})
+
+describe('listDrives — 5-state detection pipeline (offline fixtures)', () => {
+	test('1) SATA-healthy → healthy / ata / null severity', async () => {
+		vi.mocked(getBlockDevices).mockResolvedValue([dev('sda', 'WDC Blue', 'sata')] as never)
+		vi.mocked(execa).mockResolvedValue(asExeca({stdout: JSON.stringify(SATA_HEALTHY)}))
+
+		const [drive] = await listDrives()
+		expect(drive.healthStatus).toBe('healthy')
+		expect(drive.detectionMethod).toBe('ata')
+		expect(drive.severity).toBeNull()
+		expect(drive.temperature).toBe(38)
+	})
+
+	test('2) SATA-failing (reallocated>50 + passed=false) → failing / critical', async () => {
+		vi.mocked(getBlockDevices).mockResolvedValue([dev('sda', 'WDC Blue', 'sata')] as never)
+		vi.mocked(execa).mockResolvedValue(asExeca({stdout: JSON.stringify(SATA_FAILING)}))
+
+		const [drive] = await listDrives()
+		expect(drive.healthStatus).toBe('failing')
+		expect(drive.severity).toBe('critical')
+		expect(drive.reasons.length).toBeGreaterThan(0)
+	})
+
+	test('3) NVMe-critical (critical_warning=4, used=97) → failing / critical / nvme', async () => {
+		vi.mocked(getBlockDevices).mockResolvedValue([dev('nvme0n1', 'Samsung 980', 'nvme')] as never)
+		vi.mocked(execa).mockResolvedValue(asExeca({stdout: JSON.stringify(NVME_CRITICAL)}))
+
+		const [drive] = await listDrives()
+		expect(drive.healthStatus).toBe('failing')
+		expect(drive.severity).toBe('critical')
+		expect(drive.detectionMethod).toBe('nvme')
+	})
+
+	test('4) USB-unavailable (auto + -d sat both unresolved) → unavailable / unsupported, NEVER healthy', async () => {
+		vi.mocked(getBlockDevices).mockResolvedValue([dev('sdb', 'USB Enclosure', 'usb')] as never)
+		// Both the auto-detect read AND the -d sat retry return the same bridge error.
+		vi.mocked(execa).mockResolvedValue(asExeca({stdout: JSON.stringify(USB_BRIDGE_UNRESOLVED), exitCode: 4}))
+
+		const [drive] = await listDrives()
+		expect(drive.healthStatus).toBe('unavailable')
+		expect(drive.detectionMethod).toBe('unsupported')
+		// SMART-04 regression guard: an unreadable enclosure must NEVER read healthy.
+		expect(drive.healthStatus).not.toBe('healthy')
+		// The -d sat fallback must actually have been attempted (2 reads).
+		expect(vi.mocked(execa).mock.calls.length).toBe(2)
+	})
+
+	test('5) permission-denied (internal, sudo password required) → unavailable / permission-denied, NEVER healthy', async () => {
+		vi.mocked(getBlockDevices).mockResolvedValue([dev('sdc', 'Internal HDD', 'sata')] as never)
+		vi.mocked(execa).mockResolvedValue(asExeca({stdout: '', stderr: 'sudo: a password is required', exitCode: 1}))
+
+		const [drive] = await listDrives()
+		expect(drive.healthStatus).toBe('unavailable')
+		expect(drive.detectionMethod).toBe('permission-denied')
+		// SMART-04 regression guard: a missing sudo grant must NEVER read healthy.
+		expect(drive.healthStatus).not.toBe('healthy')
 	})
 })
