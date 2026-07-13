@@ -550,11 +550,22 @@ phase33_finalize() {
     local to_field=""
     [[ -n "$LIVOS_UPDATE_TO_SHA" ]] && to_field=", \"to_sha\": \"$LIVOS_UPDATE_TO_SHA\""
 
+    # Phase 311-04 (UPDSAFE-02): warn-only signature verdict, built the same
+    # conditional way from_field/to_field are. Populated only when
+    # livos_verify_fetched_ref() set a status this run (empty on a precheck-fail
+    # exit that never reached it — the object is then simply absent, valid JSON).
+    # Local update-history JSON is the ONLY telemetry sink (operator-locked: no
+    # cross-box phone-home / control-plane fan-out — see 311-RESEARCH Q3).
+    local sigverify_field=""
+    if [[ -n "${_LIVOS_SIGVERIFY_STATUS:-}" ]]; then
+        sigverify_field=", \"signature_verification\": {\"status\": \"${_LIVOS_SIGVERIFY_STATUS}\", \"source\": \"${_LIVOS_SIGVERIFY_SOURCE:-}\", \"expected\": \"${_LIVOS_SIGVERIFY_EXPECTED:-}\", \"actual\": \"${_LIVOS_SIGVERIFY_ACTUAL:-}\"}"
+    fi
+
     local json_path="${HISTORY_DIR}/${LIVOS_UPDATE_START_ISO_FS}-${status}.json"
     cat > "$json_path" <<JSON
 {
   "timestamp": "${LIVOS_UPDATE_START_ISO_JSON}",
-  "status": "${status}"${from_field}${to_field},
+  "status": "${status}"${from_field}${to_field}${sigverify_field},
   "duration_ms": ${duration_ms},
   "log_path": "${final_log_file}"${reason_field}
 }
