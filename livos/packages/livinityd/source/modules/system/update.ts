@@ -420,7 +420,11 @@ export async function performUpdate(livinityd: Livinityd): Promise<boolean> {
 		// Phase 310 ALERT-02 — NEW detection hook: a failed update may leave the
 		// box partially updated. Fire-and-forget external-dispatch (critical);
 		// never let a notification/dispatch failure alter the update control flow.
-		livinityd.notifications.add('update-failed', {severity: 'critical', external: true}).catch(() => {})
+		// INFO-01: leading `void` matches the codebase convention for intentionally
+		// unawaited (fire-and-forget) promises and satisfies no-floating-promises.
+		void livinityd.notifications
+			.add('update-failed', {severity: 'critical', external: true})
+			.catch(() => {})
 		return false
 	}
 
