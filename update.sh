@@ -2864,6 +2864,60 @@ else
     info "livos-add-apt-repo.sh source not found — skipping (apt-repo apps unavailable)"
 fi
 
+# ── Step 7.10b: Phase 313 (SMART) — disk-health provisioning (sudoers.d/livos-smart + smartmontools) ──
+# The livos-smart NOPASSWD grant + smartmontools must reach ALREADY-DEPLOYED
+# boxes on Update, not just fresh installs. Mirrors the livos-native day-2 sync
+# above VERBATIM (content-diff + visudo validate-or-remove), retargeted to
+# livos-smart. Missing this is the "looks wired, silently no-ops" failure class
+# (RESEARCH Pitfall 1 / PATTERNS Flag 1): a box that took Phase 313 would call
+# `sudo -n smartctl ...`, get denied, and surface every drive as permission-denied
+# forever. Fully fail-tolerant: a missing source or a visudo rejection never
+# aborts the Update.
+step "Phase 313 (SMART): disk-health provisioning (sudoers.d/livos-smart + smartmontools)"
+
+_set_desktop_identity   # Phase 277.1 — self-derive the desktop user (no literal bruce)
+
+# --- (a) sudoers.d/livos-smart — install + template the subject to the desktop user ---
+_SMART_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-smart"
+if [[ ! -f "$_SMART_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _SMART_SUDOERS_SRC="$TEMP_DIR/scripts/install/sudoers.d/livos-smart"
+fi
+_SMART_SUDOERS_DST="/etc/sudoers.d/livos-smart"
+if [[ -f "$_SMART_SUDOERS_SRC" ]]; then
+    _SMART_SUDOERS_TMP=$(mktemp)
+    if [[ "$_DESKTOP_USER" != "bruce" ]]; then
+        sed -E "s/^bruce([[:space:]]+ALL=)/${_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DESKTOP_USER})/g" \
+            "$_SMART_SUDOERS_SRC" > "$_SMART_SUDOERS_TMP"
+    else
+        cp -f "$_SMART_SUDOERS_SRC" "$_SMART_SUDOERS_TMP"
+    fi
+    if [[ ! -f "$_SMART_SUDOERS_DST" ]] || ! cmp -s "$_SMART_SUDOERS_TMP" "$_SMART_SUDOERS_DST"; then
+        install -m 0440 -o root -g root "$_SMART_SUDOERS_TMP" "$_SMART_SUDOERS_DST"
+        # SAFETY-CRITICAL: a malformed sudoers file can break sudo system-wide.
+        # Validate the INSTALLED file; if visudo rejects it, REMOVE it (SMART reads
+        # stay denied — the prior state — rather than risk a broken sudoers).
+        if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_SMART_SUDOERS_DST" >/dev/null 2>&1; then
+            warn "visudo rejected $_SMART_SUDOERS_DST — removing (SMART reads stay denied until fixed)"
+            rm -f "$_SMART_SUDOERS_DST"
+        else
+            ok "sudoers.d/livos-smart installed (subject: ${_DESKTOP_USER})"
+        fi
+    else
+        info "sudoers.d/livos-smart already current (subject: ${_DESKTOP_USER})"
+    fi
+    rm -f "$_SMART_SUDOERS_TMP"
+else
+    info "sudoers.d/livos-smart source not found — skipping (SMART reads unavailable)"
+fi
+
+# --- (b) smartmontools — gated idempotent apt install (skip the apt call on a provisioned box) ---
+if command -v smartctl >/dev/null 2>&1; then
+    info "update.sh: smartctl already present — skipping apt install"
+elif [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq smartmontools 2>&1 | tail -3 \
+        || warn "smartmontools install failed (non-fatal — SMART surfaces 'unavailable' until fixed)"
+fi
+
 # ── Step 7.11: Phase 306 — desktop-user password helper (wrapper + sudoers + bootstrap) ──
 # The "Regenerate" button on the Desktop password row in Settings → Account calls
 # livinityd's system.regenerateDesktopPassword, which runs
