@@ -255,3 +255,88 @@ describe('listDrives — 5-state detection pipeline (offline fixtures)', () => {
 		expect(drive.healthStatus).not.toBe('healthy')
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────────────
+// H-02 regression — 'healthy' requires POSITIVE evidence, not mere key-presence.
+// These are the exact deterministic shapes the code review named: a smartctl
+// payload can technically carry a health key while proving NOTHING, and such a
+// read must resolve to 'unavailable', never 'healthy'.
+// ─────────────────────────────────────────────────────────────────────────
+describe('listDrives — H-02 no-false-healthy hardening (positive-evidence gate)', () => {
+	test('empty SATA shape {smart_status:{}, ata_smart_attributes:{table:[]}} → unavailable, NEVER healthy', async () => {
+		vi.mocked(getBlockDevices).mockResolvedValue([dev('sda', 'Ghost Drive', 'sata')] as never)
+		// A key is present (readSucceeded=true) but there is ZERO genuine evidence:
+		// no passed bit, no attribute rows. This is the core H-02 false-healthy trap.
+		vi.mocked(execa).mockResolvedValue(
+			asExeca({stdout: JSON.stringify({smart_status: {}, ata_smart_attributes: {table: []}})}),
+		)
+
+		const [drive] = await listDrives()
+		expect(drive.healthStatus).not.toBe('healthy')
+		expect(drive.healthStatus).toBe('unavailable')
+	})
+
+	test('SATA passed===true + clean Backblaze-5 → healthy (positive PASS + populated table)', async () => {
+		vi.mocked(getBlockDevices).mockResolvedValue([dev('sda', 'WDC Blue', 'sata')] as never)
+		vi.mocked(execa).mockResolvedValue(
+			asExeca({
+				stdout: JSON.stringify({
+					smart_status: {passed: true},
+					ata_smart_attributes: {
+						table: [
+							{id: 5, name: 'Reallocated_Sector_Ct', raw: {value: 0}, when_failed: ''},
+							{id: 187, name: 'Reported_Uncorrect', raw: {value: 0}, when_failed: ''},
+							{id: 197, name: 'Current_Pending_Sector', raw: {value: 0}, when_failed: ''},
+							{id: 198, name: 'Offline_Uncorrectable', raw: {value: 0}, when_failed: ''},
+						],
+					},
+				}),
+			}),
+		)
+
+		const [drive] = await listDrives()
+		expect(drive.healthStatus).toBe('healthy')
+	})
+
+	test('SATA passed===false → failing (a real fail still wins over the positive-evidence gate)', async () => {
+		vi.mocked(getBlockDevices).mockResolvedValue([dev('sda', 'WDC Blue', 'sata')] as never)
+		vi.mocked(execa).mockResolvedValue(
+			asExeca({stdout: JSON.stringify({smart_status: {passed: false}, ata_smart_attributes: {table: []}})}),
+		)
+
+		const [drive] = await listDrives()
+		expect(drive.healthStatus).toBe('failing')
+		expect(drive.severity).toBe('critical')
+	})
+
+	test('NVMe with an empty/absent health log {nvme_smart_health_information_log:{}} → unavailable, NEVER healthy', async () => {
+		vi.mocked(getBlockDevices).mockResolvedValue([dev('nvme0n1', 'Samsung 980', 'nvme')] as never)
+		// Detected as nvme (the log key is present) but the log is EMPTY — critical_warning
+		// is unreadable, so there is no genuine health signal.
+		vi.mocked(execa).mockResolvedValue(
+			asExeca({stdout: JSON.stringify({nvme_smart_health_information_log: {}})}),
+		)
+
+		const [drive] = await listDrives()
+		expect(drive.detectionMethod).toBe('nvme')
+		expect(drive.healthStatus).not.toBe('healthy')
+		expect(drive.healthStatus).toBe('unavailable')
+	})
+
+	test('JSON with an error-severity smartctl message → NEVER healthy even with a clean-looking payload', async () => {
+		vi.mocked(getBlockDevices).mockResolvedValue([dev('sda', 'WDC Blue', 'sata')] as never)
+		vi.mocked(execa).mockResolvedValue(
+			asExeca({
+				stdout: JSON.stringify({
+					smart_status: {passed: true},
+					ata_smart_attributes: {table: [{id: 5, name: 'Reallocated_Sector_Ct', raw: {value: 0}, when_failed: ''}]},
+					smartctl: {messages: [{string: 'Read of ATA attribute table failed', severity: 'error'}]},
+				}),
+			}),
+		)
+
+		const [drive] = await listDrives()
+		expect(drive.healthStatus).not.toBe('healthy')
+		expect(drive.healthStatus).toBe('unavailable')
+	})
+})

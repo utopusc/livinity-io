@@ -55,6 +55,12 @@ export interface SmartHealthEval {
 	severity: SmartSeverity | null
 	reasons: string[]
 	attributes: SmartAttribute[]
+	// ★ SMART-04 (H-02): TRUE only when the read carried GENUINE positive health
+	// evidence — a real firmware PASS bit or a populated Backblaze-5 table (SATA),
+	// or a parseable critical_warning field (NVMe). A technically-present-but-empty
+	// smart_status/attributes/health-log payload yields FALSE, so 'healthy' can
+	// never be inferred from mere key-presence (the H-02 false-healthy gap).
+	positiveEvidence: boolean
 }
 
 // Backblaze's 5 failure-predicting SATA attributes (by ATA attribute id).
@@ -99,6 +105,9 @@ export function evaluateSataHealth({
 	const reasons: string[] = []
 	const attributes: SmartAttribute[] = []
 	let severity: SmartSeverity | null = null
+	// H-02: count how many Backblaze-5 rows were ACTUALLY present in the table
+	// (distinguish "0 rows read → uninformative" from "5 rows read, all clean").
+	let attrRowsFound = 0
 
 	// Drive firmware's own aggregate FAIL → automatic critical.
 	if (smart_status?.passed === false) {
@@ -118,6 +127,7 @@ export function evaluateSataHealth({
 
 	for (const spec of specs) {
 		const row = table?.find((entry) => entry?.id === spec.id)
+		if (row !== undefined) attrRowsFound++
 		const raw = rawValue(row)
 		const whenFailed = typeof row?.when_failed === 'string' ? row.when_failed.trim() : ''
 		let status: SmartAttribute['status'] = 'ok'
@@ -142,7 +152,13 @@ export function evaluateSataHealth({
 		attributes.push({key: spec.key, label: spec.label, raw, status})
 	}
 
-	return {severity, reasons, attributes}
+	// H-02 positive-evidence gate: 'healthy' is only ever inferable when the read
+	// actually asserted a PASS (smart_status.passed===true) OR returned at least
+	// one Backblaze-5 attribute row. An empty {smart_status:{}, table:[]} shape has
+	// neither → positiveEvidence=false → assembleDrive maps it to 'unavailable'.
+	const positiveEvidence = smart_status?.passed === true || attrRowsFound > 0
+
+	return {severity, reasons, attributes, positiveEvidence}
 }
 
 // ── evaluateNvmeHealth ─────────────────────────────────────────────────────
@@ -204,7 +220,12 @@ export function evaluateNvmeHealth(
 		attributes.push({key: 'available_spare', label: 'Available Spare', raw: availableSpare, status: 'ok'})
 	}
 
-	return {severity, reasons, attributes}
+	// H-02 positive-evidence gate: the NVMe SMART/Health log page always carries a
+	// critical_warning byte. If it is unreadable (log absent or an empty {} object),
+	// we have no genuine health signal → positiveEvidence=false → 'unavailable'.
+	const positiveEvidence = typeof log?.critical_warning === 'number'
+
+	return {severity, reasons, attributes, positiveEvidence}
 }
 
 // ── evaluateTemperature ────────────────────────────────────────────────────
@@ -229,7 +250,11 @@ export function evaluateTemperature(celsius: number | null | undefined): SmartTe
 // constrains literal argument text, not a crafted id).
 const DEVICE_ID_RE = /^(sd[a-z]+|nvme\d+n\d+|mmcblk\d+)$/
 
-// A smartctl read "succeeded" iff the JSON carries at least one health surface.
+// A smartctl read "resolved" iff the JSON carries at least one health surface.
+// NOTE (H-02): this is a REACHABILITY signal only ("smartctl returned a health
+// key"), NOT a health verdict. It gates whether the SUCCESS branch runs; the
+// branch itself then demands genuine positive evidence before 'healthy' (mere
+// key-presence is no longer sufficient — see assembleDrive).
 function readSucceeded(json: SmartctlJson | null): boolean {
 	return (
 		!!json &&
@@ -237,6 +262,14 @@ function readSucceeded(json: SmartctlJson | null): boolean {
 			json.ata_smart_attributes !== undefined ||
 			json.nvme_smart_health_information_log !== undefined)
 	)
+}
+
+// H-02: TRUE if smartctl logged any error-severity diagnostic (checksum failure,
+// partial/aborted read, etc.). Such a read must NEVER be trusted as 'healthy',
+// even when a health key is technically present alongside the error.
+function hasErrorMessage(json: SmartctlJson | null): boolean {
+	const messages = Array.isArray(json?.smartctl?.messages) ? json!.smartctl!.messages! : []
+	return messages.some((m) => typeof m?.severity === 'string' && m.severity.toLowerCase() === 'error')
 }
 
 interface SmartctlJson {
@@ -402,12 +435,14 @@ async function assembleDrive(dev: {id: string; name: string; transport: string})
 
 	const {selfTestInProgress, lastSelfTest} = readSelfTest(json!, isNvme)
 
+	// Default posture stays 'unavailable' — the read RESOLVED a key, but that alone
+	// is NOT a clean bill of health (H-02). Only a genuine positive signal upgrades
+	// it, and only a failing signal marks it 'failing'.
 	const drive: SmartDrive = {
 		deviceId,
 		transport,
 		model,
-		healthStatus: 'healthy', // ★ SMART-04: the ONE and ONLY 'healthy' assignment —
-		// reachable solely inside this success branch, after a resolved read.
+		healthStatus: 'unavailable',
 		severity: null,
 		temperature: tempCelsius,
 		temperatureStatus: evaluateTemperature(tempCelsius),
@@ -419,9 +454,19 @@ async function assembleDrive(dev: {id: string; name: string; transport: string})
 	}
 
 	if (evalResult.severity) {
+		// Genuine failing evidence (passed===false / tripped Backblaze-5 counter /
+		// nonzero NVMe critical_warning) — the strongest signal, always wins.
 		drive.healthStatus = 'failing'
 		drive.severity = evalResult.severity
+	} else if (evalResult.positiveEvidence && !hasErrorMessage(json)) {
+		// ★ SMART-04 (H-02): the ONE and ONLY 'healthy' assignment. Requires POSITIVE
+		// evidence (a real PASS / populated health surface) AND no error-severity
+		// smartctl message. A technically-present-but-empty payload, or one carrying a
+		// read error, falls through to the 'unavailable' default below — never 'healthy'.
+		drive.healthStatus = 'healthy'
 	}
+	// else: resolved a key but no positive evidence (empty/uninformative payload) or a
+	// logged read error → keep the honest 'unavailable' default, NEVER 'healthy'.
 
 	return drive
 }
