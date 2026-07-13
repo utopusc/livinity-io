@@ -51,6 +51,7 @@ import {
 	TbShieldLock,
 	TbMessages,
 	TbWorld,
+	TbArrowBackUp,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -88,6 +89,8 @@ import {
 	DropdownMenuTrigger,
 } from '@/shadcn-components/ui/dropdown-menu'
 import {trpcReact} from '@/trpc/trpc'
+import {RollbackConfirmModal} from '@/components/rollback-confirm-modal'
+import {useRollback} from '@/providers/global-system-state/rollback'
 import {CopyableField} from '@/components/ui/copyable-field'
 import {PinInput} from '@/components/ui/pin-input'
 import {t} from '@/utils/i18n'
@@ -1698,6 +1701,19 @@ function AdvancedSection() {
 }
 
 function SoftwareUpdateSection() {
+	// Phase 311 UPDSAFE-04 — canRollback gates the rollback affordance entirely:
+	// a box that never completed an update has no last-good snapshot and must not
+	// be offered a button that would fail (RESEARCH A.2). Hidden while loading and
+	// when data.available !== true. This section is already admin-gated at the menu
+	// level (adminOnly) AND the mutation is adminProcedure — the client gate here
+	// is defense-in-depth, not the authorization boundary.
+	const rollbackTarget = trpcReact.system.canRollback.useQuery()
+	const [rollbackOpen, setRollbackOpen] = useState(false)
+	const {rollback, isPending: rollbackPending} = useRollback({
+		onSuccess: () => setRollbackOpen(false),
+	})
+	const canRollback = rollbackTarget.data?.available === true
+
 	return (
 		<div className='space-y-4'>
 			<p className='text-body-sm text-text-secondary'>Check for LivOS updates.</p>
@@ -1711,6 +1727,40 @@ function SoftwareUpdateSection() {
 					<PastDeploysTable />
 				</div>
 			</div>
+
+			{/* Phase 311 UPDSAFE-04 — manual rollback to last-good. Destructive
+			    styling mirrors the Factory-Reset row (AdvancedSection); a plain
+			    IconButton (not a link) opens the confirm modal — this is an
+			    in-place mutation, not navigation. */}
+			{canRollback && (
+				<>
+					<div className='flex items-center justify-between rounded-radius-md border border-accent-red/20 bg-accent-red/5 p-4'>
+						<div>
+							<div className='text-body font-medium text-accent-red'>
+								{t('software-update.rollback.button')}
+							</div>
+							<div className='text-caption text-text-secondary'>
+								{t('software-update.rollback.description')}
+							</div>
+						</div>
+						<IconButton
+							icon={TbArrowBackUp}
+							text='destructive'
+							onClick={() => setRollbackOpen(true)}
+							data-testid='rollback-to-last-good-button'
+						>
+							{t('software-update.rollback.button')}
+						</IconButton>
+					</div>
+					<RollbackConfirmModal
+						open={rollbackOpen}
+						onOpenChange={setRollbackOpen}
+						target={rollbackTarget.data ?? null}
+						rollback={rollback}
+						rollbackPending={rollbackPending}
+					/>
+				</>
+			)}
 		</div>
 	)
 }
