@@ -199,6 +199,42 @@ if [[ -d "$LAST_GOOD_DIR/livinityd-source" ]]; then
             cp -r "$LAST_GOOD_DIR/liv-core-dist" "$tgt" 2>/dev/null
         done
     fi
+    # ── Phase 311 WR-01 FIX: widened restore (mirror restore_last_good / Layer-A
+    # + livos-manual-rollback.sh / Layer-C). A SIGKILL after `pnpm install` began
+    # forward-mutating node_modules is the EXACT scenario Layer-B exists to catch,
+    # yet without these two blocks Layer-B would restore OLD code against a
+    # forward-mutated node_modules / systemd unit set (Pitfall 4). Keep all three
+    # restore bodies in sync. ──
+    # node_modules restore (paired with the code so old code never runs against
+    # forward-mutated deps).
+    if [[ -d "$LAST_GOOD_DIR/node_modules" ]]; then
+        rsync -a --delete "$LAST_GOOD_DIR/node_modules/" "$LIVOS_DIR/node_modules/" 2>/dev/null \
+            || log "node_modules restore failed — a rollback pnpm install may be required"
+    fi
+    # systemd units restore (cmp -s per unit; single daemon-reload + restart changed).
+    if [[ -d "$LAST_GOOD_DIR/systemd" ]]; then
+        _sd_changed=0; _sd_restart=""
+        for _sd_unit in "$LAST_GOOD_DIR/systemd"/*.service; do
+            [[ -f "$_sd_unit" ]] || continue
+            _sd_base=$(basename "$_sd_unit")
+            _sd_live="/etc/systemd/system/$_sd_base"
+            if ! cmp -s "$_sd_unit" "$_sd_live" 2>/dev/null; then
+                cp -a "$_sd_unit" "$_sd_live" 2>/dev/null
+                _sd_changed=1; _sd_restart="$_sd_restart $_sd_base"
+            fi
+        done
+        if [[ -d "$LAST_GOOD_DIR/systemd/livos.service.d" ]]; then
+            if ! diff -rq "$LAST_GOOD_DIR/systemd/livos.service.d" /etc/systemd/system/livos.service.d >/dev/null 2>&1; then
+                rm -rf /etc/systemd/system/livos.service.d 2>/dev/null
+                cp -a "$LAST_GOOD_DIR/systemd/livos.service.d" /etc/systemd/system/livos.service.d 2>/dev/null
+                _sd_changed=1
+            fi
+        fi
+        if [[ "$_sd_changed" == "1" ]]; then
+            systemctl daemon-reload 2>/dev/null
+            for _sd_base in $_sd_restart; do systemctl restart "$_sd_base" 2>/dev/null; done
+        fi
+    fi
     _LIVOS_RUN_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1); [ -z "$_LIVOS_RUN_USER" ] && _LIVOS_RUN_USER=$(stat -c '%U' /opt/livos 2>/dev/null)
     if id "$_LIVOS_RUN_USER" >/dev/null 2>&1; then
         chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIVOS_DIR/packages/livinityd/source" "$LIVOS_DIR/packages/ui/dist" 2>/dev/null
