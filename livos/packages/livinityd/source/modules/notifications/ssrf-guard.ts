@@ -164,7 +164,10 @@ export async function assertResolvedHostSafe(
 	try {
 		parsed = new URL(urlStr)
 	} catch {
-		throw new Error(`SSRF blocked: invalid URL ${urlStr}`)
+		// LOW-01: never interpolate the raw input — for a webhook `urlStr` IS the
+		// secret delivery URL (Slack/etc. embed a bearer token in the path), and this
+		// message can flow to logs / the admin test route.
+		throw new Error('SSRF blocked: invalid URL')
 	}
 
 	if (!ALLOWED_SCHEMES.has(parsed.protocol)) {
@@ -174,7 +177,9 @@ export async function assertResolvedHostSafe(
 	}
 
 	const rawHost = parsed.hostname
-	if (!rawHost) throw new Error(`SSRF blocked: URL ${urlStr} has no host`)
+	// LOW-01: same secret-leak concern as the invalid-URL branch — don't echo the
+	// raw (possibly secret) input.
+	if (!rawHost) throw new Error('SSRF blocked: URL has no host')
 
 	// 1. Literal-target fast path (covers IPv4 dotted/integer, IPv6, IPv4-mapped).
 	if (isIpLiteral(rawHost)) {
