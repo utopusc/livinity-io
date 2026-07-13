@@ -178,7 +178,7 @@ export function Notifications() {
 	// admin-gated screens/mutations). Non-admins must neither see them nor be
 	// able to snooze them away from the admin — filter WITHOUT clearing, so the
 	// notification stays queued for the admin's session.
-	const ADMIN_ONLY_NOTIFICATIONS = ['backups-engine-unavailable', 'backups-not-configured']
+	const ADMIN_ONLY_NOTIFICATIONS = ['backups-engine-unavailable', 'backups-not-configured', 'update-failed', 'disk-critical']
 	const {isAdmin, isLoading: isLoadingUser} = useCurrentUser()
 	const canSeeAdminNotifications = !isLoadingUser && isAdmin
 
@@ -266,6 +266,59 @@ export function Notifications() {
 		}
 
 		// Default fallback for unknown notifications
+		// Phase 310-04 (ALERT-02) — a system update failed; the box may be in a
+		// partially-updated state. Critical, admin-only. Mirrors the
+		// backups-engine-unavailable block shape.
+		if (notification === 'update-failed') {
+			return {
+				title: t('notifications.update-failed.title'),
+				description: t('notifications.update-failed.description'),
+				action: (
+					<>
+						<Button variant='default' size='dialog' onClick={() => clearNotification(notification)} tabIndex={-1}>
+							{t('ok')}
+						</Button>
+						<AlertDialogAction
+							variant='primary'
+							onClick={() => {
+								clearNotification(notification)
+								navigate('/settings')
+							}}
+							tabIndex={0}
+						>
+							Open Settings
+						</AlertDialogAction>
+					</>
+				),
+			}
+		}
+
+		// Phase 310-04 (ALERT-02) — disk space critically low (server-side
+		// scheduled check). Critical/warning, admin-only.
+		if (notification === 'disk-critical') {
+			return {
+				title: t('notifications.disk-critical.title'),
+				description: t('notifications.disk-critical.description'),
+				action: (
+					<>
+						<Button variant='default' size='dialog' onClick={() => clearNotification(notification)} tabIndex={-1}>
+							{t('ok')}
+						</Button>
+						<AlertDialogAction
+							variant='primary'
+							onClick={() => {
+								clearNotification(notification)
+								navigate('/settings')
+							}}
+							tabIndex={0}
+						>
+							Open Settings
+						</AlertDialogAction>
+					</>
+				),
+			}
+		}
+
 		return getDefaultNotificationContent(notification)
 	}
 
