@@ -1,5 +1,6 @@
 import {$} from 'execa'
 import fs from 'node:fs/promises'
+import semver from 'semver'
 import stripAnsi from 'strip-ansi'
 
 import type {ProgressStatus} from '../apps/schema.js'
@@ -12,6 +13,12 @@ const GITHUB_TAGS_URL = 'https://api.github.com/repos/utopusc/livinity-io/tags?p
 // NON-prerelease published Release, or 404 when none exist yet (graceful).
 const GITHUB_RELEASES_LATEST_URL =
 	'https://api.github.com/repos/utopusc/livinity-io/releases/latest'
+// Phase 311 UPDSAFE-01 — beta channel: the FULL releases list (prereleases
+// included) so a beta box can resolve the newest PUBLISHED prerelease, which
+// /releases/latest excludes by GitHub contract. Selection is semver-max via
+// pickMaxReleaseTag (never API order) — see fetchBetaRelease.
+const GITHUB_RELEASES_LIST_URL =
+	'https://api.github.com/repos/utopusc/livinity-io/releases?per_page=100'
 const DEPLOYED_SHA_PATH = '/opt/livos/.deployed-sha'
 // Phase 266 — update.sh records the deployed RELEASE TAG here (next to
 // .deployed-sha) so detection can compare tags, not just commit SHAs.
@@ -38,7 +45,33 @@ type ReleaseData = {
 	published_at: string | null
 	target_commitish: string
 }
-let releasesCache: {at: number; data: ReleaseData | null} | null = null
+// Phase 311 UPDSAFE-01 — per-channel cache. A single shared slot would thrash
+// the other channel's value on every toggle and double the GitHub 60 req/hr
+// unauth budget. `data: null` is still a VALID cached value (404 / no releases).
+type ReleaseCacheSlot = {at: number; data: ReleaseData | null}
+const releasesCache = new Map<'stable' | 'beta', ReleaseCacheSlot>()
+
+// Phase 311 UPDSAFE-01 — pure, never-throwing selector for the beta channel.
+// Picks the semver-MAX tag from a list of release tags, coercing LivOS's
+// non-strict tags (e.g. "v44.1", which lacks a patch segment) via the SAME
+// `semver.valid || semver.coerce` idiom used at apps.ts:593. Tags that cannot
+// be coerced are dropped (never throws); the ORIGINAL tag string of the
+// greatest coerced version is returned (NOT the first list entry / API order),
+// or null when no tag coerces. This is the explicit anti-first-index guard
+// RESEARCH.md mandates over the raw GitHub response ordering.
+export function pickMaxReleaseTag(tags: string[]): string | null {
+	let bestTag: string | null = null
+	let bestVersion: string | null = null
+	for (const tag of tags) {
+		const valid = semver.valid(tag) || semver.valid(semver.coerce(tag))
+		if (!valid) continue
+		if (bestVersion === null || semver.gt(valid, bestVersion)) {
+			bestVersion = valid
+			bestTag = tag
+		}
+	}
+	return bestTag
+}
 
 // Phase 30 hot-patch round 5: resolve a human-friendly version label.
 // Strategy: pull the most recent tags from GitHub, find the tag whose commit SHA
@@ -138,8 +171,9 @@ async function computeAionuiOffPin(): Promise<boolean> {
 // serve the last good value (which may itself be null) so the UI degrades to a
 // quiet "On latest" instead of an error toast. Mirrors the commits/tags cache.
 async function fetchLatestRelease(livinityd: Livinityd): Promise<ReleaseData | null> {
-	if (releasesCache && Date.now() - releasesCache.at < RELEASES_CACHE_TTL_MS) {
-		return releasesCache.data
+	const cached = releasesCache.get('stable')
+	if (cached && Date.now() - cached.at < RELEASES_CACHE_TTL_MS) {
+		return cached.data
 	}
 	try {
 		const response = await fetch(GITHUB_RELEASES_LATEST_URL, {
@@ -150,26 +184,78 @@ async function fetchLatestRelease(livinityd: Livinityd): Promise<ReleaseData | n
 		})
 		if (response.status === 404) {
 			// No releases published yet — the graceful-fallback state, not an error.
-			releasesCache = {at: Date.now(), data: null}
+			releasesCache.set('stable', {at: Date.now(), data: null})
 			return null
 		}
 		if (response.ok) {
 			const data = (await response.json()) as ReleaseData
-			releasesCache = {at: Date.now(), data}
+			releasesCache.set('stable', {at: Date.now(), data})
 			return data
 		}
 		// Rate-limit / 5xx → serve stale (incl. a previously-cached null).
-		if (releasesCache) {
+		const stale = releasesCache.get('stable')
+		if (stale) {
 			livinityd.logger.log(
 				`GitHub releases API ${response.status} on checkUpdate; serving cached value`,
 			)
-			return releasesCache.data
+			return stale.data
 		}
 		return null
 	} catch (err) {
 		// Network/DNS failure → stale or null. Never propagate.
-		if (releasesCache) return releasesCache.data
+		const stale = releasesCache.get('stable')
+		if (stale) return stale.data
 		livinityd.logger.log(`GitHub releases API unreachable on checkUpdate: ${String(err)}`)
+		return null
+	}
+}
+
+// Phase 311 UPDSAFE-01 — beta channel resolver. Fetches the FULL releases list
+// (prereleases included), filters out drafts defensively, and returns the
+// ReleaseData of the semver-MAX tag via pickMaxReleaseTag. Mirrors
+// fetchLatestRelease's never-throw / stale-on-error cache discipline EXACTLY
+// (this query is polled hourly + on every window focus) but keyed to the 'beta'
+// cache slot. On 404 / rate-limit / network failure it serves the beta slot
+// (which may itself be null) so the box degrades to a quiet "On latest", never
+// an error toast.
+async function fetchBetaRelease(livinityd: Livinityd): Promise<ReleaseData | null> {
+	const cached = releasesCache.get('beta')
+	if (cached && Date.now() - cached.at < RELEASES_CACHE_TTL_MS) {
+		return cached.data
+	}
+	try {
+		const response = await fetch(GITHUB_RELEASES_LIST_URL, {
+			headers: {
+				'User-Agent': `LivOS-${livinityd.version}`,
+				Accept: 'application/vnd.github+json',
+			},
+		})
+		if (response.status === 404) {
+			releasesCache.set('beta', {at: Date.now(), data: null})
+			return null
+		}
+		if (response.ok) {
+			// The list endpoint returns drafts for authenticated requests; unauth
+			// requests exclude them, but filter defensively regardless.
+			const list = (await response.json()) as Array<ReleaseData & {draft?: boolean}>
+			const published = Array.isArray(list) ? list.filter((r) => !r.draft) : []
+			const winnerTag = pickMaxReleaseTag(published.map((r) => r.tag_name))
+			const data = winnerTag ? (published.find((r) => r.tag_name === winnerTag) ?? null) : null
+			releasesCache.set('beta', {at: Date.now(), data})
+			return data
+		}
+		const stale = releasesCache.get('beta')
+		if (stale) {
+			livinityd.logger.log(
+				`GitHub releases (beta) API ${response.status} on checkUpdate; serving cached value`,
+			)
+			return stale.data
+		}
+		return null
+	} catch (err) {
+		const stale = releasesCache.get('beta')
+		if (stale) return stale.data
+		livinityd.logger.log(`GitHub releases (beta) API unreachable on checkUpdate: ${String(err)}`)
 		return null
 	}
 }
@@ -287,7 +373,18 @@ export async function getLatestRelease(livinityd: Livinityd) {
 		if (err.code !== 'ENOENT') throw err
 	}
 
-	const release = await fetchLatestRelease(livinityd)
+	// Phase 311 UPDSAFE-01 — channel-aware resolution. Read the SAME store key
+	// setReleaseChannel persists (routes.ts:142); default 'stable'. Beta resolves
+	// the semver-max PUBLISHED release (prereleases included) via the list
+	// endpoint; stable is byte-unchanged (/releases/latest, which by GitHub
+	// contract already excludes prereleases). Return-to-stable is naturally
+	// correct with NO special-casing: the tag-vs-tag `available` compare below
+	// fires on ANY differing tag — including a stable tag numerically BEHIND the
+	// beta the box currently runs — so switching back cleanly offers the latest
+	// stable release.
+	const channel = (await livinityd.store.get('settings.releaseChannel')) || 'stable'
+	const release =
+		channel === 'beta' ? await fetchBetaRelease(livinityd) : await fetchLatestRelease(livinityd)
 
 	// Phase 305 R3 — is the box's vendored AionUi off the pinned version? (fail-soft
 	// self-heal left it stale). Surfaced as a DIAGNOSTIC flag on both return paths
