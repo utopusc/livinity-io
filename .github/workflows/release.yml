@@ -30,6 +30,32 @@ jobs:
         with:
           fetch-depth: 0
 
+      # ── Phase 311-04 (UPDSAFE-02): pre-tag self-consistency guard ───────────────
+      # scripts/install/EXPECTED_RELEASE pins the release tag it ships in. Boxes clone
+      # a release BY TAG (update.sh: git clone --depth 1 --branch <tag>), and a tag's
+      # tree is immutable once pushed — so the pin MUST already be correct INSIDE the
+      # tagged commit. A post-tag "generate/commit" step could never reach a box
+      # cloning that tag, so the release-cut procedure is PRE-TAG (never force-move):
+      #   (1) bump the pin line of the EXPECTED_RELEASE file to refs/tags/<next-tag>
+      #   (2) commit that change on master
+      #   (3) THEN create and push the tag
+      # The step below re-reads the pin out of the PUSHED tag's own tree and REFUSES
+      # to publish on any tag/pin mismatch, forcing a correct re-cut via that flow.
+      # WARN-ONLY GATE: this only asserts self-consistency of the pin material. It is
+      # NOT the box-side signature-enforcement flip — livos_verify_fetched_ref() stays
+      # warn-only in Phase 311; fail-closed is Phase 312 (a strictly later release).
+      # A future maintainer MUST NOT convert this guard into box-side enforcement here.
+      - name: Verify EXPECTED_RELEASE pins this exact tag (pre-tag self-consistency)
+        run: |
+          pin="$(git show "${GITHUB_REF_NAME}:scripts/install/EXPECTED_RELEASE" \
+                  | grep -vE '^[[:space:]]*(#|$)' | head -1 | tr -d '[:space:]')"
+          expected="refs/tags/${GITHUB_REF_NAME}"
+          if [ "$pin" != "$expected" ]; then
+            echo "::error::EXPECTED_RELEASE pins '$pin' but this tag is '$expected' — bump+commit the pin BEFORE tagging (pre-tag-prep flow). Refusing to publish."
+            exit 1
+          fi
+          echo "EXPECTED_RELEASE self-consistency OK: $pin == $expected"
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:

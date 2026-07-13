@@ -1,0 +1,43 @@
+# scripts/install/EXPECTED_RELEASE — LivOS release pin (Phase 311-04, UPDSAFE-02)
+#
+# WHAT THIS IS
+#   A single "pin line" naming the release this repo tree belongs to. update.sh's
+#   livos_verify_fetched_ref() reads it out of the freshly-cloned release tree and
+#   compares the resolved commit against the fetched HEAD.
+#
+# FORMAT (consumed by update.sh:  grep -vE '^\s*(#|$)' | head -1 | tr -d '[:space:]')
+#   * Lines beginning with '#' and blank lines are ignored.
+#   * The FIRST non-comment line is the pin.
+#   * Use the FULL  refs/tags/<tag>  form. A refs/tags/<tag> line is resolved to a
+#     commit via  git rev-parse "<tag>^{commit}"  INSIDE the cloned tree, then
+#     compared to the fetched HEAD SHA. Because boxes clone a release BY that same
+#     tag, HEAD == the tag's commit == what refs/tags/<tag> resolves to → a
+#     self-consistent match.
+#
+# WARN-ONLY (Phase 311) — NOT enforcement
+#   In Phase 311 a pin mismatch is WARN-ONLY: livos_verify_fetched_ref() logs a
+#   SIGNATURE-WARN, records a signature_verification verdict into the update-history
+#   JSON, and PROCEEDS — it never aborts an update. The fail-closed flip (refuse to
+#   deploy on mismatch) is Phase 312, a strictly LATER release, gated on one full
+#   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
+#   verify function as part of Phase 311.
+#
+# CURRENT VALUE = PRE-TAG SENTINEL (placeholder)
+#   The line below is an intentional, non-matching SENTINEL. No release tag is being
+#   cut in this commit, so it does NOT yet name a real tag. On a box it resolves to
+#   nothing -> the warn-only path records status="unresolvable" and proceeds (never
+#   aborts). The release.yml CI guard REFUSES to publish any tag while this sentinel
+#   is still in place, forcing the pre-tag-prep flow below.
+#
+# MANDATORY PRE-TAG RELEASE-CUT PROCEDURE (self-consistency; never force-tag)
+#   A git tag's tree is immutable once pushed, so the pin MUST already be correct
+#   INSIDE the tagged commit — a post-tag "generate" step could never reach a box
+#   cloning that tag. Therefore, before cutting any release tag:
+#     (1) bump the pin line below to  refs/tags/<next-tag>  (the exact tag to cut);
+#     (2) commit that change on master;
+#     (3) THEN create and push the tag  (git tag <next-tag> ; git push origin <next-tag>).
+#   This ordering guarantees the tagged commit's own tree carries a pin equal to its
+#   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
+#   unnecessary and it is explicitly disallowed. release.yml verifies this and
+#   refuses to publish on any tag/pin mismatch.
+refs/tags/v0.0.0-UNSET-PLACEHOLDER

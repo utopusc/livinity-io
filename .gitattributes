@@ -6,3 +6,8 @@
 *.conf text eol=lf
 .planning/phases/**/artifacts/**/*.sh text eol=lf
 .planning/phases/**/artifacts/**/*.conf text eol=lf
+# Phase 311-04 (UPDSAFE-02): the release pin is read by update.sh on the Linux box.
+# Force LF (extensionless — not caught by *.sh above). The maintainer keyring is
+# treated as binary so git never rewrites its ASCII-armor line endings.
+scripts/install/EXPECTED_RELEASE text eol=lf
+scripts/install/maintainer.gpg -text
