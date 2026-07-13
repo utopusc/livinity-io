@@ -167,13 +167,17 @@ _dld_install_system_packages() {
     # Phase 106 Bug #8: samba + samba-common-bin required for livinityd Files
     # module (smbpasswd binary + /etc/samba/smb.conf management). Mini PC has
     # these from initial bootstrap; fresh VPS does not.
-    info "Installing PostgreSQL + Redis + build deps + samba (Bug #8)"
+    # Phase 313 (SMART-02): smartmontools — smartctl SATA/NVMe SMART reads +
+    # self-test triggers for the disk-health monitor. Plain Ubuntu-archive
+    # package (no arch conditional, unlike the pinned kopia binary below).
+    info "Installing PostgreSQL + Redis + build deps + samba + smartmontools (Bug #8)"
     apt-get install -y -qq \
         postgresql postgresql-client \
         redis-server \
         build-essential python3 git rsync openssl \
         samba samba-common-bin \
-        bubblewrap tinyproxy
+        bubblewrap tinyproxy \
+        smartmontools
     ok "System packages installed"
 
     # ── Backups-v2 P0: kopia backup engine ────────────────────────────────
@@ -2937,6 +2941,35 @@ _dld_template_app_units() {
         rm -f "$_native_tmp"
     else
         info "sudoers.d/livos-native source not found — skipping (native apt installs unavailable)"
+    fi
+
+    # 2b. Phase 313 (SMART) — sudoers.d/livos-smart (smartctl disk-health grant) —
+    # install + template. Byte-for-byte parallel to the livos-native block above,
+    # retargeted at livos-smart. Runs on EVERY deploy (idempotent, content-diffed).
+    local _smart_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-smart"
+    [[ -f "$_smart_src" ]] || _smart_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-smart"
+    local _smart_dst="/etc/sudoers.d/livos-smart"
+    if [[ -f "$_smart_src" ]]; then
+        local _smart_tmp
+        _smart_tmp=$(mktemp)
+        if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                "$_smart_src" > "$_smart_tmp"
+        else
+            cp -f "$_smart_src" "$_smart_tmp"
+        fi
+        if [[ ! -f "$_smart_dst" ]] || ! cmp -s "$_smart_tmp" "$_smart_dst"; then
+            install -m 0440 -o root -g root "$_smart_tmp" "$_smart_dst"
+            if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_smart_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_smart_dst — removing (SMART reads stay denied until fixed)"
+                rm -f "$_smart_dst"
+            else
+                ok "sudoers.d/livos-smart installed (user-spec: ${_DLD_DESKTOP_USER})"
+            fi
+        fi
+        rm -f "$_smart_tmp"
+    else
+        info "sudoers.d/livos-smart source not found — skipping (SMART reads unavailable)"
     fi
 
     # 3. Phase 289 (WS-D) — copy the apt-repo privileged helper (the apt-repo install method
