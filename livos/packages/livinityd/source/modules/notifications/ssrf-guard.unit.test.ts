@@ -72,4 +72,25 @@ describe('notifications/ssrf-guard assertResolvedHostSafe', () => {
 			}),
 		).rejects.toThrow(/^SSRF blocked/)
 	})
+
+	// MED-01 — 100.64.0.0/10 (RFC 6598 CGNAT). Tailscale assigns every node a
+	// 100.x.x.x tailnet address; these boxes run Tailscale, so a tailnet host must
+	// be blocked as an outbound alert-channel target.
+	test('k: CGNAT/Tailscale literal http://100.64.0.1/ is rejected', async () => {
+		await expect(assertResolvedHostSafe('http://100.64.0.1/')).rejects.toThrow(/^SSRF blocked/)
+	})
+
+	test('l: a name resolving into the 100.64.0.0/10 range (rebind) is rejected', async () => {
+		await expect(
+			assertResolvedHostSafe('https://tailnet.example.com/hook', {
+				lookup: async () => ['100.100.100.100'],
+			}),
+		).rejects.toThrow(/^SSRF blocked/)
+	})
+
+	// Guard against an off-by-one: 100.63.x and 100.128.x are OUTSIDE the /10 and
+	// must still be treated as public.
+	test('m: 100.63.255.255 (just below the /10) is NOT blocked', async () => {
+		await expect(assertResolvedHostSafe('http://100.63.255.255/')).resolves.toBeUndefined()
+	})
 })
