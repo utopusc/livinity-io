@@ -807,3 +807,42 @@ CREATE TABLE IF NOT EXISTS user_terminal_templates (
 
 CREATE INDEX IF NOT EXISTS user_terminal_templates_user_updated_idx
   ON user_terminal_templates(user_id, updated_at DESC);
+
+-- =========================================================================
+-- Phase 320 (MON-01) — persisted host-resource history, 3-tier rollup.
+-- Retention (enforced by scheduler resource-metrics-rollup, Plan 02, from day one):
+--   raw   pruned  >48h   | 5m rollups pruned >30d | 1h rollups pruned >365d
+-- Bounded footprint ~3MB forever. No per-user dimension (one box, one time axis).
+-- Wide row per tick (all metrics as columns) — chart-ready with a single SELECT.
+CREATE TABLE IF NOT EXISTS resource_samples_raw (
+  ts               TIMESTAMPTZ PRIMARY KEY,
+  cpu_pct          REAL,             -- systeminformation.currentLoad().currentLoad, 0-100
+  mem_used_bytes   BIGINT,
+  mem_total_bytes  BIGINT,
+  disk_read_bps    BIGINT,           -- getDiskIO().rIOSec (nullable on first sample)
+  disk_write_bps   BIGINT,           -- getDiskIO().wIOSec
+  net_rx_bps       BIGINT,           -- sum across interfaces, getNetworkStats()
+  net_tx_bps       BIGINT
+);
+
+CREATE TABLE IF NOT EXISTS resource_rollups_5m (
+  bucket_start        TIMESTAMPTZ PRIMARY KEY,
+  sample_count        INTEGER NOT NULL DEFAULT 0,
+  cpu_pct_avg         REAL, cpu_pct_min REAL, cpu_pct_max REAL,
+  mem_used_bytes_avg  BIGINT, mem_used_bytes_max BIGINT,
+  disk_read_bps_avg   BIGINT, disk_read_bps_max BIGINT,
+  disk_write_bps_avg  BIGINT, disk_write_bps_max BIGINT,
+  net_rx_bps_avg      BIGINT, net_rx_bps_max BIGINT,
+  net_tx_bps_avg      BIGINT, net_tx_bps_max BIGINT
+);
+
+CREATE TABLE IF NOT EXISTS resource_rollups_1h (
+  bucket_start        TIMESTAMPTZ PRIMARY KEY,
+  sample_count        INTEGER NOT NULL DEFAULT 0,
+  cpu_pct_avg         REAL, cpu_pct_min REAL, cpu_pct_max REAL,
+  mem_used_bytes_avg  BIGINT, mem_used_bytes_max BIGINT,
+  disk_read_bps_avg   BIGINT, disk_read_bps_max BIGINT,
+  disk_write_bps_avg  BIGINT, disk_write_bps_max BIGINT,
+  net_rx_bps_avg      BIGINT, net_rx_bps_max BIGINT,
+  net_tx_bps_avg      BIGINT, net_tx_bps_max BIGINT
+);
