@@ -654,6 +654,16 @@ export default class Livinityd {
 			this.ai.start().catch((error) => this.logger.error('ai.start() failed (non-fatal — Redis auto-reconnects; post-await route mounts still run)', error)),
 		])
 
+		// Phase 322 WR-02/WR-03 (322-review) — initialise the embedded OIDC provider
+		// now that ai.start() (this.ai.redis) and apps.start() (apps.instances) have
+		// resolved. Deferred OUT of the boot Promise.all above so getActiveMainDomain()
+		// never races an undefined redis (WR-03) and the OIDC client registry rehydrates
+		// from persisted per-app SSO state (WR-02). The /oidc routes were already mounted
+		// (lazily) inside server.start(); this only builds the provider. Non-fatal.
+		await this.server.initOidc().catch((error) =>
+			this.logger.error('server.initOidc() failed (non-fatal — OIDC inactive this boot)', error),
+		)
+
 		// Phase 101-03 — Wire the NativeAppConfigStore now that this.ai.redis
 		// is live. Construction is side-effect-free (just stashes the redis
 		// reference), so we do it eagerly here BEFORE anything that might

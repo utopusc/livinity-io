@@ -180,6 +180,11 @@ class Server {
 	port: number | undefined
 	app?: express.Express
 	server?: http.Server
+	// Phase 322 WR-02/WR-03 (322-review) — the lazy embedded OIDC provider service.
+	// Its /oidc route mounts are registered in start() (before the SPA catch-all), but
+	// the provider itself is built later by initOidc(), called from livinityd boot once
+	// redis + apps.instances are ready (out of the racing boot Promise.all).
+	oidcService?: OidcService
 	webSocketRouter = new Map<string, WebSocketServer>()
 	private appGatewayProxyCache = new Map<number, ReturnType<typeof createProxyMiddleware>>()
 	// Phase 246-03 — single SessionManager instance per livinityd process.
@@ -304,6 +309,38 @@ class Server {
 			return cfg?.active && cfg?.domain ? String(cfg.domain) : null
 		} catch {
 			return null
+		}
+	}
+
+	/**
+	 * Phase 322 WR-02/WR-03 (322-review) — DEFERRED OIDC provider init. Called from
+	 * livinityd boot strictly AFTER ai.start() (assigns this.livinityd.ai.redis) and
+	 * apps.start() (populates apps.instances) resolve, so:
+	 *   - getActiveMainDomain() never races an undefined redis (WR-03), and
+	 *   - listOidcEnabledApps() rehydrates the client registry from persisted per-app
+	 *     SSO state instead of the empty boot set (WR-02).
+	 * The /oidc route mounts already happened in start() (lazy — they next() through
+	 * until this builds the provider). Wrapped so a failure NEVER crashes start (SC3);
+	 * a no-domain box no-ops exactly like every other domain feature and re-attempts on
+	 * the next boot.
+	 */
+	async initOidc(): Promise<void> {
+		const service = this.oidcService
+		if (!service) return
+		const oidcMainDomain = await this.getActiveMainDomain()
+		if (!oidcMainDomain) {
+			this.logger?.log?.('[oidc] no domain configured — OIDC provider inactive')
+			return
+		}
+		try {
+			// Static client secrets derive from the box seed (oidc/clients.ts), so the
+			// provider needs the SAME seed apps/app.ts reads for its app passwords.
+			const seed = await fse.readFile(`${this.livinityd.dataDirectory}/db/livinity-seed/seed`)
+			const enabledApps = await this.livinityd.apps.listOidcEnabledApps()
+			await service.init({mainDomain: oidcMainDomain, enabledApps, seed})
+			this.logger?.log?.(`[oidc] provider active — ${enabledApps.length} SSO client(s) registered`)
+		} catch (err) {
+			this.logger.error('[oidc] provider init failed — OIDC inactive this boot', err)
 		}
 	}
 
@@ -1880,31 +1917,27 @@ class Server {
 		// allowlisted (APEX_PUBLIC_PREFIXES). No-domain boxes no-op like every other
 		// domain feature and re-attempt on the next boot; a provider-init failure logs
 		// and no-ops (OIDC must NEVER regress the existing login path — SC3).
-		const oidcMainDomain = await this.getActiveMainDomain()
-		if (!oidcMainDomain) {
-			this.logger?.log?.('[oidc] no domain configured — OIDC provider inactive')
-		} else {
-			try {
-				// Static client secrets derive from the box seed (oidc/clients.ts), so the
-				// provider needs the SAME seed apps/app.ts reads for its app passwords.
-				const seed = await fse.readFile(`${this.livinityd.dataDirectory}/db/livinity-seed/seed`)
-				const oidcService = new OidcService()
-				// enabledApps EMPTY at boot — no app has SSO on yet; 322-05 populates it
-				// via getOidcService()?.rebuild(...) on the admin "Enable SSO" toggle.
-				await oidcService.init({mainDomain: oidcMainDomain, enabledApps: [], seed})
-				setOidcService(oidcService)
-				// Interaction route FIRST (intercepts /oidc/interaction/:uid before
-				// provider.callback()), driven by the SAME verifier the gate + /auth/verify
-				// + Phase 259 bounce use — never a re-implemented JWT check.
-				oidcInteraction.registerOidcInteractionRoutes(this.app, {
-					getProvider: () => oidcService.provider,
-					verifySessionFull: (t) => this.verifySessionFull(t),
-				})
-				this.app.use('/oidc', oidcService.callback())
-			} catch (err) {
-				this.logger.error('[oidc] provider init failed — OIDC inactive this boot', err)
-			}
-		}
+		// WR-02/WR-03 (322-review): MOUNT the OIDC routes here (route order MUST stay
+		// BEFORE the SPA `app.use('*')` catch-all below, else /oidc/* would be swallowed
+		// by index.html), but DEFER the provider init() to Server.initOidc() — called
+		// from livinityd boot AFTER ai.start() (redis) + apps.start() (instances) resolve.
+		// The OidcService is LAZY: callback() + the interaction route next() through
+		// (unchanged no-domain / pre-init behaviour) until initOidc() builds the provider.
+		// Fixes (a) WR-03: getActiveMainDomain() previously raced ai.start() for
+		// this.livinityd.ai.redis inside the boot Promise.all and could silently skip OIDC
+		// for the whole process; and (b) WR-02: the client registry now rehydrates from
+		// persisted per-app SSO state (initOidc) instead of booting with an empty client set.
+		const oidcService = new OidcService()
+		this.oidcService = oidcService
+		setOidcService(oidcService)
+		// Interaction route FIRST (intercepts /oidc/interaction/:uid before
+		// provider.callback()), driven by the SAME verifier the gate + /auth/verify
+		// + Phase 259 bounce use — never a re-implemented JWT check.
+		oidcInteraction.registerOidcInteractionRoutes(this.app, {
+			getProvider: () => oidcService.provider,
+			verifySessionFull: (t) => this.verifySessionFull(t),
+		})
+		this.app.use('/oidc', oidcService.callback())
 
 		// Phase 259 — cross-subdomain SSO bounce. STEP 1 (runs on the operator's
 		// apex `<user>.<base>`, where the host-only LIVINITY_SESSION cookie IS sent):
