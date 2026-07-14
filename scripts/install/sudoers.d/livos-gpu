@@ -1,0 +1,25 @@
+# Phase 316 (GPU-01) — sudoers grant for the NVIDIA driver + container-toolkit wrapper.
+#
+# Grants the desktop/livinityd user (templated from `bruce` to the resolved
+# desktop user at install/update time) permission to run ONLY the root-owned
+# GPU-install wrapper. Drop at /etc/sudoers.d/livos-gpu (mode 0440, root:root).
+#
+# Security model (clone of sudoers.d/livos-smart — the Phase 313 HIGH-01 template):
+# - The grant is on ONE explicit binary path with NO glob and NO argument wildcard.
+#   The wrapper (/usr/local/lib/livos/livos-gpu-install.sh, root-owned 0755)
+#   validates its single argument against a fixed action enum
+#   {detect|install-driver|install-toolkit}, then builds every apt-get /
+#   ubuntu-drivers / nvidia-ctk / systemctl command line itself. No caller-supplied
+#   flag or package name can reach a privileged command, so there is no
+#   argument-injection surface (the class of hole a raw `apt-get`/`nvidia-ctk`
+#   NOPASSWD grant, or a trailing wildcard, would open).
+# - Because the desktop user cannot rewrite the root-owned wrapper, it cannot hijack
+#   the grant. To change a permitted operation, EDIT THE WRAPPER — do NOT broaden
+#   this grant back to a raw binary path or add a glob.
+#
+# Deploy (fresh): deploy-livinityd.sh installs the wrapper THEN this fragment;
+# day-2: update.sh Step 7.10c (content-diff + visudo validate-or-remove). Both
+# sed-template the `bruce` subject to the resolved desktop user.
+Cmnd_Alias LIVINITYD_GPU_INSTALL = /usr/local/lib/livos/livos-gpu-install.sh
+
+bruce ALL=(root) NOPASSWD: LIVINITYD_GPU_INSTALL
