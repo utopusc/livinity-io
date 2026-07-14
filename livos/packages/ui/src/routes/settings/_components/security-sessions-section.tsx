@@ -70,9 +70,15 @@ interface AuditViewRow {
 	timestamp: string | Date
 }
 
-// RFC-4180 cell escaping: quote when the value holds a comma/quote/newline.
+// RFC-4180 cell escaping + CSV formula-injection guard (WR-02).
+// A cell whose first character is =, +, -, @, TAB, or CR is treated by
+// Excel/Google Sheets as the start of a formula. Combined with WR-01 (raw
+// input.* values reaching the audit `error` field), an admin action against a
+// resource named e.g. `=cmd|'/c calc'!A0` could execute on export. Neutralize
+// by prefixing a single quote, THEN apply RFC-4180 quoting per OWASP guidance.
 function csvCell(value: string): string {
-	return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+	const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
+	return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
 }
 
 // Sanitized projection shared by both exporters — action/category/success/error
