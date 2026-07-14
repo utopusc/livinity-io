@@ -24,7 +24,7 @@ import {
 	getOnboardingSystemInfo,
 	syncDns,
 } from './system.js'
-import {detectNvidiaGpu, isNvidiaToolkitConfigured, resetGpuDetectionCache} from './gpu.js'
+import {detectGpu, detectNvidiaGpu, isNvidiaToolkitConfigured, resetGpuDetectionCache} from './gpu.js'
 
 import {adminProcedure, privateProcedure, publicProcedure, router} from '../server/trpc/trpc.js'
 
@@ -457,10 +457,17 @@ export default router({
 	// whether to render the guided GPU-install section at all: non-NVIDIA boxes see
 	// nothing, and a box that already has the toolkit configured is not re-offered
 	// the install. Never throws (both probes degrade to false — see system/gpu.ts).
-	detectGpu: privateProcedure.query(async () => ({
-		hasNvidia: await detectNvidiaGpu(),
-		toolkitConfigured: await isNvidiaToolkitConfigured(),
-	})),
+	detectGpu: privateProcedure.query(async () => {
+		// Phase 330 (GPU-03) — the composite is WSL2-aware + vendor-aware (316's
+		// lspci-only probe returns false on WSL2). Spread the richer shape and keep
+		// the two back-compat keys the shipped gpu-access-section.tsx reads (:80-81).
+		const info = await detectGpu()
+		return {
+			...info, // present, vendor, wsl2, toolkitConfigured, driverSource
+			hasNvidia: info.vendor === 'nvidia', // back-compat alias — gpu-access-section.tsx:80
+			// toolkitConfigured already present on info (back-compat alias for :81)
+		}
+	}),
 	systemDiskUsage: privateProcedure.query(({ctx}) => getSystemDiskUsage(ctx.livinityd)),
 	diskUsage: privateProcedure.query(({ctx}) => getDiskUsage(ctx.livinityd)),
 	systemMemoryUsage: privateProcedure.query(({ctx}) => getSystemMemoryUsage()),
