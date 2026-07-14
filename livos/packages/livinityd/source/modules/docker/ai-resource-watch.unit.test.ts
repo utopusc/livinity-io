@@ -129,6 +129,38 @@ describe('isThresholdExceeded', () => {
 			isThresholdExceeded({memoryPercent: 96, throttledTimeDelta: 1_000_000, restartCount: 5}),
 		).toEqual({kind: 'memory-pressure', severity: 'critical'})
 	})
+
+	// Phase 320 MON-02 — the threshold values now thread through as a parameter
+	// (default = the old constants). These cases prove a lowered threshold fires.
+	test('7. thread-through: a lowered warning threshold fires BELOW the default 80', () => {
+		// 75% is below the default 80 warning cut (would be null by default) but
+		// at/above a lowered 70 warning threshold — only passes if the param threads.
+		expect(
+			isThresholdExceeded(
+				{memoryPercent: 75, throttledTimeDelta: 0, restartCount: 0},
+				{containerMemoryWarningPct: 70, containerMemoryCriticalPct: 95, containerRestartLoopCount: 3},
+			),
+		).toEqual({kind: 'memory-pressure', severity: 'warning'})
+	})
+
+	test('8. thread-through: 85% with a lowered 70 warning still warns (never criticals)', () => {
+		expect(
+			isThresholdExceeded(
+				{memoryPercent: 85, throttledTimeDelta: 0, restartCount: 0},
+				{containerMemoryWarningPct: 70, containerMemoryCriticalPct: 95, containerRestartLoopCount: 3},
+			),
+		).toEqual({kind: 'memory-pressure', severity: 'warning'})
+	})
+
+	test('9. thread-through: a lowered restart-loop threshold fires at a lower count', () => {
+		// restartCount 2 is below the default 3 (null) but at/above a lowered 2.
+		expect(
+			isThresholdExceeded(
+				{memoryPercent: 10, throttledTimeDelta: 0, restartCount: 2},
+				{containerMemoryWarningPct: 80, containerMemoryCriticalPct: 95, containerRestartLoopCount: 2},
+			),
+		).toEqual({kind: 'restart-loop', severity: 'warning'})
+	})
 })
 
 // ---------------------------------------------------------------------------
