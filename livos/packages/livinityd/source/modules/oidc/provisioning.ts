@@ -43,6 +43,18 @@ export interface ProvisionResult {
 	reason?: string
 }
 
+// T-322-11: execa error messages echo the FULL failed command line (which for
+// Nextcloud/Gitea includes `--clientsecret=<hex>`), so a raw error must NEVER reach a
+// log or the returned `reason`. Strip every known secret first. Hex secrets have no
+// shell-special chars, so a plain substring replace is exhaustive.
+function redactSecrets(text: string, secrets: (string | undefined)[]): string {
+	let out = text
+	for (const s of secrets) {
+		if (s) out = out.split(s).join('***')
+	}
+	return out
+}
+
 /**
  * Register this app's OIDC client with the running container (docker-exec CLI for
  * Nextcloud/Gitea, loopback REST for Immich; Vaultwarden is a no-op — its SSO env is
@@ -106,9 +118,13 @@ export async function provisionOidcForApp(app: {id: string}, opts: ProvisionOidc
 				return {ok: false, reason: 'not-oidc-native'}
 		}
 	} catch (e) {
-		// Failure isolation (T-322-20): never throw out of provisioning. Log the app id
-		// and the error, but NEVER the derived secret / API key (T-322-11 / T-322-14).
-		opts.logger?.error(`[oidc-provisioning] ${app.id} failed`, e)
-		return {ok: false, reason: (e as Error).message}
+		// Failure isolation (T-322-20): never throw out of provisioning. The raw execa
+		// error object carries the full failed command (incl. the secret) in its
+		// .message/.command/.stack, so we redact FIRST and log/return only the redacted
+		// STRING — never the raw object (T-322-11 / T-322-14 no-secret-in-logs).
+		const raw = e instanceof Error ? e.message : String(e)
+		const redacted = redactSecrets(raw, [opts.clientSecret, opts.immichAdminApiKey])
+		opts.logger?.error(`[oidc-provisioning] ${app.id} failed`, redacted)
+		return {ok: false, reason: redacted}
 	}
 }
