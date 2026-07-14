@@ -4,6 +4,7 @@ import {initTRPC} from '@trpc/server'
 import {type Context} from './context.js'
 import {isAuthenticated, isAuthenticatedIfUserExists, requireRole, requireRoleIfUserExists} from './is-authenticated.js'
 import {websocketLogger} from './websocket-logger.js'
+import {auditAdminAction} from '../../security-audit/audit-middleware.js'
 
 // `t` is exported (not just internal) so v29.4 Phase 47 Plan 05 can call
 // `t.mergeRouters(appsBase, appsHealthRouter)` from server/trpc/index.ts to
@@ -31,8 +32,12 @@ export const privateProcedure = baseProcedure.use(isAuthenticated)
 // may need to be used before a user is registered when a token can't exist. We shouldn't use it for
 // everything because there could be edgecases where it gets applied like if the user file is corrupted.
 export const publicProcedureWhenNoUserExists = baseProcedure.use(isAuthenticatedIfUserExists)
-// Admin-only procedure: requires authentication + admin role
-export const adminProcedure = privateProcedure.use(requireRole('admin'))
+// Admin-only procedure: requires authentication + admin role.
+// Phase 328 SEC-01: auditAdminAction is composed AFTER requireRole('admin') so
+// every admin MUTATION appends one device_audit_log row (queries excluded), and
+// an unauthorized caller throws in the role gate before the audit fires (ASVS
+// V4 — never log a FORBIDDEN attempt as a legitimate admin action).
+export const adminProcedure = privateProcedure.use(requireRole('admin')).use(auditAdminAction)
 // Backups-v2 P0 (D10): admin once any user exists, open pre-first-user — for
 // the onboarding-restore procedures that must work on a fresh box but were
 // previously callable by ANY authenticated user afterwards.

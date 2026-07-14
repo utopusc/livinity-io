@@ -26,6 +26,7 @@ import {
 	deleteUser,
 } from '../database/index.js'
 import {createSession, revokeSessionsForUser, listSessions as listUserSessions, revokeSession as revokeUserSession} from '../database/sessions.js'
+import {recordAuthLoginEvent} from '../security-audit/events.js'
 
 const ONE_SECOND = 1000
 const ONE_MINUTE = 60 * ONE_SECOND
@@ -118,6 +119,10 @@ export default router({
 		.mutation(async ({ctx, input}) => {
 			let dbUserId: string | undefined
 			let dbUserRole: string | undefined
+			// SEC-01: resolvable actor for auth-login audit rows. Starts as the
+			// NIL UUID; upgraded to the real account id the moment the user is
+			// resolved so a wrong-password failure still attributes correctly.
+			let auditUserId = '00000000-0000-0000-0000-000000000000'
 
 			const pool = getPool()
 
@@ -125,14 +130,20 @@ export default router({
 			if (input.username && pool) {
 				const dbUser = await findUserByUsername(input.username)
 				if (!dbUser) {
+					// SEC-01 Pitfall 2: login is publicProcedure so the adminProcedure audit middleware never sees it — record manually here (success AND failure). NEVER pass the password/totpToken.
+					void recordAuthLoginEvent({userId: auditUserId, success: false, error: 'invalid_credentials'})
 					throw new TRPCError({code: 'UNAUTHORIZED', message: 'Incorrect password'})
 				}
+				// Attribute later failures (disabled / bad password) to the resolved account.
+				auditUserId = dbUser.id
 				if (!dbUser.isActive) {
+					void recordAuthLoginEvent({userId: auditUserId, success: false, error: 'account_disabled'})
 					throw new TRPCError({code: 'UNAUTHORIZED', message: 'Account is disabled'})
 				}
 
 				const validPassword = await bcrypt.compare(input.password, dbUser.hashedPassword)
 				if (!validPassword) {
+					void recordAuthLoginEvent({userId: auditUserId, success: false, error: 'invalid_credentials'})
 					throw new TRPCError({code: 'UNAUTHORIZED', message: 'Incorrect password'})
 				}
 
@@ -141,6 +152,7 @@ export default router({
 			} else {
 				// Legacy single-user login via YAML
 				if (!(await ctx.user.validatePassword(input.password))) {
+					void recordAuthLoginEvent({userId: auditUserId, success: false, error: 'invalid_credentials'})
 					throw new TRPCError({code: 'UNAUTHORIZED', message: 'Incorrect password'})
 				}
 
@@ -158,11 +170,13 @@ export default router({
 			if (!input.username && (await ctx.user.is2faEnabled())) {
 				// Check we have a token
 				if (!input.totpToken) {
+					void recordAuthLoginEvent({userId: dbUserId ?? auditUserId, success: false, error: 'missing_2fa'})
 					throw new TRPCError({code: 'UNAUTHORIZED', message: 'Missing 2FA code'})
 				}
 
 				// Verify the token
 				if (!(await ctx.user.validate2faToken(input.totpToken))) {
+					void recordAuthLoginEvent({userId: dbUserId ?? auditUserId, success: false, error: 'incorrect_2fa'})
 					throw new TRPCError({code: 'UNAUTHORIZED', message: 'Incorrect 2FA code'})
 				}
 			}
@@ -220,6 +234,7 @@ export default router({
 				maxAge: 30 * ONE_DAY,
 			})
 
+			void recordAuthLoginEvent({userId: dbUserId ?? auditUserId, success: true})
 			return apiToken
 		}),
 
