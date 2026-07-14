@@ -1,10 +1,12 @@
 import {motion} from 'framer-motion'
-import {ReactNode, useEffect} from 'react'
+import {ReactNode, useEffect, useState} from 'react'
 import QRCode from 'react-qr-code'
+import {useCopyToClipboard} from 'react-use'
 
 import {CopyableField} from '@/components/ui/copyable-field'
 import {Loading} from '@/components/ui/loading'
 import {PinInput} from '@/components/ui/pin-input'
+import {Button} from '@/shadcn-components/ui/button'
 import {use2fa} from '@/hooks/use-2fa'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useSettingsDialogProps} from '@/routes/settings/_components/shared'
@@ -35,24 +37,37 @@ export default function TwoFactorEnableDialog() {
 	const dialogProps = useSettingsDialogProps()
 
 	// const dialogProps = useDialogOpenProps('2fa-enable')
-	const {enable, totpUri, generateTotpUri} = use2fa(() => dialogProps.onOpenChange(false))
+	const {enable, totpUri, generateTotpUri, recoveryCodes, confirmEnrolled} = use2fa(() =>
+		dialogProps.onOpenChange(false),
+	)
 	useEffect(generateTotpUri, [generateTotpUri])
+
+	// IDENT-05: once the DB enrol returns one-time recovery codes, swap the
+	// QR/PinInput body for the codes panel (shown ONCE). Dialog title/description
+	// track the phase so a recovery panel never sits under "scan this QR code".
+	const showRecovery = !!(recoveryCodes && recoveryCodes.length)
 
 	if (isMobile) {
 		return (
 			<Drawer {...dialogProps}>
 				<DrawerContent fullHeight>
 					<DrawerHeader>
-						<DrawerTitle>{title}</DrawerTitle>
-						<DrawerDescription>{t('2fa-description')}</DrawerDescription>
+						<DrawerTitle>{showRecovery ? t('2fa.recovery.title') : title}</DrawerTitle>
+						<DrawerDescription>{showRecovery ? t('2fa.recovery.sub') : t('2fa-description')}</DrawerDescription>
 					</DrawerHeader>
 					<DrawerScroller>
-						<p className={paragraphClass}>{scanThisMessage}</p>
-						<div className='flex flex-col items-center gap-5'>
-							{/* NOTE: keep this small so that the pin input is visible within the viewport */}
-							<Inner qrCodeSize={150} totpUri={totpUri} onCodeCheck={enable} />
-							<div className='mb-4' />
-						</div>
+						{showRecovery ? (
+							<RecoveryCodesPanel codes={recoveryCodes ?? []} onDone={confirmEnrolled} />
+						) : (
+							<>
+								<p className={paragraphClass}>{scanThisMessage}</p>
+								<div className='flex flex-col items-center gap-5'>
+									{/* NOTE: keep this small so that the pin input is visible within the viewport */}
+									<Inner qrCodeSize={150} totpUri={totpUri} onCodeCheck={enable} />
+									<div className='mb-4' />
+								</div>
+							</>
+						)}
 					</DrawerScroller>
 				</DrawerContent>
 			</Drawer>
@@ -64,13 +79,68 @@ export default function TwoFactorEnableDialog() {
 			<DialogScrollableContent>
 				<div className='flex flex-col items-center gap-5 p-8'>
 					<DialogHeader>
-						<DialogTitle>{title}</DialogTitle>
-						<DialogDescription>{scanThisMessage}</DialogDescription>
+						<DialogTitle>{showRecovery ? t('2fa.recovery.title') : title}</DialogTitle>
+						<DialogDescription>{showRecovery ? t('2fa.recovery.sub') : scanThisMessage}</DialogDescription>
 					</DialogHeader>
-					<Inner totpUri={totpUri} onCodeCheck={enable} />
+					{showRecovery ? (
+						<RecoveryCodesPanel codes={recoveryCodes ?? []} onDone={confirmEnrolled} />
+					) : (
+						<Inner totpUri={totpUri} onCodeCheck={enable} />
+					)}
 				</div>
 			</DialogScrollableContent>
 		</Dialog>
+	)
+}
+
+// One-time recovery-codes panel (IDENT-05). Rendered ONCE right after enrol —
+// there is no query to re-read the codes (they are DEK-encrypted at rest). The
+// title/sub are supplied by the enclosing Dialog/Drawer/inline header, so this
+// panel renders only the codes grid + copy/download + note + done affordances.
+function RecoveryCodesPanel({codes, onDone}: {codes: string[]; onDone: () => void}) {
+	const [, copyToClipboard] = useCopyToClipboard()
+	const [copied, setCopied] = useState(false)
+
+	function copyAll() {
+		copyToClipboard(codes.join('\n'))
+		setCopied(true)
+		setTimeout(() => setCopied(false), 1500)
+	}
+
+	function downloadCodes() {
+		const blob = new Blob([codes.join('\n') + '\n'], {type: 'text/plain'})
+		const url = window.URL.createObjectURL(blob)
+		const a = document.createElement('a')
+		a.href = url
+		a.download = 'recovery-codes.txt'
+		document.body.appendChild(a)
+		a.click()
+		document.body.removeChild(a)
+		setTimeout(() => window.URL.revokeObjectURL(url), 0)
+	}
+
+	return (
+		<div className='flex w-full flex-col gap-4'>
+			<div className='grid grid-cols-2 gap-2 rounded-radius-md border border-border-default bg-surface-base p-4 font-mono text-body-sm'>
+				{codes.map((code) => (
+					<span key={code} className='select-all text-center tracking-wider'>
+						{code}
+					</span>
+				))}
+			</div>
+			<div className='flex flex-wrap justify-center gap-2'>
+				<Button variant='default' size='sm' onClick={copyAll}>
+					{copied ? t('clipboard.copied') : t('2fa.recovery.copy')}
+				</Button>
+				<Button variant='default' size='sm' onClick={downloadCodes}>
+					{t('2fa.recovery.download')}
+				</Button>
+			</div>
+			<p className='text-center text-caption text-text-secondary'>{t('2fa.recovery.lost-device-note')}</p>
+			<Button variant='primary' size='dialog' onClick={onDone}>
+				{t('2fa.recovery.done')}
+			</Button>
+		</div>
 	)
 }
 
@@ -146,14 +216,22 @@ const AnimateInQr = ({children, size, animateIn}: {children: ReactNode; size: nu
 
 // Inline version for settings panel (no Dialog wrapper)
 export function TwoFactorEnableInline({onComplete}: {onComplete: () => void}) {
-	const {enable, totpUri, generateTotpUri} = use2fa(onComplete)
+	const {enable, totpUri, generateTotpUri, recoveryCodes, confirmEnrolled} = use2fa(onComplete)
 	useEffect(generateTotpUri, [generateTotpUri])
 
+	const showRecovery = !!(recoveryCodes && recoveryCodes.length)
+
 	return (
-		<div className='flex flex-col items-center gap-4'>
-			<h3 className='text-body-lg font-semibold'>{t('2fa.enable.title')}</h3>
-			<p className='text-body-sm text-text-secondary text-center'>{t('2fa.enable.scan-this')}</p>
-			<Inner qrCodeSize={180} totpUri={totpUri} onCodeCheck={enable} />
+		<div className='flex w-full flex-col items-center gap-4'>
+			<h3 className='text-body-lg font-semibold'>{showRecovery ? t('2fa.recovery.title') : t('2fa.enable.title')}</h3>
+			<p className='text-body-sm text-text-secondary text-center'>
+				{showRecovery ? t('2fa.recovery.sub') : t('2fa.enable.scan-this')}
+			</p>
+			{showRecovery ? (
+				<RecoveryCodesPanel codes={recoveryCodes ?? []} onDone={confirmEnrolled} />
+			) : (
+				<Inner qrCodeSize={180} totpUri={totpUri} onCodeCheck={enable} />
+			)}
 		</div>
 	)
 }
