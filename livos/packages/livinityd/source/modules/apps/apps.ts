@@ -1346,6 +1346,26 @@ export default class Apps {
 		return allDependencies.filter(({dependencies}) => dependencies.includes(appId)).map(({id}) => id)
 	}
 
+	// 316-02 (GPU-02): set the per-app GPU-access override (delegates to the app
+	// instance, which persists to settings.yml and restarts to re-patch compose).
+	async setGpuAccess(appId: string, enabled: boolean) {
+		const app = this.getApp(appId)
+		return app.setGpuAccess(enabled)
+	}
+
+	// 316-02 (GPU-02): list the ids of every app currently claiming GPU access,
+	// so the UI can warn about GPU exclusivity. Mirrors getDependents' cross-app
+	// scan — catch-per-app so one unreadable app never fails the whole scan.
+	async listAppsWithGpuAccess(): Promise<string[]> {
+		const allGpuAccess = await Promise.all(
+			this.instances.map(async (app) => ({
+				id: app.id,
+				gpu: await app.getGpuAccess().catch(() => undefined),
+			})),
+		)
+		return allGpuAccess.filter(({gpu}) => gpu === true).map(({id}) => id)
+	}
+
 	async setHideCredentialsBeforeOpen(appId: string, value: boolean) {
 		const app = this.getApp(appId)
 		return app.store.set('hideCredentialsBeforeOpen', value)

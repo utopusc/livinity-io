@@ -471,6 +471,21 @@ export const apps = router({
 
 	dependents: privateProcedure.input(z.string()).query(async ({ctx, input}) => ctx.apps.getDependents(input)),
 
+	// 316-02 (GPU-02): toggle a single app's GPU-access override. privateProcedure
+	// (session-authenticated) matches the setSelectedDependencies precedent —
+	// toggling restarts the app container (T-316-03).
+	setGpuAccess: privateProcedure
+		.input(
+			z.object({
+				appId: z.string(),
+				enabled: z.boolean(),
+			}),
+		)
+		.mutation(async ({ctx, input}) => ctx.apps!.setGpuAccess(input.appId, input.enabled)),
+
+	// 316-02 (GPU-02): ids of apps already claiming the GPU, for the exclusivity warning.
+	listAppsWithGpuAccess: privateProcedure.query(async ({ctx}) => ctx.apps!.listAppsWithGpuAccess()),
+
 	hideCredentialsBeforeOpen: privateProcedure
 		.input(
 			z.object({
