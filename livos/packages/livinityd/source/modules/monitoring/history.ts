@@ -166,12 +166,28 @@ export async function getResourceHistory(range: HistoryRange): Promise<ResourceH
  * buckets into hourly buckets. Both statements are idempotent via ON CONFLICT
  * (bucket_start) DO UPDATE — safe to re-run on every hourly tick. Returns
  * without throwing when no pool.
+ *
+ * IN-320-03 — accepted catch-up-window trade-off (documented, no behavior
+ * change for v1): the two lookback windows below (raw->5m = last 2h, 5m->1h =
+ * last 3h) are fixed and non-backfilling. The job runs hourly, so 2-3x is a
+ * safe buffer against a missed tick or two. But if the scheduler or Postgres is
+ * DOWN longer than the raw window, raw samples older than 2h at the time the
+ * job resumes are never rolled up — and because pruneOldRows() deletes raw rows
+ * past 48h regardless, that gap in the 7d/30d chart tiers becomes permanent
+ * (the chart shows nothing for that period; connectNulls bridges it visually).
+ * This is a reasonable v1 trade-off for a ~3MB-capped module. If a longer
+ * outage window ever needs to be recoverable, widen the raw->5m lookback toward
+ * the 48h raw-retention ceiling (one extra bounded full-table scan per tick) so
+ * any outage shorter than the raw retention is fully recoverable on the next
+ * successful tick. Also surfaced in 320-HUMAN-UAT.md so operators know a
+ * multi-hour outage can leave a permanent gap in the persisted history.
  */
 export async function aggregateRollups(): Promise<void> {
 	const pool = getPool()
 	if (!pool) return
 
-	// raw -> 5m (5-minute buckets via epoch-floor).
+	// raw -> 5m (5-minute buckets via epoch-floor). Catch-up window = last 2h
+	// (fixed, non-backfilling — see IN-320-03 trade-off in the JSDoc above).
 	await pool.query(
 		`INSERT INTO resource_rollups_5m
 		   (bucket_start, sample_count, cpu_pct_avg, cpu_pct_min, cpu_pct_max,
@@ -199,6 +215,7 @@ export async function aggregateRollups(): Promise<void> {
 	)
 
 	// 5m -> 1h (weighted avg via sample_count; hour bucket via epoch-floor).
+	// Catch-up window = last 3h (fixed, non-backfilling — see IN-320-03).
 	// WR-320-01: use the SAME timezone-agnostic epoch-floor as the raw->5m tier
 	// above. extract(epoch from ts) is an absolute-instant (UTC) computation, so
 	// the bucket edges are invariant regardless of the PG session's TimeZone GUC.
