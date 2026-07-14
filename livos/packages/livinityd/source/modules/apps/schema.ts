@@ -182,6 +182,10 @@ export const AppSettingsSchema = z.object({
 	dependencies: z.record(z.string()).optional(),
 	backupIgnore: z.boolean().optional(),
 	autoStart: z.boolean().optional(),
+	// 316-02 GPU-02: per-app-instance GPU-access override. undefined = fall back
+	// to the manifest's silent auto-inject (unchanged behavior for untouched
+	// apps); true/false explicitly enables/disables GPU passthrough for this app.
+	gpuAccess: z.boolean().optional(),
 	// 256-02 SC4b: the broker keyId of this app's per-app metered virtual key
 	// (UNVERIFIED/community apps only). Persisted at install so uninstall can
 	// independently revoke it. Absent for verified/OAuth-path apps.

@@ -14,6 +14,7 @@ import {pullAll} from '../utilities/docker-pull.js'
 import FileStore from '../utilities/file-store.js'
 import {fillSelectedDependencies} from '../utilities/dependencies.js'
 import type Livinityd from '../../index.js'
+import {detectNvidiaGpu, isNvidiaToolkitConfigured} from '../system/gpu.js'
 import {validateManifest, type AppSettings} from './schema.js'
 import appScript from './legacy-compat/app-script.js'
 import {reconcileAppVolumeOwnership} from './reconcile-volume-ownership.js'
@@ -111,6 +112,17 @@ export default class App {
 		const DRI_DEVICE_PATH = '/dev/dri'
 		const deviceHasGpu = await fse.exists(DRI_DEVICE_PATH).catch(() => false)
 
+		// 316-02 (GPU-02): per-app GPU-access override + NVIDIA branch inputs.
+		// Read/probe ONCE per patch (not per service). `gpuAccessOverride` is
+		// undefined | boolean — undefined falls back to the manifest default so
+		// an app nobody has toggled keeps exactly today's behavior. The NVIDIA
+		// probes never throw (degrade to false).
+		const gpuAccessOverride = await this.store.get('gpuAccess')
+		const appRequestsNvidia = manifest.permissions?.includes('GPU-NVIDIA')
+		const wantsGpu = gpuAccessOverride ?? (appRequestsGpuAccess || appRequestsNvidia)
+		const hostHasNvidia = wantsGpu ? await detectNvidiaGpu() : false
+		const nvidiaToolkitInstalled = wantsGpu ? await isNvidiaToolkitConfigured() : false
+
 		const compose = await this.readCompose()
 
 		// Remove legacy app_proxy service if present (we use Caddy instead)
@@ -189,9 +201,23 @@ export default class App {
 					?.replace('/data/storage', `/home`)
 			})
 
-			// Pass through host DRI device to all app containers if the app requests it
-			const shouldEnableGpuPassthrough = appRequestsGpuAccess && deviceHasGpu
-			if (shouldEnableGpuPassthrough) {
+			// 316-02 (GPU-02): GPU passthrough. `wantsGpu` is the per-app override
+			// (falls back to the manifest default when untouched, so existing apps
+			// are byte-identical). Prefer an NVIDIA device reservation when an NVIDIA
+			// GPU + a configured toolkit are present; otherwise fall back to the
+			// EXISTING Intel/AMD /dev/dri passthrough, preserved unchanged.
+			if (wantsGpu && hostHasNvidia && nvidiaToolkitInstalled) {
+				const service = compose.services![serviceName]
+				// The pinned compose-spec-schema `Compose` type does not model
+				// deploy.resources.reservations.devices[].driver/count/capabilities
+				// (Pitfall 5) — localized `as any` escape hatch, no package bump.
+				const deploy = (service.deploy || {}) as any
+				deploy.resources = {
+					reservations: {devices: [{driver: 'nvidia', count: 'all', capabilities: ['gpu']}]},
+				}
+				service.deploy = deploy
+			} else if (wantsGpu && deviceHasGpu) {
+				// Pass through host DRI device to all app containers if the app requests it
 				compose.services![serviceName].devices = compose.services![serviceName].devices || []
 				compose.services![serviceName].devices.push(DRI_DEVICE_PATH)
 			}
@@ -729,6 +755,26 @@ export default class App {
 		const {dependencies} = await this.readManifest()
 		const filledSelectedDependencies = fillSelectedDependencies(dependencies, selectedDependencies)
 		const success = await this.store.set('dependencies', filledSelectedDependencies)
+		if (success) {
+			this.restart().catch((error) => {
+				this.logger.error(`Failed to restart '${this.id}'`, error)
+			})
+		}
+		return success
+	}
+
+	// 316-02 (GPU-02): read the per-app GPU-access override.
+	// undefined = no override set → patchComposeFile falls back to the manifest
+	// default (unchanged behavior). true/false = explicit admin toggle.
+	async getGpuAccess() {
+		return this.store.get('gpuAccess')
+	}
+
+	// 316-02 (GPU-02): set the per-app GPU-access override, then restart so the
+	// re-patched compose (with/without the NVIDIA reservation or DRI device)
+	// takes effect. Mirrors setSelectedDependencies' fire-and-forget restart.
+	async setGpuAccess(enabled: boolean) {
+		const success = await this.store.set('gpuAccess', enabled)
 		if (success) {
 			this.restart().catch((error) => {
 				this.logger.error(`Failed to restart '${this.id}'`, error)
