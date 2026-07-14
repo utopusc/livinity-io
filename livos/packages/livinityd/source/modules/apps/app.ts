@@ -20,6 +20,7 @@ import appScript from './legacy-compat/app-script.js'
 import {reconcileAppVolumeOwnership} from './reconcile-volume-ownership.js'
 import {pollContainerHealth} from './health-poll.js'
 import {deriveOidcClientSecret as deriveOidcSecret} from '../oidc/clients.js'
+import {provisionOidcForApp, type ProvisionResult} from '../oidc/provisioning.js'
 import {getKey, encrypt, decrypt} from '../secrets/dek.js'
 
 async function readYaml(path: string) {
@@ -926,7 +927,71 @@ export default class App {
 				this.logger.error(`Failed to restart '${this.id}'`, error)
 			})
 		}
+		// 322-06 (IDENT-02, D-322-4): the CLI/REST apps (Nextcloud/Gitea/Immich) provision
+		// OUT-OF-BAND — no compose change, so no restart. Run the SECOND provisioning
+		// mechanism (docker-exec CLI / loopback REST) AFTER the container is healthy, but
+		// fire-and-forget: the readiness gate can take up to 120s and the toggle response
+		// must not block. provisionOidcAfterHealth is failure-isolated and NEVER logs the secret.
+		if (success && enabled && ['nextcloud', 'gitea', 'immich'].includes(this.id)) {
+			this.provisionOidcAfterHealth().catch((error) => {
+				this.logger.error(`[oidc] provisioning failed for '${this.id}'`, error)
+			})
+		}
 		return success
+	}
+
+	// 322-06 (IDENT-02, D-322-4): health-gated wrapper around provisionOidcForApp — the
+	// SECOND OIDC provisioning mechanism (docker-exec CLI for Nextcloud/Gitea, loopback
+	// REST for Immich). REUSES the EXISTING pollContainerHealth gate (never a new poll
+	// loop) + getMainContainerName (the same main service Caddy proxies) — provisioning
+	// runs strictly AFTER health. Resolves the derived client secret and, for Immich, the
+	// DEK-encrypted admin key (322-05 producer, via getImmichApiKey) + the host port.
+	// Failure-isolated: provisionOidcForApp never throws, and a health-poll timeout is
+	// caught here — this NEVER breaks a toggle or install. Returns null when there is no
+	// active main domain (no stable HTTPS issuer) or no resolvable container.
+	// Callers: setOidcEnabled (toggle) + apps.#finishInstall (install-time enablement).
+	async provisionOidcAfterHealth(): Promise<ProvisionResult | null> {
+		const mainDomain = await this.#livinityd.server.getActiveMainDomain()
+		if (!mainDomain) {
+			this.logger.log(`[oidc] no active main domain — skipping SSO provisioning for ${this.id}`)
+			return null
+		}
+		const containerName = await this.getMainContainerName()
+		if (!containerName) return null
+		try {
+			// Reuse the existing readiness gate — do NOT re-implement a polling loop.
+			await pollContainerHealth(containerName, {timeoutMs: 120_000, logger: this.logger})
+		} catch (error) {
+			this.logger.error(`[oidc] ${this.id} not healthy — deferring SSO provisioning`, error)
+			return {ok: false, reason: 'container-not-healthy'}
+		}
+		let immichPort: number | undefined
+		let immichAdminApiKey: string | undefined
+		if (this.id === 'immich') {
+			// Pitfall-7 producer (322-05): the admin-pasted, DEK-encrypted key. undefined
+			// when never pasted → provisionOidcForApp returns {deferred:true}. The host
+			// port Immich publishes == manifest.port (patchComposeFile force-adds it).
+			immichAdminApiKey = (await this.getImmichApiKey()) ?? undefined
+			immichPort = (await this.readManifest()).port
+		}
+		const result = await provisionOidcForApp(this, {
+			mainDomain,
+			clientSecret: await this.deriveOidcClientSecret(),
+			containerName,
+			immichPort,
+			immichAdminApiKey,
+			logger: this.logger,
+		})
+		if (result.deferred) {
+			// Immich not onboarded yet — surface (not fatal). The 322-07 UI reads the
+			// deferred state (getOidcEnabled + immichApiKeySet) to show the manual-order note.
+			this.logger.log(`[oidc] ${this.id} SSO provisioning deferred (${result.reason})`)
+		} else if (!result.ok) {
+			this.logger.error(`[oidc] ${this.id} SSO provisioning failed (${result.reason})`)
+		} else {
+			this.logger.log(`[oidc] ${this.id} SSO provisioning succeeded`)
+		}
+		return result
 	}
 
 	// 322-05 (IDENT-02, Pitfall 7 closure): persist Immich's admin API key

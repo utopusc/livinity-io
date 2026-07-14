@@ -32,7 +32,8 @@ export interface ProvisionOidcOpts {
 	containerName: string
 	immichPort?: number
 	immichAdminApiKey?: string
-	logger?: {error: (...a: unknown[]) => void; log: (...a: unknown[]) => void}
+	// Structurally compatible with livinityd's logger (log/error) AND a minimal test fake.
+	logger?: {log: (message?: string) => void; error: (message: string, error?: unknown) => void}
 	// Test seams — default to the real execa `$` / global fetch. Never set in production.
 	deps?: {run?: ExecTag; fetchImpl?: typeof globalThis.fetch}
 }

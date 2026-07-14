@@ -855,6 +855,19 @@ export default class Apps {
 			await set('apps', apps)
 		})
 
+		// 322-06 (IDENT-02, D-322-4): install-time SSO enablement. If "Enable SSO" was
+		// toggled ON before this install, run the SECOND provisioning mechanism
+		// (provisionOidcForApp: docker-exec CLI for Nextcloud/Gitea, loopback REST for
+		// Immich) now — in the same slot reconcileAppVolumeOwnership uses, strictly AFTER
+		// health. app.install() above already polled the main container to 'ready', and
+		// provisionOidcAfterHealth re-gates on pollContainerHealth + is failure-isolated
+		// (never throws into the install path), so this is fire-and-forget.
+		if (await app.getOidcEnabled()) {
+			app.provisionOidcAfterHealth().catch((error) => {
+				this.logger.error(`[oidc] install-time provisioning failed for ${appId}`, error)
+			})
+		}
+
 		// Phase 140 plan 140-08 — provision a CF DNS + Tunnel ingress subdomain
 		// via Server5 BEFORE rebuilding Caddy locally. Best-effort: the helper
 		// internally swallows all errors and returns null, so the install flow
