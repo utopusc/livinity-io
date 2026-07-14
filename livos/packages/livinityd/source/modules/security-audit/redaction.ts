@@ -16,9 +16,11 @@
 
 // Case-insensitive: any input key containing one of these tokens is redacted.
 // Covers password, token, secret, totp, apikey, api_key, hash (which also
-// matches hashedPassword). Deliberately broad — a false-positive redaction is
-// harmless; a leaked secret is not.
-const SECRET_KEY_RE = /password|token|secret|totp|apikey|api_key|hash/i
+// matches hashedPassword), and recover (WR-03: matches recoveryCode /
+// recoveryCodes — the IDENT-05 secret vocabulary this phase introduces).
+// Deliberately broad — a false-positive redaction is harmless; a leaked secret
+// is not.
+const SECRET_KEY_RE = /password|token|secret|totp|apikey|api_key|hash|recover/i
 
 export function redact(input: unknown): unknown {
 	if (input === null || typeof input !== 'object') return input

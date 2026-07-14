@@ -45,6 +45,13 @@ describe('security-audit/redaction — redact()', () => {
 		})
 	})
 
+	test('scrubs recovery-code-shaped keys (WR-03 — IDENT-05 secret vocabulary)', () => {
+		expect(redact({recoveryCode: 'abc123', recoveryCodes: ['a', 'b']})).toEqual({
+			recoveryCode: '[REDACTED]',
+			recoveryCodes: '[REDACTED]',
+		})
+	})
+
 	test('a fake secret is NEVER present in the redacted output (provable-redaction gate)', () => {
 		const FAKE_SECRET = 'liv_sk_super_secret_value_do_not_leak'
 		const redacted = redact({
