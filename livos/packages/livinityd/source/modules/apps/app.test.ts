@@ -99,3 +99,43 @@ describe('patchComposeFile — NVIDIA GPU reservation (CR-01)', () => {
 		expect(written.services.ollama.deploy).toBeUndefined()
 	})
 })
+
+// ── WR-04 regression — the AMD ROCm image swap must be reversible ─────────────
+describe('patchComposeFile — AMD ROCm image swap + revert (WR-04)', () => {
+	test('bare-metal AMD + GPU on → ollama image swapped to :rocm and KFD/DRI devices added', async () => {
+		const written = await runPatch({
+			gpuInfo: {vendor: 'amd', wsl2: false, toolkitConfigured: true, present: true, driverSource: 'linux-native'},
+			toolkitConfigured: false,
+		})
+		expect(written.services.ollama.image).toBe('ollama/ollama:rocm')
+		expect(written.services.ollama.devices).toEqual(expect.arrayContaining(['/dev/kfd', '/dev/dri']))
+	})
+
+	test('GPU turned off later → a previously-swapped :rocm image reverts to the default tag', async () => {
+		// Persisted compose already carries the ROCm image; the user has toggled GPU
+		// OFF (override false, no manifest GPU permission) → wantsGpu is false, so the
+		// AMD branch is skipped and the revert must restore ollama/ollama:latest.
+		const written = await runPatch({
+			gpuAccess: false,
+			permissions: [],
+			image: 'ollama/ollama:rocm',
+			gpuInfo: null,
+			toolkitConfigured: false,
+		})
+		expect(written.services.ollama.image).toBe('ollama/ollama:latest')
+	})
+
+	test('bare-metal NVIDIA (not AMD) with a stale :rocm image → image reverts to default', async () => {
+		// Switching an app from AMD to an NVIDIA host must not leave the ROCm image;
+		// the NVIDIA branch fires (reservation added) AND the stale swap is reverted.
+		const written = await runPatch({
+			image: 'ollama/ollama:rocm',
+			gpuInfo: {vendor: 'nvidia', wsl2: false, toolkitConfigured: true, present: true, driverSource: 'linux-native'},
+			toolkitConfigured: true,
+		})
+		expect(written.services.ollama.image).toBe('ollama/ollama:latest')
+		expect(written.services.ollama.deploy.resources.reservations.devices).toEqual([
+			{driver: 'nvidia', count: 'all', capabilities: ['gpu']},
+		])
+	})
+})

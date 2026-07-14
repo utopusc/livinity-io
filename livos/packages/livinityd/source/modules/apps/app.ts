@@ -57,6 +57,14 @@ export function resolveWantsGpu(
 	return gpuAccessOverride ?? (appRequestsGpuAccess || appRequestsNvidia)
 }
 
+// 330 WR-04: the bare-metal AMD branch of patchComposeFile swaps Ollama's image to
+// the ROCm variant. `OLLAMA_DEFAULT_IMAGE` is the tag to restore when GPU access is
+// later turned off, so opting out never strands the app on the heavier ROCm
+// runtime. Both are FIXED literals (T-330-11) — no caller/manifest string reaches
+// them; scoped by `this.id === 'ollama'` and the exact tag this code sets.
+const OLLAMA_ROCM_IMAGE = 'ollama/ollama:rocm'
+const OLLAMA_DEFAULT_IMAGE = 'ollama/ollama:latest'
+
 type AppState =
 	| 'unknown'
 	| 'installing'
@@ -269,12 +277,26 @@ export default class App {
 				// this image swap to a manifest field (option b) is DEFERRED to a later
 				// plan — Ollama is the only gpuCapable app today.
 				if (this.id === 'ollama' && typeof service.image === 'string' && service.image.startsWith('ollama/ollama:')) {
-					service.image = 'ollama/ollama:rocm'
+					service.image = OLLAMA_ROCM_IMAGE
 				}
 			} else if (wantsGpu && deviceHasGpu) {
 				// Pass through host DRI device to all app containers if the app requests it
 				compose.services![serviceName].devices = compose.services![serviceName].devices || []
 				compose.services![serviceName].devices.push(DRI_DEVICE_PATH)
+			}
+
+			// 330 WR-04: the bare-metal AMD branch above swaps Ollama's image to the
+			// ROCm variant. When this service is NOT taking that branch (GPU toggled
+			// off, vendor no longer AMD, or WSL2), a previously-swapped :rocm image is
+			// reverted to the default tag — otherwise opting out of GPU access silently
+			// leaves the app on the heavier ROCm runtime forever. Scoped to ollama +
+			// the exact tag this code sets; FIXED literals only (T-330-11).
+			const takingAmdBranch = wantsGpu && hostVendorAmd && !hostWsl2
+			if (this.id === 'ollama' && !takingAmdBranch) {
+				const svc = compose.services![serviceName]
+				if (svc.image === OLLAMA_ROCM_IMAGE) {
+					svc.image = OLLAMA_DEFAULT_IMAGE
+				}
 			}
 		}
 
