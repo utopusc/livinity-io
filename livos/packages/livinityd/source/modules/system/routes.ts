@@ -1,6 +1,7 @@
 import os from 'node:os'
 import fs, {stat as fsStat} from 'node:fs/promises'
 import path from 'node:path'
+import {spawn} from 'child_process'
 import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 import {$} from 'execa'
@@ -23,6 +24,7 @@ import {
 	getOnboardingSystemInfo,
 	syncDns,
 } from './system.js'
+import {detectNvidiaGpu, isNvidiaToolkitConfigured} from './gpu.js'
 
 import {adminProcedure, privateProcedure, publicProcedure, router} from '../server/trpc/trpc.js'
 
@@ -32,6 +34,68 @@ let systemStatus: SystemStatus = 'running'
 // Quick hack so we can set system status from migration module until we refactor this
 export function setSystemStatus(status: SystemStatus) {
 	systemStatus = status
+}
+
+// ── Phase 316 (GPU-01) — guided NVIDIA driver + container-toolkit install ────
+// livinityd runs as the unprivileged desktop user; the privileged apt/kernel-module
+// work runs through the root-owned closed-enum wrapper (scripts/install/livos-gpu-install.sh)
+// via the scoped /etc/sudoers.d/livos-gpu NOPASSWD grant. This helper spawns
+// `sudo -n <wrapper> <action>` using the SAME spawn+timeout+never-throw contract as
+// the provider restart-hook: a failed or partial install is a recoverable, retryable
+// state — NOT a crash — so it returns a structured {ok,reason?} discriminated union
+// and NEVER throws. Only the enum-constrained action string can reach the wrapper
+// (defense-in-depth on top of the wrapper's own action enum). No reboot is triggered
+// here — the reboot-confirm UX reuses the existing reboot() primitive (imported above).
+const GPU_INSTALL_WRAPPER = '/usr/local/lib/livos/livos-gpu-install.sh'
+
+async function runGpuInstall(
+	action: 'install-driver' | 'install-toolkit',
+): Promise<{ok: true} | {ok: false; reason: string}> {
+	return new Promise((resolve) => {
+		const timeoutMs = 300_000 // driver install is slow (apt + kernel module) — 5 min headroom
+		let settled = false
+		let stderr = ''
+		const settle = (result: {ok: true} | {ok: false; reason: string}): void => {
+			if (settled) return
+			settled = true
+			clearTimeout(timer)
+			resolve(result)
+		}
+
+		const child = spawn('sudo', ['-n', GPU_INSTALL_WRAPPER, action], {
+			stdio: ['ignore', 'pipe', 'pipe'],
+			windowsHide: true,
+		})
+
+		const timer = setTimeout(() => {
+			try {
+				child.kill('SIGTERM')
+			} catch {
+				/* best-effort */
+			}
+			settle({ok: false, reason: `timeout after ${timeoutMs}ms`})
+		}, timeoutMs)
+
+		child.stderr?.on('data', (chunk: Buffer) => {
+			stderr += chunk.toString('utf8')
+		})
+
+		// Fires for ENOENT (sudo not on PATH) / EACCES — degrade, do not throw.
+		child.on('error', (err: Error) => {
+			settle({ok: false, reason: err.message || 'sudo spawn failed'})
+		})
+
+		child.on('close', (code) => {
+			if (code === 0) {
+				settle({ok: true})
+				return
+			}
+			settle({
+				ok: false,
+				reason: stderr.trim().slice(0, 500) || `wrapper exited with code ${code ?? 'unknown'}`,
+			})
+		})
+	})
 }
 
 // ── Phase 306 — desktop-user OS password credentials ─────────────────────────
@@ -378,6 +442,14 @@ export default router({
 
 	device: privateProcedure.query(() => detectDevice()),
 	cpuTemperature: privateProcedure.query(() => getCpuTemperature()),
+	// Phase 316 (GPU-01) — unprivileged read-only NVIDIA probe. Lets the UI decide
+	// whether to render the guided GPU-install section at all: non-NVIDIA boxes see
+	// nothing, and a box that already has the toolkit configured is not re-offered
+	// the install. Never throws (both probes degrade to false — see system/gpu.ts).
+	detectGpu: privateProcedure.query(async () => ({
+		hasNvidia: await detectNvidiaGpu(),
+		toolkitConfigured: await isNvidiaToolkitConfigured(),
+	})),
 	systemDiskUsage: privateProcedure.query(({ctx}) => getSystemDiskUsage(ctx.livinityd)),
 	diskUsage: privateProcedure.query(({ctx}) => getDiskUsage(ctx.livinityd)),
 	systemMemoryUsage: privateProcedure.query(({ctx}) => getSystemMemoryUsage()),
@@ -403,6 +475,16 @@ export default router({
 
 		return true
 	}),
+	// Phase 316 (GPU-01) — admin-gated guided NVIDIA install. Host-level apt/kernel
+	// operation, so adminProcedure (mirrors shutdown/restart above), NOT privateProcedure.
+	// Input is z.enum-constrained so ONLY 'install-driver' | 'install-toolkit' can reach
+	// the wrapper (defense-in-depth on top of the wrapper's own action enum) — never a
+	// free-form string. Returns runGpuInstall's {ok,reason?} union and NEVER throws: a
+	// failed install is recoverable/retryable, not a crash. No reboot is triggered here;
+	// the reboot-confirm UX reuses the existing system.restart primitive.
+	installNvidiaGpu: adminProcedure
+		.input(z.object({action: z.enum(['install-driver', 'install-toolkit'])}))
+		.mutation(async ({input}) => runGpuInstall(input.action)),
 	// ── Phase 306 R2 — desktop-user OS/sudo password (Settings → Account) ───────
 	// getDesktopUserInfo: lightweight, NON-secret. Returns just the username + a
 	// hasPassword flag so the card can render without ever shipping the plaintext.
