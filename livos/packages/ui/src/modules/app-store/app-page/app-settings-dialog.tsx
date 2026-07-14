@@ -22,6 +22,7 @@ import {t} from '@/utils/i18n'
 
 import {SelectDependencies} from '../select-dependencies-dialog'
 import {GpuAccessSection} from './gpu-access-section'
+import {OidcSsoSection} from './oidc-sso-section'
 import {PublicAccessSection} from './public-access-section'
 
 export function AppSettingsDialog() {
@@ -141,6 +142,13 @@ function AppSettingsDialogForApp({
 	const appRequestsGpu = gpuPermissions.includes('GPU') || gpuPermissions.includes('GPU-NVIDIA')
 	const gpuInitiallyEnabled = app.gpuAccess ?? appRequestsGpu
 
+	// 322-07 (IDENT-02): render the "Enable SSO" section ONLY for oidcNative apps
+	// (the 4 OIDC-native apps). `oidcNative` is the manifest visibility flag
+	// surfaced by apps.list (322-05). Default OFF — NO permissions-based fallback
+	// (unlike GPU); the per-app override `oidcEnabled` wins when present.
+	const appRequestsOidc = app.oidcNative ?? false
+	const oidcInitiallyEnabled = app.oidcEnabled ?? false
+
 	return (
 		<Dialog {...dialogProps}>
 			<DialogPortal>
@@ -175,6 +183,17 @@ function AppSettingsDialogForApp({
 					{appRequestsGpu && (
 						<div className='border-t border-border-default pt-4 mt-4'>
 							<GpuAccessSection appId={app.id} appName={app.name} initialEnabled={gpuInitiallyEnabled} />
+						</div>
+					)}
+					{/* OIDC SSO Section — 322-07 (IDENT-02), only for oidcNative apps */}
+					{appRequestsOidc && (
+						<div className='border-t border-border-default pt-4 mt-4'>
+							<OidcSsoSection
+								appId={app.id}
+								appName={app.name}
+								initialEnabled={oidcInitiallyEnabled}
+								immichApiKeySet={app.immichApiKeySet ?? false}
+							/>
 						</div>
 					)}
 					{hadChanges && (
