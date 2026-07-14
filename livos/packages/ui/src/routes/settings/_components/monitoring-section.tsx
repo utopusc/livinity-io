@@ -37,10 +37,12 @@ const RANGES: {value: Range; labelKey: string}[] = [
 	{value: '30d', labelKey: 'settings.monitoring.range-30d'},
 ]
 
+// Editable form state holds RAW strings (not numbers) so a field can be
+// transiently empty while the user retypes it — see updateField / handleSave.
 type ThresholdForm = {
-	containerMemoryWarningPct: number
-	containerMemoryCriticalPct: number
-	containerRestartLoopCount: number
+	containerMemoryWarningPct: string
+	containerMemoryCriticalPct: string
+	containerRestartLoopCount: string
 }
 
 export function MonitoringSection() {
@@ -62,21 +64,32 @@ export function MonitoringSection() {
 	useEffect(() => {
 		if (thresholdsQ.data) {
 			setForm({
-				containerMemoryWarningPct: thresholdsQ.data.containerMemoryWarningPct,
-				containerMemoryCriticalPct: thresholdsQ.data.containerMemoryCriticalPct,
-				containerRestartLoopCount: thresholdsQ.data.containerRestartLoopCount,
+				containerMemoryWarningPct: String(thresholdsQ.data.containerMemoryWarningPct),
+				containerMemoryCriticalPct: String(thresholdsQ.data.containerMemoryCriticalPct),
+				containerRestartLoopCount: String(thresholdsQ.data.containerRestartLoopCount),
 			})
 		}
 	}, [thresholdsQ.data])
 
+	// IN-320-02: keep the raw keystroke string in state so clearing "80" to type
+	// "75" leaves the field momentarily empty instead of snapping to 0 (Number('')
+	// is 0, which fought the user's typing). Coercion to a number happens once, on
+	// Save — the server zod remains the authoritative bounds/refine validator.
 	function updateField(key: keyof ThresholdForm, raw: string) {
-		const n = Number(raw)
-		setForm((f) => (f ? {...f, [key]: Number.isFinite(n) ? n : 0} : f))
+		setForm((f) => (f ? {...f, [key]: raw} : f))
 	}
 
 	function handleSave() {
 		if (!form) return
-		setM.mutate(form)
+		// Don't submit a transient empty/NaN field (Number('') === 0 would silently
+		// persist 0). Require every field to coerce to a finite number first.
+		const raws = [form.containerMemoryWarningPct, form.containerMemoryCriticalPct, form.containerRestartLoopCount]
+		if (raws.some((r) => r.trim() === '' || !Number.isFinite(Number(r)))) return
+		setM.mutate({
+			containerMemoryWarningPct: Number(form.containerMemoryWarningPct),
+			containerMemoryCriticalPct: Number(form.containerMemoryCriticalPct),
+			containerRestartLoopCount: Number(form.containerRestartLoopCount),
+		})
 	}
 
 	return (
