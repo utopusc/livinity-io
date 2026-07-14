@@ -124,8 +124,11 @@ async function writeAuditRow(
 		const ts = Date.now()
 		const id = randomUUID().slice(0, 8)
 		const file = path.join(SECURITY_EVENTS_DIR, `${ts}-${id}-${sentinel}.json`)
-		await fs.mkdir(SECURITY_EVENTS_DIR, {recursive: true})
-		await fs.writeFile(file, JSON.stringify({ts, ...jsonPayload, error: safeError}, null, 2), 'utf8')
+		// IN-02: match the sibling secrets/dek.ts convention — the forensics dir/
+		// files carry admin user IDs, action names, and timestamps that must not be
+		// world/group-readable, so create them owner-only (0700 dir / 0600 file).
+		await fs.mkdir(SECURITY_EVENTS_DIR, {recursive: true, mode: 0o700})
+		await fs.writeFile(file, JSON.stringify({ts, ...jsonPayload, error: safeError}, null, 2), {encoding: 'utf8', mode: 0o600})
 	} catch (err) {
 		logger.warn('[security-audit.events] JSON write failed (non-fatal):', err)
 	}
