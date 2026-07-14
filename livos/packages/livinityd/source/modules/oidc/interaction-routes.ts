@@ -61,7 +61,14 @@ export function registerOidcInteractionRoutes(app: Express, deps: OidcInteractio
 					accountId: session.userId,
 					clientId: params.client_id as string,
 				})
-				grant.addOIDCScope('openid profile email groups')
+				// IN-03 (322-review): grant ONLY the scopes the RP actually requested
+				// (params.scope) rather than hardcoding the full set — panva has already
+				// validated params.scope against the client's registered scopes before this
+				// interaction fires, so this is a least-privilege bound, not a widening. Fall
+				// back to 'openid' if somehow absent (a valid OIDC request always carries it).
+				const requestedScope =
+					typeof params.scope === 'string' && params.scope.trim() ? params.scope : 'openid'
+				grant.addOIDCScope(requestedScope)
 				const grantId = await grant.save()
 				return provider.interactionFinished(
 					req,
