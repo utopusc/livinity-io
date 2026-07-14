@@ -2943,6 +2943,18 @@ elif [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
         || warn "smartmontools install failed (non-fatal — SMART surfaces 'unavailable' until fixed)"
 fi
 
+# --- (c) Phase 330 (GPU-03): pciutils — day-2 presence-ensure so ALREADY-DEPLOYED
+# boxes get `lspci` for bare-metal AMD/Intel GPU vendor detection (system/gpu.ts).
+# Same idempotent apt idiom as (b) smartmontools; NOT NVIDIA-gated (lspci is what
+# detects AMD/Intel in the first place). Non-fatal — vendor detect degrades to
+# "none" until present. No new numbered step; folds into the existing baseline. ---
+if command -v lspci >/dev/null 2>&1; then
+    info "update.sh: lspci already present — skipping pciutils install"
+elif [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq pciutils 2>&1 | tail -3 \
+        || warn "pciutils install failed (non-fatal — bare-metal AMD/Intel GPU vendor detect degrades to 'none' until fixed)"
+fi
+
 # ── Step 7.10c: Phase 316 (GPU-01) — NVIDIA install provisioning (sudoers.d/livos-gpu + wrapper) ──
 # The livos-gpu NOPASSWD grant + the root-owned install wrapper must reach
 # ALREADY-DEPLOYED boxes on Update, not just fresh installs. Mirrors Step 7.10b

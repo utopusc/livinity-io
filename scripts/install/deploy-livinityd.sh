@@ -170,14 +170,19 @@ _dld_install_system_packages() {
     # Phase 313 (SMART-02): smartmontools — smartctl SATA/NVMe SMART reads +
     # self-test triggers for the disk-health monitor. Plain Ubuntu-archive
     # package (no arch conditional, unlike the pinned kopia binary below).
-    info "Installing PostgreSQL + Redis + build deps + samba + smartmontools (Bug #8)"
+    # Phase 330 (GPU-03): pciutils — provides `lspci`, the basis for bare-metal
+    # AMD/Intel GPU vendor detection (system/gpu.ts). Unconditional baseline (NOT
+    # gated behind the NVIDIA probe below — lspci is needed to detect AMD/Intel in
+    # the first place), so minimal rootfs installs can still identify the vendor.
+    info "Installing PostgreSQL + Redis + build deps + samba + smartmontools + pciutils (Bug #8)"
     apt-get install -y -qq \
         postgresql postgresql-client \
         redis-server \
         build-essential python3 git rsync openssl \
         samba samba-common-bin \
         bubblewrap tinyproxy \
-        smartmontools
+        smartmontools \
+        pciutils
     ok "System packages installed"
 
     # ── Backups-v2 P0: kopia backup engine ────────────────────────────────
