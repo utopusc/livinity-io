@@ -120,6 +120,11 @@ export const AppManifestSchema = z.object({
 	installOptions: z
 		.object({
 			subdomain: z.string().optional(),
+			// 330 GPU-05 — marks an app that SHOWS the install-time "Use GPU" toggle.
+			// VISIBILITY ONLY — never read by resolveWantsGpu (that stays
+			// permission/override-driven), so a gpuCapable app is still default-OFF
+			// until the user opts in (Pitfall 3).
+			gpuCapable: z.boolean().optional(),
 			environmentOverrides: z
 				.array(
 					z.object({

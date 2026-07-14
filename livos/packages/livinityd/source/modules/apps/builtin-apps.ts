@@ -66,6 +66,10 @@ export interface BuiltinAppManifest {
   }
   installOptions?: {
     subdomain?: string
+    // 330 GPU-05 — marks an app that SHOWS the install-time "Use GPU" toggle.
+    // VISIBILITY ONLY — never read by resolveWantsGpu (Pitfall 3). Mirrors the
+    // zod AppManifestSchema.installOptions.gpuCapable field in schema.ts.
+    gpuCapable?: boolean
     environmentOverrides?: Array<{
       name: string
       label: string
@@ -516,7 +520,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       },
       volumes: ['/root/.ollama'],
     },
-    installOptions: {subdomain: 'ollama'},
+    installOptions: {subdomain: 'ollama', gpuCapable: true},
     compose: {
       mainService: 'server',
       services: {
