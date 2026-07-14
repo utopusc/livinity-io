@@ -14,7 +14,7 @@ import {pullAll} from '../utilities/docker-pull.js'
 import FileStore from '../utilities/file-store.js'
 import {fillSelectedDependencies} from '../utilities/dependencies.js'
 import type Livinityd from '../../index.js'
-import {detectNvidiaGpu, isNvidiaToolkitConfigured} from '../system/gpu.js'
+import {detectNvidiaGpu, isNvidiaToolkitConfigured, detectGpu} from '../system/gpu.js'
 import {validateManifest, type AppSettings} from './schema.js'
 import appScript from './legacy-compat/app-script.js'
 import {reconcileAppVolumeOwnership} from './reconcile-volume-ownership.js'
@@ -140,6 +140,15 @@ export default class App {
 		const hostHasNvidia = wantsGpu ? await detectNvidiaGpu() : false
 		const nvidiaToolkitInstalled = wantsGpu ? await isNvidiaToolkitConfigured() : false
 
+		// 330 GPU-05 (GPU-04): bare-metal AMD probe. Read ONCE per patch (same
+		// discipline as the NVIDIA probes above), guarded by wantsGpu so an app
+		// nobody has toggled never shells out. `detectGpu()` never throws (degrades
+		// to vendor:'none'). WSL2-AMD gets NO compose change (no /dev/kfd there —
+		// it exposes /dev/dxg instead, FLAG 2 bare-metal-only).
+		const gpuInfo = wantsGpu ? await detectGpu() : null
+		const hostVendorAmd = gpuInfo?.vendor === 'amd'
+		const hostWsl2 = gpuInfo?.wsl2 ?? false
+
 		const compose = await this.readCompose()
 
 		// Remove legacy app_proxy service if present (we use Caddy instead)
@@ -233,6 +242,28 @@ export default class App {
 					reservations: {devices: [{driver: 'nvidia', count: 'all', capabilities: ['gpu']}]},
 				}
 				service.deploy = deploy
+			} else if (wantsGpu && hostVendorAmd && !hostWsl2) {
+				// 330 GPU-05 (GPU-04): bare-metal AMD ROCm passthrough. Distinct from
+				// the NVIDIA reservation and the generic /dev/dri arm: AMD compute needs
+				// BOTH the KFD compute node AND the DRI render node, plus membership in
+				// the video/render groups. Bare-metal ONLY (gated `!hostWsl2`) — WSL2
+				// has no /dev/kfd (FLAG 2). Ordered BEFORE the generic deviceHasGpu arm
+				// so an AMD host takes this richer branch rather than the /dev/dri-only one.
+				const service = compose.services![serviceName]
+				service.devices = service.devices || []
+				service.devices.push('/dev/kfd', '/dev/dri')
+				// group_add is not modeled by the pinned compose-spec-schema type —
+				// localized `as any` escape hatch (same discipline as deploy.resources
+				// above, Pitfall 5/7); no package bump. Device nodes + group list are
+				// FIXED literals — no caller/manifest string reaches them (T-330-11).
+				;(service as any).group_add = [...(((service as any).group_add as string[]) ?? []), 'video', 'render']
+				// AMD Ollama needs the ROCm image, not the CUDA/CPU default (Pitfall 4).
+				// App-scoped by this.id + the ollama/ollama: prefix guard. Generalizing
+				// this image swap to a manifest field (option b) is DEFERRED to a later
+				// plan — Ollama is the only gpuCapable app today.
+				if (this.id === 'ollama' && typeof service.image === 'string' && service.image.startsWith('ollama/ollama:')) {
+					service.image = 'ollama/ollama:rocm'
+				}
 			} else if (wantsGpu && deviceHasGpu) {
 				// Pass through host DRI device to all app containers if the app requests it
 				compose.services![serviceName].devices = compose.services![serviceName].devices || []
