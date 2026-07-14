@@ -19,6 +19,8 @@ import {validateManifest, type AppSettings} from './schema.js'
 import appScript from './legacy-compat/app-script.js'
 import {reconcileAppVolumeOwnership} from './reconcile-volume-ownership.js'
 import {pollContainerHealth} from './health-poll.js'
+import {deriveOidcClientSecret as deriveOidcSecret} from '../oidc/clients.js'
+import {getKey, encrypt, decrypt} from '../secrets/dek.js'
 
 async function readYaml(path: string) {
 	return yaml.load(await fse.readFile(path, 'utf8'))
@@ -126,6 +128,17 @@ export default class App {
 		const deterministicPassword = crypto.createHmac('sha256', livinitySeed).update(identifier).digest('hex')
 
 		return deterministicPassword
+	}
+
+	// 322-05 (IDENT-02, D-322-4): derive this app's OIDC client secret from the SAME
+	// box seed as deriveDeterministicPassword, delegating to the shared pure HMAC fn
+	// (oidc/clients.ts) so the secret matches byte-for-byte what buildStaticClients
+	// registers with the provider. Zero storage — reproducible on every boot/toggle.
+	// The suffix is DISTINCT from the app-password one so the two can never collide.
+	// NEVER logged.
+	async deriveOidcClientSecret() {
+		const seed = await fse.readFile(`${this.#livinityd.dataDirectory}/db/livinity-seed/seed`)
+		return deriveOidcSecret(this.id, seed)
 	}
 
 	writeCompose(compose: Compose) {
@@ -420,6 +433,40 @@ export default class App {
 				}
 			} catch (error) {
 				this.logger.error(`Failed to set NEXT_PUBLIC_BACKEND_URL for ${this.id}`, error)
+			}
+		}
+
+		// 322-05 (IDENT-02, D-322-4 mechanism #1): Vaultwarden SSO env-inject. The ONLY
+		// app whose OIDC provisioning is pure compose env — Nextcloud/Gitea use docker-exec
+		// CLI and Immich a REST call (the out-of-band 322-06 mechanism), NOT this branch.
+		// Gated on the admin "Enable SSO" toggle AND a configured domain (no stable HTTPS
+		// issuer otherwise). The sso-only flag below stays false so the master-password
+		// login survives — SSO COEXISTS, never replaces (SC3, T-322-18). Clones the Portainer TRUSTED_ORIGINS
+		// branch shape (resolve main service, guard array-vs-object environment). The
+		// derived client secret is NEVER logged (T-322-11).
+		if (this.id === 'vaultwarden' && (await this.getOidcEnabled())) {
+			try {
+				const mainDomain = await this.#livinityd.server.getActiveMainDomain()
+				if (mainDomain) {
+					const clientSecret = await this.deriveOidcClientSecret()
+					const mainServiceName = Object.keys(compose.services!).find(n => n === 'server') || Object.keys(compose.services!)[0]
+					const service = compose.services![mainServiceName]
+					if (!service.environment) service.environment = {}
+					if (typeof service.environment === 'object' && !Array.isArray(service.environment)) {
+						Object.assign(service.environment as Record<string, string>, {
+							SSO_ENABLED: 'true',
+							SSO_ONLY: 'false',
+							SSO_CLIENT_ID: `livos-${this.id}`,
+							SSO_CLIENT_SECRET: clientSecret,
+							SSO_AUTHORITY: `https://${mainDomain}/oidc`,
+							SSO_SCOPES: 'openid email profile groups',
+						})
+					}
+					// Deliberately never log the secret (T-322-11) — only the non-sensitive authority.
+					this.logger.log(`Enabled Vaultwarden SSO (authority https://${mainDomain}/oidc) for ${this.id}`)
+				}
+			} catch (error) {
+				this.logger.error(`Failed to inject SSO env for ${this.id}`, error)
 			}
 		}
 
@@ -858,6 +905,50 @@ export default class App {
 			})
 		}
 		return success
+	}
+
+	// 322-05 (IDENT-02, D-322-6): read the per-app "Enable SSO" override.
+	// undefined = never enabled (default OFF — NO manifest-permission fallback,
+	// unlike GPU). Consumed by patchComposeFile's Vaultwarden branch + apps.list.
+	async getOidcEnabled() {
+		return this.store.get('oidcEnabled')
+	}
+
+	// 322-05 (IDENT-02, D-322-4/D-322-8): set the per-app "Enable SSO" override.
+	// ONLY Vaultwarden restarts here — its SSO is a compose env change (patchComposeFile
+	// injects SSO_*), so the container must re-create to pick it up. The docker-exec/REST
+	// apps (Nextcloud/Gitea/Immich) are provisioned out-of-band in 322-06 (no compose
+	// change → no restart from this accessor). Fire-and-forget restart, mirrors setGpuAccess.
+	async setOidcEnabled(enabled: boolean) {
+		const success = await this.store.set('oidcEnabled', enabled)
+		if (success && this.id === 'vaultwarden') {
+			this.restart().catch((error) => {
+				this.logger.error(`Failed to restart '${this.id}'`, error)
+			})
+		}
+		return success
+	}
+
+	// 322-05 (IDENT-02, Pitfall 7 closure): persist Immich's admin API key
+	// DEK-encrypted at rest (secrets/dek.ts codec, its 6th consumer). WRITE-ONLY from
+	// the outside — 322-06's REST provisioning consumes it via getImmichApiKey below.
+	// The plaintext key is NEVER logged and NEVER returned by any query.
+	async setImmichApiKey(key: string) {
+		const blob = encrypt(key, await getKey())
+		return this.store.set('immichApiKeyEnc', blob)
+	}
+
+	// 322-05 (IDENT-02, Pitfall 7): decrypt the stored Immich admin API key for
+	// 322-06 provisioning. Returns null when absent or on any decrypt failure (never
+	// throws). The ONLY reader of the ciphertext; the plaintext is NEVER logged.
+	async getImmichApiKey(): Promise<string | null> {
+		const blob = await this.store.get('immichApiKeyEnc')
+		if (!blob || typeof blob !== 'string') return null
+		try {
+			return decrypt(blob, await getKey())
+		} catch {
+			return null
+		}
 	}
 
 	// Check if app is ignored from backups
