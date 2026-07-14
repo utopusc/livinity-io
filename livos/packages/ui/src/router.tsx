@@ -18,6 +18,7 @@ import OnboardingShell from './layouts/onboarding-shell'
 import {Desktop} from './layouts/desktop'
 import {SheetLayout} from './layouts/sheet'
 import {EnsureLoggedIn, EnsureLoggedOut} from './modules/auth/ensure-logged-in'
+import {Grace2faOpener} from './modules/auth/grace-2fa-opener'
 import {EnsureUserDoesntExist, EnsureUserExists} from './modules/auth/ensure-user-exists'
 import {Dock, DockBottomPositioner} from './modules/desktop/dock'
 import {TopBar} from './modules/desktop/top-bar'
@@ -95,6 +96,10 @@ export const router = createBrowserRouter([
 							    needed since TopBar is already inside
 							    WindowManagerProvider. */}
 							<TopBar />
+							{/* IDENT-05 — consumes the ?setup2fa=1 grace signal and opens
+							    the Settings → 2FA enrol window (must be inside
+							    WindowManagerProvider to call openWindow). */}
+							<Grace2faOpener />
 							<MobileAppProvider>
 								<CmdkProvider>
 									<DesktopContextMenu>

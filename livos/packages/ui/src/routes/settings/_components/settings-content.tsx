@@ -269,8 +269,17 @@ function useVisibleMenuItems(): MenuItem[] {
 		.filter((item) => !(v42MigrationActive && V42_HIDDEN_MENU_IDS.includes(item.id)))
 }
 
-export function SettingsContent() {
-	const [activeSection, setActiveSection] = useState<SettingsSection>('home')
+// IDENT-05 grace-period deep-link: the org-enforcement opener launches the
+// Settings window with route '/settings/2fa' so an unenrolled member lands on
+// the 2FA enrol screen. Only '2fa' is mapped; every other route opens 'home'
+// (the dock/launchpad pass '/settings' → unchanged behaviour).
+function initialSectionFromRoute(route?: string): SettingsSection {
+	const seg = route?.split('?')[0].split('/').filter(Boolean).pop()
+	return seg === '2fa' ? '2fa' : 'home'
+}
+
+export function SettingsContent({initialRoute}: {initialRoute?: string} = {}) {
+	const [activeSection, setActiveSection] = useState<SettingsSection>(initialSectionFromRoute(initialRoute))
 	const visibleItems = useVisibleMenuItems()
 	// Phase 224-03 — banner pinned at the top of every SettingsContent return
 	// branch (mobile-detail, mobile-home, desktop-detail-redirect, desktop-home)

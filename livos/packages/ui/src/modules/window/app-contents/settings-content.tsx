@@ -17,7 +17,7 @@ export default function SettingsWindowContent({initialRoute}: SettingsWindowCont
 	return (
 		<ErrorBoundary FallbackComponent={ErrorBoundaryCardFallback}>
 			<Suspense fallback={<Loading />}>
-				<SettingsContentInner />
+				<SettingsContentInner initialRoute={initialRoute} />
 			</Suspense>
 		</ErrorBoundary>
 	)
