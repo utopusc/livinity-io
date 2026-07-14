@@ -41,6 +41,7 @@
 		"@types/ms": "^0.7.31",
 		"@types/node-cron": "^3.0.11",
 		"@types/notp": "^2.0.2",
+		"@types/oidc-provider": "^9.5.0",
 		"@types/semver": "^7.5.8",
 		"@types/ssh2-sftp-client": "^9.0.4",
 		"@types/tcp-port-used": "^1.0.4",
