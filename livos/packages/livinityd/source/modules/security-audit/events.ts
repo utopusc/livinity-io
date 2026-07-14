@@ -28,6 +28,8 @@ import {getPool} from '../database/index.js'
 // REUSE: computeParamsDigest is the existing audit hashing function from
 // Phase 15. Importing from audit-pg.js (NOT redefining) is the SEC-01 invariant.
 import {computeParamsDigest} from '../devices/audit-pg.js'
+// WR-01: scrub secret-shaped echoes out of free-form error text before EITHER sink.
+import {redactErrorString} from './redaction.js'
 
 const SECURITY_EVENTS_DIR = '/opt/livos/data/security-events'
 const NIL_UUID = '00000000-0000-0000-0000-000000000000'
@@ -84,6 +86,13 @@ async function writeAuditRow(
 ): Promise<void> {
 	const paramsDigest = computeParamsDigest(digestSource)
 
+	// WR-01 (SEC-01 completeness): the free-form error string is the SECOND leak
+	// surface. redact() only scrubs object KEYS (the input), so a secret-shaped
+	// value interpolated into a TRPCError message would otherwise land verbatim
+	// in BOTH sinks below. Scrub it here, at the single funnel, so neither the PG
+	// `error` column nor the JSON forensics file can carry a raw secret.
+	const safeError = error === undefined ? undefined : redactErrorString(error)
+
 	// Path 1: PostgreSQL INSERT into device_audit_log (REUSE — no new table).
 	const pool = getPool()
 	if (pool) {
@@ -98,7 +107,7 @@ async function writeAuditRow(
 					toolName,
 					paramsDigest,
 					success,
-					error ?? null,
+					safeError ?? null,
 				],
 			)
 		} catch (err) {
@@ -109,12 +118,14 @@ async function writeAuditRow(
 
 	// Path 2: belt-and-suspenders JSON row (offline forensics path). The payload
 	// is already redacted by the caller (Pitfall 3) — no raw secret reaches here.
+	// The error field is overridden with the WR-01-scrubbed value so the JSON
+	// sink matches the PG column.
 	try {
 		const ts = Date.now()
 		const id = randomUUID().slice(0, 8)
 		const file = path.join(SECURITY_EVENTS_DIR, `${ts}-${id}-${sentinel}.json`)
 		await fs.mkdir(SECURITY_EVENTS_DIR, {recursive: true})
-		await fs.writeFile(file, JSON.stringify({ts, ...jsonPayload}, null, 2), 'utf8')
+		await fs.writeFile(file, JSON.stringify({ts, ...jsonPayload, error: safeError}, null, 2), 'utf8')
 	} catch (err) {
 		logger.warn('[security-audit.events] JSON write failed (non-fatal):', err)
 	}

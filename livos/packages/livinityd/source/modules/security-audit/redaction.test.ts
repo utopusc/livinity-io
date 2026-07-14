@@ -9,7 +9,7 @@
 
 import {describe, expect, test} from 'vitest'
 
-import {redact} from './redaction.js'
+import {redact, redactErrorString} from './redaction.js'
 
 describe('security-audit/redaction — redact()', () => {
 	test('scrubs a top-level secret key, leaves non-secret keys intact', () => {
@@ -64,5 +64,31 @@ describe('security-audit/redaction — redact()', () => {
 		expect(redact(null)).toBe(null)
 		expect(redact(undefined)).toBe(undefined)
 		expect(redact(true)).toBe(true)
+	})
+})
+
+describe('security-audit/redaction — redactErrorString() (WR-01)', () => {
+	// SEC-01 completeness gate for the SECOND leak surface: free-form error text
+	// that lands verbatim in device_audit_log.error AND the JSON forensics file.
+	test('scrubs a secret-shaped echo out of error text — the stored row is clean', () => {
+		const FAKE_SECRET = 'liv_sk_super_secret_value_do_not_leak'
+		const out = redactErrorString(`Enrol failed: token=${FAKE_SECRET} was rejected`)
+		expect(out).not.toContain(FAKE_SECRET)
+		expect(out).toContain('[REDACTED]')
+	})
+
+	test('scrubs every secret-shaped key including recovery codes (key: value AND key=value)', () => {
+		expect(redactErrorString('password: hunter2')).toBe('password=[REDACTED]')
+		expect(redactErrorString('apiKey=liv_k_abc')).toBe('apiKey=[REDACTED]')
+		expect(redactErrorString('recoveryCode: abc123')).toBe('recoveryCode=[REDACTED]')
+	})
+
+	test('leaves non-secret error text intact', () => {
+		expect(redactErrorString('invalid_credentials')).toBe('invalid_credentials')
+		expect(redactErrorString("Group named 'ops' already exists")).toBe("Group named 'ops' already exists")
+	})
+
+	test('caps length at 500 chars so pathological error text cannot bloat the audit trail', () => {
+		expect(redactErrorString('x'.repeat(2000))).toHaveLength(500)
 	})
 })

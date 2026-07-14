@@ -29,3 +29,22 @@ export function redact(input: unknown): unknown {
 	}
 	return out
 }
+
+// WR-01 (SEC-01 completeness): free-form error strings are the SECOND leak
+// surface — they land verbatim in `device_audit_log.error` (PG) AND the JSON
+// forensics file, neither of which `redact()` (key-based, object-only) can
+// reach. Several existing adminProcedure mutations interpolate raw `input.*`
+// values into TRPCError messages (e.g. "Credential '<name>' already exists"),
+// so a secret-shaped value can ride into the error text. This scrubs any
+// `key: value` / `key=value` echo whose key is secret-shaped and caps length so
+// pathological error text can never bloat the audit trail.
+// Matches a full secret-shaped KEY (a token from the denylist, possibly embedded
+// in a longer identifier like `recoveryCode` / `hashedPassword` / `apiKey`)
+// followed by a `:` or `=` separator and its value. Capture group 1 preserves
+// the key so the value alone is neutralized to `<key>=[REDACTED]`.
+const SECRET_ECHO_RE = /([\w.-]*(?:password|token|secret|totp|apikey|api_key|hash|recover)[\w.-]*)\s*[:=]\s*\S+/gi
+const MAX_ERROR_LEN = 500
+
+export function redactErrorString(msg: string): string {
+	return msg.replace(SECRET_ECHO_RE, '$1=[REDACTED]').slice(0, MAX_ERROR_LEN)
+}
