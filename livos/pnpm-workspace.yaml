@@ -17,6 +17,16 @@ packages:
 overrides:
   zod: ^3.25.0
 
+# pnpm v11+ reads settings from pnpm-workspace.yaml, NOT `.npmrc` / package.json.
+# `baileys` (Phase 25 WhatsApp) pulls `libsignal` as a git-repository subdep,
+# which pnpm's default supply-chain gate (`blockExoticSubdeps`) refuses with
+# ERR_PNPM_EXOTIC_SUBDEP → `pnpm install failed` → install.sh exit 1. The old
+# fix wrote `block-exotic-subdeps=false` to /opt/livos/.npmrc (deploy-livinityd.sh
+# 104-13), but pnpm 11 (installed by `npm i -g pnpm@latest`) IGNORES that .npmrc
+# key — every fresh Pro/BYOD box install aborted here until this moved to the
+# workspace file, mirroring the overrides + allowBuilds migrations above.
+blockExoticSubdeps: false
+
 # pnpm v11+ uses `allowBuilds` map (booleans) at workspace root, NOT the
 # legacy `onlyBuiltDependencies` list. Without explicit `true` values for
 # every postinstall-needing dep, fresh installs hit ERR_PNPM_IGNORED_BUILDS
