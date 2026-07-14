@@ -34,6 +34,7 @@ import {
 	TbCircleCheck,
 	TbLogout,
 	TbChartBar,
+	TbChartLine,
 	TbMail,
 	TbWebhook,
 	TbMicrophone,
@@ -131,6 +132,8 @@ const SecuritySessionsSectionLazy = React.lazy(() => import('./security-sessions
 const DomainsSectionLazy = React.lazy(() => import('./domains-section').then((m) => ({default: m.DomainsSection})))
 // Phase 310-04 (ALERT-01) — Settings → Alert Channels (admin-only external alert config).
 const AlertChannelsSectionLazy = React.lazy(() => import('./alert-channels-section').then((m) => ({default: m.AlertChannelsSection})))
+// Phase 320 (MON-01/MON-02) — Settings → Monitoring (resource history + editable thresholds).
+const MonitoringSectionLazy = React.lazy(() => import('./monitoring-section').then((m) => ({default: m.MonitoringSection})))
 // Phase 246-05 — Settings → System section (hosts the v44 "Active terminals"
 // admin panel). The panel self-gates via useTerminalPanelEnabled, so when the
 // v43 feature flag is OFF the section renders nothing — the surface vanishes
@@ -165,6 +168,8 @@ type SettingsSection =
 	| 'domains'
 	// Phase 310-04 — external alert channels (Telegram/Discord/Slack/webhook/ntfy).
 	| 'alert-channels'
+	// Phase 320 — resource-history monitoring + editable alert thresholds.
+	| 'monitoring'
 	// v29.4 Phase 47 Plan 05 — AI Diagnostics admin section.
 	| 'diagnostics'
 
@@ -206,6 +211,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'backups',          group: 'system', icon: TbDatabase,        label: 'Backups',           description: 'Backup, restore & migration',             adminOnly: true},
 	{id: 'domains', group: 'system', icon: TbWorld, label: 'Domains', description: 'Subdomains & DNS usage', adminOnly: true},
 	{id: 'alert-channels', group: 'system', icon: TbBell, label: 'Alert Channels', description: 'Telegram, Discord, Slack, webhook & ntfy alerts', adminOnly: true},
+	{id: 'monitoring', group: 'system', icon: TbChartLine, label: 'Monitoring', description: 'Resource history & alert thresholds', adminOnly: true},
 	{id: 'software-update',  group: 'system', icon: TbDownload,        label: 'Software Update',   description: 'Apply updates & view deploy history',     adminOnly: true},
 	// ── FOOTER ────────────────────────────────────────────────────────
 	{id: 'troubleshoot',     group: 'system', icon: TbTool,            label: 'Troubleshoot',      description: 'Logs & diagnostics',                      adminOnly: true, footer: true},
@@ -615,6 +621,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><DomainsSectionLazy /></Suspense>
 		case 'alert-channels':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><AlertChannelsSectionLazy /></Suspense>
+		case 'monitoring':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><MonitoringSectionLazy /></Suspense>
 		case 'diagnostics':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><DiagnosticsSectionLazy /></Suspense>
 		default:
