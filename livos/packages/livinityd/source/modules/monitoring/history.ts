@@ -198,14 +198,23 @@ export async function aggregateRollups(): Promise<void> {
 		   net_tx_bps_avg = EXCLUDED.net_tx_bps_avg, net_tx_bps_max = EXCLUDED.net_tx_bps_max`,
 	)
 
-	// 5m -> 1h (weighted avg via sample_count; hour bucket via date_trunc).
+	// 5m -> 1h (weighted avg via sample_count; hour bucket via epoch-floor).
+	// WR-320-01: use the SAME timezone-agnostic epoch-floor as the raw->5m tier
+	// above. extract(epoch from ts) is an absolute-instant (UTC) computation, so
+	// the bucket edges are invariant regardless of the PG session's TimeZone GUC.
+	// date_trunc('hour', timestamptz) would truncate in the *session* timezone —
+	// under any DST-observing session zone the fall-back transition maps two
+	// distinct absolute hours onto one local "hour" (one bucket silently
+	// overwrites the other via ON CONFLICT DO UPDATE, losing an hour of history)
+	// and spring-forward skips an hour. Epoch-floor keeps both rollup tiers
+	// consistently UTC-bucketed without depending on connection-level tz config.
 	await pool.query(
 		`INSERT INTO resource_rollups_1h
 		   (bucket_start, sample_count, cpu_pct_avg, cpu_pct_min, cpu_pct_max,
 		    mem_used_bytes_avg, mem_used_bytes_max, disk_read_bps_avg, disk_read_bps_max,
 		    disk_write_bps_avg, disk_write_bps_max, net_rx_bps_avg, net_rx_bps_max,
 		    net_tx_bps_avg, net_tx_bps_max)
-		 SELECT date_trunc('hour', bucket_start),
+		 SELECT to_timestamp(floor(extract(epoch from bucket_start) / 3600) * 3600),
 		   sum(sample_count),
 		   (sum(cpu_pct_avg * sample_count) / NULLIF(sum(sample_count),0))::real, min(cpu_pct_min), max(cpu_pct_max),
 		   (sum(mem_used_bytes_avg * sample_count) / NULLIF(sum(sample_count),0))::bigint, max(mem_used_bytes_max),

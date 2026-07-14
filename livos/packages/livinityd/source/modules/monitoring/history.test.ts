@@ -174,11 +174,27 @@ describe('aggregateRollups', () => {
 		expect(sql5m).toMatch(/INSERT INTO resource_rollups_5m/)
 		expect(sql5m).toMatch(/FROM resource_samples_raw/)
 		expect(sql5m).toMatch(/ON CONFLICT \(bucket_start\) DO UPDATE/)
+		// 5m buckets are floored on the absolute epoch (timezone-agnostic).
+		expect(sql5m).toMatch(/floor\(extract\(epoch from ts\) \/ 300\) \* 300/)
 
 		const sql1h = query.mock.calls[1][0]
 		expect(sql1h).toMatch(/INSERT INTO resource_rollups_1h/)
 		expect(sql1h).toMatch(/FROM resource_rollups_5m/)
 		expect(sql1h).toMatch(/ON CONFLICT \(bucket_start\) DO UPDATE/)
+	})
+
+	// WR-320-01: the hourly bucket must be floored on the absolute epoch (UTC),
+	// NOT date_trunc('hour', ...) which truncates in the session TimeZone and
+	// collapses/skips an hour across a DST transition. This locks both rollup
+	// tiers to the same timezone-invariant bucketing.
+	test('1h rollup buckets by timezone-agnostic epoch-floor, never date_trunc', async () => {
+		const {pool, query} = fakePool({rows: []})
+		vi.mocked(getPool).mockReturnValue(pool)
+
+		await aggregateRollups()
+		const sql1h = query.mock.calls[1][0]
+		expect(sql1h).toMatch(/floor\(extract\(epoch from bucket_start\) \/ 3600\) \* 3600/)
+		expect(sql1h).not.toMatch(/date_trunc/)
 	})
 
 	test('null pool -> resolves without calling query (fail-open)', async () => {
