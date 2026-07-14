@@ -42,6 +42,79 @@ import {UnbanModal} from '@/routes/docker/security/unban-modal'
 const POLL_INTERVAL_MS = 5_000
 const STALE_TIME_MS = 2_500
 
+// ── SEC-01 audit-log viewer/export helpers ─────────────────────────────────
+// The audit rows come from audit.listAdminAuditEvents (admin-only). The viewer
+// renders / exports only category / action / success / error — never a hash or
+// any secret (rows were already redacted at write-time by Plan 01).
+const AUDIT_PAGE_SIZE = 50
+
+const AUDIT_CATEGORY_LABELS: Record<string, string> = {
+	'admin-action': 'Admin action',
+	'auth-login': 'Login',
+	'fail2ban-host': 'Intrusion',
+	'api-keys-system': 'API key',
+}
+
+function auditCategoryLabel(deviceId: string): string {
+	return AUDIT_CATEGORY_LABELS[deviceId] ?? deviceId
+}
+
+// The subset of an audit row this viewer is allowed to surface.
+interface AuditViewRow {
+	id: string
+	deviceId: string
+	toolName: string
+	success: boolean
+	error: string | null
+	timestamp: string | Date
+}
+
+// RFC-4180 cell escaping: quote when the value holds a comma/quote/newline.
+function csvCell(value: string): string {
+	return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+}
+
+// Sanitized projection shared by both exporters — action/category/success/error
+// only, so no hashed digest ever reaches the downloaded file.
+function toExportRows(events: AuditViewRow[]) {
+	return events.map((e) => ({
+		timestamp: new Date(e.timestamp).toISOString(),
+		category: auditCategoryLabel(e.deviceId),
+		action: e.toolName,
+		success: e.success,
+		error: e.error ?? null,
+	}))
+}
+
+// Client-side Blob download of the already-authenticated tRPC result — NO new
+// REST route (mirrors ui/src/utils/logs.ts#downloadLogs), so the admin gate is
+// not duplicated outside tRPC.
+function downloadAuditBlob(content: string, mime: string, ext: 'json' | 'csv') {
+	const blob = new Blob([content], {type: mime})
+	const url = window.URL.createObjectURL(blob)
+	const a = document.createElement('a')
+	a.href = url
+	a.download = `audit-log-${Date.now()}.${ext}`
+	document.body.appendChild(a)
+	a.click()
+	document.body.removeChild(a)
+	setTimeout(() => window.URL.revokeObjectURL(url), 0)
+}
+
+function exportAuditJson(events: AuditViewRow[]) {
+	downloadAuditBlob(JSON.stringify(toExportRows(events), null, 2), 'application/json', 'json')
+}
+
+function exportAuditCsv(events: AuditViewRow[]) {
+	const header = 'timestamp,category,action,success,error'
+	const lines = toExportRows(events).map((r) =>
+		[r.timestamp, r.category, r.action, r.success ? 'success' : 'fail', r.error ?? '']
+			.map((cell) => csvCell(String(cell)))
+			.join(','),
+	)
+	downloadAuditBlob([header, ...lines].join('\r\n'), 'text/csv', 'csv')
+}
+
 // Raw shape returned by fail2ban.getJailStatus — bannedIps is a string[] plus a
 // separate lastAttemptedUsers map (unlike JailStatusCard's BannedIp[]).
 interface RawJailStatus {
@@ -67,6 +140,16 @@ export function SecuritySessionsSection() {
 	const [unbanCtx, setUnbanCtx] = useState<UnbanContext | null>(null)
 	const [signOutOpen, setSignOutOpen] = useState(false)
 	const [revokeTarget, setRevokeTarget] = useState<{id: string; label: string} | null>(null)
+	const [auditPage, setAuditPage] = useState(0)
+
+	// SEC-01 admin audit-log viewer — paginated over the reused device_audit_log
+	// (sentinel-filtered server-side). Admin-only query; the section is adminOnly.
+	const auditQuery = trpcReact.audit.listAdminAuditEvents.useQuery(
+		{limit: AUDIT_PAGE_SIZE, offset: auditPage * AUDIT_PAGE_SIZE},
+		{staleTime: 10_000},
+	)
+	const auditEvents: AuditViewRow[] = auditQuery.data?.events ?? []
+	const auditTotal = auditQuery.data?.total ?? 0
 
 	// The operator's own active login sessions (multi-user only). hasDb=false in
 	// legacy single-user mode → we fall back to the static "this device" row.
@@ -348,6 +431,106 @@ export function SecuritySessionsSection() {
 							}
 						/>
 					)}
+				</FieldCard>
+			</div>
+
+			{/* ── Audit log (admin actions & logins) — SEC-01 viewer + export ────── */}
+			<div className='flex flex-col gap-2'>
+				<FieldCard>
+					<div className='flex flex-wrap items-center justify-between gap-2'>
+						<div className='flex flex-col gap-0.5'>
+							<span className='text-[13px] font-medium text-[color:var(--fg)]'>Audit log</span>
+							<span className='text-[12px] text-[color:var(--fg-mute)]'>Admin actions &amp; logins</span>
+						</div>
+						<div className='flex items-center gap-2'>
+							<Button
+								variant='default'
+								size='sm'
+								onClick={() => exportAuditJson(auditEvents)}
+								disabled={auditEvents.length === 0}
+							>
+								Export JSON
+							</Button>
+							<Button
+								variant='default'
+								size='sm'
+								onClick={() => exportAuditCsv(auditEvents)}
+								disabled={auditEvents.length === 0}
+							>
+								Export CSV
+							</Button>
+						</div>
+					</div>
+
+					{auditQuery.isLoading && !auditQuery.data ? (
+						<div className='flex items-center justify-center gap-2 py-6 text-[13px] text-[color:var(--fg-mute)]'>
+							<Loader2 className='h-4 w-4 animate-spin' />
+							Loading audit log…
+						</div>
+					) : auditQuery.isError ? (
+						<div className='py-4 text-[13px] text-[color:var(--fg-mute)]'>
+							Error loading audit log: {auditQuery.error?.message ?? 'unknown'}
+						</div>
+					) : auditEvents.length === 0 ? (
+						<div className='py-6 text-center text-[13px] text-[color:var(--fg-mute)]'>No audit events yet.</div>
+					) : (
+						<div className='flex flex-col'>
+							{auditEvents.map((e) => (
+								<div
+									key={e.id}
+									className='flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-2 text-[12px] last:border-b-0'
+								>
+									<span className='min-w-[150px] text-[color:var(--fg-mute)]'>
+										{new Date(e.timestamp).toLocaleString()}
+									</span>
+									<span className='rounded-full bg-[color:var(--bg-2)] px-2 py-0.5 text-[10px] font-medium text-[color:var(--fg)]'>
+										{auditCategoryLabel(e.deviceId)}
+									</span>
+									<span className='font-mono text-[color:var(--fg)]'>{e.toolName}</span>
+									{e.success ? (
+										<span className='rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-medium text-green-600'>
+											OK
+										</span>
+									) : (
+										<span className='rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-600'>
+											Fail
+										</span>
+									)}
+									{e.error ? <span className='text-[color:var(--fg-faint)]'>{e.error}</span> : null}
+								</div>
+							))}
+						</div>
+					)}
+
+					{/* Pagination — bounded by total; page size AUDIT_PAGE_SIZE. */}
+					<div className='flex items-center justify-between pt-1'>
+						<span className='text-[12px] text-[color:var(--fg-faint)]'>
+							{auditTotal > 0
+								? `${auditPage * AUDIT_PAGE_SIZE + 1}–${Math.min(
+										(auditPage + 1) * AUDIT_PAGE_SIZE,
+										auditTotal,
+								  )} of ${auditTotal}`
+								: '0 events'}
+						</span>
+						<div className='flex items-center gap-2'>
+							<Button
+								variant='default'
+								size='sm'
+								onClick={() => setAuditPage((p) => Math.max(0, p - 1))}
+								disabled={auditPage === 0}
+							>
+								Prev
+							</Button>
+							<Button
+								variant='default'
+								size='sm'
+								onClick={() => setAuditPage((p) => p + 1)}
+								disabled={(auditPage + 1) * AUDIT_PAGE_SIZE >= auditTotal}
+							>
+								Next
+							</Button>
+						</div>
+					</div>
 				</FieldCard>
 			</div>
 
