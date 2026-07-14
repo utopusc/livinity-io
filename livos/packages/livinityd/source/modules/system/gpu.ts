@@ -1,4 +1,5 @@
 import {execa} from 'execa'
+import fse from 'fs-extra'
 
 /**
  * Phase 316 (GPU-02) — unprivileged NVIDIA host probes.
@@ -27,6 +28,35 @@ const PROBE_TIMEOUT_MS = 5_000
 
 let nvidiaGpuCache: Promise<boolean> | undefined
 let nvidiaToolkitCache: Promise<boolean> | undefined
+
+// ── Phase 330 (GPU-03) — WSL2 + vendor detection caches ──────────────────────
+let wsl2Cache: Promise<boolean> | undefined
+let nvidiaSmiCache: Promise<boolean> | undefined
+let amdGpuCache: Promise<boolean> | undefined
+let amdReadyCache: Promise<boolean> | undefined
+let intelGpuCache: Promise<boolean> | undefined
+let gpuInfoCache: Promise<GpuInfo> | undefined
+
+/**
+ * Phase 330 (GPU-03) — the richer, WSL2-aware, vendor-aware detection payload.
+ *
+ *   - `present`           — is any usable GPU visible to the host / distro?
+ *   - `vendor`            — 'nvidia' | 'amd' | 'intel' | 'unknown' | 'none'
+ *   - `wsl2`              — running under WSL2 (drives the toolkit-only install
+ *                           path AND SMART-05 virtual-disk suppression)
+ *   - `toolkitConfigured` — is the container-GPU runtime already wired?
+ *   - `driverSource`      — 'wsl-windows' (GPU-paravirtualized through Windows)
+ *                           | 'linux-native' (bare-metal) | 'none'
+ */
+export type GpuVendor = 'nvidia' | 'amd' | 'intel' | 'unknown' | 'none'
+export type GpuDriverSource = 'wsl-windows' | 'linux-native' | 'none'
+export interface GpuInfo {
+	present: boolean
+	vendor: GpuVendor
+	wsl2: boolean
+	toolkitConfigured: boolean
+	driverSource: GpuDriverSource
+}
 
 /**
  * Resolves `true` iff `lspci` reports an NVIDIA VGA / 3D / Display controller.
@@ -87,10 +117,239 @@ async function probeNvidiaToolkit(): Promise<boolean> {
 }
 
 /**
- * Test-only: clear both memoized probes so a fresh mock can be re-exercised.
- * Has no effect in production beyond forcing the next call to re-probe.
+ * Phase 330 (GPU-03) — WSL2-aware, vendor-aware composite detection.
+ *
+ * 316's `detectNvidiaGpu()` is lspci-only, so on WSL2 it returns `false` even
+ * when the GPU works: WSL2 passes the GPU through via `/dev/dxg` + the Windows
+ * driver stubs in `/usr/lib/wsl/lib`, and `lspci` reports the device as
+ * "Microsoft Corporation Device", not NVIDIA. `detectGpu()` layers a broader
+ * probe matrix over the untouched 316 probes and returns the richer `GpuInfo`
+ * shape the Software Update card (GPU-04) and the install popup (GPU-05) read.
+ *
+ * Same DESIGN CONTRACT as the 316 probes — every new probe NEVER throws: a
+ * missing tool / non-Linux dev host / permission error degrades to the safe
+ * default (`false` / `vendor:'none'`). All probes are memoized for the process
+ * lifetime and cleared together by `resetGpuDetectionCache()`.
+ */
+
+/**
+ * Resolves `true` under WSL2 — the GPU-paravirtualization device `/dev/dxg`
+ * exists OR `/proc/sys/kernel/osrelease` names `microsoft`. Never throws
+ * (→ `false`). Exported for reuse by SMART-05 (`scheduler/jobs.ts`) so WSL2-ness
+ * is decided in exactly one place.
+ */
+export async function isWsl2(): Promise<boolean> {
+	if (wsl2Cache === undefined) {
+		wsl2Cache = probeWsl2()
+	}
+	return wsl2Cache
+}
+
+async function probeWsl2(): Promise<boolean> {
+	try {
+		if (await fse.pathExists('/dev/dxg')) return true
+		const osrelease = await fse.readFile('/proc/sys/kernel/osrelease', 'utf8').catch(() => '')
+		return /microsoft/i.test(osrelease)
+	} catch {
+		return false
+	}
+}
+
+/**
+ * Resolves `true` iff `nvidia-smi -L` succeeds (the WSL2 NVIDIA binary lives at
+ * `/usr/lib/wsl/lib/nvidia-smi`). On ANY error, fall back to the WSL2 CUDA stub
+ * `/usr/lib/wsl/lib/libcuda.so`. Never throws (→ `false`).
+ */
+async function probeNvidiaSmi(): Promise<boolean> {
+	if (nvidiaSmiCache === undefined) {
+		nvidiaSmiCache = (async (): Promise<boolean> => {
+			try {
+				await execa('nvidia-smi', ['-L'], {timeout: PROBE_TIMEOUT_MS})
+				return true
+			} catch {
+				// nvidia-smi missing / non-zero — the CUDA stub still proves the WSL2
+				// NVIDIA passthrough is present.
+				try {
+					return await fse.pathExists('/usr/lib/wsl/lib/libcuda.so')
+				} catch {
+					return false
+				}
+			}
+		})()
+	}
+	return nvidiaSmiCache
+}
+
+/**
+ * Resolves `true` iff `lspci` reports an AMD/ATI display controller OR the ROCm
+ * compute node `/dev/kfd` exists. Never throws (→ `false`).
+ */
+async function probeAmdGpu(): Promise<boolean> {
+	if (amdGpuCache === undefined) {
+		amdGpuCache = (async (): Promise<boolean> => {
+			try {
+				const {stdout} = await execa('lspci', {timeout: PROBE_TIMEOUT_MS})
+				const hasAmdDisplay = stdout
+					.split('\n')
+					.some(
+						(line) =>
+							/\b(VGA compatible controller|3D controller|Display controller)\b/i.test(line) &&
+							/\b(Advanced Micro Devices|AMD|ATI)\b/i.test(line),
+					)
+				if (hasAmdDisplay) return true
+			} catch {
+				// lspci missing / errored — fall through to the /dev/kfd signal.
+			}
+			try {
+				return await fse.pathExists('/dev/kfd')
+			} catch {
+				return false
+			}
+		})()
+	}
+	return amdGpuCache
+}
+
+/**
+ * Resolves `true` iff `lspci` reports an Intel display controller. Detect-only
+ * (no guided install this phase). Never throws (→ `false`).
+ */
+async function probeIntelGpu(): Promise<boolean> {
+	if (intelGpuCache === undefined) {
+		intelGpuCache = (async (): Promise<boolean> => {
+			try {
+				const {stdout} = await execa('lspci', {timeout: PROBE_TIMEOUT_MS})
+				return stdout
+					.split('\n')
+					.some(
+						(line) =>
+							/\b(VGA compatible controller|3D controller|Display controller)\b/i.test(line) &&
+							/\bIntel\b/i.test(line),
+					)
+			} catch {
+				return false
+			}
+		})()
+	}
+	return intelGpuCache
+}
+
+/**
+ * Resolves `true` iff the AMD ROCm compute node `/dev/kfd` exists AND the current
+ * process user is in BOTH the `render` and `video` groups (the group membership a
+ * ROCm container needs). This is AMD's analog of `isNvidiaToolkitConfigured()`.
+ * Never throws (→ `false`).
+ */
+async function isAmdReady(): Promise<boolean> {
+	if (amdReadyCache === undefined) {
+		amdReadyCache = (async (): Promise<boolean> => {
+			try {
+				if (!(await fse.pathExists('/dev/kfd'))) return false
+				const {stdout} = await execa('id', ['-nG'], {timeout: PROBE_TIMEOUT_MS})
+				const groups = stdout.split(/\s+/)
+				return groups.includes('render') && groups.includes('video')
+			} catch {
+				return false
+			}
+		})()
+	}
+	return amdReadyCache
+}
+
+const NO_GPU: GpuInfo = {
+	present: false,
+	vendor: 'none',
+	wsl2: false,
+	toolkitConfigured: false,
+	driverSource: 'none',
+}
+
+/**
+ * Composite host GPU probe — WSL2-aware and vendor-aware. Returns the richer
+ * `GpuInfo` shape. Never throws (degrades to the no-GPU default). Memoized for
+ * the process lifetime; cleared by `resetGpuDetectionCache()`.
+ */
+export async function detectGpu(): Promise<GpuInfo> {
+	if (gpuInfoCache === undefined) {
+		gpuInfoCache = probeGpuInfo()
+	}
+	return gpuInfoCache
+}
+
+async function probeGpuInfo(): Promise<GpuInfo> {
+	try {
+		const wsl2 = await isWsl2()
+
+		if (wsl2) {
+			// WSL2 passes the GPU through via /dev/dxg; lspci reports "Microsoft
+			// Corporation Device", so vendor comes from nvidia-smi, never lspci.
+			if (await probeNvidiaSmi()) {
+				return {
+					present: true,
+					vendor: 'nvidia',
+					wsl2: true,
+					toolkitConfigured: await isNvidiaToolkitConfigured(),
+					driverSource: 'wsl-windows',
+				}
+			}
+			// A1 — a GPU is paravirtualized but the vendor is undeterminable from
+			// inside the distro (could be AMD/Intel); AMD-on-WSL2 is gated out anyway.
+			return {
+				present: true,
+				vendor: 'unknown',
+				wsl2: true,
+				toolkitConfigured: false,
+				driverSource: 'wsl-windows',
+			}
+		}
+
+		// Bare-metal Linux — vendor from lspci (316's probe) + the AMD/Intel parses.
+		if (await detectNvidiaGpu()) {
+			return {
+				present: true,
+				vendor: 'nvidia',
+				wsl2: false,
+				toolkitConfigured: await isNvidiaToolkitConfigured(),
+				driverSource: 'linux-native',
+			}
+		}
+		if (await probeAmdGpu()) {
+			return {
+				present: true,
+				vendor: 'amd',
+				wsl2: false,
+				toolkitConfigured: await isAmdReady(),
+				driverSource: 'linux-native',
+			}
+		}
+		if (await probeIntelGpu()) {
+			return {
+				present: true,
+				vendor: 'intel',
+				wsl2: false,
+				toolkitConfigured: false,
+				driverSource: 'linux-native',
+			}
+		}
+		return NO_GPU
+	} catch {
+		return NO_GPU
+	}
+}
+
+/**
+ * Test-only: clear every memoized probe so a fresh mock can be re-exercised.
+ * Also the WR-01 post-install invalidation hook (routes.ts `runGpuInstall`
+ * calls it on success). Has no effect in production beyond forcing the next
+ * call to re-probe.
  */
 export function resetGpuDetectionCache(): void {
 	nvidiaGpuCache = undefined
 	nvidiaToolkitCache = undefined
+	wsl2Cache = undefined
+	nvidiaSmiCache = undefined
+	amdGpuCache = undefined
+	amdReadyCache = undefined
+	intelGpuCache = undefined
+	gpuInfoCache = undefined
 }
