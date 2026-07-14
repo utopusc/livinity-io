@@ -48,13 +48,13 @@ type ChartRow = {
 }
 
 /** Sum two nullable rates, preserving "no sample" (both null) as null. */
-function sumRates(a: number | null, b: number | null): number | null {
+export function sumRates(a: number | null, b: number | null): number | null {
 	if (a == null && b == null) return null
 	return (a ?? 0) + (b ?? 0)
 }
 
 /** Compact bytes/second formatter for the tooltip + right-axis ticks. */
-function fmtBps(n: number): string {
+export function fmtBps(n: number): string {
 	if (!Number.isFinite(n)) return '—'
 	const units = ['B/s', 'KB/s', 'MB/s', 'GB/s', 'TB/s']
 	let v = n
@@ -73,7 +73,7 @@ function fmtTime(time: string): string {
 	return d.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})
 }
 
-function toRows(data: ResourceHistoryPoint[]): ChartRow[] {
+export function toRows(data: ResourceHistoryPoint[]): ChartRow[] {
 	return data.map((p) => {
 		const memPct =
 			p.memUsedBytes != null && p.memTotalBytes != null && p.memTotalBytes > 0
