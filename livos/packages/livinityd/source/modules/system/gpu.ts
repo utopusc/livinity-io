@@ -45,7 +45,8 @@ let gpuInfoCache: Promise<GpuInfo> | undefined
  *   - `present`           — is any usable GPU visible to the host / distro?
  *   - `vendor`            — 'nvidia' | 'amd' | 'intel' | 'unknown' | 'none'
  *   - `wsl2`              — running under WSL2 (drives the toolkit-only install
- *                           path AND SMART-05 virtual-disk suppression)
+ *                           path — the Windows driver is already in place, so the
+ *                           guided flow never installs the Linux driver)
  *   - `toolkitConfigured` — is the container-GPU runtime already wired?
  *   - `driverSource`      — 'wsl-windows' (GPU-paravirtualized through Windows)
  *                           | 'linux-native' (bare-metal) | 'none'
@@ -137,8 +138,13 @@ async function probeNvidiaToolkit(): Promise<boolean> {
 /**
  * Resolves `true` under WSL2 — the GPU-paravirtualization device `/dev/dxg`
  * exists OR `/proc/sys/kernel/osrelease` names `microsoft`. Never throws
- * (→ `false`). Exported for reuse by SMART-05 (`scheduler/jobs.ts`) so WSL2-ness
- * is decided in exactly one place.
+ * (→ `false`). Exported for reuse by the tRPC install guard (`system/routes.ts` —
+ * the install-driver / install-amd-rocm WSL2 refusal) so WSL2-ness is decided in
+ * exactly one place.
+ *
+ * IN-01 — SMART-05's virtual-disk notification suppression does NOT consume this:
+ * `scheduler/jobs.ts` keys off smart.ts's `detectionMethod === 'unsupported'`
+ * classification (which also covers USB-SAT enclosures), independent of isWsl2().
  */
 export async function isWsl2(): Promise<boolean> {
 	if (wsl2Cache === undefined) {
