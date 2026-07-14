@@ -28,7 +28,15 @@
 
 import type {RequestHandler} from 'express'
 
-import Provider, {type Account, type AccountClaims, type FindAccount, type JWKS} from 'oidc-provider'
+// Type-only import — erased at compile time so this module (statically imported by
+// server/index.ts) NEVER triggers runtime resolution of oidc-provider at load. The
+// heavy value import happens lazily inside createOidcProvider(), so a missing or
+// broken oidc-provider dependency degrades to "OIDC does not mount" (caught by the
+// initOidc try/catch) instead of crash-looping the whole daemon — including the
+// login path. This is the defense-in-depth backstop for "OIDC boot failure must
+// never take down /auth/verify".
+import type Provider from 'oidc-provider'
+import type {Account, AccountClaims, FindAccount, JWKS} from 'oidc-provider'
 
 import {findUserById} from '../database/index.js'
 import {listGroupNamesForUser} from '../database/groups.js'
@@ -85,6 +93,10 @@ function makeFindAccount(): FindAccount {
  * ourselves off LIVINITY_SESSION (interaction-routes.ts). No registration.
  */
 export async function createOidcProvider(opts: CreateOidcOptions): Promise<Provider> {
+	// Lazy value import (see the type-only import note at the top): resolving
+	// oidc-provider here — inside the initOidc try/catch — means a dependency fault
+	// degrades gracefully instead of crashing module load.
+	const {default: Provider} = await import('oidc-provider')
 	const jwks = await getOrCreateSigningJwks()
 	const provider = new Provider(`https://${opts.mainDomain}/oidc`, {
 		jwks: jwks as unknown as JWKS,
