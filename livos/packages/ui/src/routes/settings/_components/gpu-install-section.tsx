@@ -47,6 +47,10 @@ export function GpuInstallSection() {
 
 	const gpu = detectGpuQuery.data
 	const vendor = gpu?.vendor ?? 'none'
+	// IN-02: display-cased vendor name (mirrors gpu-access-section's mapping) so the
+	// detected line reads "NVIDIA / AMD / Intel", not the raw lowercase enum value.
+	const vendorLabel =
+		vendor === 'nvidia' ? 'NVIDIA' : vendor === 'amd' ? 'AMD' : vendor === 'intel' ? 'Intel' : vendor
 	const wsl2 = gpu?.wsl2 ?? false
 	const toolkitConfigured = gpu?.toolkitConfigured ?? false
 	// Reboot is required ONLY after a SUCCESSFUL bare-metal driver install.
@@ -77,7 +81,7 @@ export function GpuInstallSection() {
 			<div>
 				<span className='text-body-sm font-medium text-text-primary'>{t('software-update.gpu.title')}</span>
 				<p className='text-caption text-text-tertiary'>
-					{t('software-update.gpu.detected', {vendor, env: wsl2 ? 'WSL2' : 'Linux'})}
+					{t('software-update.gpu.detected', {vendor: vendorLabel, env: wsl2 ? 'WSL2' : 'Linux'})}
 				</p>
 			</div>
 		</div>
