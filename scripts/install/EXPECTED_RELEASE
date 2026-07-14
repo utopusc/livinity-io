@@ -22,12 +22,13 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = PRE-TAG SENTINEL (placeholder)
-#   The line below is an intentional, non-matching SENTINEL. No release tag is being
-#   cut in this commit, so it does NOT yet name a real tag. On a box it resolves to
-#   nothing -> the warn-only path records status="unresolvable" and proceeds (never
-#   aborts). The release.yml CI guard REFUSES to publish any tag while this sentinel
-#   is still in place, forcing the pre-tag-prep flow below.
+# CURRENT VALUE = refs/tags/v45.30 (pinned for this release cut — v47 batch)
+#   The pin line below names the exact tag being cut in this commit (pre-tag-prep
+#   flow, step 1). release.yml verifies pin == tag and publishes. On a box the
+#   warn-only path resolves it to the tag's commit and records a self-consistent
+#   match. The NEXT release cut MUST bump this line again to its own tag before
+#   tagging (see the mandatory procedure below); leaving a stale pin makes
+#   release.yml refuse the next publish until it is bumped.
 #
 # MANDATORY PRE-TAG RELEASE-CUT PROCEDURE (self-consistency; never force-tag)
 #   A git tag's tree is immutable once pushed, so the pin MUST already be correct
@@ -40,4 +41,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v0.0.0-UNSET-PLACEHOLDER
+refs/tags/v45.30
