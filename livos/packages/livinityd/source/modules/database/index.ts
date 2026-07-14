@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import {readFileSync} from 'node:fs'
 import {execFile} from 'node:child_process'
 import {fileURLToPath} from 'node:url'
@@ -7,6 +8,8 @@ import {promisify} from 'node:util'
 import pg from 'pg'
 
 import type Livinityd from '../../index.js'
+import * as totp from '../utilities/totp.js'
+import {getKey, encrypt, decrypt} from '../secrets/dek.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -192,6 +195,72 @@ export async function findUserByUsername(username: string): Promise<DatabaseUser
 	)
 	if (rows.length === 0) return null
 	return rowToUser(rows[0])
+}
+
+/**
+ * Phase 328 IDENT-05 — per-user TOTP (genuinely per-DB-user, unlike the legacy
+ * single-secret YAML path in user.ts). The secret + recovery codes are
+ * DEK-encrypted at rest (secrets/dek.ts, AES-256-GCM) — NEVER plaintext, NEVER
+ * returned to a query, NEVER in the audit log. These dedicated queries read the
+ * new columns directly so findUserByUsername/createUser/rowToUser stay untouched.
+ * All fail-closed on a null pool (getPool() contract).
+ */
+export async function isUserTotpEnabled(userId: string): Promise<boolean> {
+	if (!pool) return false
+	const {rows} = await pool.query('SELECT totp_enabled FROM users WHERE id = $1', [userId])
+	return rows.length > 0 && rows[0].totp_enabled === true
+}
+
+export async function validateUserTotpToken(userId: string, token: string): Promise<boolean> {
+	if (!pool) return false
+	const {rows} = await pool.query('SELECT totp_secret_enc FROM users WHERE id = $1', [userId])
+	if (rows.length === 0 || !rows[0].totp_secret_enc) return false
+	const uri = decrypt(rows[0].totp_secret_enc, await getKey())
+	return totp.verify(uri, token)
+}
+
+// Enrol: DEK-encrypt the secret + 10 one-time recovery codes; return the
+// plaintext codes ONCE (shown once by the UI) — they are NEVER persisted plaintext.
+export async function enableUserTotp(userId: string, totpUri: string): Promise<string[]> {
+	if (!pool) throw new Error('Database not initialized')
+	const key = await getKey()
+	const codes = Array.from({length: 10}, () => crypto.randomBytes(8).toString('hex'))
+	await pool.query(
+		'UPDATE users SET totp_secret_enc = $1, totp_enabled = TRUE, totp_recovery_codes_enc = $2, updated_at = NOW() WHERE id = $3',
+		[encrypt(totpUri, key), encrypt(JSON.stringify(codes), key), userId],
+	)
+	return codes
+}
+
+export async function disableUserTotp(userId: string): Promise<void> {
+	if (!pool) return
+	await pool.query(
+		'UPDATE users SET totp_secret_enc = NULL, totp_enabled = FALSE, totp_recovery_codes_enc = NULL, updated_at = NOW() WHERE id = $1',
+		[userId],
+	)
+}
+
+// Consume one recovery code (escape hatch). Decrypt → find+remove → re-encrypt →
+// persist. One-time: the consumed code no longer validates on a subsequent login.
+export async function consumeUserRecoveryCode(userId: string, code: string): Promise<boolean> {
+	if (!pool) return false
+	const {rows} = await pool.query('SELECT totp_recovery_codes_enc FROM users WHERE id = $1', [userId])
+	if (rows.length === 0 || !rows[0].totp_recovery_codes_enc) return false
+	const key = await getKey()
+	let codes: string[]
+	try {
+		codes = JSON.parse(decrypt(rows[0].totp_recovery_codes_enc, key))
+	} catch {
+		return false
+	}
+	const idx = codes.indexOf(code.trim())
+	if (idx === -1) return false
+	codes.splice(idx, 1)
+	await pool.query('UPDATE users SET totp_recovery_codes_enc = $1, updated_at = NOW() WHERE id = $2', [
+		encrypt(JSON.stringify(codes), key),
+		userId,
+	])
+	return true
 }
 
 /**

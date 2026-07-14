@@ -870,3 +870,17 @@ CREATE TABLE IF NOT EXISTS group_members (
 );
 
 CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id);
+
+-- =========================================================================
+-- Phase 328 IDENT-05 — per-user TOTP (genuinely per-DB-user, unlike the
+-- legacy single-secret YAML path). Secret + recovery codes are DEK-encrypted
+-- at rest (secrets/dek.ts, AES-256-GCM) — NEVER plaintext, NEVER in the audit
+-- log. Idempotent ADD COLUMN IF NOT EXISTS in a DO-block (Phase 25/62/257-04).
+-- Backward-compat: existing rows get NULL/FALSE.
+-- =========================================================================
+DO $$
+BEGIN
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret_enc TEXT;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_recovery_codes_enc TEXT;
+END$$;
