@@ -45,6 +45,14 @@ function rowToAudit(row: any): DeviceAuditRow {
 	}
 }
 
+/**
+ * Phase 328 SEC-01: the admin-relevant sentinel device_id set. Plan 01 writes
+ * 'admin-action' / 'auth-login'; Phase 46/59 already write 'fail2ban-host' /
+ * 'api-keys-system'. listAdminAuditEvents constrains to this set (or one member
+ * of it when a category is supplied) via a parameterized `device_id = ANY($n)`.
+ */
+const ADMIN_AUDIT_SENTINELS = ['admin-action', 'auth-login', 'fail2ban-host', 'api-keys-system'] as const
+
 export default router({
 	listDeviceEvents: adminProcedure
 		.input(
@@ -76,6 +84,82 @@ export default router({
 				conditions.push(`device_id = $${values.length}`)
 			}
 			const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+
+			// Total count for pagination.
+			const countResult = await pool.query<{count: string}>(
+				`SELECT COUNT(*)::text AS count FROM device_audit_log ${whereSql}`,
+				values,
+			)
+			const total = Number.parseInt(countResult.rows[0]?.count ?? '0', 10)
+
+			// Page of rows.
+			values.push(input.limit)
+			const limitParam = `$${values.length}`
+			values.push(input.offset)
+			const offsetParam = `$${values.length}`
+
+			const {rows} = await pool.query(
+				`SELECT id, user_id, device_id, tool_name, params_digest, success, error, timestamp
+				 FROM device_audit_log
+				 ${whereSql}
+				 ORDER BY timestamp DESC
+				 LIMIT ${limitParam} OFFSET ${offsetParam}`,
+				values,
+			)
+
+			return {
+				total,
+				limit: input.limit,
+				offset: input.offset,
+				events: rows.map(rowToAudit),
+			}
+		}),
+
+	/**
+	 * Phase 328 SEC-01: admin-only viewer over the SAME append-only
+	 * device_audit_log table, filtered to the admin-relevant sentinel set
+	 * (admin-action, auth-login, fail2ban-host, api-keys-system). An optional
+	 * `category` narrows to one sentinel; an optional `userId` narrows to one
+	 * user. Same paginated shape as listDeviceEvents (total + LIMIT/OFFSET).
+	 *
+	 * Rows carry only an already-redacted params_digest hash (SHA-256) — no
+	 * plaintext secret is ever returned. The WHERE clause uses $N placeholders
+	 * plus a values[] array; no input is ever string-interpolated.
+	 *
+	 * Enforcement: adminProcedure — requireRole('admin'). A member-role user
+	 * receives a tRPC FORBIDDEN error before the handler runs.
+	 */
+	listAdminAuditEvents: adminProcedure
+		.input(
+			z.object({
+				category: z.enum(['admin-action', 'auth-login', 'fail2ban-host', 'api-keys-system']).optional(),
+				userId: z.string().uuid().optional(),
+				limit: z.number().int().min(1).max(200).default(50),
+				offset: z.number().int().min(0).default(0),
+			}),
+		)
+		.query(async ({input}) => {
+			const pool = getPool()
+			if (!pool) {
+				throw new TRPCError({
+					code: 'SERVICE_UNAVAILABLE',
+					message: 'Audit log database is not initialized',
+				})
+			}
+
+			// Parameterized WHERE — always constrained to the admin sentinel set.
+			const conditions: string[] = []
+			const values: Array<string | number | string[]> = []
+
+			// device_id = ANY($n): one sentinel when a category is chosen, else the whole set.
+			values.push(input.category ? [input.category] : [...ADMIN_AUDIT_SENTINELS])
+			conditions.push(`device_id = ANY($${values.length})`)
+
+			if (input.userId) {
+				values.push(input.userId)
+				conditions.push(`user_id = $${values.length}`)
+			}
+			const whereSql = `WHERE ${conditions.join(' AND ')}`
 
 			// Total count for pagination.
 			const countResult = await pool.query<{count: string}>(
