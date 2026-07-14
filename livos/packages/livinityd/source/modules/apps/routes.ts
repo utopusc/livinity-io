@@ -98,9 +98,17 @@ export const apps = router({
 							deterministicPassword,
 							dependencies,
 							implements: implements_,
+							// 316-06 (GPU-02 UI): expose the manifest GPU-permission declaration so
+							// app-settings-dialog can render the GPU toggle ONLY for apps that request
+							// the GPU. `permissions` is the untyped z.array(z.string()) manifest field.
+							permissions,
 						},
 						selectedDependencies,
-					] = await Promise.all([app.readManifest(), app.getSelectedDependencies()])
+						// 316-06 (GPU-02 UI): the raw per-app override (boolean | undefined) so the
+						// toggle reflects the real persisted state — `undefined` (no override) falls
+						// back to the manifest default client-side, matching patchComposeFile's server logic.
+						gpuAccess,
+					] = await Promise.all([app.readManifest(), app.getSelectedDependencies(), app.getGpuAccess()])
 
 					if (deterministicPassword) {
 						defaultPassword = await app.deriveDeterministicPassword()
@@ -150,6 +158,9 @@ export const apps = router({
 						dependencies,
 						selectedDependencies,
 						implements: implements_,
+						// 316-06 (GPU-02 UI) — see destructure above.
+						permissions,
+						gpuAccess,
 					}
 				} catch (error) {
 					ctx.apps.logger.error(`Failed to read manifest for app ${app.id}`, error)
@@ -177,6 +188,10 @@ export const apps = router({
 					dependencies: undefined,
 					selectedDependencies: undefined,
 					implements: undefined,
+					// 316-06 (GPU-02 UI): native builtins carry no manifest permissions/override —
+					// keep the union shape uniform so `app.permissions`/`app.gpuAccess` stay typed.
+					permissions: undefined,
+					gpuAccess: undefined,
 				})
 			}
 		}

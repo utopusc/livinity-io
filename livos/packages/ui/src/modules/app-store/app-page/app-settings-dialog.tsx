@@ -21,6 +21,7 @@ import {useDialogOpenProps} from '@/utils/dialog'
 import {t} from '@/utils/i18n'
 
 import {SelectDependencies} from '../select-dependencies-dialog'
+import {GpuAccessSection} from './gpu-access-section'
 import {PublicAccessSection} from './public-access-section'
 
 export function AppSettingsDialog() {
@@ -132,6 +133,14 @@ function AppSettingsDialogForApp({
 	const inProgress = arrayIncludes(progressStates, app.state)
 	const hasChanges = !areSelectionsEqual(app.selectedDependencies, selectedDependencies)
 
+	// 316-06 (GPU-02): render the GPU section ONLY for apps whose manifest requests
+	// the GPU. `permissions`/`gpuAccess` are surfaced by apps.list (316-06 backend).
+	// The initial toggle mirrors patchComposeFile's server rule: an explicit
+	// per-app override wins, else fall back to the manifest default.
+	const gpuPermissions = app.permissions ?? []
+	const appRequestsGpu = gpuPermissions.includes('GPU') || gpuPermissions.includes('GPU-NVIDIA')
+	const gpuInitiallyEnabled = app.gpuAccess ?? appRequestsGpu
+
 	return (
 		<Dialog {...dialogProps}>
 			<DialogPortal>
@@ -162,6 +171,12 @@ function AppSettingsDialogForApp({
 					<div className='border-t border-border-default pt-4 mt-4'>
 						<PublicAccessSection appId={app.id} appName={app.name} appPort={app.port || 80} />
 					</div>
+					{/* GPU Access Section — 316-06 (GPU-02), only for apps that request the GPU */}
+					{appRequestsGpu && (
+						<div className='border-t border-border-default pt-4 mt-4'>
+							<GpuAccessSection appId={app.id} appName={app.name} initialEnabled={gpuInitiallyEnabled} />
+						</div>
+					)}
 					{hadChanges && (
 						<DialogFooter>
 							<Close asChild>
