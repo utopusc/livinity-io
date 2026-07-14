@@ -569,9 +569,22 @@ export const apps = router({
 			if (!mainDomain) {
 				throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'OIDC SSO requires a configured domain'})
 			}
-			const ok = await ctx.apps!.setOidcEnabled(input.appId, input.enabled)
+			// WR-04 (322-review): the OIDC provider can be inactive even WITH a domain
+			// configured — e.g. the domain was activated AFTER boot (initOidc only runs at
+			// boot). getOidcService()?.rebuild(...) would then be a SILENT no-op (optional
+			// chaining swallows the null) while /oidc was never mounted for this process,
+			// so the toggle would report success yet every login against the client fails.
+			// Fail CLOSED before persisting so the admin learns SSO can't be (de)registered.
 			const {getOidcService} = await import('../oidc/index.js')
-			await getOidcService()?.rebuild(await ctx.apps!.listOidcEnabledApps())
+			const service = getOidcService()
+			if (!service || !service.provider) {
+				throw new TRPCError({
+					code: 'PRECONDITION_FAILED',
+					message: 'OIDC provider is not active — restart LivOS after configuring a domain',
+				})
+			}
+			const ok = await ctx.apps!.setOidcEnabled(input.appId, input.enabled)
+			await service.rebuild(await ctx.apps!.listOidcEnabledApps())
 			return ok
 		}),
 
