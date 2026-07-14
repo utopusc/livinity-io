@@ -33,6 +33,10 @@ import * as jwt from '../jwt.js'
 import {findUserById, getAdminUser, getPool, userOwnsContainer} from '../database/index.js'
 import {createSession, isSessionRevoked} from '../database/sessions.js'
 import {parseSsoReturnTarget, sanitizeSsoPath} from './sso-handshake.js'
+import fse from 'fs-extra'
+// Phase 322 (IDENT-02) — embedded OIDC provider factory + apex interaction route.
+import {OidcService, setOidcService} from '../oidc/index.js'
+import * as oidcInteraction from '../oidc/interaction-routes.js'
 // Phase 263-01 (LIVOS-064 Critical) — pure security helpers for /api/chrome/*:
 // the unauth 401 gate + the two no-shell url sinks (URL-encoded CDP fetch +
 // argv spawn). See chrome-launch.ts for the threat rationale.
@@ -141,6 +145,16 @@ const APEX_PUBLIC_PREFIXES = [
 	'/sw.js',
 	'/registerSW.js',
 	'/workbox-',
+	// Phase 322 (IDENT-02, D-322-5, Pitfall 4) — OIDC protocol endpoints called by
+	// app BACKENDS (no LIVINITY_SESSION): discovery / jwks / token (client-cred
+	// Basic auth) / userinfo (Bearer). Browser-facing /oidc/auth + /oidc/interaction
+	// are DELIBERATELY excluded — they ride the apex gate (302 to /login when
+	// logged-out), exactly the wanted UX. Widening beyond these four would be a
+	// direct repeat of the LIVOS-053 class of risk.
+	'/oidc/.well-known/',
+	'/oidc/jwks',
+	'/oidc/token',
+	'/oidc/userinfo',
 ]
 
 // Pre-auth static assets (login wallpaper, hashed bundle chunks, fonts the
@@ -1857,6 +1871,40 @@ class Server {
 				return response.status(401).json({error: 'unauthorized'})
 			}
 		})
+
+		// Phase 322 (IDENT-02, D-322-1/2/8) — mount the embedded OIDC provider at the
+		// APEX issuer, ADDITIVELY alongside /auth/verify above and the Phase 259 bounce
+		// below. Registered AFTER the apex session gate (the earlier this.app.use) so
+		// browser-facing /oidc/auth + /oidc/interaction ride that gate's logged-out
+		// 302->/login fallback unchanged; only the 4 non-cookie protocol paths were
+		// allowlisted (APEX_PUBLIC_PREFIXES). No-domain boxes no-op like every other
+		// domain feature and re-attempt on the next boot; a provider-init failure logs
+		// and no-ops (OIDC must NEVER regress the existing login path — SC3).
+		const oidcMainDomain = await this.getActiveMainDomain()
+		if (!oidcMainDomain) {
+			this.logger?.log?.('[oidc] no domain configured — OIDC provider inactive')
+		} else {
+			try {
+				// Static client secrets derive from the box seed (oidc/clients.ts), so the
+				// provider needs the SAME seed apps/app.ts reads for its app passwords.
+				const seed = await fse.readFile(`${this.livinityd.dataDirectory}/db/livinity-seed/seed`)
+				const oidcService = new OidcService()
+				// enabledApps EMPTY at boot — no app has SSO on yet; 322-05 populates it
+				// via getOidcService()?.rebuild(...) on the admin "Enable SSO" toggle.
+				await oidcService.init({mainDomain: oidcMainDomain, enabledApps: [], seed})
+				setOidcService(oidcService)
+				// Interaction route FIRST (intercepts /oidc/interaction/:uid before
+				// provider.callback()), driven by the SAME verifier the gate + /auth/verify
+				// + Phase 259 bounce use — never a re-implemented JWT check.
+				oidcInteraction.registerOidcInteractionRoutes(this.app, {
+					getProvider: () => oidcService.provider,
+					verifySessionFull: (t) => this.verifySessionFull(t),
+				})
+				this.app.use('/oidc', oidcService.callback())
+			} catch (err) {
+				this.logger.error('[oidc] provider init failed — OIDC inactive this boot', err)
+			}
+		}
 
 		// Phase 259 — cross-subdomain SSO bounce. STEP 1 (runs on the operator's
 		// apex `<user>.<base>`, where the host-only LIVINITY_SESSION cookie IS sent):
