@@ -379,6 +379,16 @@ type StoreSchema = {
 			containerRestartLoopCount: number
 		}
 	}
+	// Phase 328 SEC-02 / IDENT-05 — org-wide security policy flags. Dedicated
+	// top-level key (NOT nested under any array/scalar — dot-prop path collisions
+	// silently drop the write, same convention as `monitoring`/`alerts` above).
+	// `require2fa` is the org-wide 2FA enforcement flag: the Security Advisor's
+	// `org-2fa-policy-disabled` probe (security-advisor/weak-config-checks.ts)
+	// READS it; Plan 03 (IDENT-05) WRITES it via security/policy.ts. Registered
+	// here so the advisor probe type-checks even if Plan 03 lands afterwards.
+	security: {
+		require2fa?: boolean
+	}
 	backups: {
 		repositories: {
 			id: string
