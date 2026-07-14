@@ -25,6 +25,10 @@ import {
 	deleteUserPreference,
 	deleteUser,
 	isUserTotpEnabled,
+	validateUserTotpToken,
+	enableUserTotp,
+	disableUserTotp,
+	consumeUserRecoveryCode,
 } from '../database/index.js'
 import {createSession, revokeSessionsForUser, listSessions as listUserSessions, revokeSession as revokeUserSession} from '../database/sessions.js'
 import {recordAuthLoginEvent} from '../security-audit/events.js'
@@ -147,6 +151,26 @@ export default router({
 				if (!validPassword) {
 					void recordAuthLoginEvent({userId: auditUserId, success: false, error: 'invalid_credentials'})
 					throw new TRPCError({code: 'UNAUTHORIZED', message: 'Incorrect password'})
+				}
+
+				// IDENT-05 — DB-user 2FA (the legacy YAML check below only covers
+				// no-username logins). Accept a valid TOTP OR a one-time recovery
+				// code (escape hatch — a lost authenticator never bricks the account,
+				// admin included). A DB user WITHOUT TOTP is NOT blocked here even when
+				// the org policy is on: user.requires2faSetup drives a post-login enrol
+				// redirect (D-328-3 grace period), never a hard lockout.
+				if (await isUserTotpEnabled(dbUser.id)) {
+					if (!input.totpToken) {
+						void recordAuthLoginEvent({userId: dbUser.id, success: false, error: 'missing_2fa'})
+						throw new TRPCError({code: 'UNAUTHORIZED', message: 'Missing 2FA code'})
+					}
+					const ok =
+						(await validateUserTotpToken(dbUser.id, input.totpToken)) ||
+						(await consumeUserRecoveryCode(dbUser.id, input.totpToken))
+					if (!ok) {
+						void recordAuthLoginEvent({userId: dbUser.id, success: false, error: 'incorrect_2fa'})
+						throw new TRPCError({code: 'UNAUTHORIZED', message: 'Incorrect 2FA code'})
+					}
 				}
 
 				dbUserId = dbUser.id
@@ -343,8 +367,13 @@ export default router({
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
-			// Check if 2FA is already enabled
-			if (await ctx.user.is2faEnabled()) {
+			// IDENT-05 — currentUser-aware: a DB-backed session enrols per-user DB
+			// TOTP (returns one-time recovery codes shown ONCE); the legacy YAML
+			// single-owner path is preserved unchanged for no-DB boxes.
+			const alreadyEnabled = ctx.currentUser
+				? await isUserTotpEnabled(ctx.currentUser.id)
+				: await ctx.user.is2faEnabled()
+			if (alreadyEnabled) {
 				throw new TRPCError({code: 'UNAUTHORIZED', message: '2FA is already enabled'})
 			}
 
@@ -353,11 +382,18 @@ export default router({
 				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Incorrect 2FA code'})
 			}
 
-			// Save URI
+			if (ctx.currentUser) {
+				const recoveryCodes = await enableUserTotp(ctx.currentUser.id, input.totpUri)
+				return {recoveryCodes}
+			}
+			// Legacy YAML path (no-DB boxes) unchanged.
 			return ctx.user.enable2fa(input.totpUri)
 		}),
 
-	is2faEnabled: publicProcedure.query(async ({ctx}) => ctx.user.is2faEnabled()),
+	is2faEnabled: publicProcedure.query(async ({ctx}) => {
+		if (ctx.currentUser) return isUserTotpEnabled(ctx.currentUser.id)
+		return ctx.user.is2faEnabled()
+	}),
 
 	// Disables 2FA
 	disable2fa: privateProcedure
@@ -367,17 +403,29 @@ export default router({
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
-			// Check if 2FA is already enabled
-			if (!(await ctx.user.is2faEnabled())) {
+			// IDENT-05 — currentUser-aware. A DB user disables per-user DB TOTP;
+			// accept a valid TOTP OR a one-time recovery code (escape hatch).
+			const enabled = ctx.currentUser
+				? await isUserTotpEnabled(ctx.currentUser.id)
+				: await ctx.user.is2faEnabled()
+			if (!enabled) {
 				throw new TRPCError({code: 'UNAUTHORIZED', message: '2FA is not enabled'})
 			}
 
-			// Verify the token
+			if (ctx.currentUser) {
+				const ok =
+					(await validateUserTotpToken(ctx.currentUser.id, input.totpToken)) ||
+					(await consumeUserRecoveryCode(ctx.currentUser.id, input.totpToken))
+				if (!ok) {
+					throw new TRPCError({code: 'UNAUTHORIZED', message: 'Incorrect 2FA code'})
+				}
+				return disableUserTotp(ctx.currentUser.id)
+			}
+
+			// Legacy YAML path (no-DB boxes) unchanged.
 			if (!(await ctx.user.validate2faToken(input.totpToken))) {
 				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Incorrect 2FA code'})
 			}
-
-			// Delete the URI
 			return ctx.user.disable2fa()
 		}),
 
