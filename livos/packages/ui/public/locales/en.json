@@ -875,6 +875,7 @@
   "settings.app-store-preferences.title": "App Store Preferences",
   "settings.contact-support": "Need help? <linked>Contact support.</linked>",
   "settings.groups.add-member": "Add member",
+  "settings.groups.admin-name-note": "Heads up — a group named exactly \"admin\" grants Gitea admin rights to its members when Gitea SSO is enabled. Pick a different name unless that is intended.",
   "settings.groups.create": "Create group",
   "settings.groups.create-button": "Create",
   "settings.groups.created": "Group created",

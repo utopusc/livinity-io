@@ -849,6 +849,7 @@
   "settings.app-store-preferences.title": "Uygulama Mağazası Tercihleri",
   "settings.contact-support": "Yardım mı lazım? <linked>Destek ile iletişime geçin.</linked>",
   "settings.groups.add-member": "Üye ekle",
+  "settings.groups.admin-name-note": "Dikkat — Gitea SSO etkinleştirildiğinde tam olarak \"admin\" adlı bir grup, üyelerine Gitea yönetici yetkisi verir. İstenmiyorsa farklı bir ad seçin.",
   "settings.groups.create": "Grup oluştur",
   "settings.groups.create-button": "Oluştur",
   "settings.groups.created": "Grup oluşturuldu",

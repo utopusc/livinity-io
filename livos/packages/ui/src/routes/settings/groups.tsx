@@ -311,6 +311,11 @@ function CreateGroupDialog({open, onOpenChange}: {open: boolean; onOpenChange: (
 								placeholder={t('settings.groups.name-placeholder')}
 								autoFocus
 							/>
+							{/* IN-04 (322-review): the literal group name "admin" carries a special
+							    cross-app meaning — Gitea's SSO mapping (--admin-group admin) grants
+							    Gitea admin to its members. Call it out honestly so nobody names a
+							    group "admin" unaware of the consequence. */}
+							<p className='text-caption text-text-tertiary'>{t('settings.groups.admin-name-note')}</p>
 						</div>
 						<div className='space-y-2'>
 							<label className='text-caption text-text-secondary'>{t('settings.groups.description-label')}</label>
