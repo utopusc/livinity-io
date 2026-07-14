@@ -101,6 +101,7 @@ import {ChangePasswordWarning, ContactSupportLink} from './shared'
 import {SettingsInfoCard} from './settings-info-card'
 import {SettingsToggleRow} from './settings-toggle-row'
 import {SoftwareUpdateListRow} from './software-update-list-row'
+import {GpuInstallSection} from './gpu-install-section'
 import {PastDeploysTable} from './past-deploys-table'
 import {MenuItemBadge} from './menu-item-badge'
 
@@ -1718,6 +1719,11 @@ function SoftwareUpdateSection() {
 		<div className='space-y-4'>
 			<p className='text-body-sm text-text-secondary'>Check for LivOS updates.</p>
 			<SoftwareUpdateListRow isActive={false} />
+			{/* Phase 330-03 (GPU-04, D-1) — guided vendor/WSL2-appropriate GPU
+			    install lives here, in Software Update. Renders nothing on non-GPU
+			    boxes; admin-gated. Shares one component with the app-settings
+			    gpu-access dialog so the two never drift. */}
+			<GpuInstallSection />
 			<div className='mt-6 flex flex-col gap-3'>
 				<h3 className='text-body font-medium'>Past Deploys</h3>
 				{/* Phase 130-03 — cap height so the table doesn't push the page

@@ -79,6 +79,12 @@ export function GpuAccessSection({appId, appName, initialEnabled}: GpuAccessSect
 
 	const hasNvidia = detectGpuQuery.data?.hasNvidia ?? false
 	const toolkitConfigured = detectGpuQuery.data?.toolkitConfigured ?? false
+	// Phase 330 (GPU-03/04) — the detectGpu payload now also carries vendor +
+	// wsl2. On WSL2 the Windows driver is already in place, so we must offer the
+	// toolkit-only path (install-toolkit-wsl) and NEVER the Linux driver (D-4) —
+	// running ubuntu-drivers on WSL2 breaks GPU passthrough. This keeps the
+	// app-settings dialog WSL2-correct in lockstep with the Software Update card.
+	const wsl2 = detectGpuQuery.data?.wsl2 ?? false
 	const installPending = installToolkitMut.isPending || installDriverMut.isPending
 	// Surface the failure of whichever action last failed (both share the same UI).
 	const installFailure =
@@ -150,21 +156,26 @@ export function GpuAccessSection({appId, appName, initialEnabled}: GpuAccessSect
 						<Button
 							size='sm'
 							variant='default'
-							onClick={() => installToolkitMut.mutate({action: 'install-toolkit'})}
+							onClick={() =>
+								installToolkitMut.mutate({action: wsl2 ? 'install-toolkit-wsl' : 'install-toolkit'})
+							}
 							disabled={installPending}
 						>
 							{installToolkitMut.isPending ? <TbLoader2 className='mr-1 h-4 w-4 animate-spin' /> : null}
 							{installToolkitMut.isPending ? t('gpu-access.installing') : t('gpu-access.install-button')}
 						</Button>
-						<Button
-							size='sm'
-							variant='ghost'
-							onClick={() => installDriverMut.mutate({action: 'install-driver'})}
-							disabled={installPending}
-						>
-							{installDriverMut.isPending ? <TbLoader2 className='mr-1 h-4 w-4 animate-spin' /> : null}
-							{t('gpu-access.install-driver-button')}
-						</Button>
+						{/* D-4: never offer the Linux driver on WSL2 — it breaks passthrough. */}
+						{!wsl2 ? (
+							<Button
+								size='sm'
+								variant='ghost'
+								onClick={() => installDriverMut.mutate({action: 'install-driver'})}
+								disabled={installPending}
+							>
+								{installDriverMut.isPending ? <TbLoader2 className='mr-1 h-4 w-4 animate-spin' /> : null}
+								{t('gpu-access.install-driver-button')}
+							</Button>
+						) : null}
 					</div>
 
 					{installFailure ? (
