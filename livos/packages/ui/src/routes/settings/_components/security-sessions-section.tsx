@@ -36,6 +36,7 @@ import {SettingsPageHeader} from '@/components/settings-page-header'
 import {FieldCard, FieldRow} from '@/components/field-card'
 
 import {SecurityToggleRow} from '@/routes/settings/_components/security-toggle-row'
+import {SettingsToggleRow} from '@/routes/settings/_components/settings-toggle-row'
 import {JailStatusCard, type JailStatus, type BannedIp} from '@/routes/docker/security/jail-status-card'
 import {UnbanModal} from '@/routes/docker/security/unban-modal'
 
@@ -159,6 +160,14 @@ export function SecuritySessionsSection() {
 			setRevokeTarget(null)
 			void sessionsQuery.refetch()
 		},
+	})
+
+	// IDENT-05 — org-wide 2FA enforcement policy (admin-only). getRequire2fa /
+	// setRequire2fa are adminProcedure server-side (Plan 03); this toggle is a
+	// convenience surface — a crafted non-admin call is rejected by the server.
+	const require2faQ = trpcReact.user.getRequire2fa.useQuery(undefined, {staleTime: 10_000})
+	const setRequire2faM = trpcReact.user.setRequire2fa.useMutation({
+		onSuccess: () => require2faQ.refetch(),
 	})
 
 	// 5s polling cadence; staleTime = half-interval so React Query flips
@@ -353,6 +362,17 @@ export function SecuritySessionsSection() {
 			{/* ── Security-panel toggle (relocated from AdvancedSection) ─────────── */}
 			<FieldCard>
 				<SecurityToggleRow />
+			</FieldCard>
+
+			{/* ── Two-factor enforcement (IDENT-05 — org-wide admin policy) ──────── */}
+			<FieldCard>
+				<SettingsToggleRow
+					title='Require two-factor sign-in'
+					description='Applies to interactive web sign-in only. When on, members without 2FA are prompted to set it up on next sign-in — they are not locked out. API keys and the desktop app authenticate separately and are not affected.'
+					checked={require2faQ.data ?? false}
+					onCheckedChange={() => setRequire2faM.mutate({value: !require2faQ.data})}
+					disabled={require2faQ.isLoading || setRequire2faM.isPending}
+				/>
 			</FieldCard>
 
 			{/* ── Sessions ──────────────────────────────────────────────────────── */}
