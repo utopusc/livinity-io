@@ -18,6 +18,7 @@
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AccountTab } from "@/components/settings/AccountTab";
+import { LocalModelsTab } from "@/components/settings/LocalModelsTab";
 import { McpTab } from "@/components/settings/McpTab";
 import { ModelsTab } from "@/components/settings/ModelsTab";
 import { ProvidersTab } from "@/components/settings/ProvidersTab";
@@ -39,6 +40,7 @@ export default function SettingsPage() {
 					<TabsTrigger value="skills">Skills</TabsTrigger>
 					<TabsTrigger value="models">Models</TabsTrigger>
 					<TabsTrigger value="providers">Providers</TabsTrigger>
+					<TabsTrigger value="local-models">Local Models</TabsTrigger>
 				</TabsList>
 				<TabsContent value="account">
 					<AccountTab />
@@ -54,6 +56,9 @@ export default function SettingsPage() {
 				</TabsContent>
 				<TabsContent value="providers">
 					<ProvidersTab />
+				</TabsContent>
+				<TabsContent value="local-models">
+					<LocalModelsTab />
 				</TabsContent>
 			</Tabs>
 		</div>
