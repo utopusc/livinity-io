@@ -923,9 +923,17 @@ export default class App {
 	async setOidcEnabled(enabled: boolean) {
 		const success = await this.store.set('oidcEnabled', enabled)
 		if (success && this.id === 'vaultwarden') {
-			this.restart().catch((error) => {
-				this.logger.error(`Failed to restart '${this.id}'`, error)
-			})
+			// WR-01 (322-review): restart() shells stop/start directly and NEVER re-runs
+			// patchComposeFile(), so the SSO_* env the Vaultwarden branch injects would
+			// never reach the recreated container — `compose up` reconciles against the
+			// on-disk docker-compose.yml, which nothing rewrote. Patch the compose FIRST
+			// (mirrors App.start()'s sequencing) so the injected env lands on disk, THEN
+			// restart. Fire-and-forget + failure-isolated, matching setGpuAccess.
+			this.patchComposeFile()
+				.then(() => this.restart())
+				.catch((error) => {
+					this.logger.error(`Failed to apply SSO compose patch + restart '${this.id}'`, error)
+				})
 		}
 		// 322-06 (IDENT-02, D-322-4): the CLI/REST apps (Nextcloud/Gitea/Immich) provision
 		// OUT-OF-BAND — no compose change, so no restart. Run the SECOND provisioning
