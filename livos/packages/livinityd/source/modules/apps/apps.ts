@@ -11,7 +11,7 @@ import semver from 'semver'
 import randomToken from '../../modules/utilities/random-token.js'
 import type Livinityd from '../../index.js'
 import appEnvironment from './legacy-compat/app-environment.js'
-import App, {readManifestInDirectory} from './app.js'
+import App, {readManifestInDirectory, resolveWantsGpu} from './app.js'
 import {reconcileAppVolumeOwnership} from './reconcile-volume-ownership.js'
 import {classifyInspect} from './health-poll.js'
 import type {AppManifest, AppSettings} from './schema.js'
@@ -1356,14 +1356,25 @@ export default class Apps {
 	// 316-02 (GPU-02): list the ids of every app currently claiming GPU access,
 	// so the UI can warn about GPU exclusivity. Mirrors getDependents' cross-app
 	// scan — catch-per-app so one unreadable app never fails the whole scan.
+	// IN-04: resolve "wants GPU" exactly like patchComposeFile — the explicit
+	// override OR the manifest GPU permission — via the shared resolveWantsGpu
+	// helper. Reading only the raw override under-counted apps relying on the
+	// manifest default (GPU permission, never toggled), so the exclusivity banner
+	// silently missed real GPU-holding apps.
 	async listAppsWithGpuAccess(): Promise<string[]> {
 		const allGpuAccess = await Promise.all(
-			this.instances.map(async (app) => ({
-				id: app.id,
-				gpu: await app.getGpuAccess().catch(() => undefined),
-			})),
+			this.instances.map(async (app) => {
+				const [override, manifest] = await Promise.all([
+					app.getGpuAccess().catch(() => undefined),
+					app.readManifest().catch(() => undefined),
+				])
+				return {
+					id: app.id,
+					wantsGpu: resolveWantsGpu(override, manifest?.permissions),
+				}
+			}),
 		)
-		return allGpuAccess.filter(({gpu}) => gpu === true).map(({id}) => id)
+		return allGpuAccess.filter(({wantsGpu}) => wantsGpu).map(({id}) => id)
 	}
 
 	async setHideCredentialsBeforeOpen(appId: string, value: boolean) {

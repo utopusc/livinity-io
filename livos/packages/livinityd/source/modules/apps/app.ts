@@ -39,6 +39,24 @@ export async function readManifestInDirectory(dataDirectory: string) {
 	return validateManifest(parseYaml)
 }
 
+/**
+ * 316-02 (GPU-02) — the SINGLE source of truth for "does this app want the GPU".
+ * An explicit per-app override (`gpuAccess` in settings.yml) always wins; when
+ * unset (`undefined`) it falls back to the manifest GPU permission
+ * (`GPU` or `GPU-NVIDIA`). Shared by `patchComposeFile` (the runtime compose
+ * patch) and `apps.listAppsWithGpuAccess` (the exclusivity-warning list, IN-04)
+ * so both agree on which apps hold the GPU — a raw override read under-counts
+ * manifest-default GPU apps. Normalizes to a definite boolean.
+ */
+export function resolveWantsGpu(
+	gpuAccessOverride: boolean | undefined,
+	permissions: string[] | undefined,
+): boolean {
+	const appRequestsGpuAccess = permissions?.includes('GPU') ?? false
+	const appRequestsNvidia = permissions?.includes('GPU-NVIDIA') ?? false
+	return gpuAccessOverride ?? (appRequestsGpuAccess || appRequestsNvidia)
+}
+
 type AppState =
 	| 'unknown'
 	| 'installing'
@@ -108,18 +126,17 @@ export default class App {
 
 	async patchComposeFile(environmentOverrides?: Record<string, string>) {
 		const manifest = await this.readManifest()
-		const appRequestsGpuAccess = manifest.permissions?.includes('GPU')
 		const DRI_DEVICE_PATH = '/dev/dri'
 		const deviceHasGpu = await fse.exists(DRI_DEVICE_PATH).catch(() => false)
 
 		// 316-02 (GPU-02): per-app GPU-access override + NVIDIA branch inputs.
 		// Read/probe ONCE per patch (not per service). `gpuAccessOverride` is
 		// undefined | boolean — undefined falls back to the manifest default so
-		// an app nobody has toggled keeps exactly today's behavior. The NVIDIA
-		// probes never throw (degrade to false).
+		// an app nobody has toggled keeps exactly today's behavior. The shared
+		// `resolveWantsGpu` helper is the single source of truth (IN-04 reuses it
+		// in listAppsWithGpuAccess). The NVIDIA probes never throw (degrade to false).
 		const gpuAccessOverride = await this.store.get('gpuAccess')
-		const appRequestsNvidia = manifest.permissions?.includes('GPU-NVIDIA')
-		const wantsGpu = gpuAccessOverride ?? (appRequestsGpuAccess || appRequestsNvidia)
+		const wantsGpu = resolveWantsGpu(gpuAccessOverride, manifest.permissions)
 		const hostHasNvidia = wantsGpu ? await detectNvidiaGpu() : false
 		const nvidiaToolkitInstalled = wantsGpu ? await isNvidiaToolkitConfigured() : false
 
