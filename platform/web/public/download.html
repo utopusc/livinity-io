@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
 
-    <title>Download Livinity Desktop for Windows — v0.2.0 Beta</title>
+    <title>Download Livinity Desktop for Windows — v0.2.2 Beta</title>
     <meta name="description" content="Livinity Desktop for Windows: zero terminal. Sign in, and your personal AI home server installs itself — WSL 2, LivOS, and your secure address, all handled for you." />
     <meta name="keywords" content="Livinity Desktop download, Windows home server app, self-hosted AI, LivOS installer, WSL2 home server, zero terminal install" />
 
@@ -16,7 +16,7 @@
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Livinity" />
     <meta property="og:title" content="Download Livinity Desktop for Windows" />
-    <meta property="og:description" content="Zero terminal. Sign in, and your personal AI home server installs itself. Windows 10/11 · v0.2.0 Beta." />
+    <meta property="og:description" content="Zero terminal. Sign in, and your personal AI home server installs itself. Windows 10/11 · v0.2.2 Beta." />
     <meta property="og:url" content="https://livinity.io/download" />
     <meta property="og:image" content="https://livinity.io/og-image.png" />
     <meta property="og:image:width" content="1200" />
@@ -26,7 +26,7 @@
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Download Livinity Desktop for Windows" />
-    <meta name="twitter:description" content="Zero terminal. Sign in, and your personal AI home server installs itself. v0.2.0 Beta." />
+    <meta name="twitter:description" content="Zero terminal. Sign in, and your personal AI home server installs itself. v0.2.2 Beta." />
     <meta name="twitter:image" content="https://livinity.io/og-image.png" />
 
     <script type="application/ld+json">
@@ -36,10 +36,10 @@
       "name": "Livinity Desktop",
       "operatingSystem": "Windows 10, Windows 11",
       "applicationCategory": "UtilitiesApplication",
-      "softwareVersion": "0.2.0",
+      "softwareVersion": "0.2.2",
       "url": "https://livinity.io/download",
-      "downloadUrl": "https://github.com/utopusc/livinity-io/releases/download/desktop-v0.2.0/Livinity-Desktop-Setup-0.2.0.exe",
-      "releaseNotes": "https://github.com/utopusc/livinity-io/releases/tag/desktop-v0.2.0",
+      "downloadUrl": "https://github.com/utopusc/livinity-io/releases/download/desktop-v0.2.2/Livinity-Desktop-Setup-0.2.2.exe",
+      "releaseNotes": "https://github.com/utopusc/livinity-io/releases/tag/desktop-v0.2.2",
       "fileSize": "100MB",
       "description": "Windows companion app for LivOS. Sign in and your personal AI home server installs itself — Livinity Desktop enables WSL 2, installs LivOS, connects your secure address, and keeps everything running from the system tray. No terminal needed.",
       "license": "https://www.gnu.org/licenses/agpl-3.0.html",
@@ -275,12 +275,12 @@
       <main class="dl-shell">
         <header class="dl-hero">
           <div class="dl-mark"></div>
-          <div class="dl-eyebrow"><span class="ic"></span> Livinity Desktop <span class="dl-beta">v0.2.0 Beta</span></div>
+          <div class="dl-eyebrow"><span class="ic"></span> Livinity Desktop <span class="dl-beta">v0.2.2 Beta</span></div>
           <h1 class="dl-title">Livinity Desktop <em>for Windows.</em></h1>
           <p class="dl-sub">Zero terminal. Sign in, and your personal AI home server installs itself — Livinity Desktop sets everything up in the background and keeps it running from the system tray.</p>
           <div class="dl-cta-row">
-            <a class="btn btn-primary" href="https://github.com/utopusc/livinity-io/releases/download/desktop-v0.2.0/Livinity-Desktop-Setup-0.2.0.exe">Download for Windows</a>
-            <a class="btn btn-ghost" href="https://github.com/utopusc/livinity-io/releases/tag/desktop-v0.2.0" target="_blank" rel="noreferrer">View release on GitHub</a>
+            <a class="btn btn-primary" href="https://github.com/utopusc/livinity-io/releases/download/desktop-v0.2.2/Livinity-Desktop-Setup-0.2.2.exe">Download for Windows</a>
+            <a class="btn btn-ghost" href="https://github.com/utopusc/livinity-io/releases/tag/desktop-v0.2.2" target="_blank" rel="noreferrer">View release on GitHub</a>
           </div>
           <p class="dl-cta-meta">.exe installer<span class="sep">·</span>100 MB<span class="sep">·</span>Windows 10 / 11, 64-bit</p>
           <p class="dl-cta-alt">On macOS or Linux? Install LivOS directly with the <a href="/#install">one-line installer</a>.</p>
@@ -336,9 +336,15 @@
     <script type="text/babel">
       const { useState, useEffect } = React;
 
-      const DESKTOP_VERSION = "0.2.0";
-      const DOWNLOAD_URL = "https://github.com/utopusc/livinity-io/releases/download/desktop-v0.2.0/Livinity-Desktop-Setup-0.2.0.exe";
-      const RELEASE_URL = "https://github.com/utopusc/livinity-io/releases/tag/desktop-v0.2.0";
+      // Fallback pinned to the latest known release. <App/> resolves the newest
+      // desktop-v* release from the GitHub API at load (CORS-enabled, no auth)
+      // and upgrades these if a newer one shipped — so this page self-heals and
+      // never serves a stale installer. If the fetch is blocked / rate-limited /
+      // offline, these current values are used.
+      const REPO = "utopusc/livinity-io";
+      const FALLBACK_VERSION = "0.2.2";
+      const FALLBACK_DOWNLOAD_URL = "https://github.com/utopusc/livinity-io/releases/download/desktop-v0.2.2/Livinity-Desktop-Setup-0.2.2.exe";
+      const FALLBACK_RELEASE_URL = "https://github.com/utopusc/livinity-io/releases/tag/desktop-v0.2.2";
 
       function Nav() {
         const [user, setUser] = useState(null);
@@ -400,6 +406,39 @@
       }
 
       function App() {
+        const [rel, setRel] = useState({
+          version: FALLBACK_VERSION,
+          downloadUrl: FALLBACK_DOWNLOAD_URL,
+          releaseUrl: FALLBACK_RELEASE_URL,
+        });
+        useEffect(() => {
+          let aborted = false;
+          fetch("https://api.github.com/repos/" + REPO + "/releases?per_page=20", {
+            headers: { Accept: "application/vnd.github+json" },
+          })
+            .then(r => (r.ok ? r.json() : null))
+            .then(list => {
+              if (aborted || !Array.isArray(list)) return;
+              const semver = t => {
+                const m = /^desktop-v(\d+)\.(\d+)\.(\d+)$/.exec(t || "");
+                return m ? [+m[1], +m[2], +m[3]] : null;
+              };
+              const cmp = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+              let best = null;
+              for (const r of list) {
+                const v = semver(r.tag_name);
+                if (!v) continue; // skip desktop-latest + non-desktop tags
+                const exe = (r.assets || []).find(a => /Setup-.*\.exe$/.test(a.name));
+                if (!exe || !exe.browser_download_url) continue;
+                if (!best || cmp(v, best.v) > 0) {
+                  best = { v, version: r.tag_name.replace(/^desktop-v/, ""), url: exe.browser_download_url, html: r.html_url };
+                }
+              }
+              if (best) setRel({ version: best.version, downloadUrl: best.url, releaseUrl: best.html });
+            })
+            .catch(() => {}); // keep the pinned fallback on any failure
+          return () => { aborted = true; };
+        }, []);
         return (
           <>
             <Nav/>
@@ -407,7 +446,7 @@
 
               <header className="dl-hero">
                 <div className="dl-mark"/>
-                <div className="dl-eyebrow"><span className="ic"/> Livinity Desktop <span className="dl-beta">v{DESKTOP_VERSION} Beta</span></div>
+                <div className="dl-eyebrow"><span className="ic"/> Livinity Desktop <span className="dl-beta">v{rel.version} Beta</span></div>
                 <h1 className="dl-title">
                   Livinity Desktop <em>for Windows.</em>
                 </h1>
@@ -417,8 +456,8 @@
                   from the system tray.
                 </p>
                 <div className="dl-cta-row">
-                  <a className="btn btn-primary" href={DOWNLOAD_URL}>Download for Windows</a>
-                  <a className="btn btn-ghost" href={RELEASE_URL} target="_blank" rel="noreferrer">View release on GitHub</a>
+                  <a className="btn btn-primary" href={rel.downloadUrl}>Download for Windows</a>
+                  <a className="btn btn-ghost" href={rel.releaseUrl} target="_blank" rel="noreferrer">View release on GitHub</a>
                 </div>
                 <p className="dl-cta-meta">.exe installer<span className="sep">·</span>100 MB<span className="sep">·</span>Windows 10 / 11, 64-bit</p>
                 <p className="dl-cta-alt">On macOS or Linux? Install LivOS directly with the <a href="/#install">one-line installer</a>.</p>
