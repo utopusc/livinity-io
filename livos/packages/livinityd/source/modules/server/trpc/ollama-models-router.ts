@@ -187,6 +187,21 @@ export function createOllamaModelsRouter(deps: OllamaModelsRouterDeps) {
 					})
 				}
 
+				// IN-03: single-flight guard. Two concurrent pulls for DIFFERENT models
+				// can each independently pass the RAM/disk guardrail against the SAME
+				// free-memory snapshot, then jointly blow the budget (TOCTOU). Reject a
+				// new pull while any OTHER model is still downloading. The admin-only UI
+				// already serializes via the disabled Pull button; this defends the
+				// direct-API path. Re-issuing the same in-flight name is harmless (it
+				// just re-attaches to the existing progress).
+				const inFlight = [...pullProgress.entries()].find(([n, p]) => !p.done && n !== name)
+				if (inFlight) {
+					throw new TRPCError({
+						code: 'CONFLICT',
+						message: `OLLAMA_PULL_IN_FLIGHT: another model ('${inFlight[0]}') is already downloading — wait for it to finish before pulling '${name}'.`,
+					})
+				}
+
 				let guardrail: PullGuardrails
 				try {
 					guardrail = await deps.client.checkPullGuardrails(name, deps.modelsDir)
@@ -213,6 +228,13 @@ export function createOllamaModelsRouter(deps: OllamaModelsRouterDeps) {
 		}),
 
 		// ── delete ────────────────────────────────────────────────────────────
+		// WR-03: if the model being deleted is CURRENTLY Liv's active model, revert
+		// to Claude FIRST (fail-safe) — otherwise the provider-config gateway would
+		// keep routing Liv to an Ollama model that no longer exists on disk, a silent
+		// break with no UI signal. revertToClaude tears down the provider config +
+		// clears the flag, so Liv falls back to its default (Claude) before the model
+		// file is removed. When the active-model dep is unwired (Redis unavailable at
+		// boot), delete still proceeds — there is no active selection to protect.
 		delete: adminProcedure.input(NameInput).mutation(async ({input}) => {
 			const name = input.name.trim()
 			if (!validateModelName(name)) {
@@ -220,6 +242,25 @@ export function createOllamaModelsRouter(deps: OllamaModelsRouterDeps) {
 					code: 'BAD_REQUEST',
 					message: `INVALID_MODEL_NAME: rejected '${input.name}'`,
 				})
+			}
+			if (deps.activeModel) {
+				let active: string | null = null
+				try {
+					active = await deps.activeModel.get()
+				} catch (err) {
+					// A read failure must not block a delete; log and continue.
+					deps.logger.warn(`[ollama-models] active-model read failed before delete of ${name}`, err)
+				}
+				if (active === name) {
+					try {
+						await deps.activeModel.revert()
+						deps.logger.info(`[ollama-models] auto-reverted to Claude before deleting active model: ${name}`)
+					} catch (err) {
+						// Reverting failed — refuse the delete so Liv is never left pointing
+						// at a model that is about to vanish from disk.
+						throw toTrpcError(err, 'OLLAMA_REVERT_BEFORE_DELETE_FAILED')
+					}
+				}
 			}
 			try {
 				return await deps.client.deleteModel(name)

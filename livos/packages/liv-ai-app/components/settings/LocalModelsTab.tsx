@@ -108,9 +108,14 @@ export function LocalModelsTab() {
 
 	const onDelete = useCallback(
 		async (name: string) => {
-			const confirmed = window.confirm(
-				`Delete the local model "${name}"? This frees its disk space and cannot be undone.`,
-			);
+			// WR-03: deleting Liv's ACTIVE model auto-reverts Liv to Claude
+			// server-side (ollama-models-router delete). Surface a distinct confirm
+			// so the operator knows the provider will change, not just disk freed.
+			const isActive = activeModel === name;
+			const message = isActive
+				? `"${name}" is Liv's active model. Deleting it will revert Liv to Claude and free its disk space. This cannot be undone. Continue?`
+				: `Delete the local model "${name}"? This frees its disk space and cannot be undone.`;
+			const confirmed = window.confirm(message);
 			if (!confirmed) return;
 			setBusyModel(name);
 			setActionError(null);
@@ -118,7 +123,7 @@ export function LocalModelsTab() {
 			setBusyModel(null);
 			if (!res.ok) setActionError(res.error ?? "Failed to delete the model.");
 		},
-		[remove],
+		[remove, activeModel],
 	);
 
 	const onRevertToClaude = useCallback(async () => {
@@ -265,7 +270,9 @@ export function LocalModelsTab() {
 							value={pullName}
 							onChange={(e) => setPullName(e.target.value)}
 							onKeyDown={(e) => {
-								if (e.key === "Enter") {
+								// IN-02: mirror the Pull button's guard so rapid Enter
+								// presses can't fire concurrent pulls / poll loops.
+								if (e.key === "Enter" && pullName.trim() && pullTarget === null) {
 									void doPull(false);
 								}
 							}}
