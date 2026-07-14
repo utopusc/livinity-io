@@ -251,6 +251,11 @@ import {ProviderKeyStore} from './modules/provider/key-store.js'
 import {EnvFileWriter} from './modules/provider/env-file-writer.js'
 import {createRestartHook} from './modules/provider/restart-hook.js'
 import {createProviderConfigRouter} from './modules/server/trpc/provider-config-router.js'
+// Phase 316-04 (LLM-01) — loopback Ollama model-management client + router.
+// Independent of Redis (talks to 127.0.0.1:11434 + reads system headroom), so
+// it is wired unconditionally. Zero provider.config coupling (316-01 RULE 1).
+import {OllamaClient} from './modules/provider/ollama-models.js'
+import {createOllamaModelsRouter} from './modules/server/trpc/ollama-models-router.js'
 // Phase 231 retirement — Phase 206 createOpenclawCliRouter import removed
 // (CLI-wrapped provider+model config). Provider config now lives under
 // `provider.config.*` (Phase 204-01) only.
@@ -2281,6 +2286,20 @@ export default class Livinityd {
 				{sessionManager: this.server.ptySessionManager},
 			)
 
+			// Phase 316-04 (LLM-01) — provider.ollamaModels.* router. No Redis
+			// dependency: the client hits the loopback Ollama daemon and reads
+			// system RAM/disk headroom. modelsDir is the livinityd data dir (the
+			// filesystem app-data lands on) for the disk guardrail probe.
+			const ollamaModelsLogger = {
+				info: (msg: string) => webappLogger.info(msg),
+				warn: (msg: string, err?: unknown) => this.logger.error(msg, err),
+			}
+			const ollamaModelsRouterProductionInstance = createOllamaModelsRouter({
+				client: new OllamaClient({logger: ollamaModelsLogger}),
+				modelsDir: this.dataDirectory,
+				logger: ollamaModelsLogger,
+			})
+
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
 				xaiAuth: xaiAuthRouterProductionInstance,
@@ -2292,6 +2311,8 @@ export default class Livinityd {
 				// Phase 231 retirement — openclawosApps / openclawosGateway /
 				// openclawCli opts removed; factory blocks gone above.
 				providerConfig: providerConfigRouterProductionInstance,
+				// Phase 316-04 (LLM-01) — provider.ollamaModels.* wired here.
+				ollamaModels: ollamaModelsRouterProductionInstance,
 				skills: skillsRouterProductionInstance,
 				skillsMarket: skillsMarketRouterProductionInstance,
 				config: configRouterProductionInstance,

@@ -506,6 +506,14 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     icon: 'https://ollama.com/public/ollama.png',
     docker: {
       image: 'ollama/ollama:latest',
+      // Phase 316-04 (LLM-01) — cap concurrent resident models at 1 (RAM/VRAM
+      // guard, T-316-12). This is a FIXED default (dual-declared like Open
+      // WebUI's OLLAMA_BASE_URL), NOT a user-facing installOptions override.
+      // For boxes with Ollama already installed pre-316 it lands on the next
+      // app update()/restart.
+      environment: {
+        OLLAMA_MAX_LOADED_MODELS: '1',
+      },
       volumes: ['/root/.ollama'],
     },
     installOptions: {subdomain: 'ollama'},
@@ -515,6 +523,10 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
         server: {
           image: 'ollama/ollama:latest',
           restart: 'unless-stopped',
+          // Phase 316-04 (LLM-01) — fixed concurrent-model cap (see docker def).
+          environment: {
+            OLLAMA_MAX_LOADED_MODELS: '1',
+          },
           volumes: ['${APP_DATA_DIR}/models:/root/.ollama'],
           ports: ['127.0.0.1:11434:11434'],
           healthcheck: {

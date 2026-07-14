@@ -198,6 +198,17 @@ import {
 	createProviderConfigRouter,
 	providerConfigRouter,
 } from './provider-config-router.js'
+// Phase 316-04 (LLM-01) — `provider.ollamaModels.*` namespace. Factory-DI:
+// production boot supplies `createOllamaModelsRouter({client, modelsDir,
+// logger})`; the default export is an empty-injection stub throwing
+// PRECONDITION_FAILED + OLLAMA_MODELS_UNAVAILABLE until boot wires the
+// loopback Ollama client. Mounted under the existing `provider` namespace so
+// the path is `provider.ollamaModels.*`. Touches ZERO provider.config surface
+// (316-01 RULE 1).
+import {
+	createOllamaModelsRouter,
+	ollamaModelsRouter,
+} from './ollama-models-router.js'
 // Phase 231 retirement — Phase 206 chat-surface tRPC import removed
 // (legacy CLI-wrapped provider+model config). Provider config now lives
 // under `provider.config.*` (Phase 204-01) only.
@@ -288,6 +299,10 @@ export function createAppRouter(opts: {
 	// INV-204-08 satisfied (no other routing surface mutations beyond the 3
 	// httpOnlyPaths additions).
 	providerConfig?: ReturnType<typeof createProviderConfigRouter>
+	// Phase 316-04 (LLM-01) — `provider.ollamaModels.*` slot. Default
+	// empty-injection stub throws PRECONDITION_FAILED until production boot
+	// wires the loopback Ollama client.
+	ollamaModels?: ReturnType<typeof createOllamaModelsRouter>
 	// Phase 219 T6 — `skills.*` namespace slot. Default empty-injection stub
 	// throws PRECONDITION_FAILED until production boot wires the real router
 	// built against a SkillsLoader instance.
@@ -432,6 +447,10 @@ export function createAppRouter(opts: {
 		// logger})` build.
 		provider: router({
 			config: opts.providerConfig ?? providerConfigRouter,
+			// Phase 316-04 (LLM-01) — local Ollama model management. Path:
+			// provider.ollamaModels.{list,pull,pullStatus,delete}. Zero
+			// provider.config coupling (316-01 RULE 1).
+			ollamaModels: opts.ollamaModels ?? ollamaModelsRouter,
 		}),
 		// Phase 219 T6+T7 — `skills.*` namespace combines:
 		//   - skills.{list,get,delete} (T6, per-agent CRUD over SkillsLoader)
