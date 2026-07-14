@@ -520,6 +520,19 @@ export default router({
 						'Linux NVIDIA driver install is refused on WSL2 — the Windows driver provides GPU passthrough; install the container toolkit instead.',
 				}
 			}
+			// WR-01: mirror the install-driver refusal for install-amd-rocm. The
+			// wrapper's own comment states the caller "must never invoke this on WSL2
+			// (no /dev/kfd there)" but trusts the closed enum and does NOT itself probe
+			// WSL2 — so enforce the invariant HERE as defense-in-depth (the UI already
+			// only renders the AMD button for vendor:'amd' && !wsl2), regardless of what
+			// the UI sent. WSL2 exposes /dev/dxg, not the ROCm compute node /dev/kfd.
+			if (input.action === 'install-amd-rocm' && (await isWsl2())) {
+				return {
+					ok: false as const,
+					reason:
+						'AMD ROCm bare-metal setup is refused on WSL2 — WSL2 has no /dev/kfd compute node; use a bare-metal Linux install for AMD acceleration.',
+				}
+			}
 			return runGpuInstall(input.action)
 		}),
 	// ── Phase 306 R2 — desktop-user OS/sudo password (Settings → Account) ───────
