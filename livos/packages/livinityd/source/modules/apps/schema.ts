@@ -125,6 +125,8 @@ export const AppManifestSchema = z.object({
 			// permission/override-driven), so a gpuCapable app is still default-OFF
 			// until the user opts in (Pitfall 3).
 			gpuCapable: z.boolean().optional(),
+			// 322 IDENT-02 (D-322-6) — marks an OIDC-native app that SHOWS the "Enable SSO" toggle in app settings. VISIBILITY ONLY — never auto-enables SSO; an explicit admin toggle (setOidcEnabled) is required.
+			oidcNative: z.boolean().optional(),
 			environmentOverrides: z
 				.array(
 					z.object({
@@ -195,6 +197,17 @@ export const AppSettingsSchema = z.object({
 	// (UNVERIFIED/community apps only). Persisted at install so uninstall can
 	// independently revoke it. Absent for verified/OAuth-path apps.
 	meteredKeyId: z.string().optional(),
+	// 322-05 IDENT-02 (D-322-6): per-app "Enable SSO" toggle. undefined = never
+	// enabled (default OFF — unlike gpuAccess there is NO manifest-permission
+	// fallback). Only set true by the admin-gated setOidcEnabled route; drives the
+	// Vaultwarden SSO env-inject in patchComposeFile + the static-clients rebuild.
+	oidcEnabled: z.boolean().optional(),
+	// 322-05 IDENT-02 (Pitfall 7): Immich's admin API key, DEK-encrypted at rest
+	// (base64(iv‖tag‖ct) via secrets/dek.ts). WRITE-ONLY from the outside — set by
+	// the admin-gated setImmichApiKey route, decrypted only inside getImmichApiKey
+	// at 322-06 provisioning time; never logged, never returned. apps.list exposes
+	// ONLY the boolean immichApiKeySet (store-presence), never this ciphertext.
+	immichApiKeyEnc: z.string().optional(),
 })
 
 export type AppSettings = z.infer<typeof AppSettingsSchema>

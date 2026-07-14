@@ -70,6 +70,10 @@ export interface BuiltinAppManifest {
     // VISIBILITY ONLY — never read by resolveWantsGpu (Pitfall 3). Mirrors the
     // zod AppManifestSchema.installOptions.gpuCapable field in schema.ts.
     gpuCapable?: boolean
+    // 322 IDENT-02 (D-322-6) — marks an OIDC-native app that SHOWS the "Enable SSO"
+    // toggle in app settings. VISIBILITY ONLY — never auto-enables SSO. Mirrors the
+    // zod AppManifestSchema.installOptions.oidcNative field in schema.ts.
+    oidcNative?: boolean
     environmentOverrides?: Array<{
       name: string
       label: string
@@ -271,6 +275,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     },
     installOptions: {
       subdomain: 'cloud',
+      oidcNative: true,
       environmentOverrides: [
         { name: 'NEXTCLOUD_ADMIN_USER', label: 'Admin Username', type: 'string', default: 'admin', required: true },
         { name: 'NEXTCLOUD_ADMIN_PASSWORD', label: 'Admin Password', type: 'password', required: true },
@@ -389,7 +394,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       environment: { USER_UID: '1000', USER_GID: '1000' },
       volumes: ['/data'],
     },
-    installOptions: { subdomain: 'git' },
+    installOptions: { subdomain: 'git', oidcNative: true },
     compose: {
       mainService: 'server',
       services: {
@@ -613,7 +618,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       image: 'vaultwarden/server:latest',
       volumes: ['/data'],
     },
-    installOptions: {subdomain: 'vault'},
+    installOptions: {subdomain: 'vault', oidcNative: true},
     compose: {
       mainService: 'server',
       services: {
@@ -648,7 +653,7 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
       image: 'ghcr.io/imagegenius/immich:latest',
       volumes: ['/config', '/photos'],
     },
-    installOptions: {subdomain: 'photos'},
+    installOptions: {subdomain: 'photos', oidcNative: true},
     compose: {
       mainService: 'server',
       services: {

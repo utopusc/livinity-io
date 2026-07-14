@@ -102,13 +102,30 @@ export const apps = router({
 							// app-settings-dialog can render the GPU toggle ONLY for apps that request
 							// the GPU. `permissions` is the untyped z.array(z.string()) manifest field.
 							permissions,
+							// 322-05 (IDENT-02 UI): the manifest visibility flag so app-settings-dialog
+							// (322-07) renders the "Enable SSO" toggle ONLY for the 4 oidcNative apps.
+							installOptions,
 						},
 						selectedDependencies,
 						// 316-06 (GPU-02 UI): the raw per-app override (boolean | undefined) so the
 						// toggle reflects the real persisted state — `undefined` (no override) falls
 						// back to the manifest default client-side, matching patchComposeFile's server logic.
 						gpuAccess,
-					] = await Promise.all([app.readManifest(), app.getSelectedDependencies(), app.getGpuAccess()])
+						// 322-05 (IDENT-02 UI): the raw per-app "Enable SSO" override (boolean |
+						// undefined). Read via the typed store directly (the getOidcEnabled accessor
+						// lands in the app.ts task); default OFF, NO manifest fallback (unlike GPU).
+						oidcEnabled,
+						// 322-05 (IDENT-02, Pitfall 7): PRESENCE of the DEK-encrypted Immich admin key.
+						// The ciphertext itself NEVER leaves the server — only the boolean immichApiKeySet
+						// below is surfaced (computed from `!= null`), never decrypting the blob.
+						immichApiKeyEnc,
+					] = await Promise.all([
+						app.readManifest(),
+						app.getSelectedDependencies(),
+						app.getGpuAccess(),
+						app.store.get('oidcEnabled'),
+						app.store.get('immichApiKeyEnc'),
+					])
 
 					if (deterministicPassword) {
 						defaultPassword = await app.deriveDeterministicPassword()
@@ -161,6 +178,14 @@ export const apps = router({
 						// 316-06 (GPU-02 UI) — see destructure above.
 						permissions,
 						gpuAccess,
+						// 322-05 (IDENT-02 UI) — see destructure above. oidcNative is the
+						// visibility flag (default false so non-oidcNative docker apps hide the
+						// toggle); oidcEnabled is the persisted per-app override (default OFF).
+						oidcNative: installOptions?.oidcNative ?? false,
+						oidcEnabled,
+						// 322-05 (Pitfall 7): true ONLY for Immich when the admin key is stored.
+						// Store-presence check — never decrypts, never returns the key.
+						immichApiKeySet: app.id === 'immich' && immichApiKeyEnc != null,
 					}
 				} catch (error) {
 					ctx.apps.logger.error(`Failed to read manifest for app ${app.id}`, error)
@@ -192,6 +217,11 @@ export const apps = router({
 					// keep the union shape uniform so `app.permissions`/`app.gpuAccess` stay typed.
 					permissions: undefined,
 					gpuAccess: undefined,
+					// 322-05 (IDENT-02 UI): native builtins are never OIDC-native — keep the
+					// union shape uniform (mirrors the gpuAccess:undefined native branch).
+					oidcNative: false,
+					oidcEnabled: undefined,
+					immichApiKeySet: undefined,
 				})
 			}
 		}
