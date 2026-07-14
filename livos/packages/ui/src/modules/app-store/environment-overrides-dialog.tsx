@@ -57,8 +57,13 @@ export function EnvironmentOverridesDialog({
 	// Default OFF — GPU access is opt-in (GPU-05 D-2).
 	const [gpuOn, setGpuOn] = useState(false)
 
-	// Only show the toggle when the app is gpu-capable AND a real GPU is present.
-	const showGpuToggle = gpuCapable === true && !!gpuVendor && gpuVendor !== 'none'
+	// WR-02: only show the toggle for vendors patchComposeFile actually acts on —
+	// NVIDIA and (bare-metal) AMD. Previously `!== 'none'` let vendor:'unknown'
+	// (the WSL2-paravirtualized-but-undeterminable case) render a dead-end toggle:
+	// there is no 'unknown' compose branch and WSL2 lacks /dev/dri for compute, so
+	// turning it on silently did nothing. AMD-on-WSL2 still passes this gate and is
+	// disabled with a note below (amdWsl2Blocked).
+	const showGpuToggle = gpuCapable === true && (gpuVendor === 'nvidia' || gpuVendor === 'amd')
 	// AMD-on-WSL2: ROCm passthrough is unavailable in WSL2 (no /dev/kfd) — render
 	// the toggle DISABLED with an explanatory note (FLAG 2, never wire it up).
 	const amdWsl2Blocked = gpuVendor === 'amd' && gpuWsl2 === true
