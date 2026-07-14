@@ -2346,15 +2346,19 @@ export default class Livinityd {
 
 			// Phase 316-04 (LLM-01) — provider.ollamaModels.* router. No Redis
 			// dependency: the client hits the loopback Ollama daemon and reads
-			// system RAM/disk headroom. modelsDir is the livinityd data dir (the
-			// filesystem app-data lands on) for the disk guardrail probe.
+			// system RAM/disk headroom. WR-04: modelsDir MUST point at the ollama
+			// app's actual models bind-mount (`${APP_DATA_DIR}/models` where
+			// APP_DATA_DIR = `${dataDirectory}/app-data/ollama`, per builtin-apps.ts
+			// + app.ts) — NOT the livinityd data-dir root — so the disk-headroom probe
+			// `df`s the SAME filesystem the pull actually lands on (e.g. when the
+			// ollama app-data is mounted on external storage).
 			const ollamaModelsLogger = {
 				info: (msg: string) => webappLogger.info(msg),
 				warn: (msg: string, err?: unknown) => this.logger.error(msg, err),
 			}
 			const ollamaModelsRouterProductionInstance = createOllamaModelsRouter({
 				client: new OllamaClient({logger: ollamaModelsLogger}),
-				modelsDir: this.dataDirectory,
+				modelsDir: `${this.dataDirectory}/app-data/ollama/models`,
 				logger: ollamaModelsLogger,
 				// Phase 316-05 (LLM-02) — explicit active-model selection + revert.
 				// Undefined when Redis/provider-config were unavailable at boot →
