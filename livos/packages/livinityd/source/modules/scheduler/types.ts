@@ -13,6 +13,8 @@ export type JobType =
 	| 'disk-critical-watch' // Phase 310 ALERT-02 — server-side low-disk detection → external alert
 	| 'smart-health-scan' // Phase 313 SMART-02 — daily per-drive SMART scan → external alert
 	| 'smart-self-test-short' // Phase 313 SMART-02 — weekly short self-test (DoS-guarded)
+	| 'resource-metrics-collect' // Phase 320 MON-01 — 1-min system-total metrics write (currentLoad, not per-app docker top)
+	| 'resource-metrics-rollup' // Phase 320 MON-01 — hourly rollup aggregate + retention prune
 
 export type JobRunStatus = 'success' | 'failure' | 'skipped' | 'running'
 
