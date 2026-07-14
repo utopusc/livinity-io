@@ -18,6 +18,7 @@ import {insertSmartAlert, findRecentSmartAlert} from '../monitoring/smart-alerts
 import {getDiskIO, getNetworkStats} from '../monitoring/monitoring.js'
 import {insertResourceSample, aggregateRollups, pruneOldRows} from '../monitoring/history.js'
 import {volumeBackupHandler} from './backup.js'
+import {securityAdvisorScanHandler} from '../security-advisor/scheduler-job.js'
 import type {BuiltInJobHandler, JobType} from './types.js'
 
 // =========================================================================
@@ -500,6 +501,7 @@ export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'smart-self-test-short': smartSelfTestShortHandler,
 	'resource-metrics-collect': resourceMetricsCollectHandler,
 	'resource-metrics-rollup': resourceMetricsRollupHandler,
+	'security-advisor-scan': securityAdvisorScanHandler,
 }
 
 // =========================================================================
@@ -542,4 +544,11 @@ export const DEFAULT_JOB_DEFINITIONS: Array<{
 	{name: 'resource-metrics-collect', schedule: '* * * * *', type: 'resource-metrics-collect', enabled: true},
 	// rollup+retention runs at :05 so it always sees a full prior hour of raw data.
 	{name: 'resource-metrics-rollup', schedule: '5 * * * *', type: 'resource-metrics-rollup', enabled: true},
+	// Phase 328 SEC-02 — weekly Trivy + weak-config scan. enabled=true: Trivy
+	// scans are cached 7 days (force:false) so repeat scans of unchanged images
+	// are near-free, and a CVE-laden image must surface even with no Settings tab
+	// open. Scheduled off-peak Sunday 4am — one hour after image-prune (0 3 * * 0)
+	// so the two weekly maintenance jobs don't overlap — and bounded to
+	// MAX_IMAGES_PER_RUN per tick to keep the cost predictable on a small box.
+	{name: 'security-advisor-scan', schedule: '0 4 * * 0', type: 'security-advisor-scan', enabled: true},
 ]

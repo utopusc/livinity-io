@@ -15,6 +15,7 @@ export type JobType =
 	| 'smart-self-test-short' // Phase 313 SMART-02 — weekly short self-test (DoS-guarded)
 	| 'resource-metrics-collect' // Phase 320 MON-01 — 1-min system-total metrics write (currentLoad, not per-app docker top)
 	| 'resource-metrics-rollup' // Phase 320 MON-01 — hourly rollup aggregate + retention prune
+	| 'security-advisor-scan' // Phase 328 SEC-02 — weekly Trivy + weak-config scan
 
 export type JobRunStatus = 'success' | 'failure' | 'skipped' | 'running'
 
