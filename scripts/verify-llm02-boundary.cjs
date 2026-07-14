@@ -12,8 +12,9 @@
  * Unlike verify-sacred-sha.cjs (which SHA-compares ONE locked file), this
  * script scans the phase changeset's PATHS + file bodies:
  *
- *   git diff --name-only <base>...HEAD   (the committed phase changeset)
- *   git diff --name-only <base>          (staged + unstaged, mid-phase)
+ *   git diff --name-only <base>...HEAD              (committed phase changeset)
+ *   git diff --name-only <base>                     (staged + unstaged, mid-phase)
+ *   git ls-files --others --exclude-standard        (untracked-but-present, WR-05)
  *
  * FAILS (exit 1, pointed message naming the offending file) when the diff:
  *   1. touches any path under `liv/packages/core/` (the whole liv-core pkg —
@@ -29,9 +30,11 @@
  * PASSES (exit 0) otherwise — "broker boundary held".
  *
  * Usage:
- *   node scripts/verify-llm02-boundary.cjs --base <ref>
- *   node scripts/verify-llm02-boundary.cjs              (base = env
- *        LLM02_BASE_REF, else merge-base with origin/master, else HEAD no-op)
+ *   node scripts/verify-llm02-boundary.cjs --base <ref>   (RECOMMENDED — always
+ *        pass an explicit base; the phase base is 97d3be2f)
+ *   node scripts/verify-llm02-boundary.cjs                (base = env
+ *        LLM02_BASE_REF, else merge-base with origin/master; WR-06: if NEITHER
+ *        resolves, EXIT 2 — fail closed, never a same-ref empty-diff false PASS)
  *   node scripts/verify-llm02-boundary.cjs --selftest   (negative self-test —
  *        runs the classifier against a synthetic violating changeset; MUST
  *        exit 1; proves the gate actually detects a breach)
@@ -114,22 +117,46 @@ function git(argsArray) {
 	return execFileSync('git', argsArray, {cwd: repoRoot, encoding: 'utf8'})
 }
 
-/** Resolve the base ref: --base > env > merge-base(origin/master,HEAD) > HEAD. */
+/**
+ * Resolve the base ref: --base > env LLM02_BASE_REF > merge-base(origin/master,HEAD).
+ *
+ * WR-06 — FAIL CLOSED. A security boundary gate must never degrade to "scan
+ * nothing and report success". If no explicit --base / env ref is given AND the
+ * origin/master merge-base cannot be resolved (no origin remote, shallow clone,
+ * offline CI), we EXIT 2 (setup error) rather than silently falling back to
+ * `HEAD` (which diffs HEAD...HEAD == empty and reports a bogus PASS). CI must
+ * treat exit 2 as a failure. Documented invocations always pass `--base <ref>`.
+ */
 function resolveBase(explicit) {
 	if (explicit) return explicit
 	if (process.env.LLM02_BASE_REF) return process.env.LLM02_BASE_REF
 	try {
-		return git(['merge-base', 'origin/master', 'HEAD']).trim()
+		const base = git(['merge-base', 'origin/master', 'HEAD']).trim()
+		if (!base) throw new Error('empty merge-base')
+		return base
 	} catch {
 		process.stderr.write(
-			'[verify-llm02-boundary] NOTE: could not resolve merge-base with origin/master; ' +
-				'falling back to HEAD (empty changeset — pass a --base <ref> for a real scan).\n',
+			'[verify-llm02-boundary] FAIL(setup): could not resolve a base ref — no --base flag, ' +
+				'no LLM02_BASE_REF env, and no origin/master merge-base (no origin remote / shallow ' +
+				'clone / offline). Pass an explicit --base <ref> (e.g. --base 97d3be2f). Refusing to ' +
+				'scan an empty changeset and report a false PASS.\n',
 		)
-		return 'HEAD'
+		process.exit(2)
 	}
 }
 
-/** Union of committed (base...HEAD) + working-tree (base) changed paths. */
+/**
+ * Union of committed (base...HEAD) + working-tree (base) + UNTRACKED changed
+ * paths.
+ *
+ * WR-05 — neither `git diff --name-only base...HEAD` (committed) nor
+ * `git diff --name-only base` (staged + unstaged) surfaces a file that exists on
+ * disk but was never `git add`ed. A brand-new untracked
+ * `modules/provider/rogue.ts` importing agent-runtime would be INVISIBLE to a
+ * mid-phase scan, contradicting the "staged + unstaged" claim. Add
+ * `git ls-files --others --exclude-standard` so present-but-untracked files are
+ * scanned too, making the gate a trustworthy pre-commit check.
+ */
 function changedFiles(base) {
 	const set = new Set()
 	for (const spec of [`${base}...HEAD`, base]) {
@@ -143,6 +170,17 @@ function changedFiles(base) {
 			// A range against HEAD (base===HEAD) or an unknown ref throws; the
 			// other spec still contributes. An empty union → clean pass.
 		}
+	}
+	// Untracked-but-present files (respecting .gitignore) — WR-05.
+	try {
+		const untracked = git(['ls-files', '--others', '--exclude-standard'])
+		untracked
+			.split('\n')
+			.map((s) => s.trim())
+			.filter(Boolean)
+			.forEach((f) => set.add(f))
+	} catch {
+		// Non-fatal: if ls-files fails, the diff legs still contribute.
 	}
 	return [...set]
 }
