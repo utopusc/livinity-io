@@ -548,6 +548,47 @@ export const apps = router({
 	// 316-02 (GPU-02): ids of apps already claiming the GPU, for the exclusivity warning.
 	listAppsWithGpuAccess: privateProcedure.query(async ({ctx}) => ctx.apps!.listAppsWithGpuAccess()),
 
+	// 322-05 (IDENT-02, D-322-8, T-322-12): toggle a single app's "Enable SSO"
+	// override. adminProcedure — OIDC client registration is a HOST-WIDE identity
+	// surface (same admin-only class as the sibling setGpuAccess). Also server-gated
+	// on a configured domain: with no stable HTTPS issuer there is no valid client to
+	// register, so a no-domain box fails CLOSED (PRECONDITION_FAILED) rather than
+	// registering a broken client. On EVERY toggle (Vaultwarden AND the CLI/REST apps)
+	// it re-resolves the enabled-apps set and rebuilds the in-process OIDC provider so
+	// the static clients array always reflects the current enabled set — a cheap
+	// Provider re-instantiation, NO container restart for the CLI/REST apps.
+	setOidcEnabled: adminProcedure
+		.input(
+			z.object({
+				appId: z.string(),
+				enabled: z.boolean(),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			const mainDomain = await ctx.server!.getActiveMainDomain()
+			if (!mainDomain) {
+				throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'OIDC SSO requires a configured domain'})
+			}
+			const ok = await ctx.apps!.setOidcEnabled(input.appId, input.enabled)
+			const {getOidcService} = await import('../oidc/index.js')
+			await getOidcService()?.rebuild(await ctx.apps!.listOidcEnabledApps())
+			return ok
+		}),
+
+	// 322-05 (IDENT-02, Pitfall 7, T-322-21): store Immich's admin API key
+	// DEK-encrypted. adminProcedure — a privileged app credential. WRITE-ONLY: the
+	// route NEVER logs or echoes the key back; the only read surface is the boolean
+	// immichApiKeySet in apps.list. 322-06's REST provisioning consumes it server-side
+	// via getImmichApiKey().
+	setImmichApiKey: adminProcedure
+		.input(
+			z.object({
+				appId: z.literal('immich'),
+				apiKey: z.string().trim().min(1).max(512),
+			}),
+		)
+		.mutation(async ({ctx, input}) => ({success: await ctx.apps!.setImmichApiKey(input.appId, input.apiKey)})),
+
 	hideCredentialsBeforeOpen: privateProcedure
 		.input(
 			z.object({

@@ -12,6 +12,7 @@ import randomToken from '../../modules/utilities/random-token.js'
 import type Livinityd from '../../index.js'
 import appEnvironment from './legacy-compat/app-environment.js'
 import App, {readManifestInDirectory, resolveWantsGpu} from './app.js'
+import type {OidcEnabledApp} from '../oidc/clients.js'
 import {reconcileAppVolumeOwnership} from './reconcile-volume-ownership.js'
 import {classifyInspect} from './health-poll.js'
 import type {AppManifest, AppSettings} from './schema.js'
@@ -1385,6 +1386,80 @@ export default class Apps {
 			}),
 		)
 		return allGpuAccess.filter(({wantsGpu}) => wantsGpu).map(({id}) => id)
+	}
+
+	// 322-05 (IDENT-02): thin passthrough to the app instance's "Enable SSO" toggle
+	// (mirrors setGpuAccess). The admin/domain gate + provider rebuild live in the
+	// setOidcEnabled route; this only persists the per-app override.
+	async setOidcEnabled(appId: string, enabled: boolean) {
+		const app = this.getApp(appId)
+		return app.setOidcEnabled(enabled)
+	}
+
+	// 322-05 (IDENT-02, Pitfall 7): thin passthrough to the app instance's write-only
+	// DEK-encrypted Immich admin-key store (the route already restricts appId to 'immich').
+	async setImmichApiKey(appId: string, apiKey: string) {
+		const app = this.getApp(appId)
+		return app.setImmichApiKey(apiKey)
+	}
+
+	// 322-05 (IDENT-02, D-322-8): resolve the currently SSO-enabled apps into the
+	// OidcEnabledApp[] the in-process provider rebuilds its static clients from. Only
+	// apps that are BOTH oidcNative (manifest) AND toggled on (getOidcEnabled) qualify.
+	// Returns [] on a no-domain box — no stable issuer, so no clients to register.
+	async listOidcEnabledApps(): Promise<OidcEnabledApp[]> {
+		const domainConfig = await this.getDomainConfig()
+		const mainDomain = domainConfig?.active ? domainConfig.domain : null
+		if (!mainDomain) return []
+
+		const subdomains = await this.getAllSubdomains()
+		const subByAppId = new Map(subdomains.map((s) => [s.appId, s]))
+
+		const results: OidcEnabledApp[] = []
+		for (const app of this.instances) {
+			try {
+				const [manifest, enabled] = await Promise.all([
+					app.readManifest().catch(() => undefined),
+					app.getOidcEnabled().catch(() => undefined),
+				])
+				if (!manifest?.installOptions?.oidcNative) continue
+				if (enabled !== true) continue
+
+				// Resolve the app's public host: prefer the canonical FQDN minted by
+				// Server5 (Phase 140 hyphen-pattern) when present, else compute
+				// {subdomain}.{mainDomain} — operator-renamed-subdomain-safe.
+				const sub = subByAppId.get(app.id)
+				const subdomain = sub?.subdomain || manifest.installOptions?.subdomain || app.id
+				const host = sub?.host || `${subdomain}.${mainDomain}`
+
+				const redirectUris = this.buildOidcRedirectUris(app.id, host)
+				if (redirectUris.length === 0) continue
+				results.push({appId: app.id, redirectUris})
+			} catch (error) {
+				this.logger.error(`[oidc] failed to resolve enabled app ${app.id}`, error)
+			}
+		}
+		return results
+	}
+
+	// 322-05 (IDENT-02, T-322-17): FIXED per-app redirect-URI templates. Only the
+	// resolved host is interpolated — the PATH is an immutable literal per app id, so
+	// no manifest/user free string can reach the URI (open-redirect / URI-injection
+	// surface). panva re-validates exact-match at auth time.
+	private buildOidcRedirectUris(appId: string, host: string): string[] {
+		const base = `https://${host}`
+		switch (appId) {
+			case 'nextcloud':
+				return [`${base}/apps/user_oidc/code`]
+			case 'vaultwarden':
+				return [`${base}/identity/connect/oidc-signin`]
+			case 'gitea':
+				return [`${base}/user/oauth2/livos/callback`]
+			case 'immich':
+				return [`${base}/auth/login`, `${base}/user-settings`, `${base}/api/oauth/mobile-redirect`]
+			default:
+				return []
+		}
 	}
 
 	async setHideCredentialsBeforeOpen(appId: string, value: boolean) {
