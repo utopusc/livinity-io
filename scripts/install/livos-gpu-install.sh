@@ -14,8 +14,9 @@
 # apt-get/nvidia-ctk would let any process that can call `sudo` inject arbitrary
 # flags/packages. Instead the sudoers grant is on THIS ONE binary path (no glob,
 # no argument wildcard) and the wrapper accepts ONLY a fixed action enum
-# {detect|install-driver|install-toolkit} — it builds every command line ITSELF,
-# so no caller-supplied flag or package name can ever reach apt/nvidia-ctk.
+# {detect|install-driver|install-toolkit|install-toolkit-wsl|install-amd-rocm} —
+# it builds every command line ITSELF, so no caller-supplied flag or package
+# name can ever reach apt/usermod/nvidia-ctk.
 # To change a permitted operation, EDIT THIS WRAPPER — do NOT broaden the grant.
 #
 # The tRPC route (system.installNvidiaGpu, adminProcedure) additionally constrains
@@ -23,7 +24,7 @@
 # defense-in-depth on top of this wrapper's own enum.
 #
 # Args (the enum is the ONLY input; anything else -> exit 2, nothing privileged runs):
-#   $1  action — detect | install-driver | install-toolkit
+#   $1  action — detect | install-driver | install-toolkit | install-toolkit-wsl | install-amd-rocm
 #
 # Exit codes: 2 = bad usage / unknown action. Otherwise the underlying command's status.
 
@@ -101,8 +102,48 @@ case "$ACTION" in
 		exit 0
 		;;
 
+	install-toolkit-wsl)
+		# NVIDIA WSL2 — toolkit ONLY. Windows provides the display driver; installing
+		# the Linux NVIDIA driver here would overwrite the /usr/lib/wsl/lib stubs and
+		# break /dev/dxg passthrough (D-4). Byte-identical privileged steps to
+		# install-toolkit (the WSL-vs-bare distinction is which action the UI picks,
+		# not different commands); the distinct name is auditable and lets the tRPC
+		# layer refuse install-driver on WSL2. Deliberately never touches the driver.
+		export DEBIAN_FRONTEND=noninteractive
+		mkdir -p /etc/apt/keyrings
+		curl -fsSL "$TOOLKIT_GPGKEY" | gpg --dearmor --no-tty --batch --yes -o "$KEYRING"
+		chmod 0644 "$KEYRING"
+		curl -fsSL "$TOOLKIT_REPO_LIST" \
+			| sed "s#deb https://#deb [signed-by=${KEYRING}] https://#g" \
+			> "$SOURCES_LIST"
+		apt-get update -qq
+		apt-get install -y -qq nvidia-container-toolkit
+		nvidia-ctk runtime configure --runtime=docker
+		systemctl restart docker
+		nvidia-ctk --version || true
+		echo "[livos-gpu-install] nvidia-container-toolkit installed + docker runtime configured (WSL2 — toolkit only, no Linux driver)"
+		exit 0
+		;;
+
+	install-amd-rocm)
+		# Bare-metal AMD only. Host needs the in-kernel amdgpu driver (default on
+		# modern Ubuntu) + /dev/kfd,/dev/dri + render/video group membership;
+		# ollama/ollama:rocm bundles the ROCm userspace runtime. The caller
+		# (routes.ts) must never invoke this on WSL2 (no /dev/kfd there); this
+		# wrapper trusts the closed enum and does not itself probe WSL2. The group
+		# list is a FIXED literal (render,video) and the user is RESOLVED via
+		# logname/SUDO_USER — never caller-supplied, never a hardcoded username.
+		export DEBIAN_FRONTEND=noninteractive
+		_GPU_USER="$(logname 2>/dev/null || echo "${SUDO_USER:-}")"
+		if [[ -n "$_GPU_USER" ]]; then
+			usermod -aG render,video "$_GPU_USER" || true
+		fi
+		echo "[livos-gpu-install] AMD render/video group access granted for '${_GPU_USER:-<none>}' — /dev/kfd + /dev/dri passthrough ready (bare-metal)"
+		exit 0
+		;;
+
 	*)
-		echo "[livos-gpu-install] invalid action: '${ACTION}' — expected one of: detect, install-driver, install-toolkit" >&2
+		echo "[livos-gpu-install] invalid action: '${ACTION}' — expected one of: detect, install-driver, install-toolkit, install-toolkit-wsl, install-amd-rocm" >&2
 		exit 2
 		;;
 esac
