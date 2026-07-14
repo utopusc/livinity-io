@@ -3044,42 +3044,31 @@ _dld_template_app_units() {
         info "sudoers.d/livos-gpu source not found — skipping (guided GPU install unavailable)"
     fi
 
-    # 2c-gpu. Phase 316 (GPU-01) — NVIDIA container-toolkit apt repo, GATED behind an
+    # 2c-gpu. Phase 316 (GPU-01) — NVIDIA container-toolkit, GATED behind an
     # `lspci` NVIDIA-GPU probe so NON-NVIDIA boxes (the overwhelming majority) see
-    # ZERO install change. On an NVIDIA box we pre-stage the official signed-by apt
-    # repo + install the container-toolkit (dearmor convention cloned from the
-    # NodeSource block ~130-140) so GPU apps can reserve the device out of the box;
-    # the proprietary DRIVER (ubuntu-drivers, reboot-requiring) stays a guided,
-    # admin-triggered UI action via the wrapper's `install-driver`. warn-not-fail:
-    # a transient NVIDIA-repo/apt error must NEVER brick a deploy (same discipline as
-    # the smartmontools + kopia blocks — the guided UI install can retry).
+    # ZERO install change. On an NVIDIA box we shell out to the SAME root-owned
+    # wrapper installed in 2a-gpu ($_gpuwrap_dst install-toolkit) instead of
+    # re-implementing the gpg/apt-repo/nvidia-ctk sequence inline (IN-05) — one
+    # maintenance surface shared with the guided in-UI install, so the two paths
+    # can never silently diverge. The proprietary DRIVER (ubuntu-drivers,
+    # reboot-requiring) stays a guided, admin-triggered UI action via the wrapper's
+    # `install-driver`. warn-not-fail: a transient NVIDIA-repo/apt error must NEVER
+    # brick a deploy (same discipline as the smartmontools + kopia blocks — the
+    # guided UI install can retry). We are already root here, so the wrapper runs
+    # directly (no sudo); the `if` context keeps a non-zero wrapper exit non-fatal.
     if command -v lspci >/dev/null 2>&1 && lspci -nnk 2>/dev/null | grep -qi 'nvidia'; then
         if command -v nvidia-ctk >/dev/null 2>&1 \
                 && docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -qi 'nvidia'; then
             info "NVIDIA container-toolkit already configured — skipping apt work"
-        else
-            info "NVIDIA GPU detected — installing nvidia-container-toolkit (official signed-by apt repo)"
-            mkdir -p /etc/apt/keyrings
-            if curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
-                    | gpg --dearmor --no-tty --batch --yes -o /etc/apt/keyrings/nvidia-container-toolkit-keyring.gpg; then
-                chmod 0644 /etc/apt/keyrings/nvidia-container-toolkit-keyring.gpg
-                curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
-                    | sed 's#deb https://#deb [signed-by=/etc/apt/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
-                    > /etc/apt/sources.list.d/nvidia-container-toolkit.list
-                if apt-get update -qq \
-                        && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nvidia-container-toolkit; then
-                    nvidia-ctk runtime configure --runtime=docker && systemctl restart docker || true
-                    if nvidia-ctk --version >/dev/null 2>&1; then
-                        ok "nvidia-container-toolkit installed + docker runtime configured"
-                    else
-                        warn "nvidia-ctk sanity check failed (non-fatal — re-run the guided GPU install from Settings)"
-                    fi
-                else
-                    warn "nvidia-container-toolkit apt install failed (non-fatal — re-run the guided GPU install from Settings)"
-                fi
+        elif [[ -x "$_gpuwrap_dst" ]]; then
+            info "NVIDIA GPU detected — installing nvidia-container-toolkit via $_gpuwrap_dst install-toolkit"
+            if "$_gpuwrap_dst" install-toolkit; then
+                ok "nvidia-container-toolkit installed + docker runtime configured"
             else
-                warn "failed to fetch/dearmor the NVIDIA container-toolkit GPG key (non-fatal — retry via guided GPU install)"
+                warn "nvidia-container-toolkit install failed (non-fatal — re-run the guided GPU install from Settings)"
             fi
+        else
+            warn "NVIDIA GPU detected but $_gpuwrap_dst is not installed — skipping toolkit install (re-run the guided GPU install from Settings once available)"
         fi
     fi
 
