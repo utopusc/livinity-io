@@ -24,7 +24,7 @@ import {
 	getOnboardingSystemInfo,
 	syncDns,
 } from './system.js'
-import {detectGpu, detectNvidiaGpu, isNvidiaToolkitConfigured, resetGpuDetectionCache} from './gpu.js'
+import {detectGpu, detectNvidiaGpu, isNvidiaToolkitConfigured, isWsl2, resetGpuDetectionCache} from './gpu.js'
 
 import {adminProcedure, privateProcedure, publicProcedure, router} from '../server/trpc/trpc.js'
 
@@ -49,7 +49,7 @@ export function setSystemStatus(status: SystemStatus) {
 const GPU_INSTALL_WRAPPER = '/usr/local/lib/livos/livos-gpu-install.sh'
 
 async function runGpuInstall(
-	action: 'install-driver' | 'install-toolkit',
+	action: 'install-driver' | 'install-toolkit' | 'install-toolkit-wsl' | 'install-amd-rocm',
 ): Promise<{ok: true} | {ok: false; reason: string}> {
 	return new Promise((resolve) => {
 		const timeoutMs = 300_000 // driver install is slow (apt + kernel module) — 5 min headroom
@@ -95,7 +95,11 @@ async function runGpuInstall(
 				// Clear the cache here so the very next `detectGpu()` refetch AND every
 				// subsequent `patchComposeFile()` NVIDIA branch see the new state without
 				// requiring a manual livinityd restart.
-				if (action === 'install-toolkit' || action === 'install-driver') {
+				if (
+					action === 'install-toolkit' ||
+					action === 'install-driver' ||
+					action === 'install-toolkit-wsl' || action === 'install-amd-rocm'
+				) {
 					resetGpuDetectionCache()
 				}
 				settle({ok: true})
@@ -493,16 +497,31 @@ export default router({
 
 		return true
 	}),
-	// Phase 316 (GPU-01) — admin-gated guided NVIDIA install. Host-level apt/kernel
-	// operation, so adminProcedure (mirrors shutdown/restart above), NOT privateProcedure.
-	// Input is z.enum-constrained so ONLY 'install-driver' | 'install-toolkit' can reach
-	// the wrapper (defense-in-depth on top of the wrapper's own action enum) — never a
-	// free-form string. Returns runGpuInstall's {ok,reason?} union and NEVER throws: a
-	// failed install is recoverable/retryable, not a crash. No reboot is triggered here;
-	// the reboot-confirm UX reuses the existing system.restart primitive.
+	// Phase 316 (GPU-01) / Phase 330 (GPU-04) — admin-gated guided GPU install.
+	// Host-level apt/usermod/kernel operation, so adminProcedure (mirrors
+	// shutdown/restart above), NOT privateProcedure. Input is z.enum-constrained so
+	// ONLY the four closed actions can reach the wrapper (defense-in-depth on top of
+	// the wrapper's own action enum) — never a free-form string. Returns
+	// runGpuInstall's {ok,reason?} union and NEVER throws: a failed install is
+	// recoverable/retryable, not a crash. No reboot is triggered here; the
+	// reboot-confirm UX reuses the existing system.restart primitive.
 	installNvidiaGpu: adminProcedure
-		.input(z.object({action: z.enum(['install-driver', 'install-toolkit'])}))
-		.mutation(async ({input}) => runGpuInstall(input.action)),
+		.input(z.object({action: z.enum(['install-driver', 'install-toolkit', 'install-toolkit-wsl', 'install-amd-rocm'])}))
+		.mutation(async ({input}) => {
+			// D-4: the Linux NVIDIA driver overwrites the /usr/lib/wsl/lib stubs and
+			// breaks /dev/dxg passthrough on WSL2. The wrapper has no WSL2 awareness,
+			// so refuse install-driver HERE — at the tRPC boundary — regardless of
+			// what the UI sent (defense-in-depth; the UI only offers install-toolkit-wsl
+			// on WSL2). RESEARCH Pitfall 1.
+			if (input.action === 'install-driver' && (await isWsl2())) {
+				return {
+					ok: false as const,
+					reason:
+						'Linux NVIDIA driver install is refused on WSL2 — the Windows driver provides GPU passthrough; install the container toolkit instead.',
+				}
+			}
+			return runGpuInstall(input.action)
+		}),
 	// ── Phase 306 R2 — desktop-user OS/sudo password (Settings → Account) ───────
 	// getDesktopUserInfo: lightweight, NON-secret. Returns just the username + a
 	// hasPassword flag so the card can render without ever shipping the plaintext.
