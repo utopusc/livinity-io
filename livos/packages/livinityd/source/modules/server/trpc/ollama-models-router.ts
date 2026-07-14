@@ -68,6 +68,24 @@ export interface OllamaPullResponse {
 
 // ── Factory deps ────────────────────────────────────────────────────────────
 
+/**
+ * Phase 316-05 (LLM-02) — the explicit active-model selection surface. Bound in
+ * production to selectOllamaModel / revertToClaude / getActiveModel (provider/
+ * active-model.ts) which compose the reused provider-config set/delete mutation
+ * with the `liv:provider:active_model` flag. Optional here: the list/pull/
+ * delete routes never need it, and the production wiring + Local Models UI
+ * (316-06) inject it. When absent, the three selection routes surface a clear
+ * PRECONDITION_FAILED rather than silently no-op.
+ */
+export interface OllamaActiveModelDep {
+	/** Explicit "Use as Liv model" for a specific installed model. */
+	select(modelName: string): Promise<void>
+	/** Explicit "Revert to Claude" — full teardown. */
+	revert(): Promise<void>
+	/** Which model is currently Liv's provider (null when none). */
+	get(): Promise<string | null>
+}
+
 export interface OllamaModelsRouterDeps {
 	client: Pick<
 		OllamaClient,
@@ -79,6 +97,8 @@ export interface OllamaModelsRouterDeps {
 		info(msg: string): void
 		warn(msg: string, err?: unknown): void
 	}
+	/** Phase 316-05 — explicit active-model selection (optional; see above). */
+	activeModel?: OllamaActiveModelDep
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
@@ -207,7 +227,72 @@ export function createOllamaModelsRouter(deps: OllamaModelsRouterDeps) {
 				throw toTrpcError(err, 'OLLAMA_DELETE_FAILED')
 			}
 		}),
+
+		// ── setActiveModel (316-05 — explicit "Use as Liv model") ─────────────
+		// The ONLY route that makes Ollama Liv's provider. Validates the model
+		// name (same allowlist as pull/delete) then delegates to the injected
+		// selection surface, which composes the reused provider-config set
+		// mutation with the liv:provider:active_model flag. list/pull/delete
+		// never touch this path — key-presence therefore always implies an
+		// explicit prior selection (316-01 RULE 1, fail-safe).
+		setActiveModel: adminProcedure.input(NameInput).mutation(async ({input}) => {
+			const name = input.name.trim()
+			if (!validateModelName(name)) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: `INVALID_MODEL_NAME: rejected '${input.name}'`,
+				})
+			}
+			const activeModel = requireActiveModel(deps)
+			try {
+				await activeModel.select(name)
+			} catch (err) {
+				throw toTrpcError(err, 'OLLAMA_SELECT_FAILED')
+			}
+			deps.logger.info(`[ollama-models] active model set: ${name}`)
+			return {ok: true as const, activeModel: name}
+		}),
+
+		// ── getActiveModel (316-05 — UI state) ────────────────────────────────
+		getActiveModel: adminProcedure.query(async () => {
+			const activeModel = requireActiveModel(deps)
+			try {
+				return {activeModel: await activeModel.get()}
+			} catch (err) {
+				throw toTrpcError(err, 'OLLAMA_ACTIVE_MODEL_READ_FAILED')
+			}
+		}),
+
+		// ── clearActiveModel (316-05 — explicit "Revert to Claude") ───────────
+		// Full teardown: deletes the Ollama provider config + clears the flag,
+		// restoring Claude as Liv's default with zero residual state.
+		clearActiveModel: adminProcedure.mutation(async () => {
+			const activeModel = requireActiveModel(deps)
+			try {
+				await activeModel.revert()
+			} catch (err) {
+				throw toTrpcError(err, 'OLLAMA_REVERT_FAILED')
+			}
+			deps.logger.info('[ollama-models] reverted to Claude (active model cleared)')
+			return {ok: true as const}
+		}),
 	})
+}
+
+/**
+ * Phase 316-05 — narrow the optional active-model dep or throw a clear,
+ * actionable error. Until the production wiring + Local Models UI (316-06)
+ * inject it, the three selection routes report unavailable rather than no-op.
+ */
+function requireActiveModel(deps: OllamaModelsRouterDeps): OllamaActiveModelDep {
+	if (!deps.activeModel) {
+		throw new TRPCError({
+			code: 'PRECONDITION_FAILED',
+			message:
+				'OLLAMA_ACTIVE_MODEL_UNAVAILABLE: active-model selection not wired — livinityd boot did not inject the selection surface',
+		})
+	}
+	return deps.activeModel
 }
 
 // ── Error mapping ────────────────────────────────────────────────────────────
@@ -233,6 +318,10 @@ export const ollamaModelsRouter = router({
 	pull: adminProcedure.input(PullInput).mutation(() => notInjected()),
 	pullStatus: adminProcedure.input(NameInput).query(() => notInjected()),
 	delete: adminProcedure.input(NameInput).mutation(() => notInjected()),
+	// Phase 316-05 — active-model selection routes (stub until production wiring).
+	setActiveModel: adminProcedure.input(NameInput).mutation(() => notInjected()),
+	getActiveModel: adminProcedure.query(() => notInjected()),
+	clearActiveModel: adminProcedure.mutation(() => notInjected()),
 })
 
 export type OllamaModelsRouter = ReturnType<typeof createOllamaModelsRouter>

@@ -255,7 +255,20 @@ import {createProviderConfigRouter} from './modules/server/trpc/provider-config-
 // Independent of Redis (talks to 127.0.0.1:11434 + reads system headroom), so
 // it is wired unconditionally. Zero provider.config coupling (316-01 RULE 1).
 import {OllamaClient} from './modules/provider/ollama-models.js'
-import {createOllamaModelsRouter} from './modules/server/trpc/ollama-models-router.js'
+import {
+	createOllamaModelsRouter,
+	type OllamaActiveModelDep,
+} from './modules/server/trpc/ollama-models-router.js'
+// Phase 316-05 (LLM-02) — explicit active-model selection + revert-to-Claude.
+// Composes the reused provider key-store/env-writer/restart mutation with the
+// distinct liv:provider:active_model flag. Wired only when Redis + the
+// provider-config surface are available (same guard as provider.config).
+import {
+	getActiveModel,
+	revertToClaude,
+	selectOllamaModel,
+	type ActiveModelDeps,
+} from './modules/provider/active-model.js'
 // Phase 231 retirement — Phase 206 createOpenclawCliRouter import removed
 // (CLI-wrapped provider+model config). Provider config now lives under
 // `provider.config.*` (Phase 204-01) only.
@@ -1992,6 +2005,11 @@ export default class Livinityd {
 			let providerConfigRouterProductionInstance:
 				| ReturnType<typeof createProviderConfigRouter>
 				| undefined
+			// Phase 316-05 (LLM-02) — the explicit active-model selection dep,
+			// bound below inside the SAME Redis guard so it reuses the provider
+			// key-store -> env-writer -> restart mutation. Undefined when Redis
+			// is unavailable -> the router's selection routes report unavailable.
+			let ollamaActiveModelDep: OllamaActiveModelDep | undefined
 			if (this.ai?.redis != null) {
 				try {
 					const providerLogger = {
@@ -2009,6 +2027,46 @@ export default class Livinityd {
 						logger: providerLogger,
 					})
 					const restartHook = createRestartHook({logger: providerLogger})
+
+					// Phase 316-05 (LLM-02) — reuse the SAME provider mutation the
+					// provider.config routes run (key-store set/delete -> env-file
+					// regen -> gateway restart), exposed as the explicit
+					// active-model selection surface. active-model.ts composes this
+					// with the liv:provider:active_model flag; the static boundary
+					// gate proves the sacred broker path is never touched.
+					const ollamaProviderConfigMutator: ActiveModelDeps['providerConfig'] =
+						{
+							set: async (provider, key) => {
+								await providerKeyStore.set(provider, key)
+								await envFileWriter.sync()
+								const r = await restartHook()
+								if (!r.ok)
+									providerLogger.warn(
+										`[active-model] gateway restart after ${provider} select failed — restart manually if needed`,
+									)
+							},
+							delete: async (provider) => {
+								await providerKeyStore.delete(provider)
+								await envFileWriter.sync()
+								const r = await restartHook()
+								if (!r.ok)
+									providerLogger.warn(
+										`[active-model] gateway restart after ${provider} revert failed — restart manually if needed`,
+									)
+							},
+						}
+					const ollamaActiveModelBindings: ActiveModelDeps = {
+						redis: this.ai.redis,
+						providerConfig: ollamaProviderConfigMutator,
+						logger: providerLogger,
+					}
+					ollamaActiveModelDep = {
+						select: (modelName) =>
+							selectOllamaModel(ollamaActiveModelBindings, modelName),
+						revert: () => revertToClaude(ollamaActiveModelBindings),
+						get: () => getActiveModel(ollamaActiveModelBindings.redis),
+					}
+
 					providerConfigRouterProductionInstance = createProviderConfigRouter({
 						keyStore: providerKeyStore,
 						envFileWriter,
@@ -2298,6 +2356,10 @@ export default class Livinityd {
 				client: new OllamaClient({logger: ollamaModelsLogger}),
 				modelsDir: this.dataDirectory,
 				logger: ollamaModelsLogger,
+				// Phase 316-05 (LLM-02) — explicit active-model selection + revert.
+				// Undefined when Redis/provider-config were unavailable at boot →
+				// the three selection routes surface OLLAMA_ACTIVE_MODEL_UNAVAILABLE.
+				activeModel: ollamaActiveModelDep,
 			})
 
 			const productionAppRouter = createAppRouter({
