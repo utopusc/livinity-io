@@ -24,9 +24,11 @@ import {
 	getUserPreferences,
 	deleteUserPreference,
 	deleteUser,
+	isUserTotpEnabled,
 } from '../database/index.js'
 import {createSession, revokeSessionsForUser, listSessions as listUserSessions, revokeSession as revokeUserSession} from '../database/sessions.js'
 import {recordAuthLoginEvent} from '../security-audit/events.js'
+import {getRequire2fa, setRequire2fa} from '../security/policy.js'
 
 const ONE_SECOND = 1000
 const ONE_MINUTE = 60 * ONE_SECOND
@@ -378,6 +380,22 @@ export default router({
 			// Delete the URI
 			return ctx.user.disable2fa()
 		}),
+
+	// IDENT-05 — org-wide 2FA policy (admin-toggled). setRequire2fa is adminProcedure → auto-audited (Plan 01).
+	// ctx.livinityd is always present on an authenticated call (typed optional; the
+	// `!` matches the existing convention, e.g. system/routes.ts require2faVerified(ctx.user!)).
+	getRequire2fa: adminProcedure.query(async ({ctx}) => getRequire2fa(ctx.livinityd!)),
+	setRequire2fa: adminProcedure
+		.input(z.object({value: z.boolean()}))
+		.mutation(async ({ctx, input}) => setRequire2fa(ctx.livinityd!, input.value)),
+
+	// Grace-period signal (Pitfall 4 / D-328-3): true when the policy is ON and the
+	// CURRENT user has not enrolled — the UI redirects to enrol, it NEVER blocks login.
+	requires2faSetup: privateProcedure.query(async ({ctx}) => {
+		if (!ctx.currentUser) return false
+		if (!(await getRequire2fa(ctx.livinityd!))) return false
+		return !(await isUserTotpEnabled(ctx.currentUser.id))
+	}),
 
 	// Returns the current user
 	get: privateProcedure.query(async ({ctx}) => {
