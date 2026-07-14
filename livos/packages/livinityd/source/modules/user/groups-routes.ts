@@ -4,6 +4,7 @@ import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 
 import {router, adminProcedure} from '../server/trpc/trpc.js'
+import {getPool} from '../database/index.js'
 import {
 	createGroup,
 	renameGroup,
@@ -13,6 +14,20 @@ import {
 	removeGroupMember,
 	listGroupMembers,
 } from '../database/groups.js'
+
+// IN-02 (322-review): the groups DAO fails OPEN — it returns false/null both when a
+// row genuinely does not exist AND when there is no DB configured at all (legacy
+// single-user box). Probe getPool() so a DAO miss on a no-DB box surfaces the honest
+// "groups require a database" (PRECONDITION_FAILED) instead of a misleading NOT_FOUND.
+function noDbConfigured(): boolean {
+	return !getPool()
+}
+
+// IN-02 (322-review): map the Postgres unique-violation on groups.name to a friendly
+// CONFLICT instead of a generic INTERNAL_SERVER_ERROR. pg surfaces SQLSTATE on `.code`.
+function isUniqueViolation(err: unknown): boolean {
+	return (err as {code?: string} | null)?.code === '23505'
+}
 
 export default router({
 	// List all groups (name-ordered). Wires GroupRow snake_case → camelCase.
@@ -27,8 +42,8 @@ export default router({
 		}))
 	}),
 
-	// Create a group. Fails PRECONDITION_FAILED when no DB is configured (the DAO
-	// fails open with null on a pure legacy single-user box).
+	// Create a group. PRECONDITION_FAILED when no DB is configured (the DAO fails open
+	// with null on a pure legacy single-user box); CONFLICT on a duplicate name.
 	create: adminProcedure
 		.input(
 			z.object({
@@ -41,6 +56,11 @@ export default router({
 				name: input.name,
 				description: input.description ?? null,
 				createdBy: ctx.currentUser?.id ?? null,
+			}).catch((err) => {
+				if (isUniqueViolation(err)) {
+					throw new TRPCError({code: 'CONFLICT', message: `A group named "${input.name}" already exists`})
+				}
+				throw err
 			})
 			if (!g) {
 				throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Groups require a configured database'})
@@ -48,7 +68,8 @@ export default router({
 			return {id: g.id}
 		}),
 
-	// Rename a group (+ optional description update). DAO-miss → NOT_FOUND.
+	// Rename a group (+ optional description update). DAO-miss → NOT_FOUND (or
+	// PRECONDITION_FAILED with no DB at all); duplicate name → CONFLICT.
 	rename: adminProcedure
 		.input(
 			z.object({
@@ -58,19 +79,31 @@ export default router({
 			}),
 		)
 		.mutation(async ({input}) => {
-			const ok = await renameGroup(input.id, input.name, input.description ?? undefined)
+			const ok = await renameGroup(input.id, input.name, input.description ?? undefined).catch((err) => {
+				if (isUniqueViolation(err)) {
+					throw new TRPCError({code: 'CONFLICT', message: `A group named "${input.name}" already exists`})
+				}
+				throw err
+			})
 			if (!ok) {
+				if (noDbConfigured()) {
+					throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Groups require a configured database'})
+				}
 				throw new TRPCError({code: 'NOT_FOUND', message: 'Group not found'})
 			}
 			return {success: true}
 		}),
 
-	// Delete a group (members cascade via FK). DAO-miss → NOT_FOUND.
+	// Delete a group (members cascade via FK). DAO-miss → NOT_FOUND (or
+	// PRECONDITION_FAILED with no DB at all).
 	delete: adminProcedure
 		.input(z.object({id: z.string().uuid()}))
 		.mutation(async ({input}) => {
 			const ok = await deleteGroup(input.id)
 			if (!ok) {
+				if (noDbConfigured()) {
+					throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Groups require a configured database'})
+				}
 				throw new TRPCError({code: 'NOT_FOUND', message: 'Group not found'})
 			}
 			return {success: true}
@@ -100,12 +133,16 @@ export default router({
 			return {success: true}
 		}),
 
-	// Remove a user from a group. DAO-miss (no such membership) → NOT_FOUND.
+	// Remove a user from a group. DAO-miss (no such membership) → NOT_FOUND (or
+	// PRECONDITION_FAILED with no DB at all).
 	removeMember: adminProcedure
 		.input(z.object({groupId: z.string().uuid(), userId: z.string().uuid()}))
 		.mutation(async ({input}) => {
 			const ok = await removeGroupMember(input.groupId, input.userId)
 			if (!ok) {
+				if (noDbConfigured()) {
+					throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Groups require a configured database'})
+				}
 				throw new TRPCError({code: 'NOT_FOUND', message: 'Membership not found'})
 			}
 			return {success: true}
