@@ -225,6 +225,40 @@ describe('detectGpu', () => {
 		expect(info).toMatchObject({present: true, vendor: 'amd', wsl2: false, driverSource: 'linux-native'})
 	})
 
+	test('WR-03: bare-metal AMD + /dev/kfd + user in render/video → toolkitConfigured true', async () => {
+		// /dev/kfd present and the desktop user is in both groups. isAmdReady queries a
+		// NAMED user via `id -nG <user>` (fresh /etc/group lookup), so it reflects a
+		// completed `usermod -aG` without a livinityd restart — the AMD analog of the
+		// NVIDIA toolkit flips ready.
+		vi.mocked(fse.pathExists).mockImplementation((async (p: string) => p === '/dev/kfd') as any)
+		vi.mocked(fse.readFile).mockResolvedValue('6.8.0-45-generic' as any)
+		vi.mocked(execa).mockImplementation((async (cmd: string) => {
+			if (cmd === 'lspci')
+				return {
+					stdout: '03:00.0 VGA compatible controller: Advanced Micro Devices, Inc. [AMD/ATI] Navi 31 [Radeon RX 7900 XTX]',
+				}
+			if (cmd === 'id') return {stdout: 'desktop render video docker'}
+			throw new Error(`unexpected execa ${cmd}`)
+		}) as any)
+		const info = await detectGpu()
+		expect(info).toMatchObject({present: true, vendor: 'amd', wsl2: false, toolkitConfigured: true})
+	})
+
+	test('WR-03: bare-metal AMD but the user is NOT in render/video → toolkitConfigured false', async () => {
+		vi.mocked(fse.pathExists).mockImplementation((async (p: string) => p === '/dev/kfd') as any)
+		vi.mocked(fse.readFile).mockResolvedValue('6.8.0-45-generic' as any)
+		vi.mocked(execa).mockImplementation((async (cmd: string) => {
+			if (cmd === 'lspci')
+				return {
+					stdout: '03:00.0 VGA compatible controller: Advanced Micro Devices, Inc. [AMD/ATI] Navi 31 [Radeon RX 7900 XTX]',
+				}
+			if (cmd === 'id') return {stdout: 'desktop docker'}
+			throw new Error(`unexpected execa ${cmd}`)
+		}) as any)
+		const info = await detectGpu()
+		expect(info).toMatchObject({present: true, vendor: 'amd', toolkitConfigured: false})
+	})
+
 	test('no GPU (not WSL2, no display controller) → vendor none, present false', async () => {
 		vi.mocked(fse.pathExists).mockResolvedValue(false as any)
 		vi.mocked(fse.readFile).mockResolvedValue('6.8.0-45-generic' as any)

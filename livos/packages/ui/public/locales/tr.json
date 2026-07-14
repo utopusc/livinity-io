@@ -853,6 +853,8 @@
   "software-update.failed.retry": "Tekrar dene",
   "software-update.gpu.amd-button": "AMD ROCm erişimini etkinleştir",
   "software-update.gpu.amd-desc": "ROCm destekli uygulamalar için konteynere AMD GPU erişimi verin (render/video grupları + /dev/kfd, /dev/dri).",
+  "software-update.gpu.amd-ready": "AMD ROCm erişimi bu sunucuda yapılandırılmış.",
+  "software-update.gpu.amd-restart-note": "Grup erişimi uygulamalara hemen uygulanır. GPU hâlâ algılanmıyorsa sunucuyu yeniden başlatın.",
   "software-update.gpu.amd-wsl2-unsupported": "WSL2'de AMD GPU — ROCm geçişi deneyseldir ve burada desteklenmez. AMD hızlandırma için bare-metal Linux kurulumu kullanın.",
   "software-update.gpu.detected": "Algılandı: {{vendor}} GPU ({{env}})",
   "software-update.gpu.intel-info": "Intel GPU algılandı — /dev/dri üzerinden medya uygulamaları için otomatik olarak kullanılır. Kurulum gerekmez.",

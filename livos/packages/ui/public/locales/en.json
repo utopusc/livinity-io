@@ -879,6 +879,8 @@
   "software-update.failed.retry": "Retry",
   "software-update.gpu.amd-button": "Enable AMD ROCm access",
   "software-update.gpu.amd-desc": "Grant container access to the AMD GPU (render/video groups + /dev/kfd, /dev/dri) for ROCm-capable apps.",
+  "software-update.gpu.amd-ready": "AMD ROCm access is configured on this server.",
+  "software-update.gpu.amd-restart-note": "Group access applies to apps immediately. Restart the server if the GPU still isn't detected.",
   "software-update.gpu.amd-wsl2-unsupported": "AMD GPU in WSL2 — ROCm passthrough is experimental and unsupported here. Use a bare-metal Linux install for AMD acceleration.",
   "software-update.gpu.detected": "Detected: {{vendor}} GPU ({{env}})",
   "software-update.gpu.intel-info": "Intel GPU detected — used automatically for media apps via /dev/dri. No setup needed.",

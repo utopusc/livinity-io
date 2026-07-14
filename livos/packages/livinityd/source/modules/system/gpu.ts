@@ -1,3 +1,5 @@
+import os from 'node:os'
+
 import {execa} from 'execa'
 import fse from 'fs-extra'
 
@@ -235,17 +237,29 @@ async function probeIntelGpu(): Promise<boolean> {
 }
 
 /**
- * Resolves `true` iff the AMD ROCm compute node `/dev/kfd` exists AND the current
- * process user is in BOTH the `render` and `video` groups (the group membership a
- * ROCm container needs). This is AMD's analog of `isNvidiaToolkitConfigured()`.
+ * Resolves `true` iff the AMD ROCm compute node `/dev/kfd` exists AND the desktop
+ * user is in BOTH the `render` and `video` groups (the group membership a ROCm
+ * container needs). This is AMD's analog of `isNvidiaToolkitConfigured()`.
  * Never throws (→ `false`).
+ *
+ * WR-03: query a NAMED user's groups via `id -nG <user>`, NOT the no-arg `id -nG`.
+ * The no-arg form reports the RUNNING process's own supplementary GIDs, which
+ * POSIX freezes at process start — a `usermod -aG render,video` (what
+ * install-amd-rocm runs) does NOT re-apply to an already-running livinityd (or its
+ * `id` child) until the next login/restart, so no-arg `id -nG` reported the AMD
+ * toolkit as never-ready right after a successful install. `id -nG <user>` instead
+ * does a fresh getpwnam+getgrouplist lookup from /etc/group, so it reflects the
+ * just-completed usermod immediately (after resetGpuDetectionCache() re-probes).
+ * `os.userInfo().username` is the desktop user livinityd runs as — the same user
+ * the wrapper resolves via logname/SUDO_USER and adds to the groups.
  */
 async function isAmdReady(): Promise<boolean> {
 	if (amdReadyCache === undefined) {
 		amdReadyCache = (async (): Promise<boolean> => {
 			try {
 				if (!(await fse.pathExists('/dev/kfd'))) return false
-				const {stdout} = await execa('id', ['-nG'], {timeout: PROBE_TIMEOUT_MS})
+				const user = os.userInfo().username
+				const {stdout} = await execa('id', ['-nG', user], {timeout: PROBE_TIMEOUT_MS})
 				const groups = stdout.split(/\s+/)
 				return groups.includes('render') && groups.includes('video')
 			} catch {

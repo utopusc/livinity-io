@@ -170,8 +170,10 @@ export function GpuInstallSection() {
 				</div>
 			) : null}
 
-			{/* AMD bare-metal → single ROCm access button (FLAG 2: NEVER on WSL2). */}
-			{vendor === 'amd' && !wsl2 ? (
+			{/* AMD bare-metal, not yet configured → ROCm access button (FLAG 2: NEVER on WSL2).
+			    WR-03: gated on !toolkitConfigured (= isAmdReady) so a completed install
+			    collapses to the ready state below instead of staying eternally clickable. */}
+			{vendor === 'amd' && !wsl2 && !toolkitConfigured ? (
 				<div className='space-y-2'>
 					<p className='text-caption text-text-secondary'>{t('software-update.gpu.amd-desc')}</p>
 					<Button
@@ -184,6 +186,21 @@ export function GpuInstallSection() {
 						{installAmdMut.isPending ? t('gpu-access.installing') : t('software-update.gpu.amd-button')}
 					</Button>
 					{failureNote}
+					{/* Honest note (WR-03): group access applies to app containers
+					    immediately (Docker resolves render/video fresh via group_add);
+					    the host login session picks it up only after a restart. */}
+					<p className='text-caption text-text-tertiary'>{t('software-update.gpu.amd-restart-note')}</p>
+				</div>
+			) : null}
+
+			{/* AMD ROCm already configured → ready state (mirrors the NVIDIA toolkit-ready check, WR-03). */}
+			{vendor === 'amd' && !wsl2 && toolkitConfigured ? (
+				<div className='space-y-1'>
+					<div className='flex items-center gap-2'>
+						<TbCheck className='h-4 w-4 text-green-400' />
+						<p className='text-caption text-text-tertiary'>{t('software-update.gpu.amd-ready')}</p>
+					</div>
+					<p className='text-caption text-text-tertiary'>{t('software-update.gpu.amd-restart-note')}</p>
 				</div>
 			) : null}
 
