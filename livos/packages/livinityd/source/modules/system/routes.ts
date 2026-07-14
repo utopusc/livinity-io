@@ -24,7 +24,7 @@ import {
 	getOnboardingSystemInfo,
 	syncDns,
 } from './system.js'
-import {detectNvidiaGpu, isNvidiaToolkitConfigured} from './gpu.js'
+import {detectNvidiaGpu, isNvidiaToolkitConfigured, resetGpuDetectionCache} from './gpu.js'
 
 import {adminProcedure, privateProcedure, publicProcedure, router} from '../server/trpc/trpc.js'
 
@@ -87,6 +87,17 @@ async function runGpuInstall(
 
 		child.on('close', (code) => {
 			if (code === 0) {
+				// WR-01: a successful guided install changes what the process-lifetime
+				// memoized host probes (system/gpu.ts) would report — `install-toolkit`
+				// makes the Docker `nvidia` runtime appear, and `install-driver` can make
+				// a previously lspci-invisible card show up. `runGpuInstall` restarts the
+				// DOCKER daemon, not livinityd, so livinityd never re-probes on its own.
+				// Clear the cache here so the very next `detectGpu()` refetch AND every
+				// subsequent `patchComposeFile()` NVIDIA branch see the new state without
+				// requiring a manual livinityd restart.
+				if (action === 'install-toolkit' || action === 'install-driver') {
+					resetGpuDetectionCache()
+				}
 				settle({ok: true})
 				return
 			}

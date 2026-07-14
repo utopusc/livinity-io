@@ -91,3 +91,45 @@ describe('isNvidiaToolkitConfigured', () => {
 		expect(vi.mocked(execa)).toHaveBeenCalledTimes(1)
 	})
 })
+
+// WR-01 regression — a successful guided install (routes.ts runGpuInstall) must
+// invalidate the process-lifetime probe cache so the very next detectGpu() /
+// patchComposeFile() re-probe reflects the newly-configured toolkit WITHOUT a
+// manual livinityd restart. This asserts the mechanism runGpuInstall relies on:
+// after resetGpuDetectionCache(), a probe that previously memoized `false`
+// re-shells and now returns the post-install `true`.
+describe('resetGpuDetectionCache — post-install re-probe (WR-01)', () => {
+	test('toolkit flips false→true after a reset (guided install then refetch)', async () => {
+		// Pre-install: no nvidia runtime configured → memoized false.
+		vi.mocked(execa).mockResolvedValue({stdout: '{"runc":{"path":"runc"}}'} as any)
+		expect(await isNvidiaToolkitConfigured()).toBe(false)
+		expect(await isNvidiaToolkitConfigured()).toBe(false) // served from cache
+		expect(vi.mocked(execa)).toHaveBeenCalledTimes(1)
+
+		// Guided install-toolkit succeeds → runGpuInstall clears the cache.
+		resetGpuDetectionCache()
+
+		// Post-install: docker now exposes the nvidia runtime → the next call
+		// re-shells and reflects the new state (no livinityd restart needed).
+		vi.mocked(execa).mockResolvedValue({
+			stdout: '{"nvidia":{"path":"nvidia-container-runtime"},"runc":{"path":"runc"}}',
+		} as any)
+		expect(await isNvidiaToolkitConfigured()).toBe(true)
+		expect(vi.mocked(execa)).toHaveBeenCalledTimes(2)
+	})
+
+	test('gpu detection re-probes after a reset (driver install reveals a card)', async () => {
+		// Pre-driver: lspci shows no nvidia display controller → memoized false.
+		vi.mocked(execa).mockResolvedValue({
+			stdout: '00:02.0 VGA compatible controller: Intel Corporation UHD Graphics 630',
+		} as any)
+		expect(await detectNvidiaGpu()).toBe(false)
+
+		resetGpuDetectionCache()
+
+		vi.mocked(execa).mockResolvedValue({
+			stdout: '01:00.0 VGA compatible controller: NVIDIA Corporation GA104 [GeForce RTX 3070]',
+		} as any)
+		expect(await detectNvidiaGpu()).toBe(true)
+	})
+})
