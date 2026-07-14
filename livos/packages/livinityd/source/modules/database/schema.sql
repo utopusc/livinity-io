@@ -846,3 +846,27 @@ CREATE TABLE IF NOT EXISTS resource_rollups_1h (
   net_rx_bps_avg      BIGINT, net_rx_bps_max BIGINT,
   net_tx_bps_avg      BIGINT, net_tx_bps_max BIGINT
 );
+
+-- =========================================================================
+-- Groups (Phase 322, IDENT-01) — the SINGLE groups source consumed by OIDC
+-- claims (322-04), file ACLs (Phase 324/FILES-02), and app sharing
+-- (Phase 323/IDENT-04). Additive/expand-only per migrations/index.ts:16-26.
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS groups (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        TEXT NOT NULL UNIQUE,
+  description TEXT,
+  created_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS group_members (
+  group_id  UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  user_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  added_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+  added_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (group_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id);

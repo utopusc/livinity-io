@@ -35,7 +35,15 @@ export const V36_P131_PINNED_WINDOWS_MIGRATIONS: ReadonlyArray<string> = [
 	'2026-05-15-p131-pinned-windows.sql',
 ] as const
 
+// Phase 322-01 (IDENT-01) — groups + group_members (the single groups source
+// consumed by OIDC claims 322-04, file ACLs 324/FILES-02, app sharing
+// 323/IDENT-04). Additive-only per the expand-only invariant above.
+export const V47_P322_GROUPS_MIGRATIONS: ReadonlyArray<string> = [
+	'2026-07-14-p322-groups.sql',
+] as const
+
 export const ALL_MIGRATIONS: ReadonlyArray<string> = [
 	...V32_AGENTS_MIGRATIONS,
 	...V36_P131_PINNED_WINDOWS_MIGRATIONS,
+	...V47_P322_GROUPS_MIGRATIONS,
 ] as const
