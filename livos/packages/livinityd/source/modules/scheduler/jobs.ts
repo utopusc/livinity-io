@@ -6,6 +6,7 @@
 // output JSON and only throw for catastrophic, job-wide failures.
 
 import {execa} from 'execa'
+import systemInformation from 'systeminformation'
 
 import {listContainers, pruneImages, isProtectedContainer} from '../docker/docker.js'
 import {listGitStacks, updateGitStackSyncSha, controlStack} from '../docker/stacks.js'
@@ -14,6 +15,8 @@ import {aiResourceWatchHandler} from '../docker/ai-resource-watch.js'
 import {getSystemDiskUsage} from '../system/system.js'
 import {listDrives, runSelfTest} from '../monitoring/smart.js'
 import {insertSmartAlert, findRecentSmartAlert} from '../monitoring/smart-alerts.js'
+import {getDiskIO, getNetworkStats} from '../monitoring/monitoring.js'
+import {insertResourceSample, aggregateRollups, pruneOldRows} from '../monitoring/history.js'
 import {volumeBackupHandler} from './backup.js'
 import type {BuiltInJobHandler, JobType} from './types.js'
 
@@ -418,6 +421,69 @@ export const smartSelfTestShortHandler: BuiltInJobHandler = async (job, ctx) => 
 }
 
 // =========================================================================
+// resource-metrics-collect — Phase 320 MON-01.
+// 1-min collector: turns Plan 01's schema into live data. Reads ONLY the CHEAP
+// system-total readers (systemInformation.currentLoad()/.mem() + already-cheap
+// getDiskIO/getNetworkStats) — NEVER the per-app `docker top` CPU reader
+// (D-320-4 / T-320-03: the expensive reader scales cost with installed-app
+// count on every minute-tick forever). Writes one wide raw sample per tick via
+// insertResourceSample(). Follows the disk-critical-watch never-throw contract:
+// guard !ctx.livinityd → skipped; body in try/catch → {status:'failure'}.
+// =========================================================================
+export const resourceMetricsCollectHandler: BuiltInJobHandler = async (job, ctx) => {
+	if (!ctx.livinityd) {
+		ctx.logger.log(`[scheduler/resource-metrics-collect] no daemon reference — skipping job ${job.name}`)
+		return {status: 'skipped', error: 'daemon reference unavailable'}
+	}
+	try {
+		const [load, mem, diskIO, netStats] = await Promise.all([
+			systemInformation.currentLoad(), // D-320-4: aggregate CPU, zero top/docker-top shell-outs
+			systemInformation.mem(),
+			getDiskIO(),
+			getNetworkStats(),
+		])
+		const netRx = netStats.reduce((s, n) => s + (n.rxSec ?? 0), 0)
+		const netTx = netStats.reduce((s, n) => s + (n.txSec ?? 0), 0)
+		await insertResourceSample({
+			cpuPct: load.currentLoad,
+			memUsedBytes: mem.active, // A2: 'active' matches the live Memory widget's "used"
+			memTotalBytes: mem.total,
+			diskReadBps: diskIO.rIOSec ?? null,
+			diskWriteBps: diskIO.wIOSec ?? null,
+			netRxBps: netRx,
+			netTxBps: netTx,
+		})
+		return {status: 'success'}
+	} catch (err) {
+		// NOTE: 'failure', NOT 'error' — JobRunResult.status has no 'error' member.
+		return {status: 'failure', error: err instanceof Error ? err.message : String(err)}
+	}
+}
+
+// =========================================================================
+// resource-metrics-rollup — Phase 320 MON-01.
+// Hourly downsampling + retention. aggregateRollups() re-aggregates raw→5m→1h
+// (idempotent ON CONFLICT); pruneOldRows() enforces retention from DAY ONE
+// (raw>48h, 5m>30d, 1h>365d) so persisted metrics can never bloat the shared
+// livos Postgres unbounded (D-320-5 / Pitfall 12 / T-320-04 — shipped in the
+// SAME wave as the collector, never deferred). Same never-throw contract.
+// =========================================================================
+export const resourceMetricsRollupHandler: BuiltInJobHandler = async (job, ctx) => {
+	if (!ctx.livinityd) {
+		ctx.logger.log(`[scheduler/resource-metrics-rollup] no daemon reference — skipping job ${job.name}`)
+		return {status: 'skipped', error: 'daemon reference unavailable'}
+	}
+	try {
+		await aggregateRollups() // raw->5m, 5m->1h (idempotent ON CONFLICT)
+		await pruneOldRows() // raw>48h, 5m>30d, 1h>365d — retention from day one (D-320-5)
+		return {status: 'success'}
+	} catch (err) {
+		// NOTE: 'failure', NOT 'error' — JobRunResult.status has no 'error' member.
+		return {status: 'failure', error: err instanceof Error ? err.message : String(err)}
+	}
+}
+
+// =========================================================================
 // Registry: jobType -> handler mapping.
 // volume-backup wired by Plan 20-02 (alpine-tar streaming to S3/SFTP/local).
 // ai-resource-watch wired by Plan 23-02 (Phase 23 AID-02 proactive alerts).
@@ -432,6 +498,8 @@ export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'disk-critical-watch': diskCriticalWatchHandler,
 	'smart-health-scan': smartHealthScanHandler,
 	'smart-self-test-short': smartSelfTestShortHandler,
+	'resource-metrics-collect': resourceMetricsCollectHandler,
+	'resource-metrics-rollup': resourceMetricsRollupHandler,
 }
 
 // =========================================================================
@@ -470,4 +538,8 @@ export const DEFAULT_JOB_DEFINITIONS: Array<{
 	// ~2min and does not saturate the drive; the handler skips any drive already
 	// mid-test (not-while-running DoS guard). Long tests stay admin-triggered only.
 	{name: 'smart-self-test-short', schedule: '0 6 * * 0', type: 'smart-self-test-short', enabled: true},
+	// Phase 320 MON-01 — cheap system-total reads (no LLM spend, no per-app docker top); enabled by default.
+	{name: 'resource-metrics-collect', schedule: '* * * * *', type: 'resource-metrics-collect', enabled: true},
+	// rollup+retention runs at :05 so it always sees a full prior hour of raw data.
+	{name: 'resource-metrics-rollup', schedule: '5 * * * *', type: 'resource-metrics-rollup', enabled: true},
 ]
