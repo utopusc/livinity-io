@@ -368,6 +368,17 @@ type StoreSchema = {
 		}[]
 		dispatchFloor: Record<string, {at: number; severity: 'critical' | 'warning' | 'info'}>
 	}
+	// Phase 320 (MON-02) — editable AI resource-watch alert thresholds. Dedicated
+	// top-level key (NOT nested under `alerts` or any array or scalar key — dot-prop
+	// path collisions silently drop the write, see channel-types.ts comment above
+	// for the exact bug this convention avoids).
+	monitoring: {
+		thresholds: {
+			containerMemoryWarningPct: number
+			containerMemoryCriticalPct: number
+			containerRestartLoopCount: number
+		}
+	}
 	backups: {
 		repositories: {
 			id: string
