@@ -355,19 +355,15 @@ export const smartHealthScanHandler: BuiltInJobHandler = async (job, ctx) => {
 				await ctx.livinityd.notifications.clear(failId).catch(() => {})
 				await ctx.livinityd.notifications.clear(unavailId).catch(() => {})
 			} else if (d.healthStatus === 'unavailable') {
-				// Genuine enclosure/unsupported case (USB SAT swallowed) — honest, non-red.
-				await ctx.livinityd.notifications
-					.add(unavailId, {severity: 'warning', external: true})
-					.catch(() => {})
+				// SMART-05 (Scope A / D-5): a drive with no SMART capability (detectionMethod
+				// 'unsupported' — WSL/virtual disks AND USB enclosures that swallow SAT) is a
+				// PERMANENT, non-actionable state. Keep the honest 'unavailable' UI badge
+				// (listDrives is untouched) but do NOT raise an external notification or an
+				// audit row — a persistent NAG is noise. permission-denied (fixable) and
+				// failing still alert above. Still clear stale alerts so a box that already
+				// NAGged (or a drive that recovered failing→unsupported) un-sticks next scan.
 				await ctx.livinityd.notifications.clear(failId).catch(() => {})
-				if (!(await findRecentSmartAlert(d.deviceId, 'unavailable', 360))) {
-					await insertSmartAlert({
-						deviceId: d.deviceId,
-						severity: 'warning',
-						kind: 'unavailable',
-						message: 'SMART unavailable through this enclosure',
-					}).catch(() => null)
-				}
+				await ctx.livinityd.notifications.clear(unavailId).catch(() => {})
 			} else {
 				// healthy — clear both per-drive alerts on recovery.
 				await ctx.livinityd.notifications.clear(failId).catch(() => {})
