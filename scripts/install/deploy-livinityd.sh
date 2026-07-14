@@ -2993,6 +2993,96 @@ _dld_template_app_units() {
         info "sudoers.d/livos-smart source not found — skipping (SMART reads unavailable)"
     fi
 
+    # 2a-gpu. Phase 316 (GPU-01) — root-owned NVIDIA install wrapper. The livos-gpu
+    # sudoers grant (2b-gpu below) is on THIS binary only; the wrapper validates a
+    # fixed action enum {detect|install-driver|install-toolkit} and builds every
+    # apt/ubuntu-drivers/nvidia-ctk argv itself, so no caller flag can reach a
+    # privileged command. Install it BEFORE the grant. Idempotent (content-diffed),
+    # byte-for-byte parallel to the livos-smart wrapper block above.
+    local _gpuwrap_src="${_DLD_STAGE_DIR}/scripts/install/livos-gpu-install.sh"
+    [[ -f "$_gpuwrap_src" ]] || _gpuwrap_src="${_DLD_LIVOS_DIR}/scripts/install/livos-gpu-install.sh"
+    local _gpuwrap_dst="/usr/local/lib/livos/livos-gpu-install.sh"
+    if [[ -f "$_gpuwrap_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_gpuwrap_dst" ]] || ! cmp -s "$_gpuwrap_src" "$_gpuwrap_dst"; then
+            if install -m 0755 -o root -g root "$_gpuwrap_src" "$_gpuwrap_dst"; then
+                ok "livos-gpu-install.sh installed at $_gpuwrap_dst"
+            else
+                warn "Failed to install livos-gpu-install.sh (non-fatal; guided GPU install unavailable until fixed)"
+            fi
+        fi
+    else
+        info "livos-gpu-install.sh source not found — skipping (guided GPU install unavailable)"
+    fi
+
+    # 2b-gpu. Phase 316 (GPU-01) — sudoers.d/livos-gpu (NVIDIA install grant) —
+    # install + template. Byte-for-byte parallel to the livos-smart block above,
+    # retargeted at livos-gpu. Runs on EVERY deploy (idempotent, content-diffed).
+    local _gpu_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-gpu"
+    [[ -f "$_gpu_src" ]] || _gpu_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-gpu"
+    local _gpu_dst="/etc/sudoers.d/livos-gpu"
+    if [[ -f "$_gpu_src" ]]; then
+        local _gpu_tmp
+        _gpu_tmp=$(mktemp)
+        if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                "$_gpu_src" > "$_gpu_tmp"
+        else
+            cp -f "$_gpu_src" "$_gpu_tmp"
+        fi
+        if [[ ! -f "$_gpu_dst" ]] || ! cmp -s "$_gpu_tmp" "$_gpu_dst"; then
+            install -m 0440 -o root -g root "$_gpu_tmp" "$_gpu_dst"
+            if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_gpu_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_gpu_dst — removing (guided GPU install stays denied until fixed)"
+                rm -f "$_gpu_dst"
+            else
+                ok "sudoers.d/livos-gpu installed (user-spec: ${_DLD_DESKTOP_USER})"
+            fi
+        fi
+        rm -f "$_gpu_tmp"
+    else
+        info "sudoers.d/livos-gpu source not found — skipping (guided GPU install unavailable)"
+    fi
+
+    # 2c-gpu. Phase 316 (GPU-01) — NVIDIA container-toolkit apt repo, GATED behind an
+    # `lspci` NVIDIA-GPU probe so NON-NVIDIA boxes (the overwhelming majority) see
+    # ZERO install change. On an NVIDIA box we pre-stage the official signed-by apt
+    # repo + install the container-toolkit (dearmor convention cloned from the
+    # NodeSource block ~130-140) so GPU apps can reserve the device out of the box;
+    # the proprietary DRIVER (ubuntu-drivers, reboot-requiring) stays a guided,
+    # admin-triggered UI action via the wrapper's `install-driver`. warn-not-fail:
+    # a transient NVIDIA-repo/apt error must NEVER brick a deploy (same discipline as
+    # the smartmontools + kopia blocks — the guided UI install can retry).
+    if command -v lspci >/dev/null 2>&1 && lspci -nnk 2>/dev/null | grep -qi 'nvidia'; then
+        if command -v nvidia-ctk >/dev/null 2>&1 \
+                && docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -qi 'nvidia'; then
+            info "NVIDIA container-toolkit already configured — skipping apt work"
+        else
+            info "NVIDIA GPU detected — installing nvidia-container-toolkit (official signed-by apt repo)"
+            mkdir -p /etc/apt/keyrings
+            if curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+                    | gpg --dearmor --no-tty --batch --yes -o /etc/apt/keyrings/nvidia-container-toolkit-keyring.gpg; then
+                chmod 0644 /etc/apt/keyrings/nvidia-container-toolkit-keyring.gpg
+                curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+                    | sed 's#deb https://#deb [signed-by=/etc/apt/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+                    > /etc/apt/sources.list.d/nvidia-container-toolkit.list
+                if apt-get update -qq \
+                        && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nvidia-container-toolkit; then
+                    nvidia-ctk runtime configure --runtime=docker && systemctl restart docker || true
+                    if nvidia-ctk --version >/dev/null 2>&1; then
+                        ok "nvidia-container-toolkit installed + docker runtime configured"
+                    else
+                        warn "nvidia-ctk sanity check failed (non-fatal — re-run the guided GPU install from Settings)"
+                    fi
+                else
+                    warn "nvidia-container-toolkit apt install failed (non-fatal — re-run the guided GPU install from Settings)"
+                fi
+            else
+                warn "failed to fetch/dearmor the NVIDIA container-toolkit GPG key (non-fatal — retry via guided GPU install)"
+            fi
+        fi
+    fi
+
     # 3. Phase 289 (WS-D) — copy the apt-repo privileged helper (the apt-repo install method
     # for Brave/Signal/Spotify/Firefox calls /usr/local/lib/livos/livos-add-apt-repo.sh via the
     # sudoers grant). This was missing from EVERY path → apt-repo apps broke on fresh installs.

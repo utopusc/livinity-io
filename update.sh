@@ -2943,6 +2943,80 @@ elif [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
         || warn "smartmontools install failed (non-fatal — SMART surfaces 'unavailable' until fixed)"
 fi
 
+# ── Step 7.10c: Phase 316 (GPU-01) — NVIDIA install provisioning (sudoers.d/livos-gpu + wrapper) ──
+# The livos-gpu NOPASSWD grant + the root-owned install wrapper must reach
+# ALREADY-DEPLOYED boxes on Update, not just fresh installs. Mirrors Step 7.10b
+# (livos-smart) VERBATIM (content-diff + visudo validate-or-remove), retargeted to
+# livos-gpu / livos-gpu-install.sh. Missing this is the "looks wired, silently
+# no-ops" failure class: a box that took Phase 316 would call
+# `sudo -n /usr/local/lib/livos/livos-gpu-install.sh <action>`, get denied, and the
+# admin's guided NVIDIA install would fail forever. The container-toolkit apt work
+# stays in the fresh-install path + the guided UI action (not re-run on every
+# Update). Fully fail-tolerant: a missing source or a visudo rejection never aborts
+# the Update.
+step "Phase 316 (GPU-01): NVIDIA install provisioning (sudoers.d/livos-gpu + install wrapper)"
+
+_set_desktop_identity   # Phase 277.1 — self-derive the desktop user (no literal bruce)
+
+# --- (a0) livos-gpu-install.sh wrapper — install BEFORE the grant ---
+# The livos-gpu grant (a) is on this ONE root-owned binary; the wrapper validates a
+# fixed action enum {detect|install-driver|install-toolkit} and hardcodes every
+# apt/ubuntu-drivers/nvidia-ctk argv, so no caller flag can be appended. livinityd
+# invokes `sudo -n <wrapper> <action>`, so the wrapper must exist on day-2 boxes too.
+# Idempotent (content-diffed), fail-tolerant.
+_GPU_WRAP_SRC="$LIVOS_DIR/scripts/install/livos-gpu-install.sh"
+if [[ ! -f "$_GPU_WRAP_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _GPU_WRAP_SRC="$TEMP_DIR/scripts/install/livos-gpu-install.sh"
+fi
+_GPU_WRAP_DST="/usr/local/lib/livos/livos-gpu-install.sh"
+if [[ -f "$_GPU_WRAP_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_GPU_WRAP_DST" ]] || ! cmp -s "$_GPU_WRAP_SRC" "$_GPU_WRAP_DST"; then
+        if install -m 0755 -o root -g root "$_GPU_WRAP_SRC" "$_GPU_WRAP_DST"; then
+            ok "livos-gpu-install.sh installed at $_GPU_WRAP_DST"
+        else
+            warn "Failed to install livos-gpu-install.sh (non-fatal — guided GPU install unavailable until fixed)"
+        fi
+    else
+        info "livos-gpu-install.sh already current"
+    fi
+else
+    info "livos-gpu-install.sh source not found — skipping (guided GPU install unavailable)"
+fi
+
+# --- (a) sudoers.d/livos-gpu — install + template the subject to the desktop user ---
+_GPU_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-gpu"
+if [[ ! -f "$_GPU_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _GPU_SUDOERS_SRC="$TEMP_DIR/scripts/install/sudoers.d/livos-gpu"
+fi
+_GPU_SUDOERS_DST="/etc/sudoers.d/livos-gpu"
+if [[ -f "$_GPU_SUDOERS_SRC" ]]; then
+    _GPU_SUDOERS_TMP=$(mktemp)
+    if [[ "$_DESKTOP_USER" != "bruce" ]]; then
+        sed -E "s/^bruce([[:space:]]+ALL=)/${_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DESKTOP_USER})/g" \
+            "$_GPU_SUDOERS_SRC" > "$_GPU_SUDOERS_TMP"
+    else
+        cp -f "$_GPU_SUDOERS_SRC" "$_GPU_SUDOERS_TMP"
+    fi
+    if [[ ! -f "$_GPU_SUDOERS_DST" ]] || ! cmp -s "$_GPU_SUDOERS_TMP" "$_GPU_SUDOERS_DST"; then
+        install -m 0440 -o root -g root "$_GPU_SUDOERS_TMP" "$_GPU_SUDOERS_DST"
+        # SAFETY-CRITICAL: a malformed sudoers file can break sudo system-wide.
+        # Validate the INSTALLED file; if visudo rejects it, REMOVE it (guided GPU
+        # install stays denied — the prior state — rather than risk a broken sudoers).
+        if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_GPU_SUDOERS_DST" >/dev/null 2>&1; then
+            warn "visudo rejected $_GPU_SUDOERS_DST — removing (guided GPU install stays denied until fixed)"
+            rm -f "$_GPU_SUDOERS_DST"
+        else
+            ok "sudoers.d/livos-gpu installed (subject: ${_DESKTOP_USER})"
+        fi
+    else
+        info "sudoers.d/livos-gpu already current (subject: ${_DESKTOP_USER})"
+    fi
+    rm -f "$_GPU_SUDOERS_TMP"
+else
+    info "sudoers.d/livos-gpu source not found — skipping (guided GPU install unavailable)"
+fi
+
 # ── Step 7.11: Phase 306 — desktop-user password helper (wrapper + sudoers + bootstrap) ──
 # The "Regenerate" button on the Desktop password row in Settings → Account calls
 # livinityd's system.regenerateDesktopPassword, which runs
