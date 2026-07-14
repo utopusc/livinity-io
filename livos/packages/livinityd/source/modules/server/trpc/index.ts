@@ -8,6 +8,11 @@ import system from '../../system/routes.js'
 import wifi from '../../system/wifi-routes.js'
 import user from '../../user/routes.js'
 import preferences from '../../user/preferences-routes.js'
+// Phase 322-02 (IDENT-01) — groups.* CRUD namespace. Static-import mount (no
+// deps — like user/preferences) of the adminProcedure router wrapping the
+// 322-01 groups DAO. The single groups source consumed later by the OIDC
+// groups claim (322-04), file ACLs (Phase 324), and app sharing (Phase 323).
+import groups from '../../user/groups-routes.js'
 import {appStore, apps as appsBase} from '../../apps/routes.js'
 import widget from '../../widgets/routes.js'
 import files from '../../files/routes.js'
@@ -325,6 +330,8 @@ export function createAppRouter(opts: {
 		wifi,
 		user,
 		preferences,
+		// Phase 322-02 (IDENT-01) — groups.* adminProcedure CRUD namespace.
+		groups,
 		appStore,
 		apps,
 		widget,
