@@ -33,8 +33,10 @@ import {
 	checkPullGuardrails,
 	estimateModelFootprintGb,
 	MODEL_NAME_RE,
+	OllamaClient,
 	validateModelName,
 } from './ollama-models.js'
+import {createOllamaModelsRouter} from '../server/trpc/ollama-models-router.js'
 
 const GB = 1024 ** 3
 
@@ -166,5 +168,141 @@ describe('checkPullGuardrails RAM + disk headroom (T-316-12)', () => {
 		expect(vi.mocked(getDiskUsageByPath)).toHaveBeenCalledWith(
 			'/opt/livos/app-data/ollama/models',
 		)
+	})
+})
+
+// ── Task 3 (a): client transport — listModels parses /api/tags ─────────────
+
+describe('OllamaClient.listModels parses GET /api/tags', () => {
+	test('returns the parsed models array', async () => {
+		const fetchImpl = vi.fn(
+			async () =>
+				new Response(
+					JSON.stringify({
+						models: [
+							{
+								name: 'llama3:8b',
+								size: 4_700_000_000,
+								digest: 'sha256:abc',
+								modified_at: '2026-01-01T00:00:00Z',
+							},
+						],
+					}),
+					{status: 200, headers: {'content-type': 'application/json'}},
+				),
+		)
+		const client = new OllamaClient({fetchImpl: fetchImpl as unknown as typeof fetch})
+		const res = await client.listModels()
+		expect(res.models).toHaveLength(1)
+		expect(res.models[0]!.name).toBe('llama3:8b')
+		// SSRF guard — the URL is the hardcoded loopback, never a caller host.
+		expect(fetchImpl).toHaveBeenCalledWith(
+			'http://127.0.0.1:11434/api/tags',
+			expect.objectContaining({method: 'GET'}),
+		)
+	})
+
+	test('surfaces a typed OLLAMA_UNREACHABLE error (never a raw undefined throw)', async () => {
+		const fetchImpl = vi.fn(async () => {
+			throw new Error('ECONNREFUSED 127.0.0.1:11434')
+		})
+		const client = new OllamaClient({fetchImpl: fetchImpl as unknown as typeof fetch})
+		await expect(client.listModels()).rejects.toMatchObject({
+			code: 'OLLAMA_UNREACHABLE',
+		})
+	})
+})
+
+// ── Task 3 (d): router — block-by-default pull does NOT start the job ───────
+
+/**
+ * Admin context — mirrors provider-config-router.test.ts (the canonical
+ * pattern for adminProcedure-gated routers in this repo).
+ */
+function makeAdminCtx() {
+	return {
+		livinityd: {} as never,
+		logger: {
+			info: () => undefined,
+			warn: () => undefined,
+			error: () => undefined,
+			verbose: () => undefined,
+			log: () => undefined,
+			debug: () => undefined,
+		},
+		server: {} as never,
+		user: {} as never,
+		appStore: {} as never,
+		apps: {} as never,
+		dangerouslyBypassAuthentication: true,
+		currentUser: {id: 'admin-uuid', username: 'admin', role: 'admin' as const},
+		transport: 'express' as const,
+	}
+}
+
+function makeRouterClient(guardrailPasses: boolean) {
+	return {
+		listModels: vi.fn(async () => ({models: []})),
+		deleteModel: vi.fn(async () => ({ok: true, status: 200})),
+		psModels: vi.fn(async () => ({models: []})),
+		pullModel: vi.fn(async () => undefined),
+		checkPullGuardrails: vi.fn(async () => ({
+			ram: {availableGb: guardrailPasses ? 32 : 1, neededGb: 7.5, ok: guardrailPasses},
+			disk: {availableGb: 500, neededGb: 8, ok: true},
+			estimate: {gb: 6, known: true, note: 'test'},
+		})),
+	}
+}
+
+function makeRouter(client: ReturnType<typeof makeRouterClient>) {
+	return createOllamaModelsRouter({
+		client: client as unknown as OllamaClient,
+		modelsDir: '/data/models',
+		logger: {info: () => undefined, warn: () => undefined},
+	})
+}
+
+describe('createOllamaModelsRouter — pull block-by-default (T-316-12)', () => {
+	test('a failing guardrail without override returns blocked + does NOT start the pull', async () => {
+		const client = makeRouterClient(false) // ram.ok=false
+		const caller = makeRouter(client).createCaller(makeAdminCtx() as never)
+		const res = await caller.pull({name: 'llama3:70b'})
+		expect(res.started).toBe(false)
+		expect(res.blocked).toBe(true)
+		// The background pull job MUST NOT have been kicked off.
+		expect(client.pullModel).not.toHaveBeenCalled()
+	})
+
+	test('override===true starts the background pull despite a failing guardrail', async () => {
+		const client = makeRouterClient(false)
+		const caller = makeRouter(client).createCaller(makeAdminCtx() as never)
+		const res = await caller.pull({name: 'llama3:70b', override: true})
+		expect(res.started).toBe(true)
+		expect(res.blocked).toBe(false)
+		expect(client.pullModel).toHaveBeenCalledTimes(1)
+	})
+
+	test('a green guardrail starts the pull without an override', async () => {
+		const client = makeRouterClient(true)
+		const caller = makeRouter(client).createCaller(makeAdminCtx() as never)
+		const res = await caller.pull({name: 'llama3:8b'})
+		expect(res.started).toBe(true)
+		expect(res.blocked).toBe(false)
+		expect(client.pullModel).toHaveBeenCalledTimes(1)
+	})
+
+	test('an injection-shaped model name is rejected before any client call', async () => {
+		const client = makeRouterClient(true)
+		const caller = makeRouter(client).createCaller(makeAdminCtx() as never)
+		await expect(caller.pull({name: '../evil'})).rejects.toThrow()
+		expect(client.checkPullGuardrails).not.toHaveBeenCalled()
+		expect(client.pullModel).not.toHaveBeenCalled()
+	})
+
+	test('delete validates the name before calling the client', async () => {
+		const client = makeRouterClient(true)
+		const caller = makeRouter(client).createCaller(makeAdminCtx() as never)
+		await expect(caller.delete({name: 'foo; rm -rf /'})).rejects.toThrow()
+		expect(client.deleteModel).not.toHaveBeenCalled()
 	})
 })
