@@ -34,15 +34,17 @@ import Dockerode from 'dockerode'
 import {listContainers, inspectContainer, getContainerLogs} from './docker.js'
 import {callKimi, redactSecrets} from './ai-diagnostics.js'
 import {findRecentAlertByKind, insertAiAlert, type AiAlertKind} from './ai-alerts.js'
+import {getThresholds, DEFAULT_THRESHOLDS, type ResourceThresholds} from '../monitoring/thresholds.js'
 import type {BuiltInJobHandler, JobRunResult} from '../scheduler/types.js'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const MEMORY_CRITICAL_PCT = 95
-const MEMORY_WARNING_PCT = 80
-const RESTART_LOOP_THRESHOLD = 3
+// Phase 320 MON-02 — the three memory/restart thresholds are now operator-editable
+// and live in DEFAULT_THRESHOLDS (monitoring/thresholds.ts). The handler reads the
+// live values once per tick and threads them into isThresholdExceeded(). The dedupe
+// window below is an anti-storm control, NOT a threshold, so it stays hardcoded.
 const DEDUPE_WINDOW_MINUTES = 60
 const LOG_TAIL_LINES = 50
 const KIMI_TIER = 'sonnet' as const
@@ -102,14 +104,17 @@ export interface ThresholdResult {
  * throttling" reliably in a 5-min window without history). We elevate
  * to critical only when memory is the issue.
  */
-export function isThresholdExceeded(input: ThresholdInput): ThresholdResult | null {
-	if (input.memoryPercent >= MEMORY_CRITICAL_PCT) {
+export function isThresholdExceeded(
+	input: ThresholdInput,
+	thresholds: ResourceThresholds = DEFAULT_THRESHOLDS,
+): ThresholdResult | null {
+	if (input.memoryPercent >= thresholds.containerMemoryCriticalPct) {
 		return {kind: 'memory-pressure', severity: 'critical'}
 	}
-	if (input.memoryPercent >= MEMORY_WARNING_PCT) {
+	if (input.memoryPercent >= thresholds.containerMemoryWarningPct) {
 		return {kind: 'memory-pressure', severity: 'warning'}
 	}
-	if (input.restartCount >= RESTART_LOOP_THRESHOLD) {
+	if (input.restartCount >= thresholds.containerRestartLoopCount) {
 		return {kind: 'restart-loop', severity: 'warning'}
 	}
 	if (input.throttledTimeDelta > 0) {
@@ -186,7 +191,19 @@ interface HandlerOutput {
 }
 
 export const aiResourceWatchHandler: BuiltInJobHandler = async (job, ctx) => {
+	// Phase 320 MON-02 — this handler's FIRST ctx.livinityd dependency (the live
+	// thresholds read + the external alert-channel dispatch below). No daemon ref
+	// (isolated unit test / Scheduler built without livinityd) → skip cleanly.
+	if (!ctx.livinityd) {
+		ctx.logger.log(`[scheduler/ai-resource-watch] no daemon reference — skipping job ${job.name}`)
+		return {status: 'skipped', error: 'daemon reference unavailable'}
+	}
+
 	ctx.logger.log(`[scheduler/ai-resource-watch] running job ${job.name}`)
+
+	// Read the operator-editable thresholds once per tick, then thread them into
+	// every isThresholdExceeded() call for this run (MON-02).
+	const thresholds = await getThresholds(ctx.livinityd)
 
 	let containers: Awaited<ReturnType<typeof listContainers>>
 	try {
@@ -230,12 +247,15 @@ export const aiResourceWatchHandler: BuiltInJobHandler = async (job, ctx) => {
 			const inspectInfo = await inspectContainer(c.name, null)
 			const restartCount = inspectInfo.restartCount ?? 0
 
-			// Threshold check
-			const threshold = isThresholdExceeded({
-				memoryPercent: mem.pct,
-				throttledTimeDelta,
-				restartCount,
-			})
+			// Threshold check — uses the live operator-set thresholds (MON-02).
+			const threshold = isThresholdExceeded(
+				{
+					memoryPercent: mem.pct,
+					throttledTimeDelta,
+					restartCount,
+				},
+				thresholds,
+			)
 			if (!threshold) continue
 
 			// Dedupe — skip if we already alerted in the last 60 minutes
@@ -310,6 +330,15 @@ export const aiResourceWatchHandler: BuiltInJobHandler = async (job, ctx) => {
 			ctx.logger.log(
 				`[scheduler/ai-resource-watch] alert created for ${c.name}: ${threshold.kind}/${threshold.severity}`,
 			)
+
+			// Phase 320 MON-02 — route resource-pressure through the Phase-310 external
+			// alert-channel bridge (Telegram/Discord/webhook/ntfy). The external message
+			// is the generic DESCRIPTIONS['ai-resource-pressure'] sentence (never the Kimi
+			// prose / container internals). Fire-and-forget: a dispatch failure must never
+			// fail the Kimi-alert-insert that already succeeded above.
+			await ctx.livinityd.notifications
+				.add(`ai-resource-pressure:${c.name}:${threshold.kind}`, {severity: threshold.severity, external: true})
+				.catch(() => {})
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err)
 			ctx.logger.error(`[scheduler/ai-resource-watch] ${c.name}: ${msg}`, err)

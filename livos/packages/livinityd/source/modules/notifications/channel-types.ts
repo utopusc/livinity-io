@@ -82,6 +82,10 @@ const DESCRIPTIONS: Record<string, string> = {
 	'smart-failing': 'A drive is showing pre-failure SMART indicators',
 	'smart-unavailable': 'SMART could not be read for a drive (enclosure limitation)',
 	'smart-permission-denied': 'SMART monitoring is not configured correctly — drive health cannot be read',
+	// Phase 320 MON-02 — floorKey collapses ai-resource-pressure:<container>:<kind> to
+	// the base key. The external message stays generic (the Kimi projection + container
+	// payload remain in-app in ai_alerts only).
+	'ai-resource-pressure': 'A container is under resource pressure',
 }
 
 // MED-04: `disk-critical` fires at two tiers (jobs.ts diskSeverityFor): warning

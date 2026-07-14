@@ -66,10 +66,20 @@ import {
 	_resetThrottleCacheForTests,
 } from './ai-resource-watch.js'
 
+// Phase 320 MON-02 — the handler now needs ctx.livinityd for its first time:
+//   - store.get('monitoring.thresholds') → undefined here → getThresholds() lazily
+//     falls back to DEFAULT_THRESHOLDS {80,95,3}, so the handler tests below keep
+//     their original truth-table behavior.
+//   - notifications.add(...external:true) is the new resource-pressure dispatch.
+const mockNotificationsAdd = vi.fn().mockResolvedValue(undefined)
 const ctx = {
 	logger: {
 		log: vi.fn(),
 		error: vi.fn(),
+	},
+	livinityd: {
+		notifications: {add: (...args: unknown[]) => mockNotificationsAdd(...args)},
+		store: {get: vi.fn().mockResolvedValue(undefined)},
 	},
 }
 
@@ -283,6 +293,15 @@ describe('aiResourceWatchHandler', () => {
 
 		// findRecentAlertByKind called exactly twice (only for stressed containers, not for healthy)
 		expect(mockFindRecentAlertByKind).toHaveBeenCalledTimes(2)
+
+		// Phase 320 MON-02 — the one created alert ALSO routes through the Phase-310
+		// external bridge exactly once, with the colon-delimited base-first id +
+		// external:true (deduped container never dispatches).
+		expect(mockNotificationsAdd).toHaveBeenCalledTimes(1)
+		expect(mockNotificationsAdd).toHaveBeenCalledWith('ai-resource-pressure:stressed-fresh:memory-pressure', {
+			severity: 'warning',
+			external: true,
+		})
 	})
 
 	test('8. throttledTime delta is computed against the cache (delta=4000 on second run)', async () => {
