@@ -4,12 +4,19 @@
 //   1: failing drive → add('smart-failing:sda', {critical, external}) + deduped insert
 //   2: dedupe hit → insertSmartAlert NOT called (no re-insert)
 //   3: healthy drive → clear('smart-failing:sda'), add NOT called
-//   4: usb unsupported → add('smart-unavailable:sdb', {warning, external})
-//   5: permission-denied internal → add('smart-permission-denied', ...)
-//   6: recovery — no denied drive this scan → clear('smart-permission-denied')
-//   7: guard (no ctx.livinityd) → {status: 'skipped'}, never throws
-//   8: listDrives throws → {status: 'failure'} (NOT 'error'), never throws out
-//   9: self-test DoS guard — in-progress + unavailable skipped, idle readable triggered
+//   4: usb unsupported (SMART-05 Scope A) → NO smart-unavailable NAG dispatched (badge-only,
+//      non-actionable); scan still 'success' — the honest 'unavailable' UI badge is unchanged
+//   5: virtual disk (WSL) unsupported → NO notification raised, badge stays 'unavailable'
+//   6: permission-denied internal → add('smart-permission-denied', ...)  [KEEP — fixable misconfig]
+//   7: recovery — no denied drive this scan → clear('smart-permission-denied')
+//   8: guard (no ctx.livinityd) → {status: 'skipped'}, never throws
+//   9: listDrives throws → {status: 'failure'} (NOT 'error'), never throws out
+//  10: self-test DoS guard — in-progress + unavailable skipped, idle readable triggered
+//
+// SMART-05 (Scope A / D-5): drives with no SMART capability (detectionMethod 'unsupported' —
+// WSL/virtual disks AND USB enclosures that swallow SAT) are a PERMANENT, non-actionable state →
+// badge-only, no external notification + no audit row. permission-denied (fixable) + failing
+// drives still alert. Tests 4 + 5 lock the no-NAG behavior; 6 + 1 lock the preserved alerting.
 //
 // Only jobs.ts consumes '../monitoring/smart.js'/'../monitoring/smart-alerts.js' in the
 // scheduler graph, so mocking them here is isolated (no transitive module breaks).
@@ -111,15 +118,28 @@ describe('smartHealthScanHandler', () => {
 		expect(add).not.toHaveBeenCalledWith('smart-failing:sda', expect.anything())
 	})
 
-	test('usb unsupported → add smart-unavailable:sdb (warning, external)', async () => {
+	test('usb unsupported → NO smart-unavailable NAG (Scope A: badge-only, non-actionable)', async () => {
 		mockListDrives.mockResolvedValue([
 			drive({deviceId: 'sdb', transport: 'usb', healthStatus: 'unavailable', detectionMethod: 'unsupported'}),
 		])
 		const {livinityd, add} = fakeDaemon()
 
-		await smartHealthScanHandler(fakeJob, {logger: fakeLogger, livinityd})
+		const result = await smartHealthScanHandler(fakeJob, {logger: fakeLogger, livinityd})
 
-		expect(add).toHaveBeenCalledWith('smart-unavailable:sdb', {severity: 'warning', external: true})
+		expect(result.status).toBe('success')
+		expect(add).not.toHaveBeenCalledWith('smart-unavailable:sdb', expect.anything())
+	})
+
+	test('virtual disk (WSL) unsupported → badge stays unavailable, NO notification raised', async () => {
+		mockListDrives.mockResolvedValue([
+			drive({deviceId: 'sdc', transport: 'unknown', model: 'Virtual Disk', healthStatus: 'unavailable', detectionMethod: 'unsupported'}),
+		])
+		const {livinityd, add} = fakeDaemon()
+
+		const result = await smartHealthScanHandler(fakeJob, {logger: fakeLogger, livinityd})
+
+		expect(result.status).toBe('success')
+		expect(add).not.toHaveBeenCalledWith('smart-unavailable:sdc', expect.anything())
 	})
 
 	test('permission-denied internal → add smart-permission-denied', async () => {
