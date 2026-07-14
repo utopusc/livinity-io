@@ -240,6 +240,21 @@ export async function disableUserTotp(userId: string): Promise<void> {
 	)
 }
 
+// Phase 328 WR-04 — admin anti-lockout escape hatch (IDENT-05). Lets an admin
+// clear ANOTHER user's TOTP so a member who lost BOTH their authenticator and
+// their one-time recovery codes can re-enrol. Same column clear as
+// disableUserTotp, but returns whether a row matched so the caller can surface
+// NOT_FOUND. NEVER reads, returns, or logs the secret — only clears it, which
+// makes org-wide 2FA enforcement safe to turn on.
+export async function adminResetUserTotp(userId: string): Promise<boolean> {
+	if (!pool) return false
+	const {rowCount} = await pool.query(
+		'UPDATE users SET totp_secret_enc = NULL, totp_enabled = FALSE, totp_recovery_codes_enc = NULL, updated_at = NOW() WHERE id = $1',
+		[userId],
+	)
+	return (rowCount ?? 0) > 0
+}
+
 // Consume one recovery code (escape hatch). Decrypt → find+remove → re-encrypt →
 // persist. One-time: the consumed code no longer validates on a subsequent login.
 export async function consumeUserRecoveryCode(userId: string, code: string): Promise<boolean> {

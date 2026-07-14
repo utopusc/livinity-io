@@ -29,6 +29,7 @@ import {
 	enableUserTotp,
 	disableUserTotp,
 	consumeUserRecoveryCode,
+	adminResetUserTotp,
 } from '../database/index.js'
 import {createSession, revokeSessionsForUser, listSessions as listUserSessions, revokeSession as revokeUserSession} from '../database/sessions.js'
 import {recordAuthLoginEvent} from '../security-audit/events.js'
@@ -427,6 +428,24 @@ export default router({
 				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Incorrect 2FA code'})
 			}
 			return ctx.user.disable2fa()
+		}),
+
+	// WR-04 — admin anti-lockout escape hatch (IDENT-05). An admin clears ANOTHER
+	// user's TOTP so a member who lost BOTH their authenticator AND their one-time
+	// recovery codes can re-enrol — the org-level counterpart to the self-service
+	// recovery-codes hatch. This is a SEPARATE adminProcedure from
+	// enable2fa/disable2fa (which stay privateProcedure): it is auto-audited by the
+	// adminProcedure middleware (Plan 01), redact() covers the {userId} input, and
+	// it NEVER reads/returns/logs the secret — it only clears it. Resetting your
+	// OWN 2FA here is harmless (an authenticated admin can already disable it).
+	adminResetUser2fa: adminProcedure
+		.input(z.object({userId: z.string().uuid()}))
+		.mutation(async ({input}) => {
+			const ok = await adminResetUserTotp(input.userId)
+			if (!ok) {
+				throw new TRPCError({code: 'NOT_FOUND', message: 'User not found'})
+			}
+			return {success: true}
 		}),
 
 	// IDENT-05 — org-wide 2FA policy (admin-toggled). setRequire2fa is adminProcedure → auto-audited (Plan 01).

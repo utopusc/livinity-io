@@ -1159,23 +1159,34 @@ const TwoFactorDisableInline = React.lazy(() =>
 function TwoFaSection() {
 	const is2faEnabledQ = trpcReact.user.is2faEnabled.useQuery()
 	const [showSetup, setShowSetup] = useState(false)
+	// WR-04 (anti-lockout): true while the one-time recovery codes are on screen.
+	// Reported by TwoFactorEnableInline so we hide the "Back to 2FA" escape hatch —
+	// the codes must not be discarded unseen before the user acknowledges them.
+	const [recoveryVisible, setRecoveryVisible] = useState(false)
+
+	const leaveSetup = () => {
+		setRecoveryVisible(false)
+		setShowSetup(false)
+	}
 
 	// Show inline 2FA setup/disable
 	if (showSetup) {
 		return (
 			<div className='space-y-4'>
-				<button
-					onClick={() => setShowSetup(false)}
-					className='flex items-center gap-2 text-body-sm text-text-secondary hover:text-text-primary'
-				>
-					<TbArrowLeft className='h-4 w-4' />
-					Back to 2FA
-				</button>
+				{recoveryVisible ? null : (
+					<button
+						onClick={leaveSetup}
+						className='flex items-center gap-2 text-body-sm text-text-secondary hover:text-text-primary'
+					>
+						<TbArrowLeft className='h-4 w-4' />
+						Back to 2FA
+					</button>
+				)}
 				<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
 					{is2faEnabledQ.data ? (
-						<TwoFactorDisableInline onComplete={() => setShowSetup(false)} />
+						<TwoFactorDisableInline onComplete={leaveSetup} />
 					) : (
-						<TwoFactorEnableInline onComplete={() => setShowSetup(false)} />
+						<TwoFactorEnableInline onComplete={leaveSetup} onRecoveryVisibleChange={setRecoveryVisible} />
 					)}
 				</Suspense>
 			</div>

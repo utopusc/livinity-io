@@ -47,9 +47,23 @@ export default function TwoFactorEnableDialog() {
 	// track the phase so a recovery panel never sits under "scan this QR code".
 	const showRecovery = !!(recoveryCodes && recoveryCodes.length)
 
+	// WR-04 (anti-lockout): while the one-time recovery codes are on screen the
+	// panel must NOT be dismissible by ESC / overlay click / close button — only
+	// the explicit "I've saved them" button (confirmEnrolled, which closes via the
+	// raw dialogProps closure captured by use2fa above) may close it. Radix Dialog
+	// AND vaul Drawer funnel every implicit dismissal through onOpenChange(false),
+	// so gating it here blocks all escape routes with a single guard.
+	const guardedDialogProps = {
+		...dialogProps,
+		onOpenChange: (open: boolean) => {
+			if (!open && showRecovery) return
+			dialogProps.onOpenChange(open)
+		},
+	}
+
 	if (isMobile) {
 		return (
-			<Drawer {...dialogProps}>
+			<Drawer {...guardedDialogProps}>
 				<DrawerContent fullHeight>
 					<DrawerHeader>
 						<DrawerTitle>{showRecovery ? t('2fa.recovery.title') : title}</DrawerTitle>
@@ -75,7 +89,7 @@ export default function TwoFactorEnableDialog() {
 	}
 
 	return (
-		<Dialog {...dialogProps}>
+		<Dialog {...guardedDialogProps}>
 			<DialogScrollableContent>
 				<div className='flex flex-col items-center gap-5 p-8'>
 					<DialogHeader>
@@ -215,11 +229,22 @@ const AnimateInQr = ({children, size, animateIn}: {children: ReactNode; size: nu
 )
 
 // Inline version for settings panel (no Dialog wrapper)
-export function TwoFactorEnableInline({onComplete}: {onComplete: () => void}) {
+export function TwoFactorEnableInline({
+	onComplete,
+	onRecoveryVisibleChange,
+}: {
+	onComplete: () => void
+	// WR-04: reports when the one-time recovery codes are on screen so the parent
+	// can hide its "Back to 2FA" escape hatch until the user acknowledges them.
+	onRecoveryVisibleChange?: (visible: boolean) => void
+}) {
 	const {enable, totpUri, generateTotpUri, recoveryCodes, confirmEnrolled} = use2fa(onComplete)
 	useEffect(generateTotpUri, [generateTotpUri])
 
 	const showRecovery = !!(recoveryCodes && recoveryCodes.length)
+	useEffect(() => {
+		onRecoveryVisibleChange?.(showRecovery)
+	}, [showRecovery, onRecoveryVisibleChange])
 
 	return (
 		<div className='flex w-full flex-col items-center gap-4'>
