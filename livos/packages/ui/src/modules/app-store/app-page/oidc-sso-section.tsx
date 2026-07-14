@@ -70,6 +70,14 @@ export function OidcSsoSection({appId, appName, initialEnabled, immichApiKeySet}
 			utils.apps.state.invalidate({appId})
 			utils.apps.list.invalidate()
 		},
+		// WR-05 (322-review): handleToggle flips the local `enabled` switch optimistically
+		// BEFORE the mutation resolves. Without this rollback the Switch (bound to local
+		// state, not server data) stays stuck in the wrong position on failure — the
+		// isError banner shows, but the toggle never self-corrects until the dialog is
+		// closed and reopened. Revert to the pre-toggle value on error.
+		onError: (_err, variables) => {
+			setEnabled(!variables.enabled)
+		},
 	})
 
 	// Pitfall 7 producer UI — WRITE-ONLY. On success we invalidate apps.list so
