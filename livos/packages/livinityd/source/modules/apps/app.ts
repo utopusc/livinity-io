@@ -14,7 +14,7 @@ import {pullAll} from '../utilities/docker-pull.js'
 import FileStore from '../utilities/file-store.js'
 import {fillSelectedDependencies} from '../utilities/dependencies.js'
 import type Livinityd from '../../index.js'
-import {detectNvidiaGpu, isNvidiaToolkitConfigured, detectGpu} from '../system/gpu.js'
+import {isNvidiaToolkitConfigured, detectGpu} from '../system/gpu.js'
 import {validateManifest, type AppSettings} from './schema.js'
 import appScript from './legacy-compat/app-script.js'
 import {reconcileAppVolumeOwnership} from './reconcile-volume-ownership.js'
@@ -137,15 +137,22 @@ export default class App {
 		// in listAppsWithGpuAccess). The NVIDIA probes never throw (degrade to false).
 		const gpuAccessOverride = await this.store.get('gpuAccess')
 		const wantsGpu = resolveWantsGpu(gpuAccessOverride, manifest.permissions)
-		const hostHasNvidia = wantsGpu ? await detectNvidiaGpu() : false
 		const nvidiaToolkitInstalled = wantsGpu ? await isNvidiaToolkitConfigured() : false
 
-		// 330 GPU-05 (GPU-04): bare-metal AMD probe. Read ONCE per patch (same
-		// discipline as the NVIDIA probes above), guarded by wantsGpu so an app
-		// nobody has toggled never shells out. `detectGpu()` never throws (degrades
-		// to vendor:'none'). WSL2-AMD gets NO compose change (no /dev/kfd there —
-		// it exposes /dev/dxg instead, FLAG 2 bare-metal-only).
+		// 330 CR-01 (GPU-03/GPU-05): a SINGLE WSL2-aware composite probe drives BOTH
+		// the NVIDIA and AMD branches below. Read ONCE per patch (same discipline as
+		// the toolkit probe above), guarded by wantsGpu so an app nobody has toggled
+		// never shells out. `detectGpu()` never throws (degrades to vendor:'none').
+		// CRITICAL: `hostHasNvidia` MUST come from detectGpu().vendor, NOT 316's
+		// lspci-only detectNvidiaGpu() — on WSL2 lspci reports "Microsoft Corporation
+		// Device" so detectNvidiaGpu() is always false, which would leave a WSL2-NVIDIA
+		// host (the flagship desktop case) without its GPU reservation even after the
+		// guided toolkit install. detectGpu() reads nvidia-smi on WSL2 and calls
+		// detectNvidiaGpu() internally on bare-metal, so bare-metal behavior is
+		// byte-identical. WSL2-AMD gets NO compose change (no /dev/kfd there — it
+		// exposes /dev/dxg instead, FLAG 2 bare-metal-only).
 		const gpuInfo = wantsGpu ? await detectGpu() : null
+		const hostHasNvidia = gpuInfo?.vendor === 'nvidia'
 		const hostVendorAmd = gpuInfo?.vendor === 'amd'
 		const hostWsl2 = gpuInfo?.wsl2 ?? false
 
