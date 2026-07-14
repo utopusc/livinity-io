@@ -40,6 +40,7 @@ import {
 	TbMicrophone,
 	TbLogin,
 	TbUsers,
+	TbUsersGroup,
 	TbBrain,
 	TbStethoscope,
 	TbBrandChrome,
@@ -117,6 +118,10 @@ import {TbSun, TbMoon, TbDeviceDesktop} from 'react-icons/tb'
 const UsersSectionLazy = React.lazy(() =>
 	import('@/routes/settings/users').then((m) => ({default: m.UsersSection})),
 )
+// Phase 322-02 (IDENT-01) — Settings > Groups admin destination (beside Users).
+const GroupsSectionLazy = React.lazy(() =>
+	import('@/routes/settings/groups').then((m) => ({default: m.GroupsSection})),
+)
 // AI-chat-specific settings (memory / ai-config / liv-agent / autonomous-agents /
 // ai-chat-settings) removed with the AI Chat teardown.
 // Phase 102-07 — Chrome Master Login (D-102-MASTER-LOGIN-UI).
@@ -151,6 +156,7 @@ type SettingsSection =
 	| 'home'
 	| 'account'
 	| 'users'
+	| 'groups'
 	| 'wallpaper'
 	| '2fa'
 	| 'chrome-master'
@@ -198,6 +204,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'mcp-servers',      group: 'workspace', icon: TbPlugConnected, label: 'MCP Servers',      description: 'Manage Model Context Protocol servers',   adminOnly: true},
 	// ── SYSTEM ────────────────────────────────────────────────────────
 	{id: 'users',            group: 'system', icon: TbUsers,           label: 'Users',             description: 'Manage users & invites',                  adminOnly: true},
+	{id: 'groups',           group: 'system', icon: TbUsersGroup,      label: 'Groups',            description: 'Manage groups & membership',              adminOnly: true},
 	{id: 'chrome-master',    group: 'system', icon: TbBrandChrome,     label: 'Chrome Profile',    description: 'Master Chrome login for WebApps',         adminOnly: true},
 	{id: 'power',            group: 'system', icon: TbPower,           label: 'Power',             description: 'Restart or shut down this device',        adminOnly: true},
 	{id: 'date-time',        group: 'system', icon: TbClock,           label: 'Date & Time',       description: 'Time zone & language',                    adminOnly: true},
@@ -586,6 +593,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <AccountSection />
 		case 'users':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><UsersSectionLazy /></Suspense>
+		case 'groups':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><GroupsSectionLazy /></Suspense>
 		case 'wallpaper':
 			return <WallpaperSection />
 		case '2fa':
