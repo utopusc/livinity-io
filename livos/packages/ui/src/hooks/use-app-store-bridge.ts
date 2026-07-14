@@ -87,6 +87,17 @@ type EnvOverride = {
 	required?: boolean
 }
 
+// Phase 330 (GPU-05) — host-side GPU context the bridge reads (system.detectGpu +
+// listAppsWithGpuAccess) and hands to the install popup so the dialog can render
+// the vendor-labelled default-OFF toggle. All host-tier (Pitfall 5) — the store
+// iframe never supplies any of this.
+type GpuCtx = {
+	gpuCapable?: boolean
+	gpuVendor?: 'nvidia' | 'amd' | 'intel' | 'unknown' | 'none' | null
+	gpuWsl2?: boolean
+	otherGpuApps?: string[]
+}
+
 interface AppStoreBridgeOptions {
 	apiKey: string | null
 	instanceName: string
@@ -103,7 +114,11 @@ interface AppStoreBridgeOptions {
 	onEnvOverridesNeeded?: (
 		appId: string,
 		overrides: EnvOverride[],
-	) => Promise<Record<string, string>>
+		// Phase 330 (GPU-05) — present only when the app is gpu-capable AND a GPU
+		// is detected; the popup renders the Use-GPU toggle from it. The callback
+		// now resolves BOTH the env values and the (optional) GPU choice.
+		gpuCtx?: GpuCtx,
+	) => Promise<{envValues: Record<string, string>; gpuAccess?: boolean}>
 }
 
 /**
@@ -503,6 +518,8 @@ export function useAppStoreBridge(
 			// registry-augmented manifests carry installOptions; the bridge resolves
 			// from whichever is available and hands off to the dialog callback.
 			let envValues: Record<string, string> | undefined
+			// Phase 330 (GPU-05) — the install-time GPU choice, threaded to apps.install.
+			let gpuAccess: boolean | undefined
 			try {
 				const [registry, builtins] = await Promise.all([
 					trpcClient.appStore.registry.query().catch(() => []),
@@ -515,8 +532,40 @@ export function useAppStoreBridge(
 				const overrides: EnvOverride[] | undefined =
 					registryApp?.installOptions?.environmentOverrides ??
 					builtinApp?.installOptions?.environmentOverrides
-				if (overrides && overrides.length > 0 && optionsRef.current.onEnvOverridesNeeded) {
-					envValues = await optionsRef.current.onEnvOverridesNeeded(appId, overrides)
+				// Phase 330 (GPU-05) — the gpu-capable signal comes from the SAME
+				// manifest read already in scope (330-04 schema); no second fetch.
+				const gpuCapable: boolean =
+					registryApp?.installOptions?.gpuCapable ?? builtinApp?.installOptions?.gpuCapable ?? false
+				// When gpu-capable, probe the host GPU + current GPU holders ONCE. Both
+				// reads are host-side (never trusted from the store iframe — T-330-13).
+				let gpuInfo: {present?: boolean; vendor?: GpuCtx['gpuVendor']; wsl2?: boolean} | null = null
+				let otherGpuApps: string[] = []
+				if (gpuCapable) {
+					gpuInfo = await trpcClient.system.detectGpu.query().catch(() => null)
+					const gpuHolders = await trpcClient.apps.listAppsWithGpuAccess.query().catch(() => [])
+					otherGpuApps = (gpuHolders as string[]).filter((id) => id !== appId)
+				}
+				const hasOverrides = !!(overrides && overrides.length > 0)
+				// FLAG 1 — widen the gate: fire the popup for gpu-capable apps with a
+				// GPU present even when they carry ZERO env overrides (e.g. Ollama).
+				const showGpu = gpuCapable && !!gpuInfo?.present
+				if ((hasOverrides || showGpu) && optionsRef.current.onEnvOverridesNeeded) {
+					const res = await optionsRef.current.onEnvOverridesNeeded(
+						appId,
+						overrides ?? [],
+						showGpu
+							? {
+									gpuCapable: true,
+									gpuVendor: gpuInfo?.vendor ?? null,
+									gpuWsl2: gpuInfo?.wsl2 ?? false,
+									otherGpuApps,
+								}
+							: undefined,
+					)
+					// Keep the "spread only if present" convention — an empty record
+					// (GPU-only popup) stays undefined so no environmentOverrides is sent.
+					envValues = Object.keys(res.envValues).length > 0 ? res.envValues : undefined
+					gpuAccess = res.gpuAccess
 				}
 			} catch {
 				// Best-effort prompt — fall through to install without overrides.
@@ -558,6 +607,7 @@ export function useAppStoreBridge(
 				await trpcClient.apps.install.mutate({
 					appId,
 					...(envValues ? {environmentOverrides: envValues} : {}),
+					...(gpuAccess !== undefined ? {gpuAccess} : {}),
 				})
 				clearInterval(pollInterval)
 				sendToIframe({type: 'progress', appId, progress: 100})

@@ -13,10 +13,20 @@ type EnvOverride = {
 	required?: boolean
 }
 
+// Phase 330 (GPU-05) — the detectGpu vendor union threaded through to the dialog.
+type GpuVendor = 'nvidia' | 'amd' | 'intel' | 'unknown' | 'none' | null
+
 type PendingPrompt = {
 	appId: string
 	overrides: EnvOverride[]
-	resolve: (values: Record<string, string>) => void
+	// Phase 330 (GPU-05) — host-supplied GPU context; present only when the app is
+	// gpu-capable AND a GPU is detected (the bridge decides this host-side).
+	gpuCapable?: boolean
+	gpuVendor?: GpuVendor
+	gpuWsl2?: boolean
+	otherGpuApps?: string[]
+	// The resolve now carries BOTH the env values and the (optional) GPU choice.
+	resolve: (result: {envValues: Record<string, string>; gpuAccess?: boolean}) => void
 	reject: (err: Error) => void
 }
 
@@ -35,9 +45,21 @@ export default function AppStoreWindowContent() {
 		// overrides (ZEP_API_KEY for MiroFish, N8N_BASIC_AUTH_PASSWORD for n8n,
 		// etc.), defer to this callback. Returns a promise that resolves to
 		// the user-supplied values or rejects on cancel.
-		onEnvOverridesNeeded: (appId, overrides) =>
-			new Promise<Record<string, string>>((resolve, reject) => {
-				setPending({appId, overrides, resolve, reject})
+		// Phase 330 (GPU-05): the bridge also invokes this for gpu-capable apps with
+		// a GPU present (even with zero env overrides) and passes GPU context; the
+		// resolved value now carries the folded GPU choice alongside the env values.
+		onEnvOverridesNeeded: (appId, overrides, gpuCtx) =>
+			new Promise<{envValues: Record<string, string>; gpuAccess?: boolean}>((resolve, reject) => {
+				setPending({
+					appId,
+					overrides,
+					gpuCapable: gpuCtx?.gpuCapable,
+					gpuVendor: gpuCtx?.gpuVendor,
+					gpuWsl2: gpuCtx?.gpuWsl2,
+					otherGpuApps: gpuCtx?.otherGpuApps,
+					resolve,
+					reject,
+				})
 			}),
 	})
 
@@ -80,8 +102,12 @@ export default function AppStoreWindowContent() {
 					}}
 					appName={pending.appId}
 					overrides={pending.overrides}
-					onNext={(values) => {
-						pending.resolve(values)
+					gpuCapable={pending.gpuCapable}
+					gpuVendor={pending.gpuVendor}
+					gpuWsl2={pending.gpuWsl2}
+					otherGpuApps={pending.otherGpuApps}
+					onNext={(values, gpuAccess) => {
+						pending.resolve({envValues: values, gpuAccess})
 						setPending(null)
 					}}
 				/>
