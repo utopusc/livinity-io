@@ -485,7 +485,7 @@ export default class Apps {
 		return NATIVE_APP_CONFIGS.some((c) => c.id === appId)
 	}
 
-	async install(appId: string, alternatives?: AppSettings['dependencies'], environmentOverrides?: Record<string, string>, isAdmin: boolean = true) {
+	async install(appId: string, alternatives?: AppSettings['dependencies'], environmentOverrides?: Record<string, string>, isAdmin: boolean = true, gpuAccess?: boolean) {
 		// Native apps don't need Docker install — they're installed via setup script
 		if (this.isNativeApp(appId)) {
 			// Just register as installed
@@ -783,7 +783,7 @@ export default class Apps {
 		// Phase 288: the install tail (instance-register -> docker up -> store
 		// persist -> provisionAppSubdomain -> registerAppSubdomain -> re-poll) is
 		// factored into #finishInstall so deployCustom() reuses it verbatim.
-		return this.#finishInstall(appId, manifest, app, filteredEnvOverrides)
+		return this.#finishInstall(appId, manifest, app, filteredEnvOverrides, gpuAccess)
 	}
 
 	/**
@@ -802,6 +802,7 @@ export default class Apps {
 		manifest: AppManifest,
 		app: App,
 		filteredEnvOverrides?: Record<string, string>,
+		gpuAccess?: boolean,
 	): Promise<boolean> {
 		// Phase 288: recompute the app data dir deterministically (same formula
 		// install()/deployCustom() use to stage the compose) so the requiresLocalAiClis
@@ -815,6 +816,15 @@ export default class Apps {
 			// this just quickly returns and does nothing since the app env is already running.
 			// However in the case where the app env is down this ensures we start it again.
 			await appEnvironment(this.#livinityd, 'up')
+			// 330 GPU-05: persist the install-time GPU choice BEFORE the first container
+			// create so patchComposeFile (inside app.install() below) picks it up on the
+			// very first pass — a direct store write, NOT app.setGpuAccess() which also
+			// fire-and-forgets this.restart() and would race the container being created
+			// (FLAG 5). Only written when a value was threaded (install() → here); the
+			// other #finishInstall caller (deployCustom) passes none → undefined → no-op.
+			if (gpuAccess !== undefined) {
+				await app.store.set('gpuAccess', gpuAccess)
+			}
 			await app.install(filteredEnvOverrides)
 		} catch (error) {
 			this.logger.error(`Failed to install app ${appId}`, error)

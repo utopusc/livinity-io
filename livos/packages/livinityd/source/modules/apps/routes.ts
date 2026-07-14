@@ -208,6 +208,11 @@ export const apps = router({
 				appId: z.string(),
 				alternatives: z.record(z.string()).optional(),
 				environmentOverrides: z.record(z.string()).optional(),
+				// 330 GPU-05: opt-in install-time GPU choice for gpuCapable apps
+				// (Ollama). Persisted before the first container create so the compose
+				// reservation lands on the first `up` (no double restart). Admin-gated
+				// at the call site below (WR-02) — see the gpuAccess note there.
+				gpuAccess: z.boolean().optional(),
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
@@ -246,7 +251,14 @@ export const apps = router({
 			// single-user (no currentUser) stays admin-equivalent — WS-D (256-04)
 			// tightens the no-currentUser case separately.
 			const isAdmin = ctx.currentUser ? ctx.currentUser.role === 'admin' : true
-			const result = await ctx.apps.install(input.appId, input.alternatives, input.environmentOverrides, isAdmin)
+			// 330 GPU-05 (WR-02): GPU passthrough is HOST-resource-affecting — the
+			// sibling `setGpuAccess` route (above) is adminProcedure for exactly this
+			// reason. `install` cannot become adminProcedure (non-admins install their
+			// own per-user instances), so the install-time gpuAccess write is honored
+			// ONLY for admins here; a non-admin's gpuAccess:true is silently dropped
+			// (→ undefined) rather than 403-ing the whole install (T-330-10).
+			const gpuAccess = input.gpuAccess === true && isAdmin ? true : undefined
+			const result = await ctx.apps.install(input.appId, input.alternatives, input.environmentOverrides, isAdmin, gpuAccess)
 			// Auto-grant access to the installing user
 			if (ctx.currentUser?.id) {
 				await grantAppAccess(ctx.currentUser.id, input.appId, ctx.currentUser.id)
