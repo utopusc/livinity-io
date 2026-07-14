@@ -6,8 +6,11 @@ import crypto from 'node:crypto'
 import {mkdir, readFile, writeFile} from 'node:fs/promises'
 import {dirname} from 'node:path'
 
-import {exportJWK, generateKeyPair} from 'jose'
-
+// `jose` is imported lazily inside getOrCreateSigningJwks() (which only runs behind
+// the initOidc try/catch) — NOT at module load. This module is pulled in statically
+// by oidc/index.ts → server/index.ts, so a static `jose` import here would crash the
+// whole daemon at load if the dependency were missing/broken, taking down the login
+// path with it. Same defense-in-depth backstop as the oidc-provider lazy import.
 import {decrypt, encrypt, getKey} from '../secrets/dek.js'
 
 // Same secrets dir as the DEK itself (dek.ts → /opt/livos/data/secrets). The
@@ -69,6 +72,7 @@ export async function getOrCreateSigningJwks(): Promise<Jwks> {
 		// generate a fresh key, overwriting any corrupt blob (self-heal).
 	}
 
+	const {exportJWK, generateKeyPair} = await import('jose')
 	const {privateKey} = await generateKeyPair('RS256', {extractable: true})
 	const jwk = (await exportJWK(privateKey)) as Record<string, unknown>
 	jwk.kid = crypto.randomUUID()
