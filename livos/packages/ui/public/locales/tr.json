@@ -635,6 +635,7 @@
   "files-widgets.favorites.no-items-text": "Burada görmek için bir klasörü favorilere ekleyin",
   "files-widgets.recents.no-items-text": "Son kullanılan dosya yok",
   "generic-in": "in",
+  "gpu-access.admin-only": "Bu uygulamanın GPU erişimini yalnızca bir yönetici değiştirebilir.",
   "gpu-access.description": "{{app}} uygulamasının donanım hızlandırma için sunucunun GPU'sunu kullanmasına izin ver.",
   "gpu-access.exclusivity-warning": "GPU zaten {{app}} uygulamasına atanmış. Aynı anda birden fazla GPU uygulaması çalıştırmak bellek yetersizliği hatalarına yol açabilir.",
   "gpu-access.install-button": "Rehberli NVIDIA kurulumu",

@@ -3,6 +3,7 @@ import {TbCpu, TbInfoCircle, TbLoader2, TbAlertTriangle, TbCheck} from 'react-ic
 
 import {Button} from '@/shadcn-components/ui/button'
 import {Switch} from '@/shadcn-components/ui/switch'
+import {useCurrentUser} from '@/hooks/use-current-user'
 import {trpcReact} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
 
@@ -35,7 +36,13 @@ interface GpuAccessSectionProps {
 export function GpuAccessSection({appId, appName, initialEnabled}: GpuAccessSectionProps) {
 	const utils = trpcReact.useUtils()
 	const [enabled, setEnabled] = useState(initialEnabled)
-	const [rebootPending, setRebootPending] = useState(false)
+
+	// WR-02: `apps.setGpuAccess` (+ the guided `system.installNvidiaGpu`) are now
+	// adminProcedure — GPU passthrough is host-resource-affecting. Mirror the
+	// storage-section / danger-zone pattern: a non-admin sees the section (so it
+	// still explains GPU exclusivity) but the host-mutating controls are disabled
+	// with a note, rather than rendering a toggle that would 403 on click.
+	const {isAdmin} = useCurrentUser()
 
 	// GPU-02 — per-app toggle. Restarts the app container server-side (T-316-03).
 	const setGpuAccessMut = trpcReact.apps.setGpuAccess.useMutation({
@@ -52,12 +59,16 @@ export function GpuAccessSection({appId, appName, initialEnabled}: GpuAccessSect
 
 	// GPU-01 — unprivileged detection gates the whole guided-install block.
 	const detectGpuQuery = trpcReact.system.detectGpu.useQuery()
-	const installNvidiaGpuMut = trpcReact.system.installNvidiaGpu.useMutation({
-		onSuccess: () => {
-			// Re-probe so a successful toolkit install collapses the install affordance.
-			void detectGpuQuery.refetch()
-		},
-	})
+	// IN-01: the toolkit install and the driver install are DISTINCT actions with
+	// distinct post-conditions (only the driver needs a reboot). Track them as two
+	// separate mutations so a failed/abandoned driver install can never leave a
+	// stale reboot banner rendering over a later successful toolkit install.
+	const onInstallSuccess = () => {
+		// Re-probe so a successful install collapses the install affordance.
+		void detectGpuQuery.refetch()
+	}
+	const installToolkitMut = trpcReact.system.installNvidiaGpu.useMutation({onSuccess: onInstallSuccess})
+	const installDriverMut = trpcReact.system.installNvidiaGpu.useMutation({onSuccess: onInstallSuccess})
 	// Reboot-confirm reuses the EXISTING system.restart primitive — no new reboot control.
 	const restartMut = trpcReact.system.restart.useMutation()
 
@@ -68,7 +79,16 @@ export function GpuAccessSection({appId, appName, initialEnabled}: GpuAccessSect
 
 	const hasNvidia = detectGpuQuery.data?.hasNvidia ?? false
 	const toolkitConfigured = detectGpuQuery.data?.toolkitConfigured ?? false
-	const installResult = installNvidiaGpuMut.data
+	const installPending = installToolkitMut.isPending || installDriverMut.isPending
+	// Surface the failure of whichever action last failed (both share the same UI).
+	const installFailure =
+		installToolkitMut.data && installToolkitMut.data.ok === false
+			? installToolkitMut.data
+			: installDriverMut.data && installDriverMut.data.ok === false
+				? installDriverMut.data
+				: null
+	// Reboot is required ONLY after a SUCCESSFUL driver install (never the toolkit).
+	const driverInstalledOk = installDriverMut.data?.ok === true
 
 	return (
 		<div className='space-y-4'>
@@ -77,14 +97,24 @@ export function GpuAccessSection({appId, appName, initialEnabled}: GpuAccessSect
 				<span className='text-body-sm font-medium text-text-primary'>{t('gpu-access.title')}</span>
 			</div>
 
-			{/* GPU-02 toggle — never disabled by the exclusivity warning below. */}
+			{/* GPU-02 toggle — never disabled by the exclusivity warning below.
+			    Disabled for non-admins (WR-02): setGpuAccess is admin-only. */}
 			<div className='flex items-center justify-between'>
 				<div className='flex items-center gap-3'>
-					<Switch checked={enabled} onCheckedChange={handleToggle} disabled={setGpuAccessMut.isPending} />
+					<Switch
+						checked={enabled}
+						onCheckedChange={handleToggle}
+						disabled={setGpuAccessMut.isPending || !isAdmin}
+					/>
 					<p className='text-caption text-text-tertiary'>{t('gpu-access.description', {app: appName})}</p>
 				</div>
 				{setGpuAccessMut.isPending ? <TbLoader2 className='h-4 w-4 animate-spin text-text-secondary' /> : null}
 			</div>
+
+			{/* WR-02 — GPU passthrough is host-affecting, so only an admin can toggle it. */}
+			{!isAdmin ? (
+				<p className='text-caption text-text-tertiary'>{t('gpu-access.admin-only')}</p>
+			) : null}
 
 			{/* GPU-02 exclusivity — a WARN banner (does NOT block the toggle). */}
 			{otherGpuApps.length > 0 ? (
@@ -104,8 +134,9 @@ export function GpuAccessSection({appId, appName, initialEnabled}: GpuAccessSect
 				</p>
 			) : null}
 
-			{/* GPU-01 guided NVIDIA install — rendered ONLY when an NVIDIA card is detected. */}
-			{hasNvidia && !toolkitConfigured ? (
+			{/* GPU-01 guided NVIDIA install — rendered ONLY when an NVIDIA card is
+			    detected AND the caller is an admin (installNvidiaGpu is admin-only, WR-02). */}
+			{isAdmin && hasNvidia && !toolkitConfigured ? (
 				<div className='space-y-3 rounded-radius-sm border border-border-default bg-surface-base p-4'>
 					<div className='flex items-start gap-3'>
 						<TbInfoCircle className='mt-0.5 h-5 w-5 text-yellow-400' />
@@ -119,33 +150,31 @@ export function GpuAccessSection({appId, appName, initialEnabled}: GpuAccessSect
 						<Button
 							size='sm'
 							variant='default'
-							onClick={() => installNvidiaGpuMut.mutate({action: 'install-toolkit'})}
-							disabled={installNvidiaGpuMut.isPending}
+							onClick={() => installToolkitMut.mutate({action: 'install-toolkit'})}
+							disabled={installPending}
 						>
-							{installNvidiaGpuMut.isPending ? <TbLoader2 className='mr-1 h-4 w-4 animate-spin' /> : null}
-							{installNvidiaGpuMut.isPending ? t('gpu-access.installing') : t('gpu-access.install-button')}
+							{installToolkitMut.isPending ? <TbLoader2 className='mr-1 h-4 w-4 animate-spin' /> : null}
+							{installToolkitMut.isPending ? t('gpu-access.installing') : t('gpu-access.install-button')}
 						</Button>
 						<Button
 							size='sm'
 							variant='ghost'
-							onClick={() => {
-								installNvidiaGpuMut.mutate({action: 'install-driver'})
-								setRebootPending(true)
-							}}
-							disabled={installNvidiaGpuMut.isPending}
+							onClick={() => installDriverMut.mutate({action: 'install-driver'})}
+							disabled={installPending}
 						>
+							{installDriverMut.isPending ? <TbLoader2 className='mr-1 h-4 w-4 animate-spin' /> : null}
 							{t('gpu-access.install-driver-button')}
 						</Button>
 					</div>
 
-					{installResult && installResult.ok === false ? (
+					{installFailure ? (
 						<p role='alert' className='text-caption text-red-400'>
-							{t('gpu-access.install-failed', {reason: installResult.reason})}
+							{t('gpu-access.install-failed', {reason: installFailure.reason})}
 						</p>
 					) : null}
 
-					{/* Reboot-required confirm — only after a driver install; reuses system.restart. */}
-					{rebootPending && installResult?.ok ? (
+					{/* Reboot-required confirm — only after a SUCCESSFUL driver install; reuses system.restart. */}
+					{driverInstalledOk ? (
 						<div className='flex items-center gap-2'>
 							<TbAlertTriangle className='h-4 w-4 text-yellow-400' />
 							<p className='text-caption text-text-secondary'>{t('gpu-access.reboot-required')}</p>

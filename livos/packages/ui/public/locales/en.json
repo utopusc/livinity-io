@@ -661,6 +661,7 @@
   "files-widgets.favorites.no-items-text": "Add a folder to favorites to see it here",
   "files-widgets.recents.no-items-text": "No recent files",
   "generic-in": "in",
+  "gpu-access.admin-only": "Only an admin can change GPU access for this app.",
   "gpu-access.description": "Allow {{app}} to use the server's GPU for hardware acceleration.",
   "gpu-access.exclusivity-warning": "The GPU is already assigned to {{app}}. Running more than one GPU app at a time may cause out-of-memory errors.",
   "gpu-access.install-button": "Guided NVIDIA setup",

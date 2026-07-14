@@ -486,10 +486,15 @@ export const apps = router({
 
 	dependents: privateProcedure.input(z.string()).query(async ({ctx, input}) => ctx.apps.getDependents(input)),
 
-	// 316-02 (GPU-02): toggle a single app's GPU-access override. privateProcedure
-	// (session-authenticated) matches the setSelectedDependencies precedent —
-	// toggling restarts the app container (T-316-03).
-	setGpuAccess: privateProcedure
+	// 316-02 (GPU-02): toggle a single app's GPU-access override. adminProcedure
+	// (WR-02): GPU passthrough is HOST-resource-affecting — it restarts the app
+	// container (T-316-03) and, on an NVIDIA box, attaches an exclusive device
+	// reservation that can force OOM/contention against another user's GPU app.
+	// It therefore matches the sibling host-level GPU/system routes
+	// (installNvidiaGpu / shutdown / restart), NOT the per-user
+	// setSelectedDependencies precedent — a non-admin member must not be able to
+	// flip GPU access on a shared global app by enumerating appIds.
+	setGpuAccess: adminProcedure
 		.input(
 			z.object({
 				appId: z.string(),
