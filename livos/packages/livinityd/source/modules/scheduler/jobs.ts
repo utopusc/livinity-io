@@ -578,11 +578,20 @@ export const upsWatchHandler: BuiltInJobHandler = async (job, ctx) => {
 		const charge = parseUpsField(stdout, 'battery.charge')
 		const runtime = parseUpsField(stdout, 'battery.runtime')
 		const onBattery = /\bOB\b/.test(statusLine)
+		// 326-review (WR-01): only announce "power restored" on the OB->OL
+		// TRANSITION (D-16: raise restored "on return to OL"), not on every healthy
+		// tick. Without this guard the else-branch fired 'ups-power-restored' on the
+		// normal steady-state OL poll (every minute), leaving a persistent bell item +
+		// a 6h-refloored external alert on boxes whose mains never dropped. The active
+		// 'ups-power-loss' notification is our persisted prior-state marker.
+		const wasOnBattery = (await ctx.livinityd.notifications.get().catch(() => [] as string[])).includes(
+			'ups-power-loss',
+		)
 		if (onBattery) {
 			// Fire-and-forget: a dispatch failure must not fail the tick.
 			await ctx.livinityd.notifications.add('ups-power-loss', {severity: 'critical', external: true}).catch(() => {})
-		} else {
-			// OL — mains restored: announce restore + clear the loss alert on recovery.
+		} else if (wasOnBattery) {
+			// OB→OL transition — mains restored: announce restore + clear the loss alert.
 			await ctx.livinityd.notifications.add('ups-power-restored', {severity: 'info', external: true}).catch(() => {})
 			await ctx.livinityd.notifications.clear('ups-power-loss').catch(() => {})
 		}

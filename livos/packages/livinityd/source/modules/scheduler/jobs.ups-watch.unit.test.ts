@@ -73,7 +73,9 @@ describe('upsWatchHandler — ctx.livinityd seam + Phase-310 alert bridge', () =
 		})
 		const add = vi.fn().mockResolvedValue(true)
 		const clear = vi.fn().mockResolvedValue(true)
-		const livinityd = {notifications: {add, clear}} as never
+		// No loss active yet — get() returns []. (326-review WR-01)
+		const get = vi.fn().mockResolvedValue([])
+		const livinityd = {notifications: {add, clear, get}} as never
 
 		const result = await upsWatchHandler(fakeJob, {logger: fakeLogger, livinityd})
 
@@ -82,7 +84,8 @@ describe('upsWatchHandler — ctx.livinityd seam + Phase-310 alert bridge', () =
 		expect(clear).not.toHaveBeenCalled()
 	})
 
-	test('OL (recovery): ups.status OL → add(ups-power-restored, info, external) + clear(ups-power-loss)', async () => {
+	// 326-review (WR-01): OL with a PRIOR loss active (OB→OL transition) → restore.
+	test('OL after loss (OB→OL): loss active → add(ups-power-restored, info, external) + clear(ups-power-loss)', async () => {
 		mockExeca.mockReset()
 		mockExeca.mockResolvedValue({
 			stdout: 'ups.status: OL\nbattery.charge: 100\nbattery.runtime: 3000',
@@ -90,12 +93,74 @@ describe('upsWatchHandler — ctx.livinityd seam + Phase-310 alert bridge', () =
 		})
 		const add = vi.fn().mockResolvedValue(true)
 		const clear = vi.fn().mockResolvedValue(true)
-		const livinityd = {notifications: {add, clear}} as never
+		// Prior loss is still active in the store → this OL is a genuine recovery.
+		const get = vi.fn().mockResolvedValue(['ups-power-loss'])
+		const livinityd = {notifications: {add, clear, get}} as never
 
 		const result = await upsWatchHandler(fakeJob, {logger: fakeLogger, livinityd})
 
 		expect(result.status).toBe('success')
 		expect(add).toHaveBeenCalledWith('ups-power-restored', {severity: 'info', external: true})
 		expect(clear).toHaveBeenCalledWith('ups-power-loss')
+	})
+
+	// 326-review (WR-01): the steady-state healthy case — a mains-powered box polls
+	// OL every minute with NO prior loss. It must NOT raise 'ups-power-restored'
+	// (the pre-fix bug spammed a persistent bell item + a 6h-refloored alert).
+	test('healthy OL (no prior loss): NO restore notification, no clear', async () => {
+		mockExeca.mockReset()
+		mockExeca.mockResolvedValue({
+			stdout: 'ups.status: OL\nbattery.charge: 100\nbattery.runtime: 3000',
+			exitCode: 0,
+		})
+		const add = vi.fn().mockResolvedValue(true)
+		const clear = vi.fn().mockResolvedValue(true)
+		const get = vi.fn().mockResolvedValue([]) // no active loss marker
+		const livinityd = {notifications: {add, clear, get}} as never
+
+		const result = await upsWatchHandler(fakeJob, {logger: fakeLogger, livinityd})
+
+		expect(result.status).toBe('success')
+		expect((result.output as {status: string}).status).toBe('OL')
+		expect(add).not.toHaveBeenCalled()
+		expect(clear).not.toHaveBeenCalled()
+	})
+
+	// 326-review (WR-01): a full OB→OL episode raises EXACTLY ONE restore. Simulated
+	// by driving the handler twice against a store whose active-notification list
+	// reflects the add()/clear() calls (mirrors the real FileStore behavior).
+	test('OB tick then OL tick → exactly one restore', async () => {
+		const active: string[] = []
+		const add = vi.fn(async (id: string) => {
+			if (!active.includes(id)) active.unshift(id)
+			return true
+		})
+		const clear = vi.fn(async (id: string) => {
+			const i = active.indexOf(id)
+			if (i >= 0) active.splice(i, 1)
+			return true
+		})
+		const get = vi.fn(async () => [...active])
+		const livinityd = {notifications: {add, clear, get}} as never
+
+		// Tick 1: OB (mains lost).
+		mockExeca.mockReset()
+		mockExeca.mockResolvedValue({stdout: 'ups.status: OB\nbattery.charge: 40', exitCode: 0})
+		await upsWatchHandler(fakeJob, {logger: fakeLogger, livinityd})
+
+		// Tick 2: OL (mains restored) — the genuine transition.
+		mockExeca.mockReset()
+		mockExeca.mockResolvedValue({stdout: 'ups.status: OL\nbattery.charge: 100', exitCode: 0})
+		await upsWatchHandler(fakeJob, {logger: fakeLogger, livinityd})
+
+		// Tick 3: steady-state OL — must NOT re-announce restore.
+		mockExeca.mockReset()
+		mockExeca.mockResolvedValue({stdout: 'ups.status: OL\nbattery.charge: 100', exitCode: 0})
+		await upsWatchHandler(fakeJob, {logger: fakeLogger, livinityd})
+
+		const restoreCalls = add.mock.calls.filter(([id]) => id === 'ups-power-restored')
+		expect(restoreCalls).toHaveLength(1)
+		// And the loss marker is cleared once the episode ends.
+		expect(active).not.toContain('ups-power-loss')
 	})
 })
