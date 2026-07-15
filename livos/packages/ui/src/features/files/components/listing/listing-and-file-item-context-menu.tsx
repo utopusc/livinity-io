@@ -180,6 +180,19 @@ export function ListingAndFileItemContextMenu({children, menuItems}: ListingAndF
 				})
 			}
 
+			// FILES-01 (324-07) — open the NEW public share-link mint dialog. DISTINCT
+			// trigger from the Samba `openShareInfoDialog` above (different dialog key,
+			// different `files-public-share-*` params, different i18n namespace).
+			const openPublicShareDialog = () => {
+				navigate({
+					search: addLinkSearchParams({
+						dialog: 'files-public-share',
+						'files-public-share-name': item.name,
+						'files-public-share-path': item.path,
+					}),
+				})
+			}
+
 			contextMenuContent = (
 				<>
 					{/* if browsing recents or search, show the "show in enclosing folder" option */}
@@ -259,6 +272,11 @@ export function ListingAndFileItemContextMenu({children, menuItems}: ListingAndF
 							{t('files-action.share')}
 						</ContextMenuItem>
 					)}
+					{/* FILES-01 (324-07) — public share link (opaque token, optional
+					    password/expiry/limit). Separate from the Samba LAN share above. */}
+					<ContextMenuItem disabled={!hasOneSelectedItem} onClick={openPublicShareDialog}>
+						{t('files-public-share.menu-create-link')}
+					</ContextMenuItem>
 					{isPathFavorite(item.path) ? (
 						<ContextMenuItem disabled={!canRemoveFavorite} onClick={() => removeFavorite({path: item.path})}>
 							{t('files-action.remove-favorite')}

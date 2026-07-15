@@ -18,6 +18,9 @@ export type FilesDialogKey =
 	| 'files-external-storage-unsupported'
 	| 'files-add-network-share'
 	| 'files-format-drive'
+	// FILES-01 (324-07) — public share-link mint dialog. DISTINCT from the Samba
+	// `files-share-info` key: this opens the NEW `public-share-dialog/`.
+	| 'files-public-share'
 export type DialogKey = GlobalDialogKey | AppStoreDialogKey | SettingsDialogKey | FilesDialogKey
 
 /**

@@ -35,6 +35,8 @@ const ExternalStorageUnsupportedDialog = lazy(
 const AddNetworkShareDialog = lazy(() => import('@/features/files/components/dialogs/add-network-share-dialog'))
 const FormatDriveDialog = lazy(() => import('@/features/files/components/dialogs/format-drive-dialog'))
 const EncryptedFolderDialog = lazy(() => import('@/features/files/components/dialogs/encrypted-folder-dialog'))
+// FILES-01 (324-07) — NEW public share-link mint dialog (distinct from ShareInfoDialog).
+const PublicShareDialog = lazy(() => import('@/features/files/components/dialogs/public-share-dialog'))
 
 type FilesWindowContentProps = {
 	initialRoute: string
@@ -239,6 +241,9 @@ function FilesWindowRouter({
 					</Suspense>
 					<Suspense>
 						<EncryptedFolderDialog />
+					</Suspense>
+					<Suspense>
+						<PublicShareDialog />
 					</Suspense>
 				</RewindOverlayProvider>
 			</FilesDndWrapper>
