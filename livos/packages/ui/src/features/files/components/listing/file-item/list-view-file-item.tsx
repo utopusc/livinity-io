@@ -3,6 +3,7 @@ import '@/features/files/components/listing/file-item/list-view-file-item.css'
 import {TbDownload, TbFileText, TbFolder, TbMusic, TbPhoto, TbVideo} from 'react-icons/tb'
 
 import {EditableName} from '@/features/files/components/listing/file-item/editable-name'
+import {EncryptedFolderBadge} from '@/features/files/components/listing/file-item/encrypted-folder-badge'
 import {TruncatedFilename} from '@/features/files/components/listing/file-item/truncated-filename'
 import {FileItemIcon} from '@/features/files/components/shared/file-item-icon'
 import {FILE_TYPE_MAP, HOME_PATH} from '@/features/files/constants'
@@ -66,15 +67,18 @@ export function ListViewFileItem({item, isEditingName, onEditingNameComplete, fa
 				</div>
 				<div className={cn('flex flex-1 items-center justify-between overflow-hidden', fadedContent && 'opacity-50')}>
 					<div className='flex min-w-0 flex-1 flex-col overflow-hidden'>
-						{isEditingName ? (
-							<EditableName item={item} view='list' onFinish={onEditingNameComplete} />
-						) : (
-							<TruncatedFilename
-								filename={item.name}
-								view='list'
-								className='min-w-0 overflow-hidden text-ellipsis whitespace-nowrap pr-2 font-medium text-caption'
-							/>
-						)}
+						<div className='flex min-w-0 items-center gap-2'>
+							{isEditingName ? (
+								<EditableName item={item} view='list' onFinish={onEditingNameComplete} />
+							) : (
+								<TruncatedFilename
+									filename={item.name}
+									view='list'
+									className='min-w-0 overflow-hidden text-ellipsis whitespace-nowrap pr-2 font-medium text-caption'
+								/>
+							)}
+							<EncryptedFolderBadge item={item} />
+						</div>
 						<span className='min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-caption-sm text-text-tertiary'>
 							{isUploading
 								? uploadingProgress === 0
@@ -116,6 +120,7 @@ export function ListViewFileItem({item, isEditingName, onEditingNameComplete, fa
 							<TruncatedFilename filename={item.name} view='list' className='min-w-0 text-caption' />
 						)}
 					</div>
+					<EncryptedFolderBadge item={item} />
 				</div>
 			</div>
 

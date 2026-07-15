@@ -34,6 +34,7 @@ const ExternalStorageUnsupportedDialog = lazy(
 )
 const AddNetworkShareDialog = lazy(() => import('@/features/files/components/dialogs/add-network-share-dialog'))
 const FormatDriveDialog = lazy(() => import('@/features/files/components/dialogs/format-drive-dialog'))
+const EncryptedFolderDialog = lazy(() => import('@/features/files/components/dialogs/encrypted-folder-dialog'))
 
 type FilesWindowContentProps = {
 	initialRoute: string
@@ -235,6 +236,9 @@ function FilesWindowRouter({
 							forcedDeviceId={forcedFormatDeviceId}
 							onForcedClose={() => setForcedFormatDeviceId(null)}
 						/>
+					</Suspense>
+					<Suspense>
+						<EncryptedFolderDialog />
 					</Suspense>
 				</RewindOverlayProvider>
 			</FilesDndWrapper>

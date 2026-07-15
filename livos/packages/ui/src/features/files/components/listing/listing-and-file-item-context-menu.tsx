@@ -11,6 +11,7 @@ import {useNetworkStorage} from '@/features/files/hooks/use-network-storage'
 import {usePreferences} from '@/features/files/hooks/use-preferences'
 import {useRewindAction} from '@/features/files/hooks/use-rewind-action'
 import {useShares} from '@/features/files/hooks/use-shares'
+import {useEncryptedFolderStore} from '@/features/files/store/use-encrypted-folder-store'
 import {useIsFilesReadOnly} from '@/features/files/providers/files-capabilities-context'
 import {useFilesStore} from '@/features/files/store/use-files-store'
 import {
@@ -18,6 +19,7 @@ import {
 	isDirectoryANetworkShare,
 } from '@/features/files/utils/is-directory-a-network-device-or-share'
 import {isDirectoryALivinityBackup} from '@/features/files/utils/is-directory-a-livinity-backup'
+import {useCurrentUser} from '@/hooks/use-current-user'
 import {useQueryParams} from '@/hooks/use-query-params'
 import {
 	ContextMenu,
@@ -81,6 +83,9 @@ export function ListingAndFileItemContextMenu({children, menuItems}: ListingAndF
 		isViewingNetworkShares,
 		navigateToDirectory,
 	} = useFilesNavigate()
+
+	const {isAdmin} = useCurrentUser()
+	const openEncryptedFolder = useEncryptedFolderStore((s) => s.openEncryptedFolder)
 
 	const {isPathShared, isAddingShare, isRemovingShare} = useShares()
 	const {isPathFavorite, addFavorite, removeFavorite, isAddingFavorite, isRemovingFavorite} = useFavorites()
@@ -278,6 +283,14 @@ export function ListingAndFileItemContextMenu({children, menuItems}: ListingAndF
 		// Listing menu (no items selected)
 		contextMenuContent = (
 			<>
+				{isAdmin ? (
+					<>
+						<ContextMenuItem onClick={() => openEncryptedFolder({mode: 'create'})}>
+							{t('storage.encryption.create')}
+						</ContextMenuItem>
+						<ContextMenuSeparator />
+					</>
+				) : null}
 				{menuItems ? (
 					<>
 						{menuItems}

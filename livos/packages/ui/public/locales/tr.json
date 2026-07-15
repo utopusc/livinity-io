@@ -1062,6 +1062,8 @@
   "storage.encryption.title": "Şifreli klasörler",
   "storage.encryption.unlock": "Kilidi aç",
   "storage.encryption.unlocked": "Kilidi açık",
+  "storage.encryption.badge.locked": "Kilitli",
+  "storage.encryption.badge.unlocked": "Kilidi açık",
   "storage.encryption.cipher-dir": "Şifreli veri konumu (host yolu)",
   "storage.encryption.plain-dir": "Bağlama konumu (host yolu)",
   "storage.encryption.path-hint": "Mutlak host yolu. Bu bir yönetici işlemidir.",
