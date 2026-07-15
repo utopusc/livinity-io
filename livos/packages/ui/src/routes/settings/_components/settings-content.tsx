@@ -54,6 +54,7 @@ import {
 	TbShieldCheck,
 	TbMessages,
 	TbWorld,
+	TbNetwork,
 	TbArrowBackUp,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
@@ -106,6 +107,7 @@ import {SettingsToggleRow} from './settings-toggle-row'
 import {SoftwareUpdateListRow} from './software-update-list-row'
 import {GpuInstallSection} from './gpu-install-section'
 import {OsPatchingSection} from './os-patching-section'
+import {NetworkSection} from './network-section'
 import {UpsStatusSection} from './ups-status-section'
 import {PastDeploysTable} from './past-deploys-table'
 import {MenuItemBadge} from './menu-item-badge'
@@ -177,6 +179,8 @@ type SettingsSection =
 	| 'advanced'
 	| 'software-update'
 	| 'domains'
+	// Phase 325-08 (NET-01) — host networking (hostname / static IP / DNS), WSL2-hidden.
+	| 'network'
 	// Phase 310-04 — external alert channels (Telegram/Discord/Slack/webhook/ntfy).
 	| 'alert-channels'
 	// Phase 320 — resource-history monitoring + editable alert thresholds.
@@ -224,6 +228,7 @@ const MENU_ITEMS: MenuItem[] = [
 	// this tab also hosts the Migration sub-tab; mobile keeps Migration separate.)
 	{id: 'backups',          group: 'system', icon: TbDatabase,        label: 'Backups',           description: 'Backup, restore & migration',             adminOnly: true},
 	{id: 'domains', group: 'system', icon: TbWorld, label: 'Domains', description: 'Subdomains & DNS usage', adminOnly: true},
+	{id: 'network', group: 'system', icon: TbNetwork, label: 'Network', description: 'Hostname, static IP & DNS', adminOnly: true},
 	{id: 'alert-channels', group: 'system', icon: TbBell, label: 'Alert Channels', description: 'Telegram, Discord, Slack, webhook & ntfy alerts', adminOnly: true},
 	{id: 'monitoring', group: 'system', icon: TbChartLine, label: 'Monitoring', description: 'Resource history & alert thresholds', adminOnly: true},
 	{id: 'security-advisor', group: 'system', icon: TbShieldCheck, label: 'Security Advisor', description: 'Scan results & remediation guidance', adminOnly: true},
@@ -645,6 +650,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <SoftwareUpdateSection />
 		case 'domains':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><DomainsSectionLazy /></Suspense>
+		case 'network':
+			return <NetworkSection />
 		case 'alert-channels':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><AlertChannelsSectionLazy /></Suspense>
 		case 'monitoring':
