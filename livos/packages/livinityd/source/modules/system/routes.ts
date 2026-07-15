@@ -30,6 +30,7 @@ import {adminProcedure, privateProcedure, publicProcedure, router} from '../serv
 import bcrypt from 'bcryptjs'
 import {createShare, listSharesForUser, revokeShare, type FileShareRow} from '../files/share-tokens.js'
 import {fileUserContext, type FileUserInfo} from '../files/files.js'
+import {grantAcl, revokeAcl, listAclsForPath} from '../files/file-acls.js'
 
 type SystemStatus = 'running' | 'updating' | 'shutting-down' | 'restarting' | 'migrating' | 'resetting' | 'restoring'
 let systemStatus: SystemStatus = 'running'
@@ -307,6 +308,95 @@ async function runWebdav(
 			}
 			settle({ok: false, reason: `timeout after ${timeoutMs}ms`})
 		}, timeoutMs)
+
+		child.stdout?.on('data', (chunk: Buffer) => {
+			stdout += chunk.toString('utf8')
+		})
+
+		child.stderr?.on('data', (chunk: Buffer) => {
+			stderr += chunk.toString('utf8')
+		})
+
+		// Fires for ENOENT (sudo not on PATH) / EACCES — degrade, do not throw.
+		child.on('error', (err: Error) => {
+			settle({ok: false, reason: err.message || 'sudo spawn failed'})
+		})
+
+		child.on('close', (code) => {
+			if (code === 0) {
+				settle({ok: true, stdout})
+				return
+			}
+			settle({
+				ok: false,
+				reason: stderr.trim().slice(0, 500) || `wrapper exited with code ${code ?? 'unknown'}`,
+			})
+		})
+	})
+}
+
+// ── Phase 324 (FILES-02, 324-04) — per-user Samba provisioning (samba-user) ──
+// Managed through the root-owned closed-enum wrapper
+// (scripts/install/livos-samba-user.sh → /usr/local/lib/livos/livos-samba-user.sh,
+// built in 324-04) via the scoped /etc/sudoers.d/livos-samba-user NOPASSWD grant.
+// A DIRECT clone of the runWebdav shape (closed-enum action, stdout-capturing,
+// never-throw discriminated union) EXTENDED to write the Samba SECONDARY password
+// to the child's STDIN for the add-user/set-password actions (never argv — mirrors
+// the livos-crypto passphrase-on-stdin discipline). The wrapper enum is
+// {add-user|set-password|remove-user|status}; the action + username are
+// zod-constrained at the route boundary below (defense-in-depth on top of the
+// wrapper's own enum + username charset guard). Provisioning is FAIL-SOFT (D-09): a
+// smbpasswd/useradd error resolves {ok:false} and is logged/reconciled — it NEVER
+// blocks a user/share op or 500s the caller. livinityd itself never runs
+// useradd/smbpasswd/userdel directly.
+const SAMBA_USER_WRAPPER = '/usr/local/lib/livos/livos-samba-user.sh'
+
+async function runSambaUser(
+	action: 'add-user' | 'set-password' | 'remove-user' | 'status',
+	username?: string,
+	// The Samba SECONDARY password — written to the child's STDIN (never argv) for
+	// add-user/set-password. Undefined for remove-user/status.
+	password?: string,
+): Promise<{ok: true; stdout: string} | {ok: false; reason: string}> {
+	return new Promise((resolve) => {
+		const timeoutMs = 300_000
+		let settled = false
+		let stdout = ''
+		let stderr = ''
+		const settle = (result: {ok: true; stdout: string} | {ok: false; reason: string}): void => {
+			if (settled) return
+			settled = true
+			clearTimeout(timer)
+			resolve(result)
+		}
+
+		// The wrapper reads the password on fd 0, so open stdin as a pipe whenever a
+		// password is supplied; otherwise leave stdin ignored (status/remove-user).
+		const wantsStdin = password != null
+		const args = ['-n', SAMBA_USER_WRAPPER, action]
+		if (username != null) args.push(username)
+		const child = spawn('sudo', args, {
+			stdio: [wantsStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+			windowsHide: true,
+		})
+
+		const timer = setTimeout(() => {
+			try {
+				child.kill('SIGTERM')
+			} catch {
+				/* best-effort */
+			}
+			settle({ok: false, reason: `timeout after ${timeoutMs}ms`})
+		}, timeoutMs)
+
+		// Write the secondary password ONE line then close stdin. The wrapper reads a
+		// single line into a private var; the value never reaches argv (not ps-visible).
+		if (wantsStdin && child.stdin) {
+			child.stdin.on('error', () => {
+				/* EPIPE if the child died first — the close/error handler settles */
+			})
+			child.stdin.end(`${password}\n`)
+		}
 
 		child.stdout?.on('data', (chunk: Buffer) => {
 			stdout += chunk.toString('utf8')
@@ -1941,5 +2031,92 @@ export default router({
 			if (!caller?.id) throw new TRPCError({code: 'UNAUTHORIZED', message: 'Authentication required'})
 			const {rowCount} = await revokeShare({id: input.id, ownerUserId: caller.id})
 			return {revoked: rowCount > 0}
+		}),
+	// ── Phase 324-04 (FILES-02, D-09) — admin file-ACL grant/revoke/list ─────────
+	// adminProcedures over the 324-02 file-acls DAO: an admin grants/revokes a
+	// per-path {none|read|write} level to a user- or group-principal, and the same
+	// grants drive the render-time Samba `valid users`/`write list` (samba.ts) — so
+	// wiring the ACL editor here is what makes per-user Samba access reachable. The
+	// action/level/principalType are z.enum-constrained; the DAO parameterizes every
+	// value and FAILS OPEN on a null pool (legacy no-DB boxes grant nothing extra).
+	// The admin ACL UI lands in 324-08. After a grant/revoke we re-apply Samba so the
+	// smb.conf valid-users list reflects the new grant immediately (fail-soft).
+	aclGrant: adminProcedure
+		.input(
+			z.object({
+				virtualPath: z.string().min(1).max(4096),
+				principalType: z.enum(['user', 'group']),
+				principalId: z.string().min(1).max(256),
+				level: z.enum(['none', 'read', 'write']),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			const row = await grantAcl({
+				virtualPath: input.virtualPath,
+				principalType: input.principalType,
+				principalId: input.principalId,
+				level: input.level,
+				grantedBy: ctx.currentUser?.id ?? null,
+			})
+			// Re-render smb.conf so a per-user share's valid-users reflects the grant
+			// (fail-soft: a Samba error is logged, never fails the grant).
+			await ctx.livinityd!.files.samba
+				.applyShares()
+				.catch((error: unknown) => ctx.livinityd!.logger.error('Failed to re-apply shares after aclGrant', error))
+			return {granted: row != null, row}
+		}),
+	aclRevoke: adminProcedure
+		.input(
+			z.object({
+				virtualPath: z.string().min(1).max(4096),
+				principalType: z.enum(['user', 'group']),
+				principalId: z.string().min(1).max(256),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			const revoked = await revokeAcl(input.virtualPath, input.principalType, input.principalId)
+			await ctx.livinityd!.files.samba
+				.applyShares()
+				.catch((error: unknown) => ctx.livinityd!.logger.error('Failed to re-apply shares after aclRevoke', error))
+			return {revoked}
+		}),
+	aclList: adminProcedure
+		.input(z.object({virtualPath: z.string().min(1).max(4096)}))
+		.query(async ({input}) => listAclsForPath(input.virtualPath)),
+	// ── Phase 324-04 (FILES-02, D-09) — per-user Samba: migration + secondary password ─
+	// The OPT-IN, BREAKING cutover from the single shared `force user = root` account
+	// to per-user synthetic accounts. sambaGetPerUserAuth reads the flag;
+	// sambaSetPerUserAuth flips it + re-renders smb.conf (existing SMB clients on the
+	// shared "livinity" account MUST re-authenticate as their own livos-<username>
+	// account with the SECONDARY password — the UI is responsible for surfacing that
+	// warning, 324-08). sambaProvisionUser generates-once the per-user secondary
+	// password (surfaced ONCE, never synced from login — NTLM can't derive from
+	// bcrypt) and provisions the synthetic account via the root wrapper on STDIN.
+	// Provisioning is FAIL-SOFT: a wrapper error returns {ok:false} and NEVER throws.
+	sambaGetPerUserAuth: adminProcedure.query(async ({ctx}) => ({
+		perUserAuth: await ctx.livinityd!.files.samba.isPerUserAuthEnabled(),
+	})),
+	sambaSetPerUserAuth: adminProcedure
+		.input(z.object({enabled: z.boolean()}))
+		.mutation(async ({ctx, input}) => {
+			await ctx.livinityd!.files.samba.setPerUserAuth(input.enabled)
+			return {perUserAuth: input.enabled}
+		}),
+	sambaProvisionUser: adminProcedure
+		.input(z.object({username: z.string().min(1).max(32).regex(/^[a-z0-9_-]+$/)}))
+		.mutation(async ({ctx, input}) => {
+			// Generate-once the per-user secondary password (surfaced ONCE below).
+			const password = await ctx.livinityd!.files.samba.getUserSambaPassword(input.username)
+			// Provision the synthetic account + smbpasswd entry via the root wrapper,
+			// password on STDIN (never argv). Fail-soft: a wrapper error degrades to a
+			// {provisioned:false} result — it never blocks the caller.
+			const result = await runSambaUser('add-user', input.username, password)
+			return {provisioned: result.ok, reason: result.ok ? undefined : result.reason, password}
+		}),
+	sambaDeprovisionUser: adminProcedure
+		.input(z.object({username: z.string().min(1).max(32).regex(/^[a-z0-9_-]+$/)}))
+		.mutation(async ({input}) => {
+			const result = await runSambaUser('remove-user', input.username)
+			return {removed: result.ok, reason: result.ok ? undefined : result.reason}
 		}),
 })

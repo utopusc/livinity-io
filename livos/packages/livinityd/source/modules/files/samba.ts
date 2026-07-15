@@ -4,6 +4,9 @@ import fse from 'fs-extra'
 import {$} from 'execa'
 
 import randomToken from '../utilities/random-token.js'
+import {listAclsForPath, type FileAclRow} from './file-acls.js'
+import {listUsers} from '../database/index.js'
+import {listGroupMembers} from '../database/groups.js'
 
 import type Livinityd from '../../index.js'
 import type {FileChangeEvent} from './watcher.js'
@@ -48,17 +51,30 @@ load printers = no
 disable spoolss = yes
 `
 
-// Indiviudal share config
-const shareConfig = (name: string, path: string) => `
-# Share specific config
+// The synthetic-account prefix — each LivOS login <username> maps to the
+// login-less Unix + Samba account livos-<username> provisioned by the root
+// wrapper (scripts/install/livos-samba-user.sh). MUST stay in lockstep with the
+// wrapper's ACCOUNT_PREFIX so the render-time `valid users` list names the exact
+// accounts smbpasswd knows about.
+export function sambaAccountName(username: string): string {
+	return `livos-${username}`
+}
+
+// LEGACY single-account share config (pre-migration, D-09). Kept VERBATIM in
+// BEHAVIOR so existing LAN shares keep working until an admin opts into the
+// per-user model (store `samba.perUserAuth`). Everything routes through the single
+// shared "livinity" account with a blanket force-user-root mapping.
+//
+// NOTE (ordering, T-324): the blanket-root directive is placed ABOVE the
+// shared-account allow-line here so it is unambiguously the LEGACY path — the
+// per-user block below carries NO force-user-root line at all.
+const legacyShareConfig = (name: string, path: string) => `
+# Share specific config (LEGACY single-account model)
 [${name}]
 path = ${path}
 writeable = yes
 
-# Only allow "livinity" user to access the share.
-valid users = livinity
-
-# Handle permissions
+# Handle permissions (LEGACY)
 # We force root so samba can read files that could be created by app processes
 # running as various users including root.
 # We inherit owner to avoid breaking permissions for apps that expect files in
@@ -69,7 +85,89 @@ inherit owner = yes
 
 # Enable Time Machine backups.
 fruit:time machine = yes
+
+# Only allow the shared "livinity" account to access the share.
+valid users = livinity
 `
+
+// PER-USER share config (324-04 / FILES-02, D-09). `valid users` + `write list` are
+// the LITERAL synthetic accounts (livos-<username>) resolved from the file_acls
+// grants at smb.conf RENDER TIME — NO `net groupmap` / NSS group sync, the same
+// resolve-at-render idiom applyShares already uses for virtualToSystemPath. A
+// write-level grant places the account on `write list`; a read grant grants
+// browse/read only. The blanket force-user-root mapping is DROPPED so on-disk
+// access follows the per-user account's own uid.
+//
+// WHY A REAL UNIX ACCOUNT + AN NTLM SECONDARY PASSWORD (files/webdav.ts:13-34
+// divergence): stock Samba has NO external_auth_hook (unlike SFTPGo/WebDAV) so it
+// cannot delegate auth to livinityd's PG bcrypt table at login; NTLM also cannot be
+// derived from a bcrypt hash. Per-user Samba therefore structurally requires a real
+// (synthetic, login-less) Unix account + a generate-once SECONDARY password in the
+// smbpasswd DB — never the login password. Provisioning is done by the root wrapper.
+const perUserShareConfig = (name: string, path: string, validUsers: string[], writeList: string[]) => `
+# Share specific config (PER-USER model — blanket force-user-root dropped)
+[${name}]
+path = ${path}
+writeable = yes
+
+# valid users / write list = the literal synthetic accounts resolved from the
+# file_acls grants at render time (write-level grants also land on write list).
+valid users = ${validUsers.join(' ')}
+write list = ${writeList.join(' ')}
+
+# On-disk access follows the per-user account's own uid (no blanket root mapping).
+force group = livinity
+inherit owner = yes
+
+# Enable Time Machine backups.
+fruit:time machine = yes
+`
+
+// Render a single share's smb.conf block. `perUser === null` → the LEGACY shared
+// account block (blanket force-user-root); otherwise the per-user block driven by the
+// render-time-resolved {validUsers, writeList}. Pure + exported for unit coverage.
+export function renderShareBlock(
+	name: string,
+	path: string,
+	perUser: {validUsers: string[]; writeList: string[]} | null,
+): string {
+	if (perUser === null) return legacyShareConfig(name, path)
+	return perUserShareConfig(name, path, perUser.validUsers, perUser.writeList)
+}
+
+// Resolve a share's file_acls grants into the literal Samba account lists at render
+// time. PURE (injectable resolvers) so the truth table is unit-testable OFFLINE (no
+// live PG). For each non-`none` grant: a user-principal resolves to one username, a
+// group-principal expands to every member's username; each is mapped to its
+// livos-<username> synthetic account. `valid users` is the union of read+write
+// accounts; `write list` is the subset with a write-level grant. Deduped.
+export async function resolveSambaShareAcls(
+	acls: readonly FileAclRow[],
+	resolvers: {
+		resolveUsername: (userId: string) => Promise<string | null>
+		resolveGroupMembers: (groupId: string) => Promise<string[]>
+	},
+): Promise<{validUsers: string[]; writeList: string[]}> {
+	const valid = new Set<string>()
+	const write = new Set<string>()
+	for (const grant of acls) {
+		// A `none` grant is an explicit deny — it contributes NO valid-users entry.
+		if (grant.level === 'none') continue
+		let usernames: string[] = []
+		if (grant.principal_type === 'user') {
+			const username = await resolvers.resolveUsername(grant.principal_id)
+			if (username) usernames = [username]
+		} else {
+			usernames = await resolvers.resolveGroupMembers(grant.principal_id)
+		}
+		for (const username of usernames) {
+			const account = sambaAccountName(username)
+			valid.add(account)
+			if (grant.level === 'write') write.add(account)
+		}
+	}
+	return {validUsers: [...valid], writeList: [...write]}
+}
 
 export default class Samba {
 	#livinityd: Livinityd
@@ -145,21 +243,87 @@ export default class Samba {
 		})`smbpasswd -s -a livinity`
 	}
 
+	// Whether the OPT-IN per-user Samba auth model is enabled (324-04, D-09). Default
+	// false — existing single-account LAN shares keep working (blanket force-user-root)
+	// until an admin explicitly opts into the BREAKING per-user cutover. Fail-soft: a
+	// missing/undecodable store key reads as legacy-off.
+	async isPerUserAuthEnabled() {
+		const state = await this.#livinityd.store.get('samba').catch(() => undefined)
+		return state?.perUserAuth ?? false
+	}
+
+	// Opt into (or back out of) the per-user auth model. This is a BREAKING migration
+	// (existing SMB clients using the shared "livinity" account will need to
+	// re-authenticate as their own livos-<username> account with the per-user
+	// SECONDARY password) — the caller is responsible for surfacing that warning + a
+	// release note. Flips the flag then re-renders smb.conf. Kept SEPARATE from the
+	// wrapper-driven account provisioning (system/routes.ts runSambaUser).
+	async setPerUserAuth(enabled: boolean) {
+		const state = await this.#livinityd.store.get('samba').catch(() => undefined)
+		await this.#livinityd.store.set('samba', {
+			perUserAuth: enabled,
+			provisionedUsers: state?.provisionedUsers ?? [],
+		})
+		await this.applyShares().catch((error) => this.logger.error('Failed to re-apply shares after migration toggle', error))
+	}
+
+	// Gets (or generates once) a PER-USER Samba SECONDARY password. Clones the single
+	// getSharePassword() surface per-user: a 128-char random token written 0600 under
+	// `secrets/samba-user-<username>-password`. It is NEVER synced from the login
+	// password (NTLM cannot derive from bcrypt — the login plaintext is never held by
+	// LivOS) and is surfaced to the user ONCE so they can enter it in their SMB client.
+	async getUserSambaPassword(username: string) {
+		const file = `${this.#livinityd.dataDirectory}/secrets/samba-user-${username}-password`
+		const password = await fse.readFile(file, 'utf8').catch(async () => {
+			this.logger.log(`Creating per-user Samba secondary password for ${username}`)
+			const generated = randomToken(128)
+			await fse.writeFile(file, generated, {mode: 0o600})
+			return generated
+		})
+		await fse.chmod(file, 0o600).catch(() => {})
+		return password
+	}
+
+	// Resolve a share's file_acls grants → the literal {validUsers, writeList} Samba
+	// account lists at render time. Wires the pure resolveSambaShareAcls to the live
+	// DB (listUsers for user-principals, listGroupMembers for group-principals). Fully
+	// fail-soft: any DB error resolves to no extra accounts (the share renders with an
+	// empty valid-users list rather than throwing mid-render).
+	async #resolveShareAcls(virtualPath: string) {
+		const acls = await listAclsForPath(virtualPath).catch(() => [] as FileAclRow[])
+		return resolveSambaShareAcls(acls, {
+			resolveUsername: async (userId) => {
+				const users = await listUsers().catch(() => [])
+				return users.find((u) => u.id === userId)?.username ?? null
+			},
+			resolveGroupMembers: async (groupId) => {
+				const members = await listGroupMembers(groupId).catch(() => [])
+				return members.map((m) => m.username)
+			},
+		})
+	}
+
 	// Apply shares to Samba
 	async applyShares() {
 		const shares = await this.#get()
+		const perUserAuth = await this.isPerUserAuthEnabled()
 
 		// Generate Samba config
 		let config = SMB_CONFIG
 		for (const share of shares) {
 			// Make Livinity shares easily detectable in clients
-			share.name = await this.#computeSharename(share.name, share.path)
+			const shareName = await this.#computeSharename(share.name, share.path)
+
+			// Resolve the render-time valid-users/write-list from file_acls BEFORE we
+			// mutate share.path (the ACL DAO keys on the VIRTUAL path).
+			const perUser = perUserAuth ? await this.#resolveShareAcls(share.path) : null
 
 			// Convert to system path
-			share.path = await this.#livinityd.files.virtualToSystemPath(share.path)
+			const systemPath = await this.#livinityd.files.virtualToSystemPath(share.path)
 
-			// Append the share config
-			config += shareConfig(share.name, share.path)
+			// Append the share config (legacy shared-account block, or the per-user
+			// block driven by the render-time-resolved grants).
+			config += renderShareBlock(shareName, systemPath, perUser)
 		}
 
 		// Write out Samba config

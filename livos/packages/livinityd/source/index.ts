@@ -459,6 +459,23 @@ type StoreSchema = {
 		port: number
 		provisionedUsers: string[]
 	}
+	// Phase 324 FILES-02 (324-04) — per-user Samba auth state. Dedicated top-level
+	// key (NOT nested under `webdav`/`files`/any array or scalar — dot-prop path
+	// collisions silently drop the write, same convention as `webdav`/`monitoring`/
+	// `security`/`tailscale` above). Holds ONLY the OPT-IN migration flag +
+	// non-secret provisioning bookkeeping: `perUserAuth` gates the BREAKING cutover
+	// from the single shared `force user = root` account to per-user synthetic
+	// accounts (default false — existing LAN shares keep working until an admin opts
+	// in), and `provisionedUsers` records which users the last provisioning pass
+	// created a synthetic Samba account for. The per-user Samba SECONDARY passwords
+	// are NEVER stored here — they live as generate-once secrets under
+	// `${dataDirectory}/secrets/samba-user-<username>-password` (0600), the same
+	// shape as the existing single `share-password` secret, and are never synced
+	// from the login password (NTLM cannot derive from bcrypt).
+	samba: {
+		perUserAuth: boolean
+		provisionedUsers: string[]
+	}
 	// Phase 329 NET-04 (329-06) — UI-DISPLAY-ONLY raw TCP/UDP exposure mirror.
 	// Written by system.netExposeOpen / system.netExposeClose AFTER a successful
 	// wrapper regen so the Settings card can render the last-known openings even when
