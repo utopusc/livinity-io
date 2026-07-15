@@ -35,6 +35,7 @@ import Favorites from './favorites.js'
 import Archive from './archive.js'
 import Thumbnails from './thumbnails.js'
 import Samba from './samba.js'
+import WebDav from './webdav.js'
 import ExternalStorage from './external-storage.js'
 import NetworkStorage from './network-storage.js'
 import Search from './search.js'
@@ -138,6 +139,7 @@ export default class Files {
 	archive: Archive
 	thumbnails: Thumbnails
 	samba: Samba
+	webdav: WebDav
 	externalStorage: ExternalStorage
 	networkStorage: NetworkStorage
 	search: Search
@@ -162,6 +164,7 @@ export default class Files {
 		this.archive = new Archive(livinityd)
 		this.thumbnails = new Thumbnails(livinityd)
 		this.samba = new Samba(livinityd)
+		this.webdav = new WebDav(livinityd)
 		this.externalStorage = new ExternalStorage(livinityd)
 		this.networkStorage = new NetworkStorage(livinityd)
 		this.search = new Search(livinityd)
@@ -283,6 +286,10 @@ export default class Files {
 		// Start submodules
 		await this.watcher.start().catch((error) => this.logger.error(`Failed to start watcher`, error))
 		await this.samba.start().catch((error) => this.logger.error(`Failed to start samba`, error))
+		// Phase 329 FILES-05 (329-05) — reconcile per-user WebDAV homes on boot. Its
+		// own start()/apply() is fail-soft (D-08), and this .catch is a second belt:
+		// a WebDAV error must NEVER take down the files module or block a LivOS user.
+		await this.webdav.start().catch((error) => this.logger.error(`Failed to start webdav`, error))
 		await this.externalStorage.start().catch((error) => this.logger.error(`Failed to start external storage`, error))
 		await this.networkStorage.start().catch((error) => this.logger.error(`Failed to start network storage`, error))
 		await this.recents.start().catch((error) => this.logger.error(`Failed to start recents`, error))

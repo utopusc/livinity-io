@@ -443,6 +443,22 @@ type StoreSchema = {
 		hostname?: string
 		backendState?: string
 	}
+	// Phase 329 FILES-05 (329-05) — WebDAV (SFTPGo) state. Dedicated top-level
+	// key (NOT nested under `tailscale`/`network`/any array or scalar — dot-prop
+	// path collisions silently drop the write, same convention as
+	// `monitoring`/`security`/`alerts`/`tailscale` above). Holds ONLY non-secret
+	// config + fail-soft provisioning bookkeeping: `enabled` (the WebDAV toggle),
+	// `port` (the fixed webdavd loopback port — the 329-04 wrapper constant 9083),
+	// and `provisionedUsers` (the usernames the last apply successfully reconciled
+	// a home dir for — an unreconciled user is retried on the next apply, D-08).
+	// Auth is NEVER stored here: passwords live ONLY in the PG bcrypt user table
+	// (livinityd is the single source of truth), validated live via the loopback
+	// external_auth_hook endpoint (/api/internal/webdav-auth) — no hash copy.
+	webdav: {
+		enabled: boolean
+		port: number
+		provisionedUsers: string[]
+	}
 	backups: {
 		repositories: {
 			id: string
