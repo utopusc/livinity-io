@@ -37,7 +37,15 @@ export function NetworkSection() {
 	// T-325-24 — host-mutating controls render for admins only.
 	const {isAdmin} = useCurrentUser()
 
-	const statusQ = trpcReact.system.networkStatus.useQuery()
+	// WR-02 — while the box's fail-closed revert watchdog is armed, poll status so the
+	// persistent Confirm banner (derived from the authoritative `revert-timer: active`
+	// signal below) stays honest: it clears itself once confirmed or after auto-revert.
+	const statusQ = trpcReact.system.networkStatus.useQuery(undefined, {
+		refetchInterval: (query) => {
+			const s = query.state.data?.status
+			return s && s.ok && /revert-timer:\s*active/.test(s.stdout) ? 5000 : false
+		},
+	})
 	const refetchStatus = () => void statusQ.refetch()
 	const setHostnameMut = trpcReact.system.networkSetHostname.useMutation({onSuccess: refetchStatus})
 	const applyIpMut = trpcReact.system.networkApplyIp.useMutation({onSuccess: refetchStatus})
@@ -117,6 +125,15 @@ export function NetworkSection() {
 	const applyFailure = applyIpMut.data && applyIpMut.data.ok === false ? applyIpMut.data.reason : null
 	const applied = applyIpMut.data?.ok === true
 
+	// WR-02 — derive the Confirm affordance from the AUTHORITATIVE wrapper status
+	// (`revert-timer: active` in `status` stdout), NOT the transient apply mutation.
+	// Applying a static IP over LAN/portal access drops the admin's connection to the
+	// OLD address; they must reconnect over the NEW address — a fresh page load where
+	// `applyIpMut.data` is gone. Reading the armed-timer signal from status means the
+	// Confirm control survives that reconnect, so a good config can actually be kept.
+	const revertArmed = status && status.ok ? /revert-timer:\s*active/.test(status.stdout) : false
+	const showConfirm = applied || revertArmed
+
 	return (
 		<div className='space-y-4 rounded-radius-sm border border-border-default bg-surface-base p-4'>
 			{header}
@@ -173,10 +190,11 @@ export function NetworkSection() {
 					</Button>
 				</div>
 
-				{/* Fail-closed 90s confirm banner — shown after a successful apply. The
-				    admin must reconnect over the NEW address and confirm or the box
-				    reverts on its own. */}
-				{applied ? (
+				{/* Fail-closed 90s confirm banner — shown whenever the box's revert
+				    watchdog is armed (WR-02: derived from the authoritative status, so it
+				    survives the reconnect over the NEW address). The admin must reconnect
+				    and confirm or the box reverts on its own. */}
+				{showConfirm ? (
 					<div className='space-y-2 rounded-radius-sm border border-amber-500/40 bg-amber-500/10 p-3'>
 						<div className='flex items-start gap-2'>
 							<TbAlertTriangle className='mt-0.5 h-4 w-4 text-amber-400' />
