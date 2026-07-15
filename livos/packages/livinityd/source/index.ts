@@ -416,6 +416,17 @@ type StoreSchema = {
 			plainDir: string
 		}[]
 	}
+	// Phase 325 NET-01 (325-08) — host networking state stamped by system.network*
+	// routes. Written by networkSetHostname (hostname + lastAppliedAt) / networkApplyIp
+	// (lastAppliedAt). Dedicated top-level key (NOT nested under `storage` or any
+	// array/scalar — dot-prop path collisions silently drop the write, same
+	// convention as `monitoring`/`security`/`alerts` above). Holds only non-secret
+	// metadata; the authoritative live config lives in /etc/netplan/90-livos.yaml
+	// (owned by the livos-network.sh wrapper, 325-06), never here.
+	network: {
+		hostname?: string
+		lastAppliedAt?: number
+	}
 	backups: {
 		repositories: {
 			id: string
