@@ -57,6 +57,8 @@ import {
 	TbNetwork,
 	TbLock,
 	TbArrowBackUp,
+	TbRouter,
+	TbBolt,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -109,6 +111,8 @@ import {SoftwareUpdateListRow} from './software-update-list-row'
 import {GpuInstallSection} from './gpu-install-section'
 import {OsPatchingSection} from './os-patching-section'
 import {NetworkSection} from './network-section'
+// Phase 329-10 (NET-04) — managed raw TCP/UDP openings, WSL2-hidden.
+import {NetExposeSection} from './net-expose-section'
 import {VpnSection} from './vpn-section'
 import {UpsStatusSection} from './ups-status-section'
 import {PastDeploysTable} from './past-deploys-table'
@@ -183,6 +187,8 @@ type SettingsSection =
 	| 'domains'
 	// Phase 325-08 (NET-01) — host networking (hostname / static IP / DNS), WSL2-hidden.
 	| 'network'
+	// Phase 329-10 (NET-04) — managed raw TCP/UDP openings, WSL2-hidden.
+	| 'net-expose'
 	// Phase 325-10 (NET-02) — first-class VPN (guided Tailscale login + MagicDNS fix).
 	| 'vpn'
 	// Phase 310-04 — external alert channels (Telegram/Discord/Slack/webhook/ntfy).
@@ -233,6 +239,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'backups',          group: 'system', icon: TbDatabase,        label: 'Backups',           description: 'Backup, restore & migration',             adminOnly: true},
 	{id: 'domains', group: 'system', icon: TbWorld, label: 'Domains', description: 'Subdomains & DNS usage', adminOnly: true},
 	{id: 'network', group: 'system', icon: TbNetwork, label: 'Network', description: 'Hostname, static IP & DNS', adminOnly: true},
+	{id: 'net-expose', group: 'system', icon: TbRouter, label: 'Ports', description: 'Managed TCP/UDP openings', adminOnly: true},
 	{id: 'vpn', group: 'system', icon: TbLock, label: 'VPN', description: 'Guided Tailscale VPN & MagicDNS', adminOnly: true},
 	{id: 'alert-channels', group: 'system', icon: TbBell, label: 'Alert Channels', description: 'Telegram, Discord, Slack, webhook & ntfy alerts', adminOnly: true},
 	{id: 'monitoring', group: 'system', icon: TbChartLine, label: 'Monitoring', description: 'Resource history & alert thresholds', adminOnly: true},
@@ -657,6 +664,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><DomainsSectionLazy /></Suspense>
 		case 'network':
 			return <NetworkSection />
+		case 'net-expose':
+			return <NetExposeSection />
 		case 'vpn':
 			return <VpnSection />
 		case 'alert-channels':
