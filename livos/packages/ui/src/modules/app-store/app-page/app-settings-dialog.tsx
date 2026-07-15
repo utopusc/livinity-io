@@ -24,6 +24,7 @@ import {SelectDependencies} from '../select-dependencies-dialog'
 import {EnvironmentOverridesSection} from './environment-overrides-section'
 import {GpuAccessSection} from './gpu-access-section'
 import {ImmichPhotoBackupSection} from './immich-photo-backup-section'
+import {JellyfinSetupSection} from './jellyfin-setup-section'
 import {OidcSsoSection} from './oidc-sso-section'
 import {PublicAccessSection} from './public-access-section'
 import {ResourceLimitsSection} from './resource-limits-section'
@@ -248,6 +249,14 @@ function AppSettingsDialogForApp({
 								host={'host' in app ? app.host : undefined}
 								subdomain={app.subdomain}
 							/>
+						</div>
+					) : null}
+					{/* Jellyfin Setup Section — 329-11 (MEDIA-02, D-23), only for the Jellyfin
+					    app while the onboarding card has not been dismissed. Guides hwaccel
+					    verification + library pick (no /Startup/* automation); dismissal persists per-app. */}
+					{app.id === 'jellyfin' && !app.jellyfinCardDismissed ? (
+						<div className='border-t border-border-default pt-4 mt-4'>
+							<JellyfinSetupSection appId={app.id} appName={app.name} />
 						</div>
 					) : null}
 					{hadChanges && (

@@ -225,6 +225,8 @@ export const AppSettingsSchema = z.object({
 	memoryLimit: z.number().optional(),
 	// 326-01 MEDIA-01 (D-19/D-23): Immich onboarding QR card dismissal flag (UI-only).
 	immichCardDismissed: z.boolean().optional(),
+	// 329-11 MEDIA-02 (D-23): Jellyfin setup onboarding card dismissal flag (UI-only).
+	jellyfinCardDismissed: z.boolean().optional(),
 })
 
 export type AppSettings = z.infer<typeof AppSettingsSchema>

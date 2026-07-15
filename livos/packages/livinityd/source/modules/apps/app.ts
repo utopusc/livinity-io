@@ -1059,6 +1059,12 @@ export default class App {
 		return this.store.set('immichCardDismissed', dismissed)
 	}
 
+	// 329-11 MEDIA-02 (D-23): remember that the Jellyfin setup onboarding card was
+	// dismissed. UI-only flag, no compose change, no restart (mirrors Immich).
+	async setJellyfinCardDismissed(dismissed: boolean) {
+		return this.store.set('jellyfinCardDismissed', dismissed)
+	}
+
 	// 322-05 (IDENT-02, D-322-6): read the per-app "Enable SSO" override.
 	// undefined = never enabled (default OFF — NO manifest-permission fallback,
 	// unlike GPU). Consumed by patchComposeFile's Vaultwarden branch + apps.list.

@@ -141,6 +141,7 @@ export const apps = router({
 						cpuLimit,
 						memoryLimit,
 						immichCardDismissed,
+						jellyfinCardDismissed,
 					] = await Promise.all([
 						app.readManifest(),
 						app.getSelectedDependencies(),
@@ -153,6 +154,7 @@ export const apps = router({
 						app.store.get('cpuLimit'),
 						app.store.get('memoryLimit'),
 						app.store.get('immichCardDismissed'),
+						app.store.get('jellyfinCardDismissed'),
 					])
 
 					if (deterministicPassword) {
@@ -226,6 +228,7 @@ export const apps = router({
 						cpuLimit,
 						memoryLimit,
 						immichCardDismissed,
+						jellyfinCardDismissed,
 					}
 				} catch (error) {
 					ctx.apps.logger.error(`Failed to read manifest for app ${app.id}`, error)
@@ -272,6 +275,7 @@ export const apps = router({
 					cpuLimit: undefined,
 					memoryLimit: undefined,
 					immichCardDismissed: undefined,
+					jellyfinCardDismissed: undefined,
 				})
 			}
 		}
@@ -638,6 +642,12 @@ export const apps = router({
 	setImmichCardDismissed: privateProcedure
 		.input(z.object({appId: z.string(), dismissed: z.boolean()}))
 		.mutation(async ({ctx, input}) => ctx.apps!.setImmichCardDismissed(input.appId, input.dismissed)),
+
+	// 329-11 MEDIA-02 (D-23): dismiss the Jellyfin setup onboarding card. privateProcedure —
+	// a per-UI onboarding-card dismissal with no host/security surface (mirrors Immich).
+	setJellyfinCardDismissed: privateProcedure
+		.input(z.object({appId: z.string(), dismissed: z.boolean()}))
+		.mutation(async ({ctx, input}) => ctx.apps!.setJellyfinCardDismissed(input.appId, input.dismissed)),
 
 	// 316-02 (GPU-02): ids of apps already claiming the GPU, for the exclusivity warning.
 	listAppsWithGpuAccess: privateProcedure.query(async ({ctx}) => ctx.apps!.listAppsWithGpuAccess()),

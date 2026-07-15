@@ -1414,6 +1414,11 @@ export default class Apps {
 		return this.getApp(appId).setImmichCardDismissed(dismissed)
 	}
 
+	// 329-11 MEDIA-02 (D-23): remember the Jellyfin setup onboarding card dismissal (UI-only).
+	async setJellyfinCardDismissed(appId: string, dismissed: boolean) {
+		return this.getApp(appId).setJellyfinCardDismissed(dismissed)
+	}
+
 	// 316-02 (GPU-02): list the ids of every app currently claiming GPU access,
 	// so the UI can warn about GPU exclusivity. Mirrors getDependents' cross-app
 	// scan — catch-per-app so one unreadable app never fails the whole scan.
