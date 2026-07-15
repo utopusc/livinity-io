@@ -459,6 +459,20 @@ type StoreSchema = {
 		port: number
 		provisionedUsers: string[]
 	}
+	// Phase 329 NET-04 (329-06) — UI-DISPLAY-ONLY raw TCP/UDP exposure mirror.
+	// Written by system.netExposeOpen / system.netExposeClose AFTER a successful
+	// wrapper regen so the Settings card can render the last-known openings even when
+	// the wrapper is undeployed / unreachable. Dedicated top-level key (NOT nested
+	// under `webdav`/`network`/any array or scalar — dot-prop path collisions
+	// silently drop the write, same convention as `monitoring`/`security`/`alerts`/
+	// `tailscale`/`webdav` above). This key is NOT the source of truth: the
+	// authoritative openings state is the wrapper-owned parsed file
+	// /etc/livos/docker-firewall-openings.list (329-02); a dropped mirror write only
+	// staleness the card.
+	netExpose: {
+		openings?: {proto: 'tcp' | 'udp'; port: number; src?: string}[]
+		lastAppliedAt?: number
+	}
 	backups: {
 		repositories: {
 			id: string

@@ -331,6 +331,85 @@ async function runWebdav(
 	})
 }
 
+// ── Phase 329 (NET-04, 329-06) — raw TCP/UDP exposure (net-expose) ───────────
+// Managed through the root-owned closed-enum wrapper
+// (scripts/install/livos-net-expose.sh → /usr/local/lib/livos/livos-net-expose.sh,
+// built in 329-02) via the scoped /etc/sudoers.d/livos-net-expose NOPASSWD grant.
+// A direct clone of the runNetwork shape (stdout-capturing, never-throw
+// discriminated union, full argv array). The wrapper enum is
+// {status|open <proto> <port> [cidr]|close <proto> <port> [cidr]|list}.
+//
+// STDOUT is captured because `status`/`list` return the wrapper's own labeled
+// probe lines (script presence + opening count + the parsed openings state file)
+// that the Settings card parses. Every positional value is zod-constrained at the
+// route boundary below (proto ∈ {tcp,udp}, port int 1-65535, optional strict IPv4
+// CIDR) BEFORE it reaches the wrapper — defense-in-depth on top of the wrapper's
+// own _valid_proto/_valid_port/_valid_cidr checks (T-329-17). livinityd never runs
+// iptables or writes /etc/livos/docker-firewall.sh directly. runNetExpose never
+// throws, so a box where the wrapper is not yet deployed degrades to {ok:false}
+// instead of 500-ing the Settings card.
+//
+// WSL2 note: detection is handled ROUTE-SIDE in netExposeStatus (reuses the
+// existing `isWsl2` already imported from './gpu.js' above) — the wrapper is
+// NEVER invoked under WSL2 because the card is hard-hidden there (D-11/D-20: raw
+// port opening is meaningless under WSL2's Windows-owned NAT networking).
+const NET_EXPOSE_WRAPPER = '/usr/local/lib/livos/livos-net-expose.sh'
+
+async function runNetExpose(args: string[]): Promise<{ok: true; stdout: string} | {ok: false; reason: string}> {
+	return new Promise((resolve) => {
+		// open/close regenerate + re-exec /etc/livos/docker-firewall.sh; all sub-second
+		// but give generous headroom for a loaded box.
+		const timeoutMs = 120_000
+		let settled = false
+		let stdout = ''
+		let stderr = ''
+		const settle = (result: {ok: true; stdout: string} | {ok: false; reason: string}): void => {
+			if (settled) return
+			settled = true
+			clearTimeout(timer)
+			resolve(result)
+		}
+
+		const child = spawn('sudo', ['-n', NET_EXPOSE_WRAPPER, ...args], {
+			stdio: ['ignore', 'pipe', 'pipe'],
+			windowsHide: true,
+		})
+
+		const timer = setTimeout(() => {
+			try {
+				child.kill('SIGTERM')
+			} catch {
+				/* best-effort */
+			}
+			settle({ok: false, reason: `timeout after ${timeoutMs}ms`})
+		}, timeoutMs)
+
+		child.stdout?.on('data', (chunk: Buffer) => {
+			stdout += chunk.toString('utf8')
+		})
+
+		child.stderr?.on('data', (chunk: Buffer) => {
+			stderr += chunk.toString('utf8')
+		})
+
+		// Fires for ENOENT (sudo not on PATH) / EACCES — degrade, do not throw.
+		child.on('error', (err: Error) => {
+			settle({ok: false, reason: err.message || 'sudo spawn failed'})
+		})
+
+		child.on('close', (code) => {
+			if (code === 0) {
+				settle({ok: true, stdout})
+				return
+			}
+			settle({
+				ok: false,
+				reason: stderr.trim().slice(0, 500) || `wrapper exited with code ${code ?? 'unknown'}`,
+			})
+		})
+	})
+}
+
 // ── Phase 325 (STOR-01, 325-05) — gocryptfs encrypted-folder management ──────
 // Managed through the root-owned closed-enum wrapper
 // (scripts/install/livos-crypto.sh → /usr/local/lib/livos/livos-crypto.sh, built
@@ -1113,6 +1192,87 @@ export default router({
 			// (never throws). Return the applied flag so the card can reflect state.
 			await ctx.livinityd!.files.webdav.setEnabled(input.enabled)
 			return {enabled: input.enabled}
+		}),
+	// ── Phase 329 (NET-04, 329-06) — raw TCP/UDP exposure from the UI ───────────
+	// FLAT route names (matches the network*/webdav* convention above). All
+	// adminProcedure: opening a raw port regenerates the root-owned DOCKER-USER
+	// firewall script (apt-free but privileged), mirroring the network* routes.
+	// Every positional value is zod-constrained BEFORE the wrapper (defense-in-depth
+	// on top of the wrapper's own _valid_proto/_valid_port/_valid_cidr — T-329-17);
+	// runNetExpose never throws, so an undeployed wrapper degrades to {ok:false}
+	// instead of 500-ing the Settings card.
+	//
+	// netExposeStatus returns the wrapper's raw probe stdout PLUS `isWsl2` (reuses
+	// the existing async isWsl2 imported from './gpu.js' — NOT re-implemented). The
+	// UI HARD-HIDES the entire card when isWsl2 is true (D-11/D-20): a raw-port
+	// opening is meaningless under WSL2's Windows-owned NAT, so the wrapper is never
+	// invoked there. On a successful open/close the openings mirror is stamped into
+	// the dedicated top-level `netExpose` StoreSchema key so the card can render
+	// last-known state offline (display-only bookkeeping; the authoritative state is
+	// the wrapper-owned /etc/livos/docker-firewall-openings.list, 329-02).
+	netExposeStatus: adminProcedure.query(async () => {
+		const status = await runNetExpose(['status'])
+		return {status, isWsl2: await isWsl2()}
+	}),
+	netExposeList: adminProcedure.query(async () => runNetExpose(['list'])),
+	// netExposeOpen: adds a `-A DOCKER-USER … -j RETURN` before the drop-all. proto
+	// ∈ {tcp,udp}, port int 1-65535, optional strict IPv4 CIDR src — all validated
+	// here before the wrapper. On success mirror the (deduped) opening into the store.
+	netExposeOpen: adminProcedure
+		.input(
+			z.object({
+				proto: z.enum(['tcp', 'udp']),
+				port: z.number().int().min(1).max(65535),
+				// Optional strict IPv4/CIDR source restriction e.g. 203.0.113.0/24 — the
+				// wrapper's _valid_cidr re-checks per-octet range; this is the boundary guard.
+				src: z
+					.string()
+					.regex(
+						/^((25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\/([0-9]|[12][0-9]|3[0-2])$/,
+						'must be an IPv4 address with a CIDR prefix (e.g. 203.0.113.0/24)',
+					)
+					.optional(),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			const args = ['open', input.proto, String(input.port), ...(input.src ? [input.src] : [])]
+			const result = await runNetExpose(args)
+			if (result.ok) {
+				const existing = (await ctx.livinityd?.store.get('netExpose')) ?? {}
+				const openings = (existing.openings ?? []).filter(
+					(o) => !(o.proto === input.proto && o.port === input.port && o.src === input.src),
+				)
+				openings.push({proto: input.proto, port: input.port, src: input.src})
+				await ctx.livinityd?.store.set('netExpose', {openings, lastAppliedAt: Date.now()})
+			}
+			return result
+		}),
+	// netExposeClose: removes exactly that opening (proto+port+src) and regenerates.
+	netExposeClose: adminProcedure
+		.input(
+			z.object({
+				proto: z.enum(['tcp', 'udp']),
+				port: z.number().int().min(1).max(65535),
+				src: z
+					.string()
+					.regex(
+						/^((25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\/([0-9]|[12][0-9]|3[0-2])$/,
+						'must be an IPv4 address with a CIDR prefix (e.g. 203.0.113.0/24)',
+					)
+					.optional(),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			const args = ['close', input.proto, String(input.port), ...(input.src ? [input.src] : [])]
+			const result = await runNetExpose(args)
+			if (result.ok) {
+				const existing = (await ctx.livinityd?.store.get('netExpose')) ?? {}
+				const openings = (existing.openings ?? []).filter(
+					(o) => !(o.proto === input.proto && o.port === input.port && o.src === input.src),
+				)
+				await ctx.livinityd?.store.set('netExpose', {openings, lastAppliedAt: Date.now()})
+			}
+			return result
 		}),
 	// ── Phase 306 R2 — desktop-user OS/sudo password (Settings → Account) ───────
 	// getDesktopUserInfo: lightweight, NON-secret. Returns just the username + a
