@@ -26,6 +26,7 @@ import {GpuAccessSection} from './gpu-access-section'
 import {OidcSsoSection} from './oidc-sso-section'
 import {PublicAccessSection} from './public-access-section'
 import {ResourceLimitsSection} from './resource-limits-section'
+import {UpdatePolicySection} from './update-policy-section'
 
 export function AppSettingsDialog() {
 	const {params} = useQueryParams()
@@ -220,6 +221,18 @@ function AppSettingsDialogForApp({
 								appName={app.name}
 								initialCpuLimit={app.cpuLimit}
 								initialMemoryLimit={app.memoryLimit}
+							/>
+						</div>
+					) : null}
+					{/* Auto-update Policy Section — 326-06 (APPS-02), only for non-native
+					    (store/docker) apps. Toggles auto/manual policy + shows/clears the version pin (both adminProcedure). */}
+					{!app.native ? (
+						<div className='border-t border-border-default pt-4 mt-4'>
+							<UpdatePolicySection
+								appId={app.id}
+								appName={app.name}
+								initialPolicy={app.autoUpdatePolicy ?? 'manual'}
+								ignoredVersion={app.ignoredVersion}
 							/>
 						</div>
 					) : null}
