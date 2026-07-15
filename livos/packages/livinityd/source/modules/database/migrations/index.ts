@@ -42,8 +42,16 @@ export const V47_P322_GROUPS_MIGRATIONS: ReadonlyArray<string> = [
 	'2026-07-14-p322-groups.sql',
 ] as const
 
+// Phase 329-01 (APPS-04) — job_runs run-history table for custom-command jobs.
+// Additive-only per the expand-only invariant above. Registered here (drift #7)
+// — do NOT repeat the p325 quota file's omission from ALL_MIGRATIONS.
+export const V47_P329_JOB_RUNS_MIGRATIONS: ReadonlyArray<string> = [
+	'2026-07-15-p329-job-runs.sql',
+] as const
+
 export const ALL_MIGRATIONS: ReadonlyArray<string> = [
 	...V32_AGENTS_MIGRATIONS,
 	...V36_P131_PINNED_WINDOWS_MIGRATIONS,
 	...V47_P322_GROUPS_MIGRATIONS,
+	...V47_P329_JOB_RUNS_MIGRATIONS,
 ] as const

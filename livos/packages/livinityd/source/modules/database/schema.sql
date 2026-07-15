@@ -166,6 +166,29 @@ CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_enabled ON scheduled_jobs(enabled)
 CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_type    ON scheduled_jobs(type);
 
 -- =========================================================================
+-- Job Runs (Phase 329 APPS-04)
+-- Per-run history for user-defined custom-command scheduled jobs: one row per
+-- execution with the truncated (LAST 16 KB) output/error. Written by the
+-- scheduler's customCommandHandler (recordJobRun) and retention-pruned in-tick
+-- (pruneJobRuns: keep last 20 runs/job_name + 30-day cap, D-14) so history can
+-- never bloat the shared Postgres. Additive / expand-only per the operator-locked
+-- schema invariant (migrations/index.ts:16-26).
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS job_runs (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id       UUID,                          -- scheduled_jobs.id (soft ref — a deleted job keeps its history until pruned)
+  job_name     TEXT NOT NULL,                 -- denormalized name (survives job rename/delete; prune key)
+  started_at   TIMESTAMPTZ NOT NULL,
+  finished_at  TIMESTAMPTZ,
+  status       TEXT NOT NULL,                 -- 'success' | 'failure' | 'skipped' | 'running'
+  output       TEXT,                          -- truncated to LAST 16 KB
+  error        TEXT,                          -- truncated to LAST 16 KB
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_runs_name_started ON job_runs (job_name, started_at DESC);
+
+-- =========================================================================
 -- Git Credentials (Phase 21 GIT-01)
 -- AES-256-GCM-encrypted at rest using SHA-256 of JWT secret as key.
 -- encrypted_data shape depends on type:
