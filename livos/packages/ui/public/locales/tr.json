@@ -989,6 +989,8 @@
   "settings.security-advisor.title": "Güvenlik",
   "settings.security-advisor.title-accent": "Danışmanı",
   "settings.security-advisor.trivy-note": "İmaj taramaları yalnızca kapsayıcı CVE'lerini kapsar, ana makine veya uygulama yapılandırmasını değil.",
+  "settings.users.quota.edit": "Kotayı düzenle",
+  "settings.users.quota.help": "{{name}} için gigabayt cinsinden bir depolama sınırı belirleyin. Sınırsız için boş bırakın veya 0 girin. Kotalar esnek uygulanır ve düzenli olarak güncellenir.",
   "settings.users.quota.label": "Depolama kotası",
   "settings.users.quota.placeholder": "GB (sınırsız için 0 bırakın)",
   "settings.users.quota.save": "Kotayı kaydet",
