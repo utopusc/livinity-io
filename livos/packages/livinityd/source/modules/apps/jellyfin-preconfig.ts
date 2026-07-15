@@ -24,8 +24,9 @@ import {$} from 'execa'
  *     `Movies/Shows/Music` libraries under the app's `/media` mount. Existing
  *     installs are a no-op — no breaking volume restructure (D-23).
  *
- * NO `/Startup/*` wizard automation anywhere here (D-23) — the operator completes
- * Jellyfin's wizard once, guided by the dismissible jellyfin-setup onboarding card.
+ * NO first-run wizard API automation anywhere here (D-23, the undocumented
+ * setup-wizard endpoints are drift risk) — the operator completes Jellyfin's wizard
+ * once, guided by the dismissible jellyfin-setup onboarding card.
  */
 
 // Jellyfin EncodingOptions.HardwareAccelerationType values (verified from
