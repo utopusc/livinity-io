@@ -16,7 +16,9 @@ export function useAppsWithUpdates() {
 	const appsWithUpdates = (apps.userApps ?? [])
 		.filter((app) => {
 			const availableApp = availableApps.appsKeyed[app.id]
-			return availableApp && availableApp.version !== app.version
+			// D-05: a pinned app (ignoredVersion === the available version) is skipped so it never
+			// appears in the Updates dialog (mirror filter lives in use-update-all-apps).
+			return availableApp && availableApp.version !== app.version && app.ignoredVersion !== availableApp.version
 		})
 		.map((app) => availableApps.appsKeyed[app.id])
 

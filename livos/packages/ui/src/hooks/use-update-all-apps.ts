@@ -19,7 +19,7 @@ export function useUpdateAllApps() {
 	const updateAll = () => {
 		const apps = appsQ.data ?? []
 		// @ts-expect-error `version`
-		const appsWithUpdates = apps.filter((app) => allAvailableApps.appsKeyed?.[app.id]?.version !== app.version)
+		const appsWithUpdates = apps.filter((app) => allAvailableApps.appsKeyed?.[app.id]?.version !== app.version && app.ignoredVersion !== allAvailableApps.appsKeyed?.[app.id]?.version)
 
 		appsWithUpdates.map((app) => updateMut.mutate({appId: app.id}))
 	}

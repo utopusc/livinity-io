@@ -104,6 +104,11 @@ function AppItem({app}: {app: RegistryApp}) {
 		},
 	})
 	const updateApp = () => updateMut.mutate({appId: app.id})
+	// 326-06 (APPS-02 / D-05): pin the currently-available version so this app disappears
+	// from the (pin-filtered) Updates list and is skipped by "Update all".
+	const ignoreMut = trpcReact.apps.setIgnoredVersion.useMutation({
+		onSuccess: () => utils.apps.list.invalidate(),
+	})
 
 	const progress = appStateQ.data?.progress
 	const appState = appStateQ.isLoading ? 'loading' : appStateQ.data!.state
@@ -130,6 +135,16 @@ function AppItem({app}: {app: RegistryApp}) {
 				>
 					{inProgress ? appStateToString(appState) + '...' : t('app-updates.update')}
 				</ProgressButton>
+			</div>
+			<div className='mt-1.5 flex justify-end'>
+				<button
+					type='button'
+					className='text-caption text-text-tertiary underline underline-offset-2 disabled:opacity-50'
+					onClick={() => ignoreMut.mutate({appId: app.id, version: app.version})}
+					disabled={ignoreMut.isPending}
+				>
+					{t('app-updates.ignore')}
+				</button>
 			</div>
 			{app.releaseNotes && (
 				<div className='relative mt-2 grid'>
