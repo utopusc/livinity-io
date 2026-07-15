@@ -1124,7 +1124,7 @@
   "storage.encryption.badge.unlocked": "Unlocked",
   "storage.encryption.cipher-dir": "Encrypted data location (host path)",
   "storage.encryption.plain-dir": "Mount location (host path)",
-  "storage.encryption.path-hint": "Absolute host path. This is an admin operation.",
+  "storage.encryption.path-hint": "Absolute host path — must live under /opt/livos/data (e.g. /opt/livos/data/users/<you>/Secret). This is an admin operation.",
   "storage.encryption.unlock-title": "Unlock “{name}”",
   "storage.encryption.lock-title": "Lock “{name}”",
   "storage.encryption.lock-body": "Locking re-encrypts the folder. Its files stay on disk but are unreadable until you unlock it again.",

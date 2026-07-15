@@ -187,7 +187,7 @@ export default function EncryptedFolderDialog() {
 									id='enc-cipher-dir'
 									value={cipherDir}
 									onChange={(e) => setCipherDir(e.target.value)}
-									placeholder='/home/…/.Secret.enc'
+									placeholder='/opt/livos/data/users/…/.Secret.enc'
 									className='w-full bg-surface-base font-mono text-12'
 									disabled={busy}
 									autoFocus
@@ -201,7 +201,7 @@ export default function EncryptedFolderDialog() {
 									id='enc-plain-dir'
 									value={plainDir}
 									onChange={(e) => setPlainDir(e.target.value)}
-									placeholder='/home/…/Secret'
+									placeholder='/opt/livos/data/users/…/Secret'
 									className='w-full bg-surface-base font-mono text-12'
 									disabled={busy}
 								/>

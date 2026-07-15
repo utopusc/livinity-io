@@ -1098,7 +1098,7 @@
   "storage.encryption.badge.unlocked": "Kilidi açık",
   "storage.encryption.cipher-dir": "Şifreli veri konumu (host yolu)",
   "storage.encryption.plain-dir": "Bağlama konumu (host yolu)",
-  "storage.encryption.path-hint": "Mutlak host yolu. Bu bir yönetici işlemidir.",
+  "storage.encryption.path-hint": "Mutlak host yolu — /opt/livos/data altında olmalıdır (ör. /opt/livos/data/users/<siz>/Secret). Bu bir yönetici işlemidir.",
   "storage.encryption.unlock-title": "“{name}” kilidini aç",
   "storage.encryption.lock-title": "“{name}” klasörünü kilitle",
   "storage.encryption.lock-body": "Kilitleme klasörü yeniden şifreler. Dosyalar diskte kalır ancak tekrar kilidi açılana kadar okunamaz.",
