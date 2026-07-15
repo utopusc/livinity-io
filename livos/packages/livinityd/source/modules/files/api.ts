@@ -349,6 +349,35 @@ export default function api({publicApi, privateApi, livinityd}: ApiOptions) {
 	const shareNotAvailable = (response: express.Response) =>
 		response.status(404).json({error: '[share-not-available]'})
 
+	// Phase 324-01 (D-03/D-05) — per-token password rate-limit window.
+	const SHARE_PW_MAX_ATTEMPTS = 10 // per window, per token
+	const SHARE_PW_WINDOW_SECONDS = 300 // 5 min
+
+	// The ONE password-denial response (D-05). Called by BOTH the wrong-password
+	// branch AND the rate-limited branch so the two are byte-identical — an
+	// attacker cannot tell a bad password from a throttle. DISTINCT from the
+	// password-required prompt (no submission), which MAY differ (UX, D-05).
+	const sharePasswordDenied = (response: express.Response) =>
+		response.status(401).json({error: '[share-wrong-password]'})
+
+	// Per-token brute-force rate-limit (D-03) — hand-built from Redis INCR+EXPIRE
+	// (no rate-limit middleware exists). Keyed on the token HASH so throttling one
+	// token never affects another. Fails OPEN on a Redis error (the 192-bit token
+	// + bcryptjs are the primary controls; a Redis outage must not lock out a
+	// legitimate viewer) — the outage is logged WITHOUT the password.
+	const shareRateLimited = async (tokenHash: string): Promise<boolean> => {
+		try {
+			const redis = livinityd.ai.redis
+			const key = `share:rl:${tokenHash}`
+			const count = await redis.incr(key)
+			if (count === 1) await redis.expire(key, SHARE_PW_WINDOW_SECONDS)
+			return count > SHARE_PW_MAX_ATTEMPTS
+		} catch (error) {
+			livinityd.logger.error('[files.share] rate-limit check failed — failing open', error)
+			return false
+		}
+	}
+
 	// Per-share unlock-grant cookie name (D-03). Bound to the row id; a UUID
 	// stripped to alnum is a valid cookie-name token.
 	const shareCookieName = (shareId: string) => `livshare_${shareId.replace(/[^a-zA-Z0-9]/g, '')}`
@@ -436,14 +465,45 @@ export default function api({publicApi, privateApi, livinityd}: ApiOptions) {
 		}
 
 		// ── Password branch (D-03) ───────────────────────────────────────────
-		// Task 2: a password-protected share requires a valid per-token unlock
-		// grant cookie; absent → 401 password-required (this MAY differ per D-05).
-		// Task 3 adds the bcryptjs submission compare + Redis rate-limit here.
+		// A password-protected share is satisfied by EITHER a still-valid per-token
+		// unlock grant cookie OR a fresh correct password submitted this request.
+		//   - no grant + no submitted password → 401 password-required (MAY differ)
+		//   - over the per-token rate-limit      → 401 wrong-password (identical to↓)
+		//   - wrong password                     → 401 wrong-password
+		//   - correct password                   → mint a ~30-min grant cookie
+		// The submitted password rides the `x-share-password` header (never the
+		// URL/query) and is NEVER logged.
 		if (row.passwordHash) {
-			const unlocked = await shareGrantValid(request, row.id)
-			if (!unlocked) {
-				response.status(401).json({error: '[share-password-required]'})
-				return null
+			const alreadyUnlocked = await shareGrantValid(request, row.id)
+			if (!alreadyUnlocked) {
+				const submittedHeader = request.headers['x-share-password']
+				const submitted = typeof submittedHeader === 'string' ? submittedHeader : ''
+				if (!submitted) {
+					// No submission — prompt for the password (MAY differ, D-05).
+					response.status(401).json({error: '[share-password-required]'})
+					return null
+				}
+				// Rate-limit BEFORE the compare (per token). Over-cap is a DENIAL
+				// byte-identical to a wrong password (no throttle oracle, D-05).
+				if (await shareRateLimited(tokenHash)) {
+					sharePasswordDenied(response)
+					return null
+				}
+				const passwordOk = await bcrypt.compare(submitted, row.passwordHash)
+				if (!passwordOk) {
+					sharePasswordDenied(response)
+					return null
+				}
+				// Correct password → mint a short-lived grant BOUND to this share
+				// (audience livinityd-share + shareId), scoped to the share routes.
+				const {token: grant} = await livinityd.server.signShareGrant(row.id)
+				response.cookie(shareCookieName(row.id), grant, {
+					httpOnly: true,
+					secure: true,
+					sameSite: 'strict',
+					path: '/api/files/share',
+					maxAge: 30 * 60 * 1000, // ~30 min, matches the grant TTL
+				})
 			}
 		}
 
