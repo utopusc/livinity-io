@@ -1,0 +1,9 @@
+# Phase 325 (NET-02) — sudoers grant for the Tailscale VPN wrapper.
+# Security model: grant on ONE explicit binary path, NO glob, NO arg wildcard.
+# The wrapper validates its action enum {install|login|set|down|status} and builds
+# every apt/tailscale/ufw/systemctl argv AND the fixed /opt/livos/.env
+# LIVOS_TAILSCALE_BIND=<validated tailscale ip -4> line itself. No caller string
+# reaches a privileged command or the EnvironmentFile.
+# Deploy: deploy-livinityd.sh block 2a/2b-tailscale; day-2: update.sh Step 7.10h.
+Cmnd_Alias LIVINITYD_TAILSCALE = /usr/local/lib/livos/livos-tailscale.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_TAILSCALE
