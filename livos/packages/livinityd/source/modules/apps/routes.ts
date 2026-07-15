@@ -607,7 +607,18 @@ export const apps = router({
 	// resource contention on the shared host. .positive()/.int().positive() bound the DoS
 	// surface; limits apply via patchComposeFile+restart, never a live-container update.
 	setResourceLimits: adminProcedure
-		.input(z.object({appId: z.string(), cpuLimit: z.number().positive().optional(), memoryLimit: z.number().int().positive().optional()}))
+		// 326-review (WR-02): Docker rejects `deploy.resources.limits.memory` below 6 MB
+		// ("Minimum memory limit allowed is 6MB"). The limit is persisted + re-applied by
+		// patchComposeFile() on every mutation, so a too-low value makes `compose up`
+		// refuse and bricks the app until manually cleared. Enforce Docker's 6 MB floor
+		// (6 * 1024 * 1024 bytes) server-side — the UI mirrors it (resource-limits-section).
+		.input(
+			z.object({
+				appId: z.string(),
+				cpuLimit: z.number().positive().optional(),
+				memoryLimit: z.number().int().min(6 * 1024 * 1024).optional(),
+			}),
+		)
 		.mutation(async ({ctx, input}) => ctx.apps!.setResourceLimits(input.appId, {cpuLimit: input.cpuLimit, memoryLimit: input.memoryLimit})),
 
 	// 326-01 APPS-02 (D-04/D-21): set the per-app auto-update policy. adminProcedure —

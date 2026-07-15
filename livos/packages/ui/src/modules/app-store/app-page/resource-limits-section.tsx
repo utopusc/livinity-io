@@ -40,6 +40,13 @@ export function ResourceLimitsSection({appId, appName, initialCpuLimit, initialM
 		initialMemoryLimit != null ? String(Math.round(initialMemoryLimit / 1024 / 1024)) : '',
 	)
 
+	// 326-review (WR-02): Docker refuses a memory limit below 6 MB and the app is
+	// then stuck stopped (the bad limit re-applies on every patchComposeFile). Reject
+	// a positive-but-below-6-MB value inline before firing the mutation. Empty / <=0
+	// still means "no limit" (cleared), so only a positive < 6 is invalid.
+	const memoryMBNum = parseFloat(memoryLimitMB)
+	const memoryBelowMin = memoryLimitMB.trim() !== '' && Number.isFinite(memoryMBNum) && memoryMBNum > 0 && memoryMBNum < 6
+
 	const setResourceLimitsMut = trpcReact.apps.setResourceLimits.useMutation({
 		onSuccess: () => {
 			utils.apps.state.invalidate({appId})
@@ -48,6 +55,8 @@ export function ResourceLimitsSection({appId, appName, initialCpuLimit, initialM
 	})
 
 	const handleSave = () => {
+		// 326-review (WR-02): never send a below-6-MB limit — Docker would brick the app.
+		if (memoryBelowMin) return
 		// Empty / non-positive fields CLEAR the limit (send undefined). Convert MB->bytes
 		// and CPU->decimal cores exactly like container-create-form.tsx.
 		const cpu = cpuLimit.trim() && parseFloat(cpuLimit) > 0 ? parseFloat(cpuLimit) : undefined
@@ -88,11 +97,19 @@ export function ResourceLimitsSection({appId, appName, initialCpuLimit, initialM
 					<Input
 						type='text'
 						inputMode='numeric'
+						min={6}
 						value={memoryLimitMB}
 						onValueChange={setMemoryLimitMB}
 						placeholder={t('app-resource-limits.memory-placeholder')}
 						disabled={!isAdmin || setResourceLimitsMut.isPending}
+						aria-invalid={memoryBelowMin || undefined}
 					/>
+					{/* 326-review (WR-02): inline validation — Docker's 6 MB floor. */}
+					{memoryBelowMin ? (
+						<p role='alert' className='mt-1.5 px-[5px] text-caption text-red-400'>
+							{t('app-resource-limits.memory-min-error')}
+						</p>
+					) : null}
 				</div>
 			</div>
 
@@ -107,7 +124,7 @@ export function ResourceLimitsSection({appId, appName, initialCpuLimit, initialM
 					size='sm'
 					variant='default'
 					onClick={handleSave}
-					disabled={!isAdmin || setResourceLimitsMut.isPending}
+					disabled={!isAdmin || setResourceLimitsMut.isPending || memoryBelowMin}
 				>
 					{setResourceLimitsMut.isPending ? <TbLoader2 className='mr-1 h-4 w-4 animate-spin' /> : null}
 					{t('app-resource-limits.save')}

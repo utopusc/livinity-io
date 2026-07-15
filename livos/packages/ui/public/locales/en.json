@@ -48,6 +48,7 @@
   "app-resource-limits.cpu-placeholder": "e.g. 1.5",
   "app-resource-limits.description": "Cap how much CPU and memory {{app}} can use. Leave a field empty for no limit.",
   "app-resource-limits.memory-label": "Memory (MB)",
+  "app-resource-limits.memory-min-error": "Memory limit must be at least 6 MB (Docker's minimum).",
   "app-resource-limits.memory-placeholder": "e.g. 1024",
   "app-resource-limits.restart-note": "Saving restarts the app to apply the new limits.",
   "app-resource-limits.save": "Save limits",

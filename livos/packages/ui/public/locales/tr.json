@@ -48,6 +48,7 @@
   "app-resource-limits.cpu-placeholder": "örn. 1.5",
   "app-resource-limits.description": "{{app}} uygulamasının kullanabileceği CPU ve bellek miktarını sınırlayın. Sınır koymamak için bir alanı boş bırakın.",
   "app-resource-limits.memory-label": "Bellek (MB)",
+  "app-resource-limits.memory-min-error": "Bellek sınırı en az 6 MB olmalı (Docker'ın alt sınırı).",
   "app-resource-limits.memory-placeholder": "örn. 1024",
   "app-resource-limits.restart-note": "Kaydetmek, yeni sınırları uygulamak için uygulamayı yeniden başlatır.",
   "app-resource-limits.save": "Sınırları kaydet",
