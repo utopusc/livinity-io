@@ -3689,6 +3689,77 @@ else
     info "sudoers.d/livos-rclone source not found — skipping (cloud-drive control unavailable)"
 fi
 
+# ── Step 7.10l: Phase 324 (FILES-02) — per-user Samba provisioning (sudoers.d/livos-samba-user + wrapper) ──
+# The livos-samba-user NOPASSWD grant + the root-owned Samba wrapper (synthetic
+# `useradd --system --no-create-home --shell /usr/sbin/nologin livos-<username>`
+# account + `smbpasswd -a` with the Samba SECONDARY password read on stdin, never argv)
+# must reach ALREADY-DEPLOYED boxes on Update, not just fresh installs.
+# Mirrors Step 7.10m (livos-rclone) VERBATIM (content-diff + visudo validate-or-remove),
+# retargeted to livos-samba-user. livinityd invokes
+# `sudo -n /usr/local/lib/livos/livos-samba-user.sh <action> [username]`, so the wrapper + grant
+# must exist on day-2 boxes too. Missing this is the "looks wired, silently no-ops" failure class.
+# Fully fail-tolerant: a missing source or a visudo rejection never aborts the Update.
+step "Phase 324 (FILES-02): per-user Samba provisioning (sudoers.d/livos-samba-user + install wrapper)"
+
+_set_desktop_identity   # Phase 277.1 — self-derive the desktop user (no literal bruce)
+
+# --- (a0) livos-samba-user.sh wrapper — install BEFORE the grant ---
+# The livos-samba-user grant (a) is on this ONE root-owned binary; the wrapper validates a fixed
+# action enum {add-user|set-password|remove-user|status}, charset-validates the username, and
+# builds every useradd/smbpasswd/userdel argv itself (the Samba secondary password arrives on stdin).
+_SAMBAU_WRAP_SRC="$LIVOS_DIR/scripts/install/livos-samba-user.sh"
+if [[ ! -f "$_SAMBAU_WRAP_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _SAMBAU_WRAP_SRC="$TEMP_DIR/scripts/install/livos-samba-user.sh"
+fi
+_SAMBAU_WRAP_DST="/usr/local/lib/livos/livos-samba-user.sh"
+if [[ -f "$_SAMBAU_WRAP_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_SAMBAU_WRAP_DST" ]] || ! cmp -s "$_SAMBAU_WRAP_SRC" "$_SAMBAU_WRAP_DST"; then
+        if install -m 0755 -o root -g root "$_SAMBAU_WRAP_SRC" "$_SAMBAU_WRAP_DST"; then
+            ok "livos-samba-user.sh installed at $_SAMBAU_WRAP_DST"
+        else
+            warn "Failed to install livos-samba-user.sh (non-fatal — per-user Samba unavailable until fixed)"
+        fi
+    else
+        info "livos-samba-user.sh already current"
+    fi
+else
+    info "livos-samba-user.sh source not found — skipping (per-user Samba unavailable)"
+fi
+
+# --- (a) sudoers.d/livos-samba-user — install + template the subject to the desktop user ---
+_SAMBAU_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-samba-user"
+if [[ ! -f "$_SAMBAU_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _SAMBAU_SUDOERS_SRC="$TEMP_DIR/scripts/install/sudoers.d/livos-samba-user"
+fi
+_SAMBAU_SUDOERS_DST="/etc/sudoers.d/livos-samba-user"
+if [[ -f "$_SAMBAU_SUDOERS_SRC" ]]; then
+    _SAMBAU_SUDOERS_TMP=$(mktemp)
+    if [[ "$_DESKTOP_USER" != "bruce" ]]; then
+        sed -E "s/^bruce([[:space:]]+ALL=)/${_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DESKTOP_USER})/g" \
+            "$_SAMBAU_SUDOERS_SRC" > "$_SAMBAU_SUDOERS_TMP"
+    else
+        cp -f "$_SAMBAU_SUDOERS_SRC" "$_SAMBAU_SUDOERS_TMP"
+    fi
+    if [[ ! -f "$_SAMBAU_SUDOERS_DST" ]] || ! cmp -s "$_SAMBAU_SUDOERS_TMP" "$_SAMBAU_SUDOERS_DST"; then
+        install -m 0440 -o root -g root "$_SAMBAU_SUDOERS_TMP" "$_SAMBAU_SUDOERS_DST"
+        # SAFETY-CRITICAL: a malformed sudoers file can break sudo system-wide.
+        # Validate the INSTALLED file; if visudo rejects it, REMOVE it (per-user Samba
+        # stays denied — the prior state — rather than risk broken sudo).
+        if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_SAMBAU_SUDOERS_DST" >/dev/null 2>&1; then
+            warn "visudo rejected $_SAMBAU_SUDOERS_DST — removing (per-user Samba stays denied until fixed)"
+            rm -f "$_SAMBAU_SUDOERS_DST"
+        else
+            ok "sudoers.d/livos-samba-user installed (subject: ${_DESKTOP_USER})"
+        fi
+    else
+        info "sudoers.d/livos-samba-user already current (subject: ${_DESKTOP_USER})"
+    fi
+    rm -f "$_SAMBAU_SUDOERS_TMP"
+else
+    info "sudoers.d/livos-samba-user source not found — skipping (per-user Samba unavailable)"
+fi
+
 # ── Step 7.11: Phase 306 — desktop-user password helper (wrapper + sudoers + bootstrap) ──
 # The "Regenerate" button on the Desktop password row in Settings → Account calls
 # livinityd's system.regenerateDesktopPassword, which runs

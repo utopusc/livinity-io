@@ -3558,6 +3558,61 @@ _dld_template_app_units() {
         info "sudoers.d/livos-rclone source not found — skipping (cloud-drive control unavailable)"
     fi
 
+    # 2a-samba-user. Phase 324 (FILES-02) — root-owned per-user Samba provisioning
+    # wrapper (synthetic `useradd --system --no-create-home --shell /usr/sbin/nologin
+    # livos-<username>` account + `smbpasswd -a` with the Samba SECONDARY password read
+    # on stdin, never argv). The livos-samba-user sudoers grant (2b-samba-user below) is
+    # on THIS binary only; the wrapper validates a fixed action enum
+    # {add-user|set-password|remove-user|status}, charset-validates the username, and
+    # builds every useradd/smbpasswd/userdel argv itself. Install it BEFORE the grant.
+    # Idempotent (content-diffed), byte-for-byte parallel to the livos-rclone wrapper
+    # block above. Serialized AFTER 324-03's rclone block by wave; prior blocks untouched.
+    local _sambauwrap_src="${_DLD_STAGE_DIR}/scripts/install/livos-samba-user.sh"
+    [[ -f "$_sambauwrap_src" ]] || _sambauwrap_src="${_DLD_LIVOS_DIR}/scripts/install/livos-samba-user.sh"
+    local _sambauwrap_dst="/usr/local/lib/livos/livos-samba-user.sh"
+    if [[ -f "$_sambauwrap_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_sambauwrap_dst" ]] || ! cmp -s "$_sambauwrap_src" "$_sambauwrap_dst"; then
+            if install -m 0755 -o root -g root "$_sambauwrap_src" /usr/local/lib/livos/livos-samba-user.sh; then
+                ok "livos-samba-user.sh installed at $_sambauwrap_dst"
+            else
+                warn "Failed to install livos-samba-user.sh (non-fatal; per-user Samba unavailable until fixed)"
+            fi
+        fi
+    else
+        info "livos-samba-user.sh source not found — skipping (per-user Samba unavailable)"
+    fi
+
+    # 2b-samba-user. Phase 324 (FILES-02) — sudoers.d/livos-samba-user (Samba wrapper grant)
+    # — install + template. Byte-for-byte parallel to the livos-rclone block above,
+    # retargeted at livos-samba-user. Runs on EVERY deploy (idempotent, content-diffed).
+    # Wrapper install (0755) BEFORE grant install (0440).
+    local _sambau_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-samba-user"
+    [[ -f "$_sambau_src" ]] || _sambau_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-samba-user"
+    local _sambau_dst="/etc/sudoers.d/livos-samba-user"
+    if [[ -f "$_sambau_src" ]]; then
+        local _sambau_tmp
+        _sambau_tmp=$(mktemp)
+        if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                "$_sambau_src" > "$_sambau_tmp"
+        else
+            cp -f "$_sambau_src" "$_sambau_tmp"
+        fi
+        if [[ ! -f "$_sambau_dst" ]] || ! cmp -s "$_sambau_tmp" "$_sambau_dst"; then
+            install -m 0440 -o root -g root "$_sambau_tmp" "$_sambau_dst"
+            if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_sambau_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_sambau_dst — removing (per-user Samba stays denied until fixed)"
+                rm -f "$_sambau_dst"
+            else
+                ok "sudoers.d/livos-samba-user installed (user-spec: ${_DLD_DESKTOP_USER})"
+            fi
+        fi
+        rm -f "$_sambau_tmp"
+    else
+        info "sudoers.d/livos-samba-user source not found — skipping (per-user Samba unavailable)"
+    fi
+
     # 2c-gpu. Phase 316 (GPU-01) — NVIDIA container-toolkit, GATED behind an
     # `lspci` NVIDIA-GPU probe so NON-NVIDIA boxes (the overwhelming majority) see
     # ZERO install change. On an NVIDIA box we shell out to the SAME root-owned

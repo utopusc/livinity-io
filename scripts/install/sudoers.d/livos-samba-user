@@ -1,0 +1,9 @@
+# Phase 324 (FILES-02) — sudoers grant for the per-user Samba provisioning wrapper.
+# Security model: grant on ONE explicit binary path, NO glob, NO arg wildcard.
+# The wrapper validates its action enum {add-user|set-password|remove-user|status},
+# charset-validates the username BEFORE any useradd/smbpasswd/userdel, builds every
+# privileged argv itself, and reads the Samba secondary password on stdin — so no
+# caller-supplied string reaches a privileged command as a flag or a foreign account.
+# Deploy: deploy-livinityd.sh block 2a/2b-samba-user; day-2: update.sh Step 7.10l.
+Cmnd_Alias LIVINITYD_SAMBA_USER = /usr/local/lib/livos/livos-samba-user.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_SAMBA_USER
