@@ -1,0 +1,11 @@
+# Phase 325 (STOR-01) — sudoers grant for the gocryptfs (encrypted folders) wrapper.
+# Security model: grant on ONE explicit binary path, NO glob, NO arg wildcard.
+# The wrapper validates its action enum {install|create|unlock|lock|status},
+# regex-validates + data-root-anchors every path arg, and builds every
+# gocryptfs/fusermount/apt argv itself. The passphrase reaches gocryptfs via stdin
+# (-extpass reading a private env var), NEVER argv — so no caller string can escape
+# into a privileged command. A trailing `*` here would be a hole (see
+# sudoers.d/livos-smart header) — there is deliberately none.
+# Deploy: deploy-livinityd.sh block 2a/2b-crypto; day-2: update.sh Step 7.10f.
+Cmnd_Alias LIVINITYD_CRYPTO = /usr/local/lib/livos/livos-crypto.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_CRYPTO
