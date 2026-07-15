@@ -21,9 +21,11 @@ import {useDialogOpenProps} from '@/utils/dialog'
 import {t} from '@/utils/i18n'
 
 import {SelectDependencies} from '../select-dependencies-dialog'
+import {EnvironmentOverridesSection} from './environment-overrides-section'
 import {GpuAccessSection} from './gpu-access-section'
 import {OidcSsoSection} from './oidc-sso-section'
 import {PublicAccessSection} from './public-access-section'
+import {ResourceLimitsSection} from './resource-limits-section'
 
 export function AppSettingsDialog() {
 	const {params} = useQueryParams()
@@ -196,6 +198,31 @@ function AppSettingsDialogForApp({
 							/>
 						</div>
 					)}
+					{/* Configure Section â 326-04 (APPS-01), only for apps whose manifest
+					    declares environmentOverrides. Reopens the exact install-time
+					    validated form, prefilled with the app's persisted values. */}
+					{app.installOptions?.environmentOverrides?.length ? (
+						<div className='border-t border-border-default pt-4 mt-4'>
+							<EnvironmentOverridesSection
+								appId={app.id}
+								appName={app.name}
+								overrides={app.installOptions.environmentOverrides}
+								initialValues={app.environmentOverrides ?? {}}
+							/>
+						</div>
+					) : null}
+					{/* Resource Limits Section â 326-04 (APPS-03), only for non-native
+					    (store/docker) apps â native apps have no container to limit. */}
+					{!app.native ? (
+						<div className='border-t border-border-default pt-4 mt-4'>
+							<ResourceLimitsSection
+								appId={app.id}
+								appName={app.name}
+								initialCpuLimit={app.cpuLimit}
+								initialMemoryLimit={app.memoryLimit}
+							/>
+						</div>
+					) : null}
 					{hadChanges && (
 						<DialogFooter>
 							<Close asChild>
