@@ -208,6 +208,23 @@ export const AppSettingsSchema = z.object({
 	// at 322-06 provisioning time; never logged, never returned. apps.list exposes
 	// ONLY the boolean immichApiKeySet (store-presence), never this ciphertext.
 	immichApiKeyEnc: z.string().optional(),
+	// 326-01 APPS-01 (D-01/D-02/D-03): filtered post-install env overrides, re-applied
+	// inside patchComposeFile so Configure values survive app updates. Written ONLY
+	// through apps.setEnvironmentOverrides (allowlist-filtered against the manifest's
+	// installOptions.environmentOverrides — same gate as install()).
+	environmentOverrides: z.record(z.string()).optional(),
+	// 326-01 APPS-02 (D-04): per-app update policy + exact-version pin marker. undefined
+	// treated as 'manual' (the safe default). ignoredVersion pins a specific available
+	// version out of the "updates available"/"Update all" surfaces until it changes.
+	autoUpdatePolicy: z.enum(['auto', 'manual']).optional(),
+	ignoredVersion: z.string().optional(),
+	// 326-01 APPS-03 (D-07): per-app resource limits — cpuLimit = decimal cores,
+	// memoryLimit = BYTES. Applied to the MAIN service's deploy.resources.limits via
+	// patchComposeFile().then(restart) (compose-recreation-safe), never docker update.
+	cpuLimit: z.number().optional(),
+	memoryLimit: z.number().optional(),
+	// 326-01 MEDIA-01 (D-19/D-23): Immich onboarding QR card dismissal flag (UI-only).
+	immichCardDismissed: z.boolean().optional(),
 })
 
 export type AppSettings = z.infer<typeof AppSettingsSchema>

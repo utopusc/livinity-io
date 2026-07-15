@@ -178,6 +178,15 @@ export default class App {
 		const hostVendorAmd = gpuInfo?.vendor === 'amd'
 		const hostWsl2 = gpuInfo?.wsl2 ?? false
 
+		// APPS-01/03 (326-01): re-read per-app settings on EVERY patch so Configure
+		// values + limits survive update()/start()/restart() (all call patchComposeFile()
+		// with no args). Mirrors gpuAccessOverride above. storedEnvOverrides is the
+		// allowlist-filtered map persisted by apps.setEnvironmentOverrides; cpuLimit is
+		// decimal cores and memoryLimit is BYTES, both authoritative from the store.
+		const storedEnvOverrides = await this.store.get('environmentOverrides')
+		const cpuLimit = await this.store.get('cpuLimit')
+		const memoryLimit = await this.store.get('memoryLimit')
+
 		const compose = await this.readCompose()
 
 		// Remove legacy app_proxy service if present (we use Caddy instead)
@@ -314,8 +323,13 @@ export default class App {
 			}
 		}
 
-		// Apply environment overrides from install dialog
-		if (environmentOverrides && Object.keys(environmentOverrides).length > 0) {
+		// Apply environment overrides from install dialog.
+		// APPS-01 (326-01): the arg (install-time) wins; on a re-patch with no arg
+		// (update/start/restart) the allowlist-filtered store value is applied so
+		// Configure values survive. The store value is ALREADY allowlist-filtered at
+		// write time (apps.setEnvironmentOverrides) — do NOT re-filter here.
+		const effectiveEnvOverrides = environmentOverrides ?? storedEnvOverrides
+		if (effectiveEnvOverrides && Object.keys(effectiveEnvOverrides).length > 0) {
 			const envServiceNames = Object.keys(compose.services!)
 			const mainServiceName = envServiceNames.find(name =>
 				name === this.id || name === 'server' || name === 'app' || name === 'web'
@@ -327,7 +341,7 @@ export default class App {
 
 			if (Array.isArray(service.environment)) {
 				// Array format: ["KEY=VALUE", ...]
-				for (const [key, value] of Object.entries(environmentOverrides)) {
+				for (const [key, value] of Object.entries(effectiveEnvOverrides)) {
 					const idx = (service.environment as string[]).findIndex((e: string) => typeof e === 'string' && e.startsWith(`${key}=`))
 					if (idx >= 0) {
 						(service.environment as string[])[idx] = `${key}=${value}`
@@ -337,11 +351,11 @@ export default class App {
 				}
 			} else {
 				// Object format: {KEY: VALUE}
-				for (const [key, value] of Object.entries(environmentOverrides)) {
+				for (const [key, value] of Object.entries(effectiveEnvOverrides)) {
 					(service.environment as Record<string, string>)[key] = value
 				}
 			}
-			this.logger.log(`Applied ${Object.keys(environmentOverrides).length} environment overrides for ${this.id}`)
+			this.logger.log(`Applied ${Object.keys(effectiveEnvOverrides).length} environment overrides for ${this.id}`)
 
 			// v30.5 — Also write a `.env` file alongside docker-compose.yml so
 			// MULTI-SERVICE apps can reference user-provided values via Docker
@@ -354,7 +368,7 @@ export default class App {
 			// readable by livinityd's owner, never world-readable.
 			try {
 				const envFileLines: string[] = []
-				for (const [key, value] of Object.entries(environmentOverrides)) {
+				for (const [key, value] of Object.entries(effectiveEnvOverrides)) {
 					// Quote value if it contains spaces, =, $, or newlines (defensive)
 					const needsQuote = /[\s=$\n"]/.test(value)
 					const quoted = needsQuote
@@ -367,6 +381,35 @@ export default class App {
 				this.logger.log(`Wrote .env file at ${envFilePath} (${envFileLines.length} entries) for compose interpolation`)
 			} catch (err: any) {
 				this.logger.log(`[warn] Failed to write .env for ${this.id}: ${err?.message || err}`)
+			}
+		}
+
+		// APPS-03 (326-01, D-07/D-08/D-09): CPU/RAM limits on the MAIN service only.
+		// deploy.resources.limits is honored by docker compose v2 without swarm
+		// (Compose-Spec). `as any` escape hatch — compose-spec-schema does not model
+		// deploy.resources (same reason as the GPU branch). Authoritative from the
+		// store: set when present (cpus = decimal cores, memory = BYTES as a string),
+		// delete when cleared. Guarded on (cpuLimit || memoryLimit || pre-existing
+		// limits) so an app that never set a limit is left byte-identical.
+		const limitSvcNames = Object.keys(compose.services!)
+		const limitMainName = limitSvcNames.find((n) => n === this.id || n === 'server' || n === 'app' || n === 'web')
+			|| limitSvcNames.find((n) => !['docker', 'dind', 'tor', 'proxy', 'sidecar', 'init'].includes(n))
+			|| limitSvcNames[0]
+		const limitMainService = compose.services![limitMainName]
+		const limitExistingDeploy = (limitMainService?.deploy || {}) as any
+		if (cpuLimit != null || memoryLimit != null || limitExistingDeploy.resources?.limits) {
+			const service = limitMainService
+			const deploy = (service.deploy || {}) as any
+			const limits = {...(deploy.resources?.limits ?? {})} as Record<string, string>
+			if (cpuLimit != null) limits.cpus = String(cpuLimit)
+			else delete limits.cpus
+			if (memoryLimit != null) limits.memory = String(memoryLimit)
+			else delete limits.memory
+			if (Object.keys(limits).length > 0) {
+				deploy.resources = {...(deploy.resources ?? {}), limits}
+				service.deploy = deploy
+			} else if (deploy.resources) {
+				delete deploy.resources.limits
 			}
 		}
 
@@ -906,6 +949,58 @@ export default class App {
 			})
 		}
 		return success
+	}
+
+	// 326-01 APPS-01 (WR-01): persist the (already allowlist-filtered) env overrides,
+	// then patch-THEN-restart. restart() shells stop/start and NEVER re-runs
+	// patchComposeFile(), so the compose must be patched FIRST (the .env + main-service
+	// environment land on disk) so `compose up` recreates the container with them.
+	// Fire-and-forget + failure-isolated, matching the Vaultwarden setOidcEnabled shape.
+	async setEnvironmentOverrides(overrides: Record<string, string>) {
+		const success = await this.store.set('environmentOverrides', overrides)
+		if (success) {
+			this.patchComposeFile()
+				.then(() => this.restart())
+				.catch((e) => this.logger.error(`Failed to apply env overrides + restart '${this.id}'`, e))
+		}
+		return success
+	}
+
+	// 326-01 APPS-03 (WR-01, D-07): persist the CPU/RAM limits then patch-THEN-restart so
+	// the main-service deploy.resources.limits reconciliation in patchComposeFile takes
+	// effect via compose recreation — NEVER an in-place live-container mutation.
+	// FileStore.set() throws on undefined, so DELETE a key to CLEAR its limit and SET to
+	// APPLY it (cpuLimit = decimal cores, memoryLimit = BYTES).
+	async setResourceLimits({cpuLimit, memoryLimit}: {cpuLimit?: number; memoryLimit?: number}) {
+		if (cpuLimit == null) await this.store.delete('cpuLimit')
+		else await this.store.set('cpuLimit', cpuLimit)
+		const success = memoryLimit == null
+			? await this.store.delete('memoryLimit')
+			: await this.store.set('memoryLimit', memoryLimit)
+		if (success) {
+			this.patchComposeFile()
+				.then(() => this.restart())
+				.catch((e) => this.logger.error(`Failed to apply resource limits + restart '${this.id}'`, e))
+		}
+		return success
+	}
+
+	// 326-01 APPS-02 (D-04): per-app auto-update policy. Plain store write — no compose
+	// change, no restart (consumed by the app-auto-update scheduler job in a later plan).
+	async setUpdatePolicy(policy: 'auto' | 'manual') {
+		return this.store.set('autoUpdatePolicy', policy)
+	}
+
+	// 326-01 APPS-02 (D-05): pin/un-pin an exact available version out of the updates
+	// surfaces. FileStore.set() throws on undefined, so DELETE to un-pin, SET to pin.
+	async setIgnoredVersion(version: string | undefined) {
+		return version == null ? this.store.delete('ignoredVersion') : this.store.set('ignoredVersion', version)
+	}
+
+	// 326-01 MEDIA-01 (D-19): remember that the Immich onboarding QR card was dismissed.
+	// UI-only flag, no compose change, no restart.
+	async setImmichCardDismissed(dismissed: boolean) {
+		return this.store.set('immichCardDismissed', dismissed)
 	}
 
 	// 322-05 (IDENT-02, D-322-6): read the per-app "Enable SSO" override.
