@@ -1,0 +1,10 @@
+# Phase 329 (HW-02) — sudoers grant for the power-management wrapper.
+# Security model: grant on ONE explicit binary path, NO glob, NO arg wildcard.
+# The wrapper validates its 9-action enum
+# {install|status|spindown-set|spindown-clear|schedule-set|schedule-clear|test-wake|wol-enable|wol-disable},
+# regex-validates every device/iface/time token BEFORE it reaches hdparm/ethtool/rtcwake/systemctl,
+# refuses the boot/root disk + NVMe for spin-down, keeps the scheduled wake DEFAULT OFF, and
+# builds every argv + /etc file body itself — so no caller-supplied string reaches a privileged
+# command or a config file. Deploy: deploy-livinityd.sh block 2a/2b-power; day-2: update.sh Step 7.10k.
+Cmnd_Alias LIVINITYD_POWER = /usr/local/lib/livos/livos-power.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_POWER
