@@ -113,6 +113,8 @@ import {OsPatchingSection} from './os-patching-section'
 import {NetworkSection} from './network-section'
 // Phase 329-10 (NET-04) — managed raw TCP/UDP openings, WSL2-hidden.
 import {NetExposeSection} from './net-expose-section'
+// Phase 329-10 (HW-02) — power management (spin-down / schedule / WoL), WSL2-hidden.
+import {PowerManagementSection} from './power-management-section'
 import {VpnSection} from './vpn-section'
 import {UpsStatusSection} from './ups-status-section'
 import {PastDeploysTable} from './past-deploys-table'
@@ -189,6 +191,8 @@ type SettingsSection =
 	| 'network'
 	// Phase 329-10 (NET-04) — managed raw TCP/UDP openings, WSL2-hidden.
 	| 'net-expose'
+	// Phase 329-10 (HW-02) — power management (spin-down / schedule / WoL), WSL2-hidden.
+	| 'power-management'
 	// Phase 325-10 (NET-02) — first-class VPN (guided Tailscale login + MagicDNS fix).
 	| 'vpn'
 	// Phase 310-04 — external alert channels (Telegram/Discord/Slack/webhook/ntfy).
@@ -240,6 +244,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'domains', group: 'system', icon: TbWorld, label: 'Domains', description: 'Subdomains & DNS usage', adminOnly: true},
 	{id: 'network', group: 'system', icon: TbNetwork, label: 'Network', description: 'Hostname, static IP & DNS', adminOnly: true},
 	{id: 'net-expose', group: 'system', icon: TbRouter, label: 'Ports', description: 'Managed TCP/UDP openings', adminOnly: true},
+	{id: 'power-management', group: 'system', icon: TbBolt, label: 'Power management', description: 'Spin-down, scheduled wake & WoL', adminOnly: true},
 	{id: 'vpn', group: 'system', icon: TbLock, label: 'VPN', description: 'Guided Tailscale VPN & MagicDNS', adminOnly: true},
 	{id: 'alert-channels', group: 'system', icon: TbBell, label: 'Alert Channels', description: 'Telegram, Discord, Slack, webhook & ntfy alerts', adminOnly: true},
 	{id: 'monitoring', group: 'system', icon: TbChartLine, label: 'Monitoring', description: 'Resource history & alert thresholds', adminOnly: true},
@@ -666,6 +671,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <NetworkSection />
 		case 'net-expose':
 			return <NetExposeSection />
+		case 'power-management':
+			return <PowerManagementSection />
 		case 'vpn':
 			return <VpnSection />
 		case 'alert-channels':
