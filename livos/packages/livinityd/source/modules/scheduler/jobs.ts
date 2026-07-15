@@ -11,7 +11,7 @@ import {execa} from 'execa'
 import systemInformation from 'systeminformation'
 
 import getDirectorySize from '../utilities/get-directory-size.js'
-import {listUserQuotas} from '../database/index.js'
+import {listUserQuotas, getPool} from '../database/index.js'
 import {listContainers, pruneImages, isProtectedContainer} from '../docker/docker.js'
 import {listGitStacks, updateGitStackSyncSha, controlStack} from '../docker/stacks.js'
 import {syncRepo, copyComposeToStackDir} from '../docker/git-deploy.js'
@@ -24,7 +24,7 @@ import {insertResourceSample, aggregateRollups, pruneOldRows} from '../monitorin
 import {volumeBackupHandler} from './backup.js'
 import {securityAdvisorScanHandler} from '../security-advisor/scheduler-job.js'
 import {getBuiltinApp} from '../apps/builtin-apps.js'
-import type {BuiltInJobHandler, JobType} from './types.js'
+import type {BuiltInJobHandler, JobType, JobRunStatus} from './types.js'
 
 // =========================================================================
 // image-prune — wraps existing pruneImages() from docker.ts
@@ -689,6 +689,157 @@ export const userQuotaScanHandler: BuiltInJobHandler = async (job, ctx) => {
 }
 
 // =========================================================================
+// custom-command — Phase 329 APPS-04 (D-12..15).
+//
+// A user-defined scheduled command. Runs via execa with the shell option OFF
+// AS THE LIVINITYD PROCESS USER — NEVER root, NEVER a privileged wrapper, NEVER
+// a shell. The command + args are parsed/validated at SAVE time (upsertJob
+// zod → customCommandConfigSchema) and stored as a binary + argv[] literal, so
+// there is NO shell-metacharacter surface here (T-329-01). A mandatory bounded
+// timeout (300s default / 3600s max, zod-capped) kills the hung child; stored
+// output is truncated to the LAST 16 KB (T-329-02). Each run is appended to the
+// job_runs history table and retention-pruned in-tick (keep 20/job + 30-day cap,
+// D-14). A failure raises a SINGLE coalesced notification key per job, cleared
+// on the next success (D-15). Same never-throw contract as userQuotaScanHandler.
+// =========================================================================
+
+const OUTPUT_TAIL_BYTES = 16 * 1024
+
+/**
+ * Truncate to the LAST 16 KB (byte-accurate). A verbose or looping child cannot
+ * bloat the job_runs row or the in-app bell (T-329-02). A partial leading
+ * multibyte char left by the byte-slice is rendered/dropped cleanly by toString.
+ */
+export function tail16k(s: string): string {
+	if (typeof s !== 'string' || s.length === 0) return ''
+	const buf = Buffer.from(s, 'utf8')
+	if (buf.length <= OUTPUT_TAIL_BYTES) return s
+	return buf.subarray(buf.length - OUTPUT_TAIL_BYTES).toString('utf8')
+}
+
+interface JobRunRecord {
+	jobId: string | null
+	jobName: string
+	startedAt: Date
+	finishedAt: Date
+	status: JobRunStatus
+	output: string | null
+	error: string | null
+}
+
+/**
+ * Append one job_runs history row. Fail-open (mirrors history.ts): no pool →
+ * no-op, never throws — a scheduler tick must survive PG being briefly down.
+ * All values are parameterized ($1..$7); no caller string reaches the SQL text.
+ */
+export async function recordJobRun(run: JobRunRecord): Promise<void> {
+	const pool = getPool()
+	if (!pool) return
+	await pool.query(
+		`INSERT INTO job_runs (job_id, job_name, started_at, finished_at, status, output, error)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		[run.jobId, run.jobName, run.startedAt, run.finishedAt, run.status, run.output, run.error],
+	)
+}
+
+/**
+ * Retention prune (D-14): drop rows older than 30 days AND keep only the newest
+ * 20 rows per job_name. Runs inside the scheduler tick (metrics-rollup retention
+ * idiom, history.ts:pruneOldRows). The 30-day interval is a fixed literal (no
+ * caller surface); job_name is parameterized. Fail-open — never throws.
+ */
+export async function pruneJobRuns(jobName: string): Promise<void> {
+	const pool = getPool()
+	if (!pool) return
+	// 30-day cap (global — bounded, cheap).
+	await pool.query(`DELETE FROM job_runs WHERE started_at < NOW() - INTERVAL '30 days'`)
+	// Keep only the newest 20 rows for THIS job_name.
+	await pool.query(
+		`DELETE FROM job_runs
+		 WHERE job_name = $1
+		   AND id NOT IN (
+		     SELECT id FROM job_runs WHERE job_name = $1
+		     ORDER BY started_at DESC
+		     LIMIT 20
+		   )`,
+		[jobName],
+	)
+}
+
+export const customCommandHandler: BuiltInJobHandler = async (job, ctx) => {
+	// Guard: no daemon ref (isolated unit test / non-daemon caller) → skip cleanly.
+	if (!ctx.livinityd) {
+		ctx.logger.log(`[scheduler/custom-command] no daemon reference — skipping job ${job.name}`)
+		return {status: 'skipped', error: 'daemon reference unavailable'}
+	}
+
+	const alertKey = `custom-command:${job.name}` // single coalesced key per job (D-15)
+	const startedAt = new Date()
+	const cfg = (job.config ?? {}) as {
+		command?: unknown
+		args?: unknown
+		timeoutSec?: unknown
+		workingDir?: unknown
+	}
+	const command = typeof cfg.command === 'string' ? cfg.command : ''
+	const args = Array.isArray(cfg.args) ? cfg.args.filter((a): a is string => typeof a === 'string') : []
+	// Mandatory bounded timeout, defended a second time here (the zod at upsert is
+	// the primary cap): default 300s, hard-clamped to 3600s (D-13).
+	const timeoutSec =
+		typeof cfg.timeoutSec === 'number' && Number.isFinite(cfg.timeoutSec) && cfg.timeoutSec > 0
+			? Math.min(Math.floor(cfg.timeoutSec), 3600)
+			: 300
+	const workingDir = typeof cfg.workingDir === 'string' && cfg.workingDir.length > 0 ? cfg.workingDir : undefined
+
+	// Defensive: the zod at upsert already requires a non-empty command, but a
+	// hand-edited PG row could be malformed — degrade to a recorded failure
+	// rather than throwing an unhandled exception into the tick.
+	if (!command) {
+		const error = 'custom-command job has no command configured'
+		await recordJobRun({jobId: job.id, jobName: job.name, startedAt, finishedAt: new Date(), status: 'failure', output: null, error}).catch(() => {})
+		await pruneJobRuns(job.name).catch(() => {})
+		await ctx.livinityd.notifications.add(alertKey, {severity: 'warning', external: false}).catch(() => {})
+		return {status: 'failure', error}
+	}
+
+	try {
+		ctx.logger.log(`[scheduler/custom-command] running job ${job.name}: ${command} (${args.length} arg(s), ${timeoutSec}s)`)
+		// D-12: shell option OFF (no shell metacharacter surface), NON-root (the
+		// livinityd process user — no privileged wrapper), `all:true` merges
+		// stdout+stderr into one stored stream, `timeout` kills the child tree past the cap.
+		const result = await execa(command, args, {
+			shell: false,
+			timeout: timeoutSec * 1000,
+			all: true,
+			cwd: workingDir,
+		})
+		const output = tail16k(result.all ?? result.stdout ?? '')
+		await recordJobRun({jobId: job.id, jobName: job.name, startedAt, finishedAt: new Date(), status: 'success', output, error: null}).catch(() => {})
+		await pruneJobRuns(job.name).catch(() => {})
+		// Clear-on-recovery: a prior failure alert is silenced once the job succeeds.
+		await ctx.livinityd.notifications.clear(alertKey).catch(() => {})
+		return {status: 'success', output}
+	} catch (err) {
+		// Non-zero exit, ETIMEDOUT (timeout kill), spawn ENOENT — ALL land here and
+		// are NEVER re-thrown (never-throw contract). execa attaches `.all` (merged
+		// stdout+stderr) on the error; fall back to the message string.
+		const raw =
+			err && typeof err === 'object' && 'all' in err && typeof (err as {all?: unknown}).all === 'string' && (err as {all: string}).all.length > 0
+				? (err as {all: string}).all
+				: err instanceof Error
+					? err.message
+					: String(err)
+		const error = tail16k(raw)
+		await recordJobRun({jobId: job.id, jobName: job.name, startedAt, finishedAt: new Date(), status: 'failure', output: null, error}).catch(() => {})
+		await pruneJobRuns(job.name).catch(() => {})
+		// Failure alert — single coalesced key per job. external:false = in-app bell
+		// (a user cron failing is not an ops page-out, unlike disk-critical/ups).
+		await ctx.livinityd.notifications.add(alertKey, {severity: 'warning', external: false}).catch(() => {})
+		return {status: 'failure', error}
+	}
+}
+
+// =========================================================================
 // Registry: jobType -> handler mapping.
 // volume-backup wired by Plan 20-02 (alpine-tar streaming to S3/SFTP/local).
 // ai-resource-watch wired by Plan 23-02 (Phase 23 AID-02 proactive alerts).
@@ -709,6 +860,7 @@ export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'app-auto-update': appAutoUpdateHandler,
 	'ups-watch': upsWatchHandler,
 	'user-quota-scan': userQuotaScanHandler,
+	'custom-command': customCommandHandler, // Phase 329 APPS-04 (user-created only — never auto-seeded)
 }
 
 // =========================================================================

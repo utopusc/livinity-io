@@ -19,6 +19,7 @@ export type JobType =
 	| 'app-auto-update' // Phase 326 APPS-02 — daily opt-in true auto-update (policy==='auto', pin-aware)
 	| 'ups-watch' // Phase 326 HW-01 — ≥1-min UPS status poll → power-loss/restore external alert
 	| 'user-quota-scan' // Phase 325 STOR-02 — app-layer per-user du accounting → quota-exceeded bell
+	| 'custom-command' // Phase 329 APPS-04 — user-defined non-root execa(shell:false) command w/ history + failure alert
 
 export type JobRunStatus = 'success' | 'failure' | 'skipped' | 'running'
 
