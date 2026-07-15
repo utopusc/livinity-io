@@ -3029,6 +3029,78 @@ else
     info "sudoers.d/livos-gpu source not found — skipping (guided GPU install unavailable)"
 fi
 
+# ── Step 7.10d: Phase 326 (OS-01) — unattended-upgrades provisioning (sudoers.d/livos-os-patch + wrapper) ──
+# The livos-os-patch NOPASSWD grant + the root-owned unattended-upgrades wrapper must
+# reach ALREADY-DEPLOYED boxes on Update, not just fresh installs. Mirrors Step 7.10c
+# (livos-gpu) VERBATIM (content-diff + visudo validate-or-remove), retargeted to
+# livos-os-patch / livos-os-patch.sh. Missing this is the "looks wired, silently
+# no-ops" failure class: a box that took Phase 326 would call
+# `sudo -n /usr/local/lib/livos/livos-os-patch.sh <action>`, get denied, and the
+# admin's unattended-upgrades toggle would fail forever. Fully fail-tolerant: a missing
+# source or a visudo rejection never aborts the Update.
+step "Phase 326 (OS-01): unattended-upgrades provisioning (sudoers.d/livos-os-patch + install wrapper)"
+
+_set_desktop_identity   # Phase 277.1 — self-derive the desktop user (no literal bruce)
+
+# --- (a0) livos-os-patch.sh wrapper — install BEFORE the grant ---
+# The livos-os-patch grant (a) is on this ONE root-owned binary; the wrapper validates a
+# fixed action enum {status|enable|disable|set-options|dry-run|run-now|report}, regex-
+# validates its set-options args, and hardcodes every apt argv + /etc/apt config body,
+# so no caller flag can be appended. livinityd invokes `sudo -n <wrapper> <action>`, so
+# the wrapper must exist on day-2 boxes too. Idempotent (content-diffed), fail-tolerant.
+_OSPATCH_WRAP_SRC="$LIVOS_DIR/scripts/install/livos-os-patch.sh"
+if [[ ! -f "$_OSPATCH_WRAP_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _OSPATCH_WRAP_SRC="$TEMP_DIR/scripts/install/livos-os-patch.sh"
+fi
+_OSPATCH_WRAP_DST="/usr/local/lib/livos/livos-os-patch.sh"
+if [[ -f "$_OSPATCH_WRAP_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_OSPATCH_WRAP_DST" ]] || ! cmp -s "$_OSPATCH_WRAP_SRC" "$_OSPATCH_WRAP_DST"; then
+        if install -m 0755 -o root -g root "$_OSPATCH_WRAP_SRC" "$_OSPATCH_WRAP_DST"; then
+            ok "livos-os-patch.sh installed at $_OSPATCH_WRAP_DST"
+        else
+            warn "Failed to install livos-os-patch.sh (non-fatal — unattended-upgrades control unavailable until fixed)"
+        fi
+    else
+        info "livos-os-patch.sh already current"
+    fi
+else
+    info "livos-os-patch.sh source not found — skipping (unattended-upgrades control unavailable)"
+fi
+
+# --- (a) sudoers.d/livos-os-patch — install + template the subject to the desktop user ---
+_OSPATCH_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-os-patch"
+if [[ ! -f "$_OSPATCH_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _OSPATCH_SUDOERS_SRC="$TEMP_DIR/scripts/install/sudoers.d/livos-os-patch"
+fi
+_OSPATCH_SUDOERS_DST="/etc/sudoers.d/livos-os-patch"
+if [[ -f "$_OSPATCH_SUDOERS_SRC" ]]; then
+    _OSPATCH_SUDOERS_TMP=$(mktemp)
+    if [[ "$_DESKTOP_USER" != "bruce" ]]; then
+        sed -E "s/^bruce([[:space:]]+ALL=)/${_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DESKTOP_USER})/g" \
+            "$_OSPATCH_SUDOERS_SRC" > "$_OSPATCH_SUDOERS_TMP"
+    else
+        cp -f "$_OSPATCH_SUDOERS_SRC" "$_OSPATCH_SUDOERS_TMP"
+    fi
+    if [[ ! -f "$_OSPATCH_SUDOERS_DST" ]] || ! cmp -s "$_OSPATCH_SUDOERS_TMP" "$_OSPATCH_SUDOERS_DST"; then
+        install -m 0440 -o root -g root "$_OSPATCH_SUDOERS_TMP" "$_OSPATCH_SUDOERS_DST"
+        # SAFETY-CRITICAL: a malformed sudoers file can break sudo system-wide.
+        # Validate the INSTALLED file; if visudo rejects it, REMOVE it (unattended-
+        # upgrades control stays denied — the prior state — rather than risk broken sudo).
+        if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_OSPATCH_SUDOERS_DST" >/dev/null 2>&1; then
+            warn "visudo rejected $_OSPATCH_SUDOERS_DST — removing (unattended-upgrades control stays denied until fixed)"
+            rm -f "$_OSPATCH_SUDOERS_DST"
+        else
+            ok "sudoers.d/livos-os-patch installed (subject: ${_DESKTOP_USER})"
+        fi
+    else
+        info "sudoers.d/livos-os-patch already current (subject: ${_DESKTOP_USER})"
+    fi
+    rm -f "$_OSPATCH_SUDOERS_TMP"
+else
+    info "sudoers.d/livos-os-patch source not found — skipping (unattended-upgrades control unavailable)"
+fi
+
 # ── Step 7.11: Phase 306 — desktop-user password helper (wrapper + sudoers + bootstrap) ──
 # The "Regenerate" button on the Desktop password row in Settings → Account calls
 # livinityd's system.regenerateDesktopPassword, which runs
