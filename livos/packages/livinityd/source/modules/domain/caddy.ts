@@ -1155,18 +1155,31 @@ export function validatePortalDomain(domain: string): boolean {
 export const validateHybridDomain = validatePortalDomain
 
 /**
- * Generate a Caddyfile for portal mode. Uses Cloudflare DNS-01 for Let's Encrypt
- * wildcard cert issuance — no internal PKI, no CA enrollment needed on clients.
+ * Generate a Caddyfile for portal (LAN-HTTPS) mode.
  *
- * The `dns cloudflare {env.CLOUDFLARE_API_TOKEN}` directive requires the
- * `caddy-dns/cloudflare` plugin (xcaddy build OR official caddy with cf plugin).
- * Token is loaded via systemd EnvironmentFile=/etc/livos/secrets/cf-token.
+ * Phase 325-03 (NET-03, D-13/D-15) — REWRITTEN off the `caddy-dns/cloudflare`
+ * plugin. The box installs STOCK Caddy only; the `caddy-dns/cloudflare` plugin
+ * was DELIBERATELY retired by `D-134-RETIRE-DIRECT-LAN` (mode-tunnel.sh /
+ * mode-hybrid.sh install stock Caddy — no xcaddy build). The previous generator
+ * emitted a per-block DNS-01 `tls { dns <provider> {env...} }` stanza, which
+ * stock Caddy REJECTS ("unrecognized directive: dns") → reload failed.
  *
- * Per D-104-NO-PROD-IMPACT: this is purely ADDITIVE — generateFullCaddyfile is
- * not modified. Per D-104-RELAY-ZERO-DATA-PLANE: this generator emits ONLY
- * reverse_proxy entries pointing at 127.0.0.1 — data-plane stays LAN-direct.
- * Server5 is touched ONLY for (a) one-time subdomain mint and (b) periodic
- * ACME DNS-01 TXT writes; neither path is in this Caddyfile output.
+ * NEW approach — Stock Caddy only, no `caddy-dns/cloudflare` plugin (D-134 NOT
+ * reversed): drop the DNS-01 `tls` stanza entirely and let Caddy manage
+ * per-name certs via its DEFAULT ACME (TLS-ALPN-01 on :443 /
+ * HTTP-01 on :80 — both plugin-free). Per-subdomain certs are acceptable for a
+ * LAN portal (D-15). The wildcard `*.${portalDomain}` block is REPLACED with
+ * explicit per-subdomain blocks: a wildcard cert needs DNS-01 (→ plugin), while
+ * stock Caddy issues one cert per explicit name.
+ *
+ * ⚠ Live issuance requires port 80/443 reachable from Let's Encrypt for these
+ * names — UAT-gated (RESEARCH risk #1: HTTP-01/TLS-ALPN may be unreachable for
+ * LAN-only names). Reinstating a `caddy-dns/cloudflare` xcaddy build for DNS-01
+ * wildcard is the DEFERRED fallback (would partially reverse D-134).
+ *
+ * Per D-104-NO-PROD-IMPACT: purely ADDITIVE — generateFullCaddyfile is not
+ * modified. Per D-104-RELAY-ZERO-DATA-PLANE: emits ONLY reverse_proxy entries
+ * pointing at 127.0.0.1 — data-plane stays LAN-direct.
  */
 export function generatePortalCaddyfile(
 	portalDomain: string,
@@ -1175,33 +1188,20 @@ export function generatePortalCaddyfile(
 ): string {
 	const blocks: string[] = []
 
-	// Wildcard virtual host with Cloudflare DNS-01 ACME
-	blocks.push(`*.${portalDomain} {
-    tls {
-        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
-    }
-    reverse_proxy 127.0.0.1:8080 {
-${WS_TRANSPORT_BODY_LOCAL}
-    }
-}`)
-
-	// Bare apex virtual host (same cert)
+	// Bare apex virtual host — automatic HTTPS via Caddy's default ACME
+	// (TLS-ALPN-01/HTTP-01, plugin-free). No `tls { dns ... }` stanza → stock
+	// Caddy loads it. Wildcard block intentionally DROPPED (needs DNS-01 plugin).
 	blocks.push(`${portalDomain} {
-    tls {
-        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
-    }
     reverse_proxy 127.0.0.1:8080 {
 ${WS_TRANSPORT_BODY_LOCAL}
     }
 }`)
 
-	// Per-subdomain custom port routing (multi-user app gateway hint)
+	// Per-subdomain custom port routing (multi-user app gateway). Each name gets
+	// its own per-name cert from Caddy's default ACME — no wildcard, no plugin.
 	if (multiUser) {
 		for (const sub of subdomains) {
 			blocks.push(`${sub.name}.${portalDomain} {
-    tls {
-        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
-    }
     reverse_proxy 127.0.0.1:${sub.port} {
 ${FRAME_EMBED_STRIP_LOCAL}
 ${WS_TRANSPORT_BODY_LOCAL}
