@@ -19,6 +19,12 @@ import {validateManifest, type AppSettings} from './schema.js'
 import appScript from './legacy-compat/app-script.js'
 import {reconcileAppVolumeOwnership} from './reconcile-volume-ownership.js'
 import {pollContainerHealth} from './health-poll.js'
+import {
+	resolveJellyfinHwAccel,
+	seedEncodingXml,
+	ensureNvidiaVideoCap,
+	precreateMediaFolders,
+} from './jellyfin-preconfig.js'
 import {deriveOidcClientSecret as deriveOidcSecret} from '../oidc/clients.js'
 import {provisionOidcForApp, type ProvisionResult} from '../oidc/provisioning.js'
 import {getKey, encrypt, decrypt} from '../secrets/dek.js'
@@ -178,6 +184,23 @@ export default class App {
 		const hostVendorAmd = gpuInfo?.vendor === 'amd'
 		const hostWsl2 = gpuInfo?.wsl2 ?? false
 
+		// 329-11 (MEDIA-02, D-22): resolve the Jellyfin hwaccel branch ONCE, using the
+		// SAME precedence as the GPU service-loop branches below, so the encoding.xml
+		// seed (at the end of this method) agrees with the reservation actually applied.
+		// Null for non-Jellyfin apps or when no GPU branch resolves — encoding.xml is
+		// then not seeded (guarded inside seedEncodingXml).
+		const jellyfinHwAccel =
+			this.id === 'jellyfin'
+				? resolveJellyfinHwAccel({
+						wantsGpu,
+						hostHasNvidia,
+						nvidiaToolkitInstalled,
+						hostVendorAmd,
+						hostWsl2,
+						deviceHasGpu,
+					})
+				: null
+
 		// APPS-01/03 (326-01): re-read per-app settings on EVERY patch so Configure
 		// values + limits survive update()/start()/restart() (all call patchComposeFile()
 		// with no args). Mirrors gpuAccessOverride above. storedEnvOverrides is the
@@ -280,6 +303,13 @@ export default class App {
 					reservations: {devices: [{driver: 'nvidia', count: 'all', capabilities: ['gpu']}]},
 				}
 				service.deploy = deploy
+				// 329-11 (MEDIA-02, research A5 / D-22): Jellyfin NVENC needs the `video`
+				// NVIDIA driver capability. If the image env lacks it, add the explicit
+				// FIXED literal NVIDIA_DRIVER_CAPABILITIES=compute,video,utility (T-329-29).
+				// Fail-soft — a docker-inspect error never aborts the patch/install.
+				if (this.id === 'jellyfin' && typeof service.image === 'string') {
+					await ensureNvidiaVideoCap(service, service.image, this.logger)
+				}
 			} else if (wantsGpu && hostVendorAmd && !hostWsl2) {
 				// 330 GPU-05 (GPU-04): bare-metal AMD ROCm passthrough. Distinct from
 				// the NVIDIA reservation and the generic /dev/dri arm: AMD compute needs
@@ -517,6 +547,15 @@ export default class App {
 			}
 		}
 
+		// 329-11 (MEDIA-02, D-22): seed a minimal-delta encoding.xml BEFORE first
+		// container start, ONLY when a GPU branch resolved AND no encoding.xml exists
+		// yet (never clobber a wizard/user-authored file — T-329-28). patchComposeFile
+		// runs before pull/start on install, so the seed lands before Jellyfin boots;
+		// on later update()/start()/restart() the absent-guard keeps it a no-op.
+		if (this.id === 'jellyfin') {
+			await seedEncodingXml(this.dataDirectory, jellyfinHwAccel, this.logger)
+		}
+
 		await this.writeCompose(compose)
 	}
 
@@ -535,7 +574,21 @@ export default class App {
 		this.state = 'installing'
 		this.stateProgress = 1
 
+		// 329-11 (MEDIA-02, D-23): a NEW install is signalled by the absence of the
+		// first default library folder — captured BEFORE patchComposeFile so a re-run
+		// over pre-existing media (existing install) is detected and skipped, never
+		// restructured. Only Jellyfin cares; every other app leaves this false.
+		const jellyfinIsNewInstall =
+			this.id === 'jellyfin' ? !(await fse.pathExists(`${this.dataDirectory}/media/Movies`)) : false
+
 		await this.patchComposeFile(environmentOverrides)
+
+		// 329-11 (MEDIA-02, D-23): pre-create the default Movies/Shows/Music libraries
+		// under the /media mount for NEW installs only, BEFORE first container start.
+		// Existing installs are a no-op (no breaking volume change).
+		if (this.id === 'jellyfin') {
+			await precreateMediaFolders(this.dataDirectory, jellyfinIsNewInstall, this.logger)
+		}
 
 		await this.pull()
 
