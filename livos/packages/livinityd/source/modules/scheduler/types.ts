@@ -16,6 +16,8 @@ export type JobType =
 	| 'resource-metrics-collect' // Phase 320 MON-01 — 1-min system-total metrics write (currentLoad, not per-app docker top)
 	| 'resource-metrics-rollup' // Phase 320 MON-01 — hourly rollup aggregate + retention prune
 	| 'security-advisor-scan' // Phase 328 SEC-02 — weekly Trivy + weak-config scan
+	| 'app-auto-update' // Phase 326 APPS-02 — daily opt-in true auto-update (policy==='auto', pin-aware)
+	| 'ups-watch' // Phase 326 HW-01 — ≥1-min UPS status poll → power-loss/restore external alert
 
 export type JobRunStatus = 'success' | 'failure' | 'skipped' | 'running'
 

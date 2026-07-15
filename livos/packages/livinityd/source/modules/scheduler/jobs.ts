@@ -19,6 +19,7 @@ import {getDiskIO, getNetworkStats} from '../monitoring/monitoring.js'
 import {insertResourceSample, aggregateRollups, pruneOldRows} from '../monitoring/history.js'
 import {volumeBackupHandler} from './backup.js'
 import {securityAdvisorScanHandler} from '../security-advisor/scheduler-job.js'
+import {getBuiltinApp} from '../apps/builtin-apps.js'
 import type {BuiltInJobHandler, JobType} from './types.js'
 
 // =========================================================================
@@ -485,6 +486,114 @@ export const resourceMetricsRollupHandler: BuiltInJobHandler = async (job, ctx) 
 }
 
 // =========================================================================
+// app-auto-update — Phase 326 APPS-02 (true auto-update).
+// For every installed app whose per-app autoUpdatePolicy is 'auto', compare the
+// INSTALLED manifest version to the shipped builtin manifest version (the
+// reliable server-side "available version" signal — the app-store registry
+// route returns [], so builtin-manifest bumps are the update trigger). Update
+// only when the available version DIFFERS and is NOT the admin's ignoredVersion
+// pin. Each app is wrapped in its OWN try/catch so one failing update never
+// fails the tick (T-326-18); autoUpdatePolicy defaults to 'manual' so NOTHING
+// auto-updates until an admin opts an app in (T-326-17). Follows the
+// disk-critical-watch never-throw contract (guard→skipped, try/catch→failure).
+// =========================================================================
+export const appAutoUpdateHandler: BuiltInJobHandler = async (job, ctx) => {
+	// Guard: no daemon ref (isolated unit test / Scheduler built without
+	// livinityd) → skip cleanly, never throw.
+	if (!ctx.livinityd) {
+		ctx.logger.log(`[scheduler/app-auto-update] no daemon reference — skipping job ${job.name}`)
+		return {status: 'skipped', error: 'daemon reference unavailable'}
+	}
+	try {
+		ctx.logger.log(`[scheduler/app-auto-update] running job ${job.name}`)
+		const updated: string[] = []
+		for (const app of ctx.livinityd.apps.instances) {
+			try {
+				const policy = await app.store.get('autoUpdatePolicy')
+				// Opt-in only: 'manual' (the default) and undefined are left untouched.
+				if (policy !== 'auto') continue
+				const installed = (await app.readManifest()).version
+				const available = getBuiltinApp(app.id)?.version
+				const ignored = await app.store.get('ignoredVersion')
+				// Skip when up-to-date OR when the available version is the admin's pin.
+				if (available && available !== installed && available !== ignored) {
+					await app.update()
+					updated.push(app.id)
+				}
+			} catch (err) {
+				// Per-app isolation: one app's failure must not fail the whole tick.
+				ctx.logger.error(
+					`[scheduler/app-auto-update] ${app.id}: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}
+		ctx.logger.log(`[scheduler/app-auto-update] auto-updated ${updated.length} app(s)`)
+		return {status: 'success', output: {updated}}
+	} catch (err) {
+		// NOTE: 'failure', NOT 'error' — JobRunResult.status has no 'error' member.
+		return {status: 'failure', error: err instanceof Error ? err.message : String(err)}
+	}
+}
+
+// =========================================================================
+// ups-watch — Phase 326 HW-01 (the ALERT half of criterion-4).
+// STATUS/ALERT-only UPS poll. Reads `upsc ups@localhost` (a localhost-only NUT
+// socket), parses the `ups.status` line (OL / OB / LB tokens). On OB (running
+// on battery — mains lost) raises the 'ups-power-loss' external alert; on OL
+// (mains restored) raises 'ups-power-restored' and clears the loss alert. A box
+// with NO UPS / NUT not configured is NORMAL → {status:'success', unavailable},
+// NEVER a failure. This ≥1-min poll NEVER decides shutdown — upsmon (POLLFREQ
+// 5s, Plan 326-03) owns the shutdown decision. Reaches the daemon EXCLUSIVELY
+// through ctx.livinityd; every add/clear is fire-and-forget (.catch()); NEVER
+// throws out of the scheduler tick.
+// =========================================================================
+const UPS_POLL_TIMEOUT_MS = 10_000
+
+// Parse a `key: value` line from `upsc` output; null when the field is absent.
+function parseUpsField(stdout: string, key: string): string | null {
+	const line = stdout.split('\n').find((l) => l.startsWith(`${key}:`))
+	if (!line) return null
+	return line.slice(line.indexOf(':') + 1).trim()
+}
+
+export const upsWatchHandler: BuiltInJobHandler = async (job, ctx) => {
+	// Guard: no daemon ref → skip cleanly, never throw.
+	if (!ctx.livinityd) {
+		ctx.logger.log(`[scheduler/ups-watch] no daemon reference — skipping job ${job.name}`)
+		return {status: 'skipped', error: 'daemon reference unavailable'}
+	}
+	try {
+		ctx.logger.log(`[scheduler/ups-watch] running job ${job.name}`)
+		// reject:false so an absent UPS / unconfigured NUT degrades to 'unavailable'
+		// instead of throwing (a box with no UPS is the normal case, NOT a failure).
+		const {stdout, exitCode} = await execa('upsc', ['ups@localhost'], {
+			timeout: UPS_POLL_TIMEOUT_MS,
+			reject: false,
+		})
+		const statusLine = stdout.split('\n').find((line) => line.startsWith('ups.status:'))
+		if (exitCode !== 0 || !statusLine) {
+			// No UPS configured / upsc unavailable → NORMAL, no notification.
+			return {status: 'success', output: {status: 'unavailable'}}
+		}
+		const charge = parseUpsField(stdout, 'battery.charge')
+		const runtime = parseUpsField(stdout, 'battery.runtime')
+		const onBattery = /\bOB\b/.test(statusLine)
+		if (onBattery) {
+			// Fire-and-forget: a dispatch failure must not fail the tick.
+			await ctx.livinityd.notifications.add('ups-power-loss', {severity: 'critical', external: true}).catch(() => {})
+		} else {
+			// OL — mains restored: announce restore + clear the loss alert on recovery.
+			await ctx.livinityd.notifications.add('ups-power-restored', {severity: 'info', external: true}).catch(() => {})
+			await ctx.livinityd.notifications.clear('ups-power-loss').catch(() => {})
+		}
+		return {status: 'success', output: {status: onBattery ? 'OB' : 'OL', charge, runtime}}
+	} catch (err) {
+		// NOTE: 'failure', NOT 'error' — JobRunResult.status has no 'error' member.
+		return {status: 'failure', error: err instanceof Error ? err.message : String(err)}
+	}
+}
+
+// =========================================================================
 // Registry: jobType -> handler mapping.
 // volume-backup wired by Plan 20-02 (alpine-tar streaming to S3/SFTP/local).
 // ai-resource-watch wired by Plan 23-02 (Phase 23 AID-02 proactive alerts).
@@ -502,6 +611,8 @@ export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'resource-metrics-collect': resourceMetricsCollectHandler,
 	'resource-metrics-rollup': resourceMetricsRollupHandler,
 	'security-advisor-scan': securityAdvisorScanHandler,
+	'app-auto-update': appAutoUpdateHandler,
+	'ups-watch': upsWatchHandler,
 }
 
 // =========================================================================
@@ -551,4 +662,14 @@ export const DEFAULT_JOB_DEFINITIONS: Array<{
 	// so the two weekly maintenance jobs don't overlap — and bounded to
 	// MAX_IMAGES_PER_RUN per tick to keep the cost predictable on a small box.
 	{name: 'security-advisor-scan', schedule: '0 4 * * 0', type: 'security-advisor-scan', enabled: true},
+	// Phase 326 APPS-02 — true auto-update. Daily 4am off-peak. enabled=true is SAFE
+	// because autoUpdatePolicy defaults to 'manual', so this handler updates NOTHING
+	// until an admin explicitly opts an app into 'auto' (T-326-17); the ignoredVersion
+	// pin is honored and each app runs in its own try/catch (T-326-18).
+	{name: 'app-auto-update', schedule: '0 4 * * *', type: 'app-auto-update', enabled: true},
+	// Phase 326 HW-01 — UPS status watch, every minute. enabled=true: a box with no
+	// UPS returns 'unavailable' (no-op, no LLM spend), and mains-loss must alert even
+	// with no Settings tab open. This poll is STATUS/ALERT-only — upsmon (POLLFREQ 5s)
+	// owns the actual shutdown decision, never this ≥1-min tick.
+	{name: 'ups-watch', schedule: '* * * * *', type: 'ups-watch', enabled: true},
 ]
