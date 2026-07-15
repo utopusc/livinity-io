@@ -105,6 +105,7 @@ import {SettingsInfoCard} from './settings-info-card'
 import {SettingsToggleRow} from './settings-toggle-row'
 import {SoftwareUpdateListRow} from './software-update-list-row'
 import {GpuInstallSection} from './gpu-install-section'
+import {OsPatchingSection} from './os-patching-section'
 import {PastDeploysTable} from './past-deploys-table'
 import {MenuItemBadge} from './menu-item-badge'
 
@@ -1769,6 +1770,11 @@ function SoftwareUpdateSection() {
 			    boxes; admin-gated. Shares one component with the app-settings
 			    gpu-access dialog so the two never drift. */}
 			<GpuInstallSection />
+			{/* Phase 326-07 (OS-01) — unattended-upgrades (host apt security
+			    updates) managed from the UI, sibling to the GPU install card
+			    (D-13). Admin-gated; degrades to a note where the wrapper is
+			    not yet deployed. */}
+			<OsPatchingSection />
 			<div className='mt-6 flex flex-col gap-3'>
 				<h3 className='text-body font-medium'>Past Deploys</h3>
 				{/* Phase 130-03 — cap height so the table doesn't push the page
