@@ -29,8 +29,15 @@
 #   spindown-set   <dev> <timeout>   opt-in per-drive HDD spin-down (hdparm.conf + udev),
 #                                    NVMe excluded, boot/root disk refused (D-17)
 #   spindown-clear <dev>             remove that drive's stanza + udev rule
-#   schedule-set   <HH:MM> <HH:MM|secs>  systemd-timer shutdown + rtcwake-armed RTC wake (D-18)
+#   schedule-set   <HH:MM> <HH:MM|secs>  systemd-timer shutdown + rtcwake-armed RTC wake (D-18);
+#                                    the wake is resolved to the first occurrence AFTER the
+#                                    scheduled shutdown, and the shutdown unit RE-ARMS the next
+#                                    wake before every power-off so the recurring daily timer
+#                                    never outlives its wake alarm (WR-01/WR-02)
 #   schedule-clear                   disarm the shutdown timer + clear the RTC alarm
+#   arm-wake       <HH:MM|secs>      INTERNAL: re-arm the next RTC wake (invoked by the shutdown
+#                                    unit's ExecStartPre as root, NOT via sudo) so each cycle of
+#                                    the recurring shutdown timer is paired with a fresh alarm
 #   test-wake                        arm a ~180s rtcwake alarm and report — the recommended
 #                                    pre-flight before real arming (D-18)
 #   wol-enable     <iface>           ethtool -s <iface> wol g + dedicated systemd oneshot unit (D-19)
@@ -58,6 +65,10 @@ SHUTDOWN_TIMER="/etc/systemd/system/livos-power-shutdown.timer"
 SHUTDOWN_SVC="/etc/systemd/system/livos-power-shutdown.service"
 WOL_UNIT="/etc/systemd/system/livos-power-wol@.service"
 RTC_WAKEALARM="/sys/class/rtc/rtc0/wakealarm"
+# Deployed wrapper path (deploy-livinityd.sh / update.sh install THIS file here, root:root
+# 0755). The scheduled-shutdown unit's ExecStartPre calls back into it to re-arm the next
+# wake each cycle; hardcoded (not $0) so the unit is invariant to how schedule-set was invoked.
+SELF="/usr/local/lib/livos/livos-power.sh"
 
 # ── Validators (run BEFORE any value reaches a privileged command) ───────────
 
@@ -267,12 +278,22 @@ case "$ACTION" in
 		fi
 
 		# Shutdown side: a wrapper-owned systemd oneshot service + timer (OnCalendar).
-		cat > "$SHUTDOWN_SVC" <<'PWRSVC'
+		# ExecStartPre RE-ARMS the next RTC wake immediately before every power-off, so each
+		# cycle of the recurring daily timer is paired with a fresh alarm instead of relying on
+		# the single alarm armed at schedule-set time (which would only wake the FIRST cycle,
+		# then strand the box off on night 2+) — WR-02. arm-wake is passed the ORIGINAL wake
+		# argument (HH:MM → next occurrence after the power-off instant; secs → same delta),
+		# and it runs as root directly (the unit runs as root; NOT via sudo). ExecStartPre is
+		# NOT prefixed with `-`, so if the wake cannot be armed the unit ABORTS and the box does
+		# NOT power off — the fail-safe posture against stranding. WAKE is regex-validated HH:MM
+		# or a bounded seconds count and SELF is a fixed constant, so the unit body is injection-free.
+		cat > "$SHUTDOWN_SVC" <<PWRSVC
 [Unit]
 Description=LivOS scheduled power-off (HW-02)
 
 [Service]
 Type=oneshot
+ExecStartPre=${SELF} arm-wake ${WAKE}
 ExecStart=/sbin/shutdown -h now
 PWRSVC
 		cat > "$SHUTDOWN_TIMER" <<PWRTIMER
@@ -289,10 +310,11 @@ PWRTIMER
 		systemctl daemon-reload || true
 		systemctl enable --now livos-power-shutdown.timer || true
 
-		# Wake side: arm the RTC alarm now. `-m no` sets the hardware alarm WITHOUT
-		# suspending, so the alarm persists across the scheduled power-off and fires it
-		# back on. The RTC alarm is absolute in hardware, so arming it now for a future
-		# delta is correct even though the box will be off in between.
+		# Wake side: arm the RTC alarm for the FIRST cycle now. `-m no` sets the hardware
+		# alarm WITHOUT suspending, so the alarm persists across the scheduled power-off and
+		# fires it back on. The RTC alarm is absolute in hardware, so arming it now for a
+		# future delta is correct even though the box will be off in between. Cycle 2+ are
+		# re-armed by the shutdown unit's ExecStartPre (arm-wake) right before each power-off.
 		rtcwake -m no -s "$WAKE_SECS" || {
 			echo "[livos-power] rtcwake failed to arm the RTC alarm — schedule NOT trusted (run test-wake)" >&2
 			exit 1
@@ -311,6 +333,33 @@ PWRTIMER
 		# dedicated disarm mode).
 		[[ -w "$RTC_WAKEALARM" ]] && echo 0 > "$RTC_WAKEALARM" 2>/dev/null || true
 		echo "schedule-clear"
+		exit 0
+		;;
+
+	arm-wake)
+		# INTERNAL re-arm entrypoint invoked by the scheduled-shutdown unit's ExecStartPre
+		# (runs as root, directly — NOT via sudo) so each cycle of the recurring daily shutdown
+		# timer is paired with a fresh RTC alarm (WR-02). The wake arg is HH:MM (next occurrence
+		# STRICTLY after now — i.e. after the power-off instant this runs at) or a raw seconds
+		# delta. Fails HARD on any rtcwake error so the calling ExecStartPre aborts the power-off
+		# rather than stranding the box off with no pending alarm.
+		WAKE="${2:-}"
+		if _valid_hhmm "$WAKE"; then
+			now_epoch=$(date +%s)
+			target_epoch=$(_next_wake_epoch "$now_epoch" "$WAKE") || {
+				echo "[livos-power] arm-wake: could not resolve wake time: '${WAKE}'" >&2; exit 2; }
+			WAKE_SECS=$(( target_epoch - now_epoch ))
+		elif _valid_secs "$WAKE"; then
+			WAKE_SECS="$WAKE"
+		else
+			echo "[livos-power] arm-wake: invalid wake argument (expected HH:MM or 1-604800 seconds): '${WAKE}'" >&2
+			exit 2
+		fi
+		rtcwake -m no -s "$WAKE_SECS" || {
+			echo "[livos-power] arm-wake: rtcwake failed to arm the RTC alarm" >&2
+			exit 1
+		}
+		echo "arm-wake wake_in=${WAKE_SECS}s"
 		exit 0
 		;;
 
@@ -403,7 +452,7 @@ WOLSVC
 		;;
 
 	*)
-		echo "[livos-power] invalid action: '${ACTION}' — expected one of: install status spindown-set spindown-clear schedule-set schedule-clear test-wake wol-enable wol-disable" >&2
+		echo "[livos-power] invalid action: '${ACTION}' — expected one of: install status spindown-set spindown-clear schedule-set schedule-clear arm-wake test-wake wol-enable wol-disable" >&2
 		exit 2
 		;;
 esac
