@@ -20,7 +20,7 @@
 
 import {createHash} from 'node:crypto'
 import * as crypto from 'node:crypto'
-import {readdirSync} from 'node:fs'
+import {readdirSync, readFileSync} from 'node:fs'
 import {fileURLToPath} from 'node:url'
 import nodePath from 'node:path'
 
@@ -50,6 +50,7 @@ import {
 	constantTimeHashEqual,
 } from './share-tokens.js'
 import {ALL_MIGRATIONS} from '../database/migrations/index.js'
+import {signShareGrant, verifyShareGrant} from '../jwt.js'
 
 function fakeRow(overrides: Record<string, unknown> = {}) {
 	return {
@@ -191,5 +192,74 @@ describe('files share-tokens DAO (324-01 FILES-01)', () => {
 		// incidental p325 cross-phase fix).
 		expect(ALL_MIGRATIONS).toContain('2026-07-15-p324-file-shares.sql')
 		expect(ALL_MIGRATIONS).toContain('2026-07-15-p325-user-quota.sql')
+	})
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Route-manifest + password-oracle guards (source-text discipline, mirrors
+// domain/caddy.test.ts). D-02 (routes on publicApi, CVE-2026-45282), D-03
+// (bcryptjs + per-token redis rate-limit), D-05 (wrong-password == rate-limited).
+// ─────────────────────────────────────────────────────────────────────────────
+describe('share route manifest + password-oracle guards (324-01 D-02/D-03/D-05)', () => {
+	const here = nodePath.dirname(fileURLToPath(import.meta.url))
+	const apiSrc = readFileSync(nodePath.resolve(here, './api.ts'), 'utf8')
+	const serverSrc = readFileSync(nodePath.resolve(here, '../server/index.ts'), 'utf8')
+
+	test('all three share routes register on publicApi — NEVER privateApi (D-02)', () => {
+		expect(apiSrc).toMatch(/publicApi\.get\(\s*'\/share\/:token'/)
+		expect(apiSrc).toMatch(/publicApi\.get\(\s*'\/share\/:token\/download'/)
+		expect(apiSrc).toMatch(/publicApi\.get\(\s*'\/share\/:token\/thumbnail'/)
+		expect(apiSrc).not.toMatch(/privateApi\.get\(\s*'\/share/)
+	})
+
+	test('every share route resolves the path inside fileUserContext.run(owner) (D-04)', () => {
+		// One run(owner) per route + none of them uses getFileUserFromRequest
+		// (the cookie identity) for the public share path resolution.
+		const runs = apiSrc.match(/fileUserContext\.run\(resolved\.owner/g) ?? []
+		expect(runs.length).toBeGreaterThanOrEqual(3)
+	})
+
+	test("'/api/files/share/' is present in APEX_PUBLIC_PREFIXES (D-02)", () => {
+		expect(serverSrc).toMatch(/APEX_PUBLIC_PREFIXES[\s\S]*'\/api\/files\/share\/'/)
+	})
+
+	test('password branch bcrypt-compares AND per-token redis rate-limits (D-03)', () => {
+		expect(apiSrc).toMatch(/bcrypt\.compare/)
+		expect(apiSrc).toMatch(/share:rl:/)
+		// The rate-limit key is per-TOKEN (keyed on the token hash), so throttling
+		// one token can never affect another.
+		expect(apiSrc).toMatch(/share:rl:\$\{tokenHash\}/)
+	})
+
+	test('wrong-password and rate-limited share ONE denial helper — no oracle (D-05)', () => {
+		// Both the over-cap (rate-limit) branch and the bad-compare branch MUST
+		// call the SAME denial helper so their responses are byte-identical; an
+		// attacker cannot detect that throttling has kicked in.
+		const denials = apiSrc.match(/sharePasswordDenied\(response\)/g) ?? []
+		expect(denials.length).toBeGreaterThanOrEqual(2)
+		expect(apiSrc).toContain('[share-wrong-password]')
+		// The password-required prompt (no submission) is a DISTINCT token — it
+		// MAY differ from wrong-password per D-05 (UX), and it does.
+		expect(apiSrc).toContain('[share-password-required]')
+	})
+
+	test('the submitted password is never logged', () => {
+		// No log line carries the password on the same line.
+		for (const line of apiSrc.split('\n')) {
+			if (/console\.(log|error)/.test(line) || /logger\./.test(line)) {
+				expect(line.toLowerCase()).not.toContain('password')
+			}
+		}
+	})
+})
+
+describe('share unlock grant is bound to ONE share (324-01 D-03)', () => {
+	test('a grant minted for share A does NOT satisfy share B (shareId binding)', async () => {
+		const secret = 'a'.repeat(64)
+		const {token} = await signShareGrant(secret, 'share-A')
+		const claims = await verifyShareGrant(token, secret)
+		// The route admits IFF claims.shareId === the accessed shareId.
+		expect(claims.shareId === 'share-A').toBe(true)
+		expect(claims.shareId === 'share-B').toBe(false)
 	})
 })
