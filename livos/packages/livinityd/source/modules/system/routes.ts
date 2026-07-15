@@ -27,6 +27,9 @@ import {
 import {detectGpu, detectNvidiaGpu, isNvidiaToolkitConfigured, isWsl2, resetGpuDetectionCache} from './gpu.js'
 
 import {adminProcedure, privateProcedure, publicProcedure, router} from '../server/trpc/trpc.js'
+import bcrypt from 'bcryptjs'
+import {createShare, listSharesForUser, revokeShare, type FileShareRow} from '../files/share-tokens.js'
+import {fileUserContext, type FileUserInfo} from '../files/files.js'
 
 type SystemStatus = 'running' | 'updating' | 'shutting-down' | 'restarting' | 'migrating' | 'resetting' | 'restoring'
 let systemStatus: SystemStatus = 'running'
@@ -845,6 +848,40 @@ const desktopTotpInput = z.object({totp: z.string().trim().min(6).max(12)})
 // double-clicks / spray are capped to one call per 10s.
 let lastDesktopPasswordRegenAt = 0
 const DESKTOP_PASSWORD_REGEN_MIN_INTERVAL_MS = 10_000
+
+// ── Phase 324-06 (FILES-01, D-01/D-04/D-05) — owner-side public-share management ─
+// The client-facing projection of a file_shares row. DELIBERATELY OMITS
+// `passwordHash` (the bcrypt hash is never re-exposed) — token_hash is already
+// absent from the DAO's SELECT_COLS. `hasPassword` is the only bit the UI needs.
+// The raw `liv_share_` token is NEVER part of this view: it is returned exactly
+// ONCE, by shareCreate, at mint time (api-keys idiom, D-01).
+type ShareView = {
+	id: string
+	virtualPath: string
+	tokenPrefix: string
+	hasPassword: boolean
+	expiresAt: Date | null
+	maxDownloads: number | null
+	downloadCount: number
+	lastAccessedAt: Date | null
+	revokedAt: Date | null
+	createdAt: Date
+}
+
+function toShareView(row: FileShareRow): ShareView {
+	return {
+		id: row.id,
+		virtualPath: row.virtualPath,
+		tokenPrefix: row.tokenPrefix,
+		hasPassword: row.passwordHash != null,
+		expiresAt: row.expiresAt,
+		maxDownloads: row.maxDownloads,
+		downloadCount: row.downloadCount,
+		lastAccessedAt: row.lastAccessedAt,
+		revokedAt: row.revokedAt,
+		createdAt: row.createdAt,
+	}
+}
 
 export default router({
 	online: publicProcedure.query(() => true),
@@ -1821,5 +1858,88 @@ export default router({
 				}
 			}
 			return result
+		}),
+	// ── Phase 324-06 (FILES-01, D-01/D-04/D-05) — owner-side public-share links ──
+	// Owner-scoped management over the 324-01 share-tokens.ts DAO. Every op is
+	// scoped to the CALLER's own owner_user_id (ctx.currentUser.id) — never a
+	// client-supplied owner — so a normal member manages only THEIR OWN shares.
+	// privateProcedure (any authenticated user), NOT adminProcedure: sharing your
+	// own file is a per-user action; the create-time path check (below) — not a
+	// role gate — confines a caller to their own tree. These are registered on the
+	// AUTHENTICATED router; the token-verified PUBLIC surface lives in 324-01's
+	// files/api.ts publicApi (never here).
+	//
+	// shareCreate mints the raw `liv_share_` token exactly ONCE (returned only
+	// here, at mint time — never re-derivable, api-keys idiom). shareList returns
+	// ALL the caller's shares INCLUDING revoked ones (CVE-2026-45285: no share may
+	// be minted without appearing in the owner's always-available audit list).
+	shareCreate: privateProcedure
+		.input(
+			z.object({
+				// The virtual path to share. Resolved INSIDE the caller's own tree
+				// below (never a raw system path); zod only constrains the shape.
+				virtualPath: z.string().min(1).max(4096),
+				// Optional gate password — bcrypt-hashed before it reaches the DAO.
+				password: z.string().min(1).max(1024).optional(),
+				// Optional expiry (ISO string / epoch coerced to a Date) + download cap.
+				expiresAt: z.coerce.date().optional(),
+				maxDownloads: z.number().int().positive().max(1_000_000).optional(),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			const caller = ctx.currentUser
+			// Fail closed: share management requires a resolved DB user (owner FK).
+			// Legacy no-DB single-user boxes have no file_shares table anyway.
+			if (!caller?.id) throw new TRPCError({code: 'UNAUTHORIZED', message: 'Authentication required'})
+			const userInfo: FileUserInfo = {username: caller.username, role: caller.role as FileUserInfo['role']}
+
+			// Owner-scoped path validation (T-324-19): resolve the path INSIDE the
+			// caller's own tree — virtualToSystemPath throws [escapes-base]/[invalid-base]
+			// for any path the caller cannot reach, so a caller can NEVER mint a share
+			// for someone else's path. Then confirm the target exists (don't mint a
+			// share for a nonexistent path). Both run inside the caller's file context.
+			const systemPath = await fileUserContext.run(userInfo, () =>
+				ctx.livinityd!.files.virtualToSystemPath(input.virtualPath),
+			)
+			await fsStat(systemPath)
+
+			// bcrypt-hash the optional password before store (never persist plaintext);
+			// $2a$→$2b$ normalization mirrors user/user.ts:55.
+			const passwordHash = input.password
+				? (await bcrypt.hash(input.password, 12)).replace(/^\$2a\$/, '$2b$')
+				: null
+
+			const {row, plaintext} = await createShare({
+				ownerUserId: caller.id, // the CALLER — never client-supplied
+				virtualPath: input.virtualPath,
+				passwordHash,
+				expiresAt: input.expiresAt ?? null,
+				maxDownloads: input.maxDownloads ?? null,
+			})
+
+			// The raw token is surfaced EXACTLY ONCE, here — the view carries only
+			// the prefix + metadata (no hash, no password).
+			return {token: plaintext, share: toShareView(row)}
+		}),
+	// shareList — the always-available "my shares" audit list. Returns ALL of the
+	// caller's shares (owner_user_id == caller) INCLUDING revoked/expired ones so
+	// no minted share is ever invisible to its owner (CVE-2026-45285). The view
+	// strips the bcrypt password hash; the token hash is already never selected.
+	shareList: privateProcedure.query(async ({ctx}) => {
+		const caller = ctx.currentUser
+		if (!caller?.id) throw new TRPCError({code: 'UNAUTHORIZED', message: 'Authentication required'})
+		const rows = await listSharesForUser(caller.id)
+		return rows.map(toShareView)
+	}),
+	// shareRevoke — owner-scoped soft-revoke. The DAO's WHERE owner_user_id = $2
+	// makes revoking another user's share (by guessing its id) a no-op, so
+	// rowCount 0 → revoked:false without leaking whether the id exists.
+	shareRevoke: privateProcedure
+		.input(z.object({id: z.string().min(1)}))
+		.mutation(async ({ctx, input}) => {
+			const caller = ctx.currentUser
+			if (!caller?.id) throw new TRPCError({code: 'UNAUTHORIZED', message: 'Authentication required'})
+			const {rowCount} = await revokeShare({id: input.id, ownerUserId: caller.id})
+			return {revoked: rowCount > 0}
 		}),
 })
