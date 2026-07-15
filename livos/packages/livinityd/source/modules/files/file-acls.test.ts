@@ -34,6 +34,7 @@ import {
 	type AclLevel,
 } from './file-acls.js'
 import {ALL_MIGRATIONS} from '../database/migrations/index.js'
+import Files, {type FileUserInfo} from './files.js'
 
 // ── in-memory file_acls + group_members store behind a pg-shaped runner ───────
 type AclRec = {
@@ -257,5 +258,137 @@ describe('file-acls DAO — FILES-02 (D-07/D-08)', () => {
 		expect(ALL_MIGRATIONS).toContain('2026-07-15-p324-file-acls.sql')
 		// The 324-01 file_shares registration must remain untouched.
 		expect(ALL_MIGRATIONS).toContain('2026-07-15-p324-file-shares.sql')
+	})
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getEffectivePermission — the files.ts resolution layer composed ON TOP of
+// getActiveBaseDirectories (D-08). Tested via Files.prototype.<m>.call(stub) —
+// the same offline stub discipline as files.test.ts (no Livinityd/PG/redis
+// bring-up). The method only reads this.getActiveBaseDirectories(userInfo) and
+// the injected ACL resolver, so a minimal stub suffices.
+// ─────────────────────────────────────────────────────────────────────────────
+function ownTree(username: string): Map<string, string> {
+	const base = `/data/users/${username}`
+	return new Map<string, string>([
+		['/Home', `${base}/home`],
+		['/Trash', `${base}/trash`],
+		['/Apps', `${base}/app-data`],
+		['/External', '/data/external'],
+		['/Backups', `${base}/backups`],
+		['/Network', '/data/network'],
+	])
+}
+
+function makeFilesStub(dirs: Map<string, string>): Files {
+	return {
+		getActiveBaseDirectories: (_userInfo?: FileUserInfo) => dirs,
+	} as unknown as Files
+}
+
+function effPerm(
+	stub: Files,
+	path: string,
+	userInfo: FileUserInfo | undefined,
+	deps?: unknown,
+): Promise<{source: string; level: AclLevel | null; operations: string[] | null}> {
+	return (Files.prototype as any).getEffectivePermission.call(stub, path, userInfo, deps)
+}
+
+const MARY: FileUserInfo = {username: 'mary', role: 'member'}
+
+describe('getEffectivePermission — cross-user ACL layer (324-02 D-08)', () => {
+	test('own-Home path is ownership-governed — the ACL layer is NOT consulted', async () => {
+		const stub = makeFilesStub(ownTree('mary'))
+		let aclConsulted = false
+		const res = await effPerm(stub, '/Home/report.pdf', MARY, {
+			getEffectiveLevel: async () => {
+				aclConsulted = true
+				return 'write' as AclLevel
+			},
+			resolveUserId: async () => 'mary-uid',
+		})
+		expect(res.source).toBe('ownership')
+		expect(res.operations).toBeNull()
+		// Own-tree paths NEVER route through the ACL DAO.
+		expect(aclConsulted).toBe(false)
+	})
+
+	test("a 'read' grant on an out-of-tree path → read/copy allowed, write DENIED", async () => {
+		const stub = makeFilesStub(ownTree('mary'))
+		const res = await effPerm(stub, '/Shared/reports', MARY, {
+			getEffectiveLevel: async () => 'read' as AclLevel,
+			resolveUserId: async () => 'mary-uid',
+		})
+		expect(res.source).toBe('acl')
+		expect(res.level).toBe('read')
+		expect(res.operations).toContain('copy')
+		// read is read-only — it can NEVER add the mutate op.
+		expect(res.operations).not.toContain('writable')
+	})
+
+	test("a 'write' grant on an out-of-tree path → 'writable' present", async () => {
+		const stub = makeFilesStub(ownTree('mary'))
+		const res = await effPerm(stub, '/Shared/reports', MARY, {
+			getEffectiveLevel: async () => 'write' as AclLevel,
+			resolveUserId: async () => 'mary-uid',
+		})
+		expect(res.source).toBe('acl')
+		expect(res.level).toBe('write')
+		expect(res.operations).toContain('writable')
+	})
+
+	test('no grant on an out-of-tree path → fail-closed empty (unchanged from today)', async () => {
+		const stub = makeFilesStub(ownTree('mary'))
+		const res = await effPerm(stub, '/Shared/secret', MARY, {
+			getEffectiveLevel: async () => null,
+			resolveUserId: async () => 'mary-uid',
+		})
+		expect(res.source).toBe('acl')
+		expect(res.level).toBeNull()
+		expect(res.operations).toEqual([])
+	})
+
+	test("an explicit 'none' grant on an out-of-tree path → deny (empty operations)", async () => {
+		const stub = makeFilesStub(ownTree('mary'))
+		const res = await effPerm(stub, '/Shared/secret', MARY, {
+			getEffectiveLevel: async () => 'none' as AclLevel,
+			resolveUserId: async () => 'mary-uid',
+		})
+		expect(res.level).toBe('none')
+		expect(res.operations).toEqual([])
+	})
+
+	test('out-of-tree path with NO resolved identity → fail-closed (ACL not consulted)', async () => {
+		const stub = makeFilesStub(ownTree('mary'))
+		let aclConsulted = false
+		const res = await effPerm(stub, '/Shared/secret', undefined, {
+			getEffectiveLevel: async () => {
+				aclConsulted = true
+				return 'write' as AclLevel
+			},
+			resolveUserId: async () => 'mary-uid',
+		})
+		expect(res.operations).toEqual([])
+		expect(aclConsulted).toBe(false)
+	})
+
+	test('the result is ADVISORY only — it leaks no system path (containment stays with virtualToSystemPath)', async () => {
+		const stub = makeFilesStub(ownTree('mary'))
+		const res = await effPerm(stub, '/Shared/reports', MARY, {
+			getEffectiveLevel: async () => 'write' as AclLevel,
+			resolveUserId: async () => 'mary-uid',
+		})
+		// Only {source, level, operations} — a grant ADDS operations, it never
+		// returns (or bypasses) a resolved filesystem path.
+		expect(Object.keys(res).sort()).toEqual(['level', 'operations', 'source'])
+	})
+
+	test('files.ts layers on getActiveBaseDirectories and keeps virtualToSystemPath containment (source guard)', () => {
+		const here = nodePath.dirname(fileURLToPath(import.meta.url))
+		const src = readFileSync(nodePath.resolve(here, './files.ts'), 'utf8')
+		expect(src).toMatch(/getEffectivePermission/)
+		expect(src).toMatch(/getActiveBaseDirectories/)
+		expect(src).toMatch(/virtualToSystemPath/)
 	})
 })
