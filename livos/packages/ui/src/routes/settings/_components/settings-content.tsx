@@ -106,6 +106,7 @@ import {SettingsToggleRow} from './settings-toggle-row'
 import {SoftwareUpdateListRow} from './software-update-list-row'
 import {GpuInstallSection} from './gpu-install-section'
 import {OsPatchingSection} from './os-patching-section'
+import {UpsStatusSection} from './ups-status-section'
 import {PastDeploysTable} from './past-deploys-table'
 import {MenuItemBadge} from './menu-item-badge'
 
@@ -1775,6 +1776,10 @@ function SoftwareUpdateSection() {
 			    (D-13). Admin-gated; degrades to a note where the wrapper is
 			    not yet deployed. */}
 			<OsPatchingSection />
+			{/* Phase 326-08 (HW-01) — NUT UPS status/config, sibling to the
+			    OS-patch + GPU cards (D-13). Admin-gated; renders a "no UPS"
+			    state on boxes with no UPS attached / wrapper not deployed. */}
+			<UpsStatusSection />
 			<div className='mt-6 flex flex-col gap-3'>
 				<h3 className='text-body font-medium'>Past Deploys</h3>
 				{/* Phase 130-03 — cap height so the table doesn't push the page
