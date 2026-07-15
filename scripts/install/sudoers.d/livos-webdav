@@ -1,0 +1,9 @@
+# Phase 329 (FILES-05) — sudoers grant for the SFTPGo (WebDAV) wrapper.
+# Security model: grant on ONE explicit binary path, NO glob, NO arg wildcard.
+# The wrapper validates its action enum {install|configure|status|remove}, builds
+# the pinned+sha256-verified SFTPGo download itself, and owns the entire
+# /etc/sftpgo config body — so no caller-supplied string reaches a privileged
+# command or the config file.
+# Deploy: deploy-livinityd.sh block 2a/2b-webdav; day-2: update.sh Step 7.10i.
+Cmnd_Alias LIVINITYD_WEBDAV = /usr/local/lib/livos/livos-webdav.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_WEBDAV
