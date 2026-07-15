@@ -126,10 +126,18 @@ describe('validateHybridDomain (Phase 104 plan 104-04)', () => {
 })
 
 describe('generateHybridCaddyfile (Phase 104 plan 104-04)', () => {
-	it('contains wildcard block with Cloudflare DNS-01 directive', () => {
+	// Phase 325-03 (NET-03, D-13/D-15): the generator was rewritten OFF the
+	// caddy-dns/cloudflare plugin (retired by D-134). Stock Caddy loads the
+	// output → NO `dns cloudflare` directive, NO wildcard block (wildcard needs
+	// DNS-01/plugin; stock Caddy issues per-name certs instead).
+	it('emits NO caddy-dns/cloudflare DNS-01 directive (stock Caddy — D-134)', () => {
 		const out = generateHybridCaddyfile('ab12cd34.home.livinity.io')
-		expect(out).toContain('*.ab12cd34.home.livinity.io {')
-		expect(out).toContain('dns cloudflare {env.CLOUDFLARE_API_TOKEN}')
+		expect(out).not.toContain('dns cloudflare')
+		expect(out).not.toContain('{env.CLOUDFLARE_API_TOKEN}')
+	})
+	it('emits NO wildcard block (needs DNS-01 plugin — dropped for stock Caddy)', () => {
+		const out = generateHybridCaddyfile('ab12cd34.home.livinity.io')
+		expect(out).not.toContain('*.ab12cd34.home.livinity.io {')
 	})
 	it('contains bare apex block', () => {
 		const out = generateHybridCaddyfile('ab12cd34.home.livinity.io')
@@ -142,7 +150,7 @@ describe('generateHybridCaddyfile (Phase 104 plan 104-04)', () => {
 		expect(out).not.toContain('ca liv-local')
 		expect(out).not.toContain('issuer internal')
 	})
-	it('emits multi-user subdomains with the cloudflare DNS directive', () => {
+	it('emits multi-user subdomains WITHOUT any cloudflare DNS directive (stock Caddy)', () => {
 		const out = generateHybridCaddyfile(
 			'ab12cd34.home.livinity.io',
 			[{name: 'app1', port: 8081}],
@@ -150,11 +158,12 @@ describe('generateHybridCaddyfile (Phase 104 plan 104-04)', () => {
 		)
 		expect(out).toContain('app1.ab12cd34.home.livinity.io {')
 		expect(out).toContain('reverse_proxy 127.0.0.1:8081')
-		// app1 block must also have the cloudflare TLS directive
+		// Phase 325-03: the app1 block relies on Caddy default ACME (per-name
+		// cert) — it MUST NOT carry a `dns cloudflare` directive anymore.
 		const app1Idx = out.indexOf('app1.ab12cd34.home.livinity.io {')
 		const app1End = out.indexOf('}', app1Idx)
 		const app1Block = out.slice(app1Idx, app1End)
-		expect(app1Block).toContain('dns cloudflare')
+		expect(app1Block).not.toContain('dns cloudflare')
 	})
 	it('reverse_proxy lines all target 127.0.0.1 (LAN-direct data plane)', () => {
 		const out = generateHybridCaddyfile(

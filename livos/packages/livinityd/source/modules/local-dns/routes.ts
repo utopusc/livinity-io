@@ -23,7 +23,12 @@ import {
 	reloadCaddy,
 	type PortalSubdomainConfig,
 } from '../domain/caddy.js'
-import {provisionHybridSubdomain, ServerSideProvisionUnavailable} from './hybrid-provision.js'
+// Phase 325-03 (NET-03, D-13/D-14) — vendor mint endpoint DEFERRED; the portal
+// provision path now uses the BYO own-CF-zone flow. `writeCfTokenSecret` persists
+// the operator's token; `provisionPortalDnsRecord` writes the LAN-direct A-record
+// on their own zone (reuses the free-tier cf-local own-zone primitive).
+import {writeCfTokenSecret, HYBRID_TOKEN_SECRET_PATH} from './hybrid-provision.js'
+import {provisionPortalDnsRecord} from '../apps/cf-local.js'
 
 const REDIS_LOCAL_MODE = 'livos:domain:local_mode'
 const REDIS_LOCAL_TLD = 'livos:domain:local_tld'
@@ -40,9 +45,18 @@ const IPV4_RE =
 	/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$/
 
 // Phase 104 review fix WIZ-01 + PROVIDE-01 — provisionPortal input schema.
+// Phase 325-03 (NET-03, D-13/D-14) — extended for the BYO own-CF-zone flow:
+// the operator supplies their own zone id + portal domain (in addition to the
+// API token + LAN IP). The token is a SECRET — never logged, never returned.
 const provisionPortalSchema = z.object({
 	hostIp: z.string().refine((v) => IPV4_RE.test(v), {message: 'Invalid IPv4'}),
 	cloudflareApiToken: z.string().min(1).max(4096),
+	zoneId: z.string().min(1).max(100),
+	portalDomain: z
+		.string()
+		.min(1)
+		.max(253)
+		.refine(validatePortalDomain, {message: 'Invalid portal domain shape'}),
 })
 
 // Phase 104 plan 104-04 — portal mode activation schema
@@ -87,19 +101,28 @@ const local = router({
 
 	provisionPortal: adminProcedure
 		.input(provisionPortalSchema)
-		.mutation(async ({input}) => {
-			try {
-				const result = await provisionHybridSubdomain({
-					hostIp: input.hostIp,
-					cloudflareApiToken: input.cloudflareApiToken,
-				})
-				return {success: true as const, subdomain: result.subdomain, zoneId: result.zoneId}
-			} catch (err) {
-				if (err instanceof ServerSideProvisionUnavailable) {
-					throw new Error(`Server5 control-plane unavailable: ${err.message}`)
-				}
-				throw err instanceof Error ? err : new Error(String(err))
-			}
+		.mutation(async ({ctx, input}) => {
+			// Phase 325-03 (NET-03, D-13/D-14) — BYO own-CF-zone flow. Replaces the
+			// DEFERRED vendor mint endpoint: persist the operator's token as a 0600
+			// EnvironmentFile secret, write an UNPROXIED A-record for the portal name
+			// on THEIR own zone (LAN-direct), and record state in Redis. The token is
+			// never logged or returned (T-325-08).
+			const redis = ctx.livinityd?.ai.redis
+			if (!redis) throw new Error('livinityd context unavailable')
+			await writeCfTokenSecret(input.cloudflareApiToken, HYBRID_TOKEN_SECRET_PATH)
+			await provisionPortalDnsRecord({
+				apiToken: input.cloudflareApiToken,
+				zoneId: input.zoneId,
+				name: input.portalDomain,
+				ip: input.hostIp,
+			})
+			await Promise.all([
+				redis.set(REDIS_PORTAL_SUBDOMAIN, input.portalDomain),
+				redis.set(REDIS_PORTAL_ZONE_ID, input.zoneId),
+				redis.set(REDIS_HOST_IP, input.hostIp),
+				redis.set(REDIS_CF_TOKEN_PATH, HYBRID_TOKEN_SECRET_PATH),
+			])
+			return {success: true as const, subdomain: input.portalDomain, zoneId: input.zoneId}
 		}),
 
 	activatePortal: adminProcedure
@@ -152,19 +175,25 @@ const local = router({
 
 	provisionHybrid: adminProcedure
 		.input(provisionPortalSchema)
-		.mutation(async ({input}) => {
-			try {
-				const result = await provisionHybridSubdomain({
-					hostIp: input.hostIp,
-					cloudflareApiToken: input.cloudflareApiToken,
-				})
-				return {success: true as const, subdomain: result.subdomain, zoneId: result.zoneId}
-			} catch (err) {
-				if (err instanceof ServerSideProvisionUnavailable) {
-					throw new Error(`Server5 control-plane unavailable: ${err.message}`)
-				}
-				throw err instanceof Error ? err : new Error(String(err))
-			}
+		.mutation(async ({ctx, input}) => {
+			// Phase 325-03 — legacy alias, same BYO own-CF-zone body as provisionPortal
+			// (duplicated per the tRPC-ctx-typing note above). Token never logged.
+			const redis = ctx.livinityd?.ai.redis
+			if (!redis) throw new Error('livinityd context unavailable')
+			await writeCfTokenSecret(input.cloudflareApiToken, HYBRID_TOKEN_SECRET_PATH)
+			await provisionPortalDnsRecord({
+				apiToken: input.cloudflareApiToken,
+				zoneId: input.zoneId,
+				name: input.portalDomain,
+				ip: input.hostIp,
+			})
+			await Promise.all([
+				redis.set(REDIS_PORTAL_SUBDOMAIN, input.portalDomain),
+				redis.set(REDIS_PORTAL_ZONE_ID, input.zoneId),
+				redis.set(REDIS_HOST_IP, input.hostIp),
+				redis.set(REDIS_CF_TOKEN_PATH, HYBRID_TOKEN_SECRET_PATH),
+			])
+			return {success: true as const, subdomain: input.portalDomain, zoneId: input.zoneId}
 		}),
 
 	activateHybrid: adminProcedure

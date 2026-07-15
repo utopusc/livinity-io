@@ -46,6 +46,13 @@ export class ServerSideProvisionUnavailable extends Error {
 	}
 }
 
+// Phase 325-03 (NET-03, D-14): DEFERRED — the vendor mint endpoint
+// `https://livinity.io/api/hybrid/provision` was never deployed on the vendor
+// web app, and reviving it means shipping money/auth code to Vercel, which is
+// operator-gated. The portal provision path now uses the BYO own-CF-zone flow
+// instead (see local-dns/routes.ts → apps/cf-local.ts provisionPortalDnsRecord).
+// This vendor helper + ServerSideProvisionUnavailable are left INTACT but unused
+// so the deferred vendor path can be re-enabled by an operator decision later.
 const DEFAULT_ENDPOINT = 'https://livinity.io/api/hybrid/provision'
 
 // Strict shape — accept ONLY <label>.home.livinity.io (one or more dot-separated

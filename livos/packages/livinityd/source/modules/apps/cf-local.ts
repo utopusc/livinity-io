@@ -378,3 +378,61 @@ export async function deprovisionAppSubdomainLocal(cfg: LocalCfConfig, appSlug: 
 
 	if (errors.length > 0) throw errors[0]
 }
+
+// ─── Portal (LAN-HTTPS) BYO-zone A-record primitive ────────────────────────
+// Phase 325-03 (NET-03, D-13/D-14): the portal-mode LAN-HTTPS flow reuses the
+// SAME own-CF-zone credential shape as the free tier (operator's API token +
+// their zone id), but instead of a proxied CNAME into a tunnel it writes an
+// UNPROXIED A-record pointing the portal name at the box's LAN IP. Portal mode
+// is LAN-direct: clients must resolve the REAL LAN IP, and stock-Caddy ACME
+// (HTTP-01/TLS-ALPN-01) needs the box reachable at that IP — a proxied
+// (orange-cloud) record would hide the LAN IP behind Cloudflare and break both.
+
+const PORTAL_IPV4_RE =
+	/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$/
+
+export interface PortalDnsRecordInput {
+	/** The operator's CF API token (Zone:DNS:Edit) — a secret; never logged. */
+	apiToken: string
+	/** DNS zone id for the operator's registrable domain. */
+	zoneId: string
+	/** Fully-qualified portal name the A-record is created for, e.g. `box.bruceoz.com`. */
+	name: string
+	/** Box LAN IPv4 the A-record points at, e.g. `192.168.1.20`. */
+	ip: string
+}
+
+/**
+ * Create (idempotently replace) an UNPROXIED A-record for the portal name on the
+ * operator's OWN Cloudflare zone. Mirrors the free-tier own-zone pattern but for
+ * a LAN-direct A-record rather than a tunnel CNAME. Reuses the module `callCf`
+ * (timeout + retry + envelope handling). Never logs/returns the token.
+ */
+export async function provisionPortalDnsRecord(
+	input: PortalDnsRecordInput,
+): Promise<{dnsRecordId: string; name: string}> {
+	if (!PORTAL_IPV4_RE.test(input.ip)) {
+		throw new CfLocalError(`Invalid LAN IPv4 "${input.ip}"`, 400, 'provisionPortalDnsRecord')
+	}
+	if (!input.zoneId) {
+		throw new CfLocalError('Missing CF zone id', 400, 'provisionPortalDnsRecord')
+	}
+	// Replace any stale record of this exact name first (idempotent re-provision).
+	const stale = await callCf<CfDnsRecord[]>(input.apiToken, {
+		method: 'GET',
+		path: `/zones/${input.zoneId}/dns_records?name=${encodeURIComponent(input.name)}`,
+	}).catch(() => [] as CfDnsRecord[])
+	for (const rec of stale ?? []) {
+		await callCf<unknown>(input.apiToken, {
+			method: 'DELETE',
+			path: `/zones/${input.zoneId}/dns_records/${rec.id}`,
+		}).catch(() => {})
+	}
+	const created = await callCf<{id: string}>(input.apiToken, {
+		method: 'POST',
+		path: `/zones/${input.zoneId}/dns_records`,
+		// UNPROXIED (proxied:false, grey-cloud) — LAN-direct + ACME reachability.
+		body: {type: 'A', name: input.name, content: input.ip, proxied: false, ttl: 120},
+	})
+	return {dnsRecordId: created.id, name: input.name}
+}
