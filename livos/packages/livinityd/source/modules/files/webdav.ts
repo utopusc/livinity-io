@@ -14,8 +14,8 @@ export const WEBDAV_PORT = 9083
 // (`${dataDirectory}/users/${username}` — the 329-04 users_base_dir
 // `/opt/livos/data/users` + `%username%` template, and the files.ts per-user
 // isolation convention). Each SFTPGo account is scoped to ITS OWN home_dir — this
-// is the deliberate DIVERGENCE (D-07) from Samba's single shared
-// `force user = root` account: no shared account, no forced root, no single shared
+// is the deliberate DIVERGENCE (D-07) from Samba's single shared forced-root
+// account: no shared account, no forced-root mapping, no single shared
 // smbpasswd secret. Shared by the WebDav class (on-disk reconcile) and the
 // loopback external_auth_hook endpoint (the home_dir it returns to SFTPGo) so the
 // two never drift.
