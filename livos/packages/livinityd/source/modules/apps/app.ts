@@ -389,21 +389,24 @@ export default class App {
 		// (Compose-Spec). `as any` escape hatch — compose-spec-schema does not model
 		// deploy.resources (same reason as the GPU branch). Authoritative from the
 		// store: set when present (cpus = decimal cores, memory = BYTES as a string),
-		// delete when cleared. Guarded on (cpuLimit || memoryLimit || pre-existing
-		// limits) so an app that never set a limit is left byte-identical.
+		// delete when cleared. `typeof === 'number'` (not `!= null`) is deliberate —
+		// the schema types these as numbers, and it also refuses any corrupt/non-number
+		// store value so a stray truthy read can never write String(<non-number>).
+		const hasCpuLimit = typeof cpuLimit === 'number'
+		const hasMemoryLimit = typeof memoryLimit === 'number'
 		const limitSvcNames = Object.keys(compose.services!)
 		const limitMainName = limitSvcNames.find((n) => n === this.id || n === 'server' || n === 'app' || n === 'web')
 			|| limitSvcNames.find((n) => !['docker', 'dind', 'tor', 'proxy', 'sidecar', 'init'].includes(n))
 			|| limitSvcNames[0]
 		const limitMainService = compose.services![limitMainName]
 		const limitExistingDeploy = (limitMainService?.deploy || {}) as any
-		if (cpuLimit != null || memoryLimit != null || limitExistingDeploy.resources?.limits) {
+		if (hasCpuLimit || hasMemoryLimit || limitExistingDeploy.resources?.limits) {
 			const service = limitMainService
 			const deploy = (service.deploy || {}) as any
 			const limits = {...(deploy.resources?.limits ?? {})} as Record<string, string>
-			if (cpuLimit != null) limits.cpus = String(cpuLimit)
+			if (hasCpuLimit) limits.cpus = String(cpuLimit)
 			else delete limits.cpus
-			if (memoryLimit != null) limits.memory = String(memoryLimit)
+			if (hasMemoryLimit) limits.memory = String(memoryLimit)
 			else delete limits.memory
 			if (Object.keys(limits).length > 0) {
 				deploy.resources = {...(deploy.resources ?? {}), limits}

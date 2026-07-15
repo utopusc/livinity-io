@@ -139,3 +139,55 @@ describe('patchComposeFile — AMD ROCm image swap + revert (WR-04)', () => {
 		])
 	})
 })
+
+// ── 326-01 APPS-03 — CPU/RAM limits reconcile onto the main service's deploy.resources.limits ──
+// Uses a PER-KEY store mock (the GPU harness above blankets every key with one value)
+// so cpuLimit/memoryLimit are read independently of gpuAccess. Proves: set-when-present,
+// untouched-when-absent, and delete-when-cleared (authoritative-from-store reconciliation).
+describe('patchComposeFile — resource limits (326-01 APPS-03)', () => {
+	async function runLimitPatch(store: {cpuLimit?: number; memoryLimit?: number}, existingCompose?: any) {
+		vi.mocked(detectGpu).mockResolvedValue({
+			vendor: 'none',
+			wsl2: false,
+			toolkitConfigured: false,
+			present: false,
+			driverSource: 'none',
+		} as any)
+		vi.mocked(isNvidiaToolkitConfigured).mockResolvedValue(false)
+		vi.spyOn(fse, 'exists').mockResolvedValue(false as any)
+		const app = new App(fakeLivinityd, 'ollama')
+		vi.spyOn(app, 'readManifest').mockResolvedValue({permissions: []} as any)
+		vi.spyOn(app.store, 'get').mockImplementation(async (key: any) => (store as any)[key])
+		vi.spyOn(app, 'readCompose').mockResolvedValue(
+			(existingCompose ?? {services: {ollama: {image: 'ollama/ollama:latest'}}}) as any,
+		)
+		let written: any
+		vi.spyOn(app, 'writeCompose').mockImplementation(async (c: any) => {
+			written = c
+		})
+		await app.patchComposeFile()
+		return written
+	}
+
+	test('cpuLimit + memoryLimit set → limits written on the main service (cores string + BYTES string)', async () => {
+		const written = await runLimitPatch({cpuLimit: 1.5, memoryLimit: 536870912})
+		expect(written.services.ollama.deploy.resources.limits).toEqual({cpus: '1.5', memory: '536870912'})
+	})
+
+	test('no limits set + no existing limits → deploy left untouched (byte-identical)', async () => {
+		const written = await runLimitPatch({})
+		expect(written.services.ollama.deploy).toBeUndefined()
+	})
+
+	test('cleared limits on an app that previously had them → limits removed on re-patch', async () => {
+		const written = await runLimitPatch({}, {
+			services: {ollama: {image: 'ollama/ollama:latest', deploy: {resources: {limits: {cpus: '2', memory: '100'}}}}},
+		})
+		expect(written.services.ollama.deploy.resources.limits).toBeUndefined()
+	})
+
+	test('a non-number store value never coerces to String(<non-number>) (defensive typeof guard)', async () => {
+		const written = await runLimitPatch({cpuLimit: true as any, memoryLimit: true as any})
+		expect(written.services.ollama.deploy).toBeUndefined()
+	})
+})
