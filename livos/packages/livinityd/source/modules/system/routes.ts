@@ -259,6 +259,78 @@ async function runUps(
 	})
 }
 
+// ── Phase 329 (FILES-05, 329-05) — WebDAV (SFTPGo) daemon management ─────────
+// Managed through the root-owned closed-enum wrapper
+// (scripts/install/livos-webdav.sh → /usr/local/lib/livos/livos-webdav.sh, built
+// in 329-04) via the scoped /etc/sudoers.d/livos-webdav NOPASSWD grant. A DIRECT
+// clone of the 326-08 runUps shape (single-word closed-enum action, stdout-
+// capturing, never-throw discriminated union): the wrapper enum is
+// {install|configure|status|remove}. STDOUT is captured because `status` returns
+// the SFTPGo service state the Settings card parses. The slow case is `install`
+// (apt-get install of the pinned SFTPGo .deb) — a held package-lock or a slow
+// download is a recoverable state, not a crash, so a non-zero exit resolves
+// {ok:false,reason} and NEVER throws. livinityd itself never runs apt/systemctl or
+// writes /etc/sftpgo directly — only the enum-constrained action string (validated
+// at the route boundary below, defense-in-depth on top of the wrapper's own enum)
+// ever reaches the wrapper.
+const WEBDAV_WRAPPER = '/usr/local/lib/livos/livos-webdav.sh'
+
+async function runWebdav(
+	action: 'install' | 'configure' | 'status' | 'remove',
+): Promise<{ok: true; stdout: string} | {ok: false; reason: string}> {
+	return new Promise((resolve) => {
+		// `install` runs apt-get install of the pinned SFTPGo .deb; give it 5-min headroom.
+		const timeoutMs = 300_000
+		let settled = false
+		let stdout = ''
+		let stderr = ''
+		const settle = (result: {ok: true; stdout: string} | {ok: false; reason: string}): void => {
+			if (settled) return
+			settled = true
+			clearTimeout(timer)
+			resolve(result)
+		}
+
+		const child = spawn('sudo', ['-n', WEBDAV_WRAPPER, action], {
+			stdio: ['ignore', 'pipe', 'pipe'],
+			windowsHide: true,
+		})
+
+		const timer = setTimeout(() => {
+			try {
+				child.kill('SIGTERM')
+			} catch {
+				/* best-effort */
+			}
+			settle({ok: false, reason: `timeout after ${timeoutMs}ms`})
+		}, timeoutMs)
+
+		child.stdout?.on('data', (chunk: Buffer) => {
+			stdout += chunk.toString('utf8')
+		})
+
+		child.stderr?.on('data', (chunk: Buffer) => {
+			stderr += chunk.toString('utf8')
+		})
+
+		// Fires for ENOENT (sudo not on PATH) / EACCES — degrade, do not throw.
+		child.on('error', (err: Error) => {
+			settle({ok: false, reason: err.message || 'sudo spawn failed'})
+		})
+
+		child.on('close', (code) => {
+			if (code === 0) {
+				settle({ok: true, stdout})
+				return
+			}
+			settle({
+				ok: false,
+				reason: stderr.trim().slice(0, 500) || `wrapper exited with code ${code ?? 'unknown'}`,
+			})
+		})
+	})
+}
+
 // ── Phase 325 (STOR-01, 325-05) — gocryptfs encrypted-folder management ──────
 // Managed through the root-owned closed-enum wrapper
 // (scripts/install/livos-crypto.sh → /usr/local/lib/livos/livos-crypto.sh, built
@@ -1015,6 +1087,33 @@ export default router({
 	ups: adminProcedure
 		.input(z.object({action: z.enum(['install', 'configure', 'remove'])}))
 		.mutation(async ({input}) => runUps(input.action)),
+	// ── Phase 329 (FILES-05, 329-05) — WebDAV (SFTPGo) management from the UI ────
+	// FLAT route names (matches the upsStatus/ups convention above). All
+	// adminProcedure: installing/configuring SFTPGo is a host-level operation
+	// (apt + /etc/sftpgo + systemd) mirroring ups/osPatch. The action is
+	// z.enum-constrained BEFORE it reaches the wrapper (defense-in-depth on top of
+	// the wrapper's own enum); livinityd never runs apt/systemctl or writes
+	// /etc/sftpgo. runWebdav never throws, so a box where the wrapper is not yet
+	// deployed degrades to {ok:false} instead of 500-ing the Settings card.
+	//
+	// webdavStatus is the cheap read; `webdav` gates install/configure/remove behind
+	// a z.enum. webdavSetEnabled toggles the dedicated top-level `webdav` StoreSchema
+	// key (via the fail-soft WebDav class) — enabling reconciles per-user homes,
+	// which can NEVER block anything (D-08). The enable toggle is intentionally
+	// SEPARATE from the wrapper actions: enabling the feature (store flag + on-disk
+	// home reconcile) is distinct from installing/configuring the daemon binary.
+	webdavStatus: adminProcedure.query(async () => runWebdav('status')),
+	webdav: adminProcedure
+		.input(z.object({action: z.enum(['install', 'configure', 'remove'])}))
+		.mutation(async ({input}) => runWebdav(input.action)),
+	webdavSetEnabled: adminProcedure
+		.input(z.object({enabled: z.boolean()}))
+		.mutation(async ({ctx, input}) => {
+			// Fail-soft: setEnabled writes the store flag then reconciles per-user homes
+			// (never throws). Return the applied flag so the card can reflect state.
+			await ctx.livinityd!.files.webdav.setEnabled(input.enabled)
+			return {enabled: input.enabled}
+		}),
 	// ── Phase 306 R2 — desktop-user OS/sudo password (Settings → Account) ───────
 	// getDesktopUserInfo: lightweight, NON-secret. Returns just the username + a
 	// hasPassword flag so the card can render without ever shipping the plaintext.
