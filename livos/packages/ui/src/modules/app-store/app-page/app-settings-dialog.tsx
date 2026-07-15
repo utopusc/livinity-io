@@ -23,6 +23,7 @@ import {t} from '@/utils/i18n'
 import {SelectDependencies} from '../select-dependencies-dialog'
 import {EnvironmentOverridesSection} from './environment-overrides-section'
 import {GpuAccessSection} from './gpu-access-section'
+import {ImmichPhotoBackupSection} from './immich-photo-backup-section'
 import {OidcSsoSection} from './oidc-sso-section'
 import {PublicAccessSection} from './public-access-section'
 import {ResourceLimitsSection} from './resource-limits-section'
@@ -233,6 +234,19 @@ function AppSettingsDialogForApp({
 								appName={app.name}
 								initialPolicy={app.autoUpdatePolicy ?? 'manual'}
 								ignoredVersion={app.ignoredVersion}
+							/>
+						</div>
+					) : null}
+					{/* Immich Photo-Backup Section — 326-09 (MEDIA-01), only for the Immich
+					    app while the onboarding card has not been dismissed. QR of the plain
+					    HTTPS instance URL + store links; dismissal persists per-app. */}
+					{app.id === 'immich' && !app.immichCardDismissed ? (
+						<div className='border-t border-border-default pt-4 mt-4'>
+							<ImmichPhotoBackupSection
+								appId={app.id}
+								appName={app.name}
+								host={'host' in app ? app.host : undefined}
+								subdomain={app.subdomain}
 							/>
 						</div>
 					) : null}
