@@ -3,9 +3,13 @@ import {pipeline} from 'node:stream/promises'
 
 import express from 'express'
 import fse from 'fs-extra'
+import bcrypt from 'bcryptjs'
+
+import {findUserByUsername} from '../database/index.js'
 
 import type {ApiOptions} from '../server/index.js'
 import {fileUserContext, type FileUserInfo} from './files.js'
+import {webdavHomeDir} from './webdav.js'
 
 // Extract FileUserInfo from Express request (set by privateApi middleware in server/index.ts)
 function getFileUserFromRequest(request: express.Request): FileUserInfo | undefined {
@@ -22,7 +26,81 @@ function getFileUserFromRequest(request: express.Request): FileUserInfo | undefi
 const TEXT_EDIT_MAX_BYTES = 5 * 1024 * 1024 // 5 MB (editor)
 const PREVIEW_MAX_BYTES = 25 * 1024 * 1024 // 25 MB (docx/xlsx/pdf preview)
 
+// Phase 329-05 FILES-05 (D-07 / T-329-14) — loopback-only guard for the SFTPGo
+// external_auth_hook endpoint. Only the local SFTPGo daemon may reach it.
+// NOTE: Caddy reverse-proxies PUBLIC traffic to 127.0.0.1:8080 too, so a loopback
+// peer address alone is necessary-but-NOT-sufficient. The discriminator is the
+// reverse-proxy forwarding headers: Caddy stamps X-Forwarded-* on every proxied
+// (public) request, whereas SFTPGo's direct hook POST carries none. So we require
+// BOTH a loopback TCP peer AND the total absence of any forwarding header.
+function isLoopbackWebdavAuthRequest(request: express.Request): boolean {
+	const remote = request.socket.remoteAddress ?? ''
+	const isLoopbackPeer = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1'
+	if (!isLoopbackPeer) return false
+	const forwardedHeaders = ['x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-real-ip']
+	if (forwardedHeaders.some((header) => request.headers[header] !== undefined)) return false
+	return true
+}
+
 export default function api({publicApi, privateApi, livinityd}: ApiOptions) {
+	// Phase 329-05 FILES-05 (D-07) — the SFTPGo `external_auth_hook` target.
+	// Registered on the RAW app (NOT the /api/files router, which SFTPGo can't
+	// address) at the ABSOLUTE path the 329-04 wrapper points webdavd at:
+	//   http://127.0.0.1:8080/api/internal/webdav-auth  (external_auth_scope=1)
+	// LOOPBACK-ONLY (isLoopbackWebdavAuthRequest, T-329-14): only the local SFTPGo
+	// daemon may reach it. It reads the presented username+password (SFTPGo's
+	// password-scope hook body), looks the user up in the EXISTING PG bcrypt user
+	// table (findUserByUsername) and bcrypt-compares — livinityd stays the SOLE
+	// source of truth, NO hash is duplicated into SFTPGo. On success it returns the
+	// SFTPGo user object (status 1, per-user home_dir, full perms on that home); on
+	// ANY failure it returns an empty `{}` — a CONSTANT response (SFTPGo denies a
+	// user with no username) that NEVER reveals whether the username or the password
+	// was wrong. The password is NEVER logged.
+	if (livinityd.server.app) {
+		livinityd.server.app.post(
+			'/api/internal/webdav-auth',
+			// Route-scoped JSON parser (the module has no global body parser). SFTPGo's
+			// hook body is tiny (username/password/ip/protocol) — a 4kb cap is ample.
+			express.json({limit: '4kb'}),
+			async (request, response) => {
+				// Reject anything that isn't a direct local SFTPGo call (loopback + no XFF).
+				if (!isLoopbackWebdavAuthRequest(request)) return response.status(403).json({})
+
+				const body = (request.body ?? {}) as {username?: unknown; password?: unknown}
+				const username = typeof body.username === 'string' ? body.username : ''
+				const password = typeof body.password === 'string' ? body.password : ''
+
+				// Empty JSON body → SFTPGo treats a user with no username as auth-denied.
+				// Single constant failure path (no username/password oracle).
+				const deny = () => response.status(200).json({})
+
+				if (!username || !password) return deny()
+
+				try {
+					const user = await findUserByUsername(username)
+					if (!user || !user.isActive || !user.hashedPassword) return deny()
+
+					const passwordOk = await bcrypt.compare(password, user.hashedPassword)
+					if (!passwordOk) return deny()
+
+					// SUCCESS — the SFTPGo user object. home_dir = the user's OWN data root
+					// (per-user isolation, D-07 — never Samba's shared account); full
+					// permissions scoped to that home only.
+					return response.status(200).json({
+						status: 1,
+						username: user.username,
+						home_dir: webdavHomeDir(livinityd, user.username),
+						permissions: {'/': ['*']},
+					})
+				} catch (error) {
+					// Fail closed. Never leak internals; the password is never in scope of the log.
+					livinityd.logger.error('webdav-auth lookup failed', error)
+					return deny()
+				}
+			},
+		)
+	}
+
 	// Serve thumbnails from the thumbnails directory
 	// GET /api/files/thumbnail/:thumbnail
 	privateApi.use(
