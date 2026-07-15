@@ -3265,6 +3265,77 @@ else
     info "sudoers.d/livos-crypto source not found — skipping (encrypted-folder control unavailable)"
 fi
 
+# ── Step 7.10g: Phase 325 (NET-01) — host networking provisioning (sudoers.d/livos-network + wrapper) ──
+# The livos-network NOPASSWD grant + the root-owned networking wrapper (hostname/
+# static-IP/DNS + fail-closed armed-rollback watchdog) must reach ALREADY-DEPLOYED
+# boxes on Update, not just fresh installs. Mirrors Step 7.10f (livos-crypto)
+# VERBATIM (content-diff + visudo validate-or-remove), retargeted to livos-network.
+# livinityd invokes `sudo -n /usr/local/lib/livos/livos-network.sh <action>`, so the
+# wrapper + grant must exist on day-2 boxes too. Missing this is the "looks wired,
+# silently no-ops" failure class (day-2 box gets denied forever). Fully
+# fail-tolerant: a missing source or a visudo rejection never aborts the Update.
+step "Phase 325 (NET-01): host networking provisioning (sudoers.d/livos-network + install wrapper)"
+
+_set_desktop_identity   # Phase 277.1 — self-derive the desktop user (no literal bruce)
+
+# --- (a0) livos-network.sh wrapper — install BEFORE the grant ---
+# The livos-network grant (a) is on this ONE root-owned binary; the wrapper validates
+# a fixed action enum {status|set-hostname|apply-ip|confirm|revert|set-dns},
+# regex-validates every hostname/IPv4/CIDR/DNS arg, and builds every netplan yaml
+# body + hostnamectl/netplan/systemd-run argv itself.
+_NETWORK_WRAP_SRC="$LIVOS_DIR/scripts/install/livos-network.sh"
+if [[ ! -f "$_NETWORK_WRAP_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _NETWORK_WRAP_SRC="$TEMP_DIR/scripts/install/livos-network.sh"
+fi
+_NETWORK_WRAP_DST="/usr/local/lib/livos/livos-network.sh"
+if [[ -f "$_NETWORK_WRAP_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_NETWORK_WRAP_DST" ]] || ! cmp -s "$_NETWORK_WRAP_SRC" "$_NETWORK_WRAP_DST"; then
+        if install -m 0755 -o root -g root "$_NETWORK_WRAP_SRC" "$_NETWORK_WRAP_DST"; then
+            ok "livos-network.sh installed at $_NETWORK_WRAP_DST"
+        else
+            warn "Failed to install livos-network.sh (non-fatal — network control unavailable until fixed)"
+        fi
+    else
+        info "livos-network.sh already current"
+    fi
+else
+    info "livos-network.sh source not found — skipping (network control unavailable)"
+fi
+
+# --- (a) sudoers.d/livos-network — install + template the subject to the desktop user ---
+_NETWORK_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-network"
+if [[ ! -f "$_NETWORK_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _NETWORK_SUDOERS_SRC="$TEMP_DIR/scripts/install/sudoers.d/livos-network"
+fi
+_NETWORK_SUDOERS_DST="/etc/sudoers.d/livos-network"
+if [[ -f "$_NETWORK_SUDOERS_SRC" ]]; then
+    _NETWORK_SUDOERS_TMP=$(mktemp)
+    if [[ "$_DESKTOP_USER" != "bruce" ]]; then
+        sed -E "s/^bruce([[:space:]]+ALL=)/${_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DESKTOP_USER})/g" \
+            "$_NETWORK_SUDOERS_SRC" > "$_NETWORK_SUDOERS_TMP"
+    else
+        cp -f "$_NETWORK_SUDOERS_SRC" "$_NETWORK_SUDOERS_TMP"
+    fi
+    if [[ ! -f "$_NETWORK_SUDOERS_DST" ]] || ! cmp -s "$_NETWORK_SUDOERS_TMP" "$_NETWORK_SUDOERS_DST"; then
+        install -m 0440 -o root -g root "$_NETWORK_SUDOERS_TMP" "$_NETWORK_SUDOERS_DST"
+        # SAFETY-CRITICAL: a malformed sudoers file can break sudo system-wide.
+        # Validate the INSTALLED file; if visudo rejects it, REMOVE it (network
+        # control stays denied — the prior state — rather than risk broken sudo).
+        if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_NETWORK_SUDOERS_DST" >/dev/null 2>&1; then
+            warn "visudo rejected $_NETWORK_SUDOERS_DST — removing (network control stays denied until fixed)"
+            rm -f "$_NETWORK_SUDOERS_DST"
+        else
+            ok "sudoers.d/livos-network installed (subject: ${_DESKTOP_USER})"
+        fi
+    else
+        info "sudoers.d/livos-network already current (subject: ${_DESKTOP_USER})"
+    fi
+    rm -f "$_NETWORK_SUDOERS_TMP"
+else
+    info "sudoers.d/livos-network source not found — skipping (network control unavailable)"
+fi
+
 # ── Step 7.11: Phase 306 — desktop-user password helper (wrapper + sudoers + bootstrap) ──
 # The "Regenerate" button on the Desktop password row in Settings → Account calls
 # livinityd's system.regenerateDesktopPassword, which runs

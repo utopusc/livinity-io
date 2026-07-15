@@ -3225,6 +3225,62 @@ _dld_template_app_units() {
         info "sudoers.d/livos-crypto source not found — skipping (encrypted-folder control unavailable)"
     fi
 
+    # 2a-network. Phase 325 (NET-01) — root-owned host networking wrapper (hostname/
+    # static-IP/DNS) with the fail-closed armed-rollback watchdog. The livos-network
+    # sudoers grant (2b-network below) is on THIS binary only; the wrapper validates
+    # a fixed action enum {status|set-hostname|apply-ip|confirm|revert|set-dns},
+    # regex-validates every hostname/IPv4/CIDR/DNS arg, and builds every netplan yaml
+    # body + hostnamectl/netplan/systemd-run argv itself. Install it BEFORE the grant.
+    # Idempotent (content-diffed), byte-for-byte parallel to the livos-crypto wrapper
+    # block above (the install call names the literal dst path so the grant target is
+    # auditable). This block is serialized AFTER 325-02's crypto block by wave; the
+    # crypto block above is untouched.
+    local _netwrap_src="${_DLD_STAGE_DIR}/scripts/install/livos-network.sh"
+    [[ -f "$_netwrap_src" ]] || _netwrap_src="${_DLD_LIVOS_DIR}/scripts/install/livos-network.sh"
+    local _netwrap_dst="/usr/local/lib/livos/livos-network.sh"
+    if [[ -f "$_netwrap_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_netwrap_dst" ]] || ! cmp -s "$_netwrap_src" "$_netwrap_dst"; then
+            if install -m 0755 -o root -g root "$_netwrap_src" /usr/local/lib/livos/livos-network.sh; then
+                ok "livos-network.sh installed at $_netwrap_dst"
+            else
+                warn "Failed to install livos-network.sh (non-fatal; network control unavailable until fixed)"
+            fi
+        fi
+    else
+        info "livos-network.sh source not found — skipping (network control unavailable)"
+    fi
+
+    # 2b-network. Phase 325 (NET-01) — sudoers.d/livos-network (networking wrapper
+    # grant) — install + template. Byte-for-byte parallel to the livos-crypto block
+    # above, retargeted at livos-network. Runs on EVERY deploy (idempotent,
+    # content-diffed). Wrapper install (0755) BEFORE grant install (0440).
+    local _network_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-network"
+    [[ -f "$_network_src" ]] || _network_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-network"
+    local _network_dst="/etc/sudoers.d/livos-network"
+    if [[ -f "$_network_src" ]]; then
+        local _network_tmp
+        _network_tmp=$(mktemp)
+        if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                "$_network_src" > "$_network_tmp"
+        else
+            cp -f "$_network_src" "$_network_tmp"
+        fi
+        if [[ ! -f "$_network_dst" ]] || ! cmp -s "$_network_tmp" "$_network_dst"; then
+            install -m 0440 -o root -g root "$_network_tmp" "$_network_dst"
+            if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_network_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_network_dst — removing (network control stays denied until fixed)"
+                rm -f "$_network_dst"
+            else
+                ok "sudoers.d/livos-network installed (user-spec: ${_DLD_DESKTOP_USER})"
+            fi
+        fi
+        rm -f "$_network_tmp"
+    else
+        info "sudoers.d/livos-network source not found — skipping (network control unavailable)"
+    fi
+
     # 2c-gpu. Phase 316 (GPU-01) — NVIDIA container-toolkit, GATED behind an
     # `lspci` NVIDIA-GPU probe so NON-NVIDIA boxes (the overwhelming majority) see
     # ZERO install change. On an NVIDIA box we shell out to the SAME root-owned
