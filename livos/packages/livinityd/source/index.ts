@@ -427,6 +427,22 @@ type StoreSchema = {
 		hostname?: string
 		lastAppliedAt?: number
 	}
+	// Phase 325 NET-02 (325-10) — UI-DISPLAY-ONLY Tailscale VPN state mirror. Written
+	// by system.tailscale / system.tailscaleStatus AFTER a status/login poll so the
+	// VPN Settings card can render the last-known {enabled, overlayIp, hostname,
+	// backendState} even when the daemon is unreachable. This key is NOT the bind
+	// mechanism: the actual overlay bind is driven by 325-09 (the livos-tailscale.sh
+	// wrapper writes LIVOS_TAILSCALE_BIND to /opt/livos/.env and restarts
+	// livos.service; the server's additive listener reads process.env, NOT this key).
+	// A dropped mirror write only staleness the card (T-325-32). Dedicated top-level
+	// key (NOT nested under `network`/any scalar/array — dot-prop path collisions
+	// silently drop the write, same convention as `monitoring`/`security`/`alerts`).
+	tailscale: {
+		enabled: boolean
+		overlayIp?: string
+		hostname?: string
+		backendState?: string
+	}
 	backups: {
 		repositories: {
 			id: string
