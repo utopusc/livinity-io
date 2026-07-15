@@ -63,7 +63,7 @@ function save(stub: Files, virtualPath: string, content: string) {
 
 describe('saveTextFile — FILES-04 writable + quota-delta + atomic write', () => {
 	test('non-writable dir throws [operation-not-allowed] and writes nothing', async () => {
-		const assertWithinQuota = vi.fn(async () => {})
+		const assertWithinQuota = vi.fn(async (_username?: string, _addBytes?: number) => {})
 		const stub = makeStub({
 			getAllowedOperations: vi.fn(async () => ['copy', 'move']), // no 'writable'
 			assertWithinQuota,
@@ -78,7 +78,7 @@ describe('saveTextFile — FILES-04 writable + quota-delta + atomic write', () =
 	})
 
 	test('new file → delta equals full new size', async () => {
-		const assertWithinQuota = vi.fn(async () => {})
+		const assertWithinQuota = vi.fn(async (_username?: string, _addBytes?: number) => {})
 		const stub = makeStub({assertWithinQuota})
 
 		await save(stub, '/Home/new.txt', 'abcde') // 5 bytes, no prior file
@@ -89,7 +89,7 @@ describe('saveTextFile — FILES-04 writable + quota-delta + atomic write', () =
 	})
 
 	test('growing a file → delta is only the growth, not the full new size', async () => {
-		const assertWithinQuota = vi.fn(async () => {})
+		const assertWithinQuota = vi.fn(async (_username?: string, _addBytes?: number) => {})
 		const stub = makeStub({assertWithinQuota})
 
 		await save(stub, '/Home/grow.txt', 'abc') // 3 bytes new
@@ -129,7 +129,7 @@ describe('saveTextFile — FILES-04 writable + quota-delta + atomic write', () =
 	})
 
 	test('admin context → quota username undefined (exempt) but still writable-gated', async () => {
-		const assertWithinQuota = vi.fn(async () => {})
+		const assertWithinQuota = vi.fn(async (_username?: string, _addBytes?: number) => {})
 		const stub = makeStub({assertWithinQuota})
 
 		await fileUserContext.run({username: 'boss', role: 'admin'}, async () => {
@@ -141,7 +141,7 @@ describe('saveTextFile — FILES-04 writable + quota-delta + atomic write', () =
 	})
 
 	test('member context → quota username is the member username', async () => {
-		const assertWithinQuota = vi.fn(async () => {})
+		const assertWithinQuota = vi.fn(async (_username?: string, _addBytes?: number) => {})
 		const stub = makeStub({assertWithinQuota})
 
 		await fileUserContext.run({username: 'mary', role: 'member'}, async () => {

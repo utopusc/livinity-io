@@ -636,6 +636,57 @@ export default class Files {
 		return this.systemToVirtualPath(destinationSystemPath)
 	}
 
+	// Phase 329-07 FILES-04 (D-05) — Save UTF-8 text content to a file with the
+	// SAME writable + per-user quota gate copy()/move() use, plus an atomic
+	// temp+rename write. This is deliberately NOT the /api/files/upload path,
+	// which bypasses the 325 quota gate (fixing that bypass is out of scope for
+	// this phase). `virtualPath` is the target FILE path (existing or new).
+	async saveTextFile(virtualPath: string, content: string): Promise<string> {
+		// (1) Writable gate — clone copy() (:582-583; also rename :707, delete
+		// :843). getAllowedOperations resolves writability through the same
+		// base-directory + readonly/protected rules as the rest of the module, so
+		// a caller path can never write into a readonly/protected location.
+		const allowedOperations = await this.getAllowedOperations(virtualPath)
+		if (!allowedOperations.includes('writable')) throw new Error('[operation-not-allowed]')
+
+		// Resolve the target through the traversal-hardened resolver (the same one
+		// copy()/rename()/delete() use) — no raw caller path reaches the fs.
+		const systemPath = await this.virtualToSystemPath(virtualPath)
+
+		// (2) Quota-delta gate — clone copy()'s gate (:604-608) but only on the
+		// GROWTH delta: a rewrite that shrinks or stays the same adds 0 bytes, a
+		// brand-new file adds its full size. Admins use the global tree (no
+		// per-user quota) so they are exempt; members/guests are checked.
+		const newSize = Buffer.byteLength(content, 'utf8')
+		const oldSize = (await fse.stat(systemPath).catch(() => null))?.size ?? 0
+		const quotaUser = fileUserContext.getStore()
+		await this.assertWithinQuota(
+			quotaUser && quotaUser.role !== 'admin' ? quotaUser.username : undefined,
+			Math.max(0, newSize - oldSize),
+		)
+
+		// (3) Atomic write — mirror the /upload route's temp+rename structure
+		// (api.ts:152-172) so the file is never left half-written on a crash, and
+		// clean up the temp file if either step fails.
+		const fileName = nodePath.basename(systemPath)
+		const directory = nodePath.dirname(systemPath)
+		const temporarySystemPath = nodePath.join(directory, `.${fileName}.livinity-upload`)
+		await fse.ensureDir(directory)
+		try {
+			await fse.writeFile(temporarySystemPath, content, 'utf8')
+			await fse.rename(temporarySystemPath, systemPath)
+		} catch (error) {
+			await fse.remove(temporarySystemPath).catch(() => {})
+			throw error
+		}
+
+		// Set owner to the livinity user (best-effort; unsupported on some
+		// filesystems, e.g. external exFAT — mirror createDirectory()).
+		await this.chownSystemPath(systemPath).catch(() => {})
+
+		return this.systemToVirtualPath(systemPath)
+	}
+
 	// Moves a file or directory from one virtual path to another.
 	async move(sourceVirtualPath: string, destinationVirtualDirectory: string, {collision = 'error'} = {}) {
 		// If the destination is the current containing folder then the file is already in the correct location
