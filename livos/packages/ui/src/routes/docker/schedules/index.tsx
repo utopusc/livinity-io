@@ -21,8 +21,11 @@ import {toast} from 'sonner'
 import {Button} from '@/shadcn-components/ui/button'
 import {trpcReact} from '@/trpc/trpc'
 
+import {t} from '@/utils/i18n'
+
 import {useDockerResource, useSelectedVolume} from '../resource-store'
 import {AddBackupDialog} from './add-backup-dialog'
+import {AddCustomJobDialog} from './add-custom-job-dialog'
 import {JobCard, type JobRow} from './job-card'
 
 export function SchedulerSection() {
@@ -40,6 +43,7 @@ export function SchedulerSection() {
 	const selectedVolume = useSelectedVolume()
 	const setSelectedVolume = useDockerResource((s) => s.setSelectedVolume)
 	const [showAddDialog, setShowAddDialog] = useState(false)
+	const [showAddCustomDialog, setShowAddCustomDialog] = useState(false)
 	const [pendingVolumeName, setPendingVolumeName] = useState<string | null>(null)
 
 	useEffect(() => {
@@ -103,15 +107,26 @@ export function SchedulerSection() {
 						pruning and update checks; you can add volume backup jobs to S3, SFTP, or local
 						destinations.
 					</p>
-					<Button
-						variant='primary'
-						size='sm'
-						className='h-11'
-						onClick={() => setShowAddDialog(true)}
-					>
-						<TbPlus className='h-4 w-4' />
-						Add Backup
-					</Button>
+					<div className='flex flex-wrap gap-2'>
+						<Button
+							variant='secondary'
+							size='sm'
+							className='h-11'
+							onClick={() => setShowAddCustomDialog(true)}
+						>
+							<TbPlus className='h-4 w-4' />
+							{t('custom-job.add')}
+						</Button>
+						<Button
+							variant='primary'
+							size='sm'
+							className='h-11'
+							onClick={() => setShowAddDialog(true)}
+						>
+							<TbPlus className='h-4 w-4' />
+							Add Backup
+						</Button>
+					</div>
 				</div>
 
 				{/* Job list */}
@@ -154,6 +169,16 @@ export function SchedulerSection() {
 						utils.scheduler.listJobs.invalidate()
 					}}
 					initialVolumeName={pendingVolumeName ?? undefined}
+				/>
+
+				{/* Add Custom Job dialog (Phase 329-08 APPS-04) */}
+				<AddCustomJobDialog
+					open={showAddCustomDialog}
+					onOpenChange={setShowAddCustomDialog}
+					onSaved={() => {
+						setShowAddCustomDialog(false)
+						utils.scheduler.listJobs.invalidate()
+					}}
 				/>
 			</div>
 		</div>

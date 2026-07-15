@@ -85,6 +85,7 @@
 		"codemirror": "6.0.2",
 		"colorthief": "^2.4.0",
 		"compute-scroll-into-view": "^3.1.0",
+		"cronstrue": "3.24.0",
 		"date-fns": "^3.0.6",
 		"dompurify": "3.4.11",
 		"embla-carousel-react": "^8.6.0",
