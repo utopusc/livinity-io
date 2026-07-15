@@ -27,7 +27,8 @@ import pRetry from 'p-retry'
 import {copyWithProgress} from '../utilities/copy-with-progress.js'
 
 import {getDiskUsageByPath} from '../system/system.js'
-import {getUserQuotaBytes} from '../database/index.js'
+import {getUserQuotaBytes, findUserByUsername} from '../database/index.js'
+import {getEffectiveLevel as aclGetEffectiveLevel, type AclLevel} from './file-acls.js'
 
 import Watcher from './watcher.js'
 import Recents from './recents.js'
@@ -56,6 +57,32 @@ const ALL_OPERATIONS = [
 ] as const
 
 type FileOperation = (typeof ALL_OPERATIONS)[number]
+
+// Phase 324-02 FILES-02 (D-08) — translate an ACL union level into the operation
+// set it ADDS onto getAllowedOperations for a cross-user granted path. `read` is
+// strictly read-only (view + copy-out, NEVER the mutate op); `write` adds
+// mutation. `none` / no-grant deny (empty set) — the ACL layer only ever ADDS
+// visibility, never removes an ownership-governed capability on the caller's own
+// tree (own-tree paths never reach here).
+const ACL_READ_OPERATIONS: readonly FileOperation[] = ['copy']
+const ACL_WRITE_OPERATIONS: readonly FileOperation[] = ['copy', 'writable', 'move', 'rename', 'trash', 'delete']
+
+function aclLevelToOperations(level: AclLevel | null): FileOperation[] {
+	if (level === 'write') return [...ACL_WRITE_OPERATIONS]
+	if (level === 'read') return [...ACL_READ_OPERATIONS]
+	return [] // 'none' | null → deny
+}
+
+// The result of the cross-user ACL resolution layer. `source: 'ownership'` means
+// the path is inside the caller's own per-user tree and is governed by the
+// existing ownership rules (the ACL DAO is NOT consulted; operations === null).
+// `source: 'acl'` means the path is OUTSIDE the caller's tree and the level/
+// operations are the ONLY thing that grants any cross-user visibility.
+export type EffectivePermission = {
+	source: 'ownership' | 'acl'
+	level: AclLevel | null
+	operations: FileOperation[] | null
+}
 
 type File = {
 	name: string
@@ -244,6 +271,53 @@ export default class Files {
 		}
 		// Single-user (legacy) mode: the global tree is the only tree.
 		return this.baseDirectories
+	}
+
+	// Phase 324-02 FILES-02 (D-08) — cross-user ACL resolution layer, composed ON
+	// TOP of getActiveBaseDirectories. It NEVER replaces base-dir isolation: it is
+	// consulted ONLY for a path OUTSIDE the caller's own per-user tree, and a grant
+	// only ADDS visibility/operations. The actual system path is still resolved
+	// through virtualToSystemPath (escapes-base containment) elsewhere — a grant
+	// can never reach outside the data root.
+	//
+	//   - A path whose base segment is one of the caller's OWN base dirs (/Home,
+	//     /Trash, …) stays ownership-governed: source 'ownership', operations null,
+	//     and the ACL DAO is NOT consulted.
+	//   - Any other (out-of-tree) path is the ACL layer's domain: it resolves the
+	//     most-permissive union level (getEffectiveLevel) and maps it to the added
+	//     operation set. Fail CLOSED: no resolved identity or no applicable grant →
+	//     empty operations (no extra access), unchanged from today.
+	//
+	// `deps` is injectable so the resolution is unit-testable offline (defaults to
+	// the real file-acls DAO + findUserByUsername).
+	async getEffectivePermission(
+		virtualPath: string,
+		userInfo: FileUserInfo | undefined = fileUserContext.getStore(),
+		deps: {
+			getEffectiveLevel?: (path: string, userId: string) => Promise<AclLevel | null>
+			resolveUserId?: (username: string) => Promise<string | null>
+		} = {},
+	): Promise<EffectivePermission> {
+		// Own per-user tree → ownership-governed; the ACL layer is NEVER consulted.
+		const segments = virtualPath.split('/').filter(Boolean)
+		const baseSegment = `/${segments[0] ?? ''}`
+		const ownBaseDirs = this.getActiveBaseDirectories(userInfo)
+		if (ownBaseDirs.has(baseSegment)) {
+			return {source: 'ownership', level: null, operations: null}
+		}
+
+		// Out-of-tree path: the ACL grant is the ONLY thing that can ADD visibility.
+		// Fail closed on an unidentified caller (no per-user identity → nothing extra).
+		if (!userInfo) return {source: 'acl', level: null, operations: []}
+
+		const resolveUserId =
+			deps.resolveUserId ?? (async (username: string) => (await findUserByUsername(username))?.id ?? null)
+		const userId = await resolveUserId(userInfo.username)
+		if (!userId) return {source: 'acl', level: null, operations: []}
+
+		const getLevel = deps.getEffectiveLevel ?? aclGetEffectiveLevel
+		const level = await getLevel(virtualPath, userId)
+		return {source: 'acl', level: level ?? null, operations: aclLevelToOperations(level)}
 	}
 
 	// Ensure per-user directories exist. Called on first access.
