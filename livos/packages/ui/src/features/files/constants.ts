@@ -25,6 +25,8 @@ const PdfViewer = lazy(() => import('@/features/files/components/file-viewer/pdf
 const VideoViewer = lazy(() => import('@/features/files/components/file-viewer/video-viewer'))
 const TextEditorViewer = lazy(() => import('@/features/files/components/file-viewer/text-editor'))
 const MarkdownViewer = lazy(() => import('@/features/files/components/file-viewer/markdown-viewer'))
+const DocxViewer = lazy(() => import('@/features/files/components/file-viewer/docx-viewer'))
+const XlsxViewer = lazy(() => import('@/features/files/components/file-viewer/xlsx-viewer'))
 
 export const BASE_ROUTE_PATH = '/files' as const
 export const HOME_PATH = '/Home' as const
@@ -113,17 +115,17 @@ export const FILE_TYPE_MAP = {
 	'application/x-mobipocket-ebook': {nameTKey: 'files-type.mobi', thumbnail: EbookThumbnail, viewer: null},
 
 	// Microsoft Office
-	'application/msword': {nameTKey: 'files-type.word', thumbnail: DocxThumbnail, viewer: null},
+	'application/msword': {nameTKey: 'files-type.word', thumbnail: DocxThumbnail, viewer: DocxViewer},
 	'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
 		nameTKey: 'files-type.word',
 		thumbnail: DocxThumbnail,
-		viewer: null,
+		viewer: DocxViewer,
 	},
-	'application/vnd.ms-excel': {nameTKey: 'files-type.excel', thumbnail: CsvThumbnail, viewer: null},
+	'application/vnd.ms-excel': {nameTKey: 'files-type.excel', thumbnail: CsvThumbnail, viewer: XlsxViewer},
 	'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
 		nameTKey: 'files-type.excel',
 		thumbnail: CsvThumbnail,
-		viewer: null,
+		viewer: XlsxViewer,
 	},
 	'application/vnd.ms-powerpoint': {nameTKey: 'files-type.powerpoint', thumbnail: PptThumbnail, viewer: null},
 	'application/vnd.openxmlformats-officedocument.presentationml.presentation': {
