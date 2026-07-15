@@ -3,6 +3,7 @@ import {useState} from 'react'
 import {
 	TbCheck,
 	TbCopy,
+	TbDatabase,
 	TbLoader2,
 	TbPlus,
 	TbShieldCheck,
@@ -33,6 +34,7 @@ import {
 import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
+import {formatBytes} from '@/utils/pretty-bytes'
 
 type UserRow = {
 	id: string
@@ -43,7 +45,18 @@ type UserRow = {
 	is_active: boolean
 	created_at: string
 	updated_at: string
+	// Phase 325 STOR-02 — per-user soft quota (bytes; null/<=0 = unlimited) +
+	// last-scanned used bytes (null until the user-quota-scan job first runs).
+	quota_bytes?: number | null
+	used_bytes?: number | null
 }
+
+// Bytes per gigabyte using the decimal convention that pretty-bytes renders (GB = 1e9),
+// so the editor input round-trips against what the used/limit cell displays.
+const BYTES_PER_GB = 1_000_000_000
+// Past this fraction of the limit, the used/limit cell warns (mirrors the backend
+// QUOTA_SOFT_RATIO soft-warn threshold in files.ts / jobs.ts).
+const QUOTA_SOFT_RATIO = 0.9
 
 function getInitials(name: string): string {
 	return name
@@ -145,6 +158,16 @@ function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: bool
 	const isMobile = useIsMobile()
 	const utils = trpcReact.useUtils()
 
+	const [showQuotaDialog, setShowQuotaDialog] = useState(false)
+
+	// Phase 325 STOR-02 — a null/<=0 quota is unlimited (no ceiling); otherwise show
+	// "used of limit" with a warning tint once past the soft ratio.
+	const hasQuota = user.quota_bytes != null && user.quota_bytes > 0
+	const overSoft = hasQuota && user.used_bytes != null && user.used_bytes >= (user.quota_bytes as number) * QUOTA_SOFT_RATIO
+	const quotaLabel = hasQuota
+		? t('settings.users.quota.used', {used: formatBytes(user.used_bytes), limit: formatBytes(user.quota_bytes)})
+		: t('settings.users.quota.unlimited')
+
 	const roleMut = trpcReact.user.updateUserRole.useMutation({
 		onSuccess: () => {
 			utils.user.listAllUsers.invalidate()
@@ -218,7 +241,22 @@ function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: bool
 						)}
 					</div>
 					<div className='text-caption text-text-tertiary'>@{user.username}</div>
+					{/* Phase 325 STOR-02 — used/limit quota cell */}
+					<div className={cn('text-caption', overSoft ? 'text-accent-red' : 'text-text-tertiary')}>{quotaLabel}</div>
 				</div>
+
+				{/* Quota editor — admin action, allowed on any user (incl. self) */}
+				<Button
+					variant='default'
+					size='sm'
+					className={cn(isMobile ? 'h-11 shrink-0 px-2.5' : 'shrink-0')}
+					onClick={() => setShowQuotaDialog(true)}
+					title={t('settings.users.quota.edit')}
+					aria-label={t('settings.users.quota.edit')}
+				>
+					<TbDatabase className='h-4 w-4' />
+					{!isMobile && <span className='ml-1.5'>{t('settings.users.quota.edit')}</span>}
+				</Button>
 
 				{/* Desktop-only: role select + actions inline */}
 				{!isMobile && (
@@ -348,7 +386,109 @@ function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: bool
 					<span className='text-caption text-text-tertiary capitalize'>{user.role}</span>
 				</div>
 			)}
+
+			<QuotaDialog open={showQuotaDialog} onOpenChange={setShowQuotaDialog} user={user} />
 		</div>
+	)
+}
+
+// Phase 325 STOR-02 — per-user storage quota editor. Cloned from InviteDialog:
+// a numeric GB input, Save calls setUserQuota (0 = unlimited, matching the backend's
+// quota <= 0 == no-ceiling rule) then invalidates the users list. Enforcement is
+// soft/approximate (refreshed by the user-quota-scan job) — see 325-01 D-05.
+function QuotaDialog({
+	open,
+	onOpenChange,
+	user,
+}: {
+	open: boolean
+	onOpenChange: (open: boolean) => void
+	user: UserRow
+}) {
+	const utils = trpcReact.useUtils()
+
+	// Seed from the current quota, rounded to whole GB for a friendly editor value.
+	const initialGb = user.quota_bytes != null && user.quota_bytes > 0 ? String(Math.round(user.quota_bytes / BYTES_PER_GB)) : ''
+	const [gb, setGb] = useState(initialGb)
+
+	const setQuotaMut = trpcReact.user.setUserQuota.useMutation({
+		onSuccess: () => {
+			utils.user.listAllUsers.invalidate()
+			toast.success(t('settings.users.quota.save'))
+			onOpenChange(false)
+		},
+		onError: (error) => {
+			toast.error(error.message)
+		},
+	})
+
+	const handleClose = (isOpen: boolean) => {
+		if (!isOpen) {
+			// Reset the editor to the row's current value when closing.
+			setGb(initialGb)
+			setQuotaMut.reset()
+		}
+		onOpenChange(isOpen)
+	}
+
+	const handleSave = () => {
+		// Empty or non-positive input = unlimited (send 0, the backend's no-ceiling value).
+		const parsed = Number.parseFloat(gb)
+		const quotaBytes = !Number.isFinite(parsed) || parsed <= 0 ? 0 : Math.round(parsed * BYTES_PER_GB)
+		setQuotaMut.mutate({userId: user.id, quotaBytes})
+	}
+
+	return (
+		<Dialog open={open} onOpenChange={handleClose}>
+			<DialogPortal>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>{t('settings.users.quota.label')}</DialogTitle>
+					</DialogHeader>
+
+					<div className='space-y-4'>
+						<p className='text-body-sm text-text-secondary'>
+							{t('settings.users.quota.help', {name: user.display_name})}
+						</p>
+						<div className='space-y-2'>
+							<label className='text-caption text-text-secondary' htmlFor='quota-gb-input'>
+								{t('settings.users.quota.label')}
+							</label>
+							<input
+								id='quota-gb-input'
+								type='number'
+								min={0}
+								step={1}
+								inputMode='decimal'
+								value={gb}
+								onChange={(e) => setGb(e.target.value)}
+								placeholder={t('settings.users.quota.placeholder')}
+								className='w-full rounded-radius-md border border-border-default bg-surface-base px-3 py-2 text-body-sm text-text-primary outline-none focus:border-brand'
+							/>
+						</div>
+					</div>
+
+					<DialogFooter>
+						<Button size='dialog' variant='primary' onClick={handleSave} disabled={setQuotaMut.isPending}>
+							{setQuotaMut.isPending ? (
+								<>
+									<TbLoader2 className='h-4 w-4 animate-spin' />
+									{t('settings.users.quota.save')}
+								</>
+							) : (
+								<>
+									<TbDatabase className='h-4 w-4' />
+									{t('settings.users.quota.save')}
+								</>
+							)}
+						</Button>
+						<Button size='dialog' onClick={() => handleClose(false)}>
+							{t('cancel')}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</DialogPortal>
+		</Dialog>
 	)
 }
 
