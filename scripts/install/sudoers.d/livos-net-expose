@@ -1,0 +1,9 @@
+# Phase 329 (NET-04) — sudoers grant for the raw TCP/UDP port-exposure wrapper.
+# Security model: grant on ONE explicit binary path, NO glob, NO arg wildcard.
+# The wrapper validates its action enum {status|open|close|list}, regex-validates
+# proto/port/CIDR BEFORE any value reaches the firewall, keeps a PARSED (never sourced)
+# openings state file, and REGENERATES the entire /etc/livos/docker-firewall.sh itself —
+# so no caller-supplied string reaches a privileged command or the firewall file.
+# Deploy: deploy-livinityd.sh block 2a/2b-net-expose; day-2: update.sh Step 7.10j.
+Cmnd_Alias LIVINITYD_NET_EXPOSE = /usr/local/lib/livos/livos-net-expose.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_NET_EXPOSE
