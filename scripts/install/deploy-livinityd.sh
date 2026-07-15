@@ -3281,6 +3281,61 @@ _dld_template_app_units() {
         info "sudoers.d/livos-network source not found — skipping (network control unavailable)"
     fi
 
+    # 2a-tailscale. Phase 325 (NET-02) — root-owned Tailscale VPN wrapper (guided
+    # login-URL flow + `set --accept-dns=false` MagicDNS/cloudflared-1033 fix + ufw
+    # tailscale0 rule + the D-12 /opt/livos/.env overlay-bind persistence + livos.service
+    # restart). The livos-tailscale sudoers grant (2b-tailscale below) is on THIS binary
+    # only; the wrapper validates a fixed action enum {install|login|set|down|status} and
+    # builds every apt/tailscale/ufw/systemctl argv + the fixed LIVOS_TAILSCALE_BIND .env
+    # line itself. Install it BEFORE the grant. Idempotent (content-diffed), byte-for-byte
+    # parallel to the livos-network wrapper block above. Serialized AFTER 325-06's network
+    # block by wave; the network block above is untouched.
+    local _tswrap_src="${_DLD_STAGE_DIR}/scripts/install/livos-tailscale.sh"
+    [[ -f "$_tswrap_src" ]] || _tswrap_src="${_DLD_LIVOS_DIR}/scripts/install/livos-tailscale.sh"
+    local _tswrap_dst="/usr/local/lib/livos/livos-tailscale.sh"
+    if [[ -f "$_tswrap_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_tswrap_dst" ]] || ! cmp -s "$_tswrap_src" "$_tswrap_dst"; then
+            if install -m 0755 -o root -g root "$_tswrap_src" /usr/local/lib/livos/livos-tailscale.sh; then
+                ok "livos-tailscale.sh installed at $_tswrap_dst"
+            else
+                warn "Failed to install livos-tailscale.sh (non-fatal; VPN control unavailable until fixed)"
+            fi
+        fi
+    else
+        info "livos-tailscale.sh source not found — skipping (VPN control unavailable)"
+    fi
+
+    # 2b-tailscale. Phase 325 (NET-02) — sudoers.d/livos-tailscale (VPN wrapper grant)
+    # — install + template. Byte-for-byte parallel to the livos-network block above,
+    # retargeted at livos-tailscale. Runs on EVERY deploy (idempotent, content-diffed).
+    # Wrapper install (0755) BEFORE grant install (0440).
+    local _tailscale_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-tailscale"
+    [[ -f "$_tailscale_src" ]] || _tailscale_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-tailscale"
+    local _tailscale_dst="/etc/sudoers.d/livos-tailscale"
+    if [[ -f "$_tailscale_src" ]]; then
+        local _tailscale_tmp
+        _tailscale_tmp=$(mktemp)
+        if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                "$_tailscale_src" > "$_tailscale_tmp"
+        else
+            cp -f "$_tailscale_src" "$_tailscale_tmp"
+        fi
+        if [[ ! -f "$_tailscale_dst" ]] || ! cmp -s "$_tailscale_tmp" "$_tailscale_dst"; then
+            install -m 0440 -o root -g root "$_tailscale_tmp" "$_tailscale_dst"
+            if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_tailscale_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_tailscale_dst — removing (VPN control stays denied until fixed)"
+                rm -f "$_tailscale_dst"
+            else
+                ok "sudoers.d/livos-tailscale installed (user-spec: ${_DLD_DESKTOP_USER})"
+            fi
+        fi
+        rm -f "$_tailscale_tmp"
+    else
+        info "sudoers.d/livos-tailscale source not found — skipping (VPN control unavailable)"
+    fi
+
     # 2c-gpu. Phase 316 (GPU-01) — NVIDIA container-toolkit, GATED behind an
     # `lspci` NVIDIA-GPU probe so NON-NVIDIA boxes (the overwhelming majority) see
     # ZERO install change. On an NVIDIA box we shell out to the SAME root-owned

@@ -2943,6 +2943,42 @@ class Server {
 			tryListen()
 		})
 
+		// Phase 325-09 (NET-02, D-12) — ADDITIVE tailscale-overlay listener.
+		// Reads LIVOS_TAILSCALE_BIND from process.env, which is supplied by
+		// /opt/livos/.env (written by livos-tailscale.sh at `login`); systemd
+		// re-reads the EnvironmentFile on the wrapper's `systemctl restart
+		// livos.service`, so the value reaches this process on the next unit boot.
+		// When it holds the tailscale overlay IP we bind a SECOND listener on that
+		// IP so the box is reachable over the tailnet (ufw-gated to tailscale0).
+		// We deliberately do NOT bind-move loopback: bind-moving 127.0.0.1 to the
+		// 100.x overlay would UNBIND loopback and break Caddy's public front door
+		// (Caddy → 127.0.0.1:8080) + liv-core loopback calls. The loopback listener
+		// above stays untouched. Empty/unset LIVOS_TAILSCALE_BIND → pure no-op.
+		const overlayBind = process.env.LIVOS_TAILSCALE_BIND
+		if (typeof overlayBind === 'string' && overlayBind.trim().length > 0) {
+			const overlayHost = overlayBind.trim()
+			// Second http server sharing the SAME express app (this.app). WS
+			// upgrades are forwarded to the primary server so the existing upgrade
+			// router (auth + subdomain/custom-domain/agent/voice routing) runs
+			// unchanged — no duplication of that logic.
+			const overlayServer = http.createServer(this.app)
+			overlayServer.requestTimeout = 0
+			overlayServer.on('upgrade', (request, socket, head) => {
+				this.server?.emit('upgrade', request, socket, head)
+			})
+			overlayServer.on('error', (err: NodeJS.ErrnoException) => {
+				// Never let an overlay-bind failure crash the daemon — the loopback
+				// listener (the public path) is already up and unaffected.
+				this.logger.error(
+					`Tailscale overlay listener ${overlayHost}:${targetPort} failed (loopback unaffected)`,
+					err,
+				)
+			})
+			overlayServer.listen(targetPort, overlayHost, () => {
+				this.logger.log(`ADDITIVE overlay listener on ${overlayHost}:${targetPort} (D-12, tailnet)`)
+			})
+		}
+
 		return this
 	}
 }
