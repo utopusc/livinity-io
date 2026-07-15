@@ -128,6 +128,23 @@ _refuse_system_disk() {
 	return 0
 }
 
+# Print the epoch of the FIRST occurrence of wake time $2 (HH:MM) STRICTLY AFTER the
+# reference epoch $1, rolling forward whole wall-clock days (DST-correct for the wall-clock
+# wake time). Used so the wake alarm is always queued for a moment AFTER a given instant —
+# the scheduled shutdown epoch (schedule-set) or the current power-off instant (arm-wake) —
+# instead of a naive next-from-now that can fire while the box is still on and leave the
+# following power-off with no pending alarm (WR-01). Empty output + non-zero on parse failure.
+_next_wake_epoch() {
+	local ref="${1:-}" hhmm="${2:-}" day t
+	day=$(date -d "@${ref}" +%F 2>/dev/null) || return 1
+	t=$(date -d "${day} ${hhmm}" +%s 2>/dev/null) || return 1
+	while (( t <= ref )); do
+		day=$(date -d "${day} +1 day" +%F 2>/dev/null) || return 1
+		t=$(date -d "${day} ${hhmm}" +%s 2>/dev/null) || return 1
+	done
+	printf '%s' "$t"
+}
+
 # ── Actions ──────────────────────────────────────────────────────────────────
 case "$ACTION" in
 	install)
@@ -226,11 +243,21 @@ case "$ACTION" in
 		# seconds count. Resolve to an absolute alarm delta in seconds.
 		if _valid_hhmm "$WAKE"; then
 			now_epoch=$(date +%s)
-			target_epoch=$(date -d "today ${WAKE}" +%s 2>/dev/null) || {
-				echo "[livos-power] could not parse wake time: '${WAKE}'" >&2; exit 2; }
-			if (( target_epoch <= now_epoch )); then
-				target_epoch=$(date -d "tomorrow ${WAKE}" +%s 2>/dev/null)
+			# Resolve the SHUTDOWN epoch first: the next future occurrence of the shutdown
+			# HH:MM, matching the systemd OnCalendar=*-*-* ${SHUT}:00 that fires the power-off.
+			shut_epoch=$(date -d "today ${SHUT}" +%s 2>/dev/null) || {
+				echo "[livos-power] could not resolve the shutdown epoch: '${SHUT}'" >&2; exit 2; }
+			if (( shut_epoch <= now_epoch )); then
+				shut_epoch=$(date -d "tomorrow ${SHUT}" +%s 2>/dev/null)
 			fi
+			# Resolve the WAKE relative to the SHUTDOWN, not to `now`: the first wake occurrence
+			# STRICTLY AFTER the shutdown fires. A naive next-from-now wake can elapse while the
+			# box is still on (e.g. arm 06:00, shutdown 23:00, wake 07:00 → 07:00 fires today
+			# harmlessly, then the 23:00 power-off leaves NO pending alarm → box strands off).
+			# Rolling the wake past the shutdown guarantees an alarm is queued for AFTER the
+			# power-off (WR-01).
+			target_epoch=$(_next_wake_epoch "$shut_epoch" "$WAKE") || {
+				echo "[livos-power] could not resolve a wake time after the scheduled shutdown: '${WAKE}'" >&2; exit 2; }
 			WAKE_SECS=$(( target_epoch - now_epoch ))
 		elif _valid_secs "$WAKE"; then
 			WAKE_SECS="$WAKE"
