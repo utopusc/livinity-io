@@ -1,0 +1,11 @@
+# Phase 325 (NET-01) — sudoers grant for the host networking wrapper.
+# Security model: grant on ONE explicit binary path, NO glob, NO arg wildcard.
+# The wrapper validates its action enum {status|set-hostname|apply-ip|confirm|
+# revert|set-dns}, regex-validates every hostname/IPv4/CIDR/DNS arg, and builds
+# every netplan yaml body + hostnamectl/netplan/systemd-run argv itself — so no
+# caller string can escape into a privileged command or a foreign config directive.
+# A trailing `*` here would be a hole (see sudoers.d/livos-smart header) — there is
+# deliberately none.
+# Deploy: deploy-livinityd.sh block 2a/2b-network; day-2: update.sh Step 7.10g.
+Cmnd_Alias LIVINITYD_NETWORK = /usr/local/lib/livos/livos-network.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_NETWORK
