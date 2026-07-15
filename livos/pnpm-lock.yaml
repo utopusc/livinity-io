@@ -284,9 +284,12 @@ importers:
       cors:
         specifier: 2.8.5
         version: 2.8.5
+      cron-parser:
+        specifier: 5.6.2
+        version: 5.6.2
       cronstrue:
-        specifier: ^3.14.0
-        version: 3.14.0
+        specifier: 3.24.0
+        version: 3.24.0
       dbus-next:
         specifier: ^0.10.2
         version: 0.10.2
@@ -821,7 +824,7 @@ importers:
         version: 1.0.26(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react-vnc:
         specifier: ^2.0.3
-        version: 2.0.3(react-dom@18.3.1(react@18.3.1))(react-scripts@5.0.1(@babel/plugin-syntax-flow@7.29.7(@babel/core@7.28.6))(@babel/plugin-transform-react-jsx@7.29.7(@babel/core@7.28.6))(@types/babel__core@7.20.5)(eslint@8.57.1)(lightningcss@1.32.0)(react@18.3.1)(type-fest@4.41.0)(typescript@5.9.3))(react@18.3.1)(rollup@2.80.0)(tslib@2.8.1)(typescript@5.9.3)
+        version: 2.0.3(react-dom@18.3.1(react@18.3.1))(react-scripts@5.0.1(@babel/plugin-syntax-flow@7.29.7(@babel/core@7.28.6))(@babel/plugin-transform-react-jsx@7.29.7(@babel/core@7.28.6))(@types/babel__core@7.20.5)(eslint@8.57.1)(lightningcss@1.32.0)(react@18.3.1)(type-fest@4.41.0)(typescript@5.9.3))(react@18.3.1)(rollup@4.57.0)(tslib@2.8.1)(typescript@5.9.3)
       react-window:
         specifier: ^1.8.11
         version: 1.8.11(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -1011,10 +1014,10 @@ importers:
         version: 4.5.14(@types/node@20.8.7)(lightningcss@1.32.0)(terser@5.48.0)
       vite-bundle-visualizer:
         specifier: ^0.11.0
-        version: 0.11.0(rollup@2.80.0)
+        version: 0.11.0(rollup@4.57.0)
       vite-imagetools:
         specifier: ^7.0.5
-        version: 7.1.1(rollup@2.80.0)
+        version: 7.1.1(rollup@4.57.0)
       vite-plugin-pwa:
         specifier: ^1.2.0
         version: 1.2.0(vite@4.5.14(@types/node@20.8.7)(lightningcss@1.32.0)(terser@5.48.0))(workbox-build@7.4.0(@types/babel__core@7.20.5))(workbox-window@7.4.0)
@@ -8474,8 +8477,12 @@ packages:
     resolution: {integrity: sha512-p0SaNjrHOnQeR8/VnfGbmg9te2kfyYSQ7Sc/j/6DtPL3JQvKxmjO9TSjNFpujqV3vEYYBvNNvXSxzyksBWAx1Q==}
     engines: {node: '>=12.0.0'}
 
-  cronstrue@3.14.0:
-    resolution: {integrity: sha512-XnW4vuK/jPJjmTyDWiej1Zq36Od7ITwxaV2O1pzHZuyMVvdy7NAvyvIBzybt+idqSpfqYuoDG7uf/ocGtJVWxA==}
+  cron-parser@5.6.2:
+    resolution: {integrity: sha512-yJ/G1LVir6CnlkLI40CsampPLKl1SprGGlUagWtGJxewytRVYezv5xVyzzbT+Pvzx+VIRvZVF7/a0eEMTxdnTA==}
+    engines: {node: '>=18'}
+
+  cronstrue@3.24.0:
+    resolution: {integrity: sha512-t/Ji3Ur2c/pzhIAWNwC0ftl3JAE4dLfCjAdZoTZXmPDZwcispnS1PaMcMS4OmIIXyIVouAz+yw+mfQiE3hz5OQ==}
     hasBin: true
 
   cross-env@7.0.3:
@@ -22002,13 +22009,13 @@ snapshots:
     optionalDependencies:
       rollup: 2.80.0
 
-  '@rollup/plugin-typescript@11.1.6(rollup@2.80.0)(tslib@2.8.1)(typescript@5.9.3)':
+  '@rollup/plugin-typescript@11.1.6(rollup@4.57.0)(tslib@2.8.1)(typescript@5.9.3)':
     dependencies:
-      '@rollup/pluginutils': 5.3.0(rollup@2.80.0)
+      '@rollup/pluginutils': 5.3.0(rollup@4.57.0)
       resolve: 1.22.11
       typescript: 5.9.3
     optionalDependencies:
-      rollup: 2.80.0
+      rollup: 4.57.0
       tslib: 2.8.1
 
   '@rollup/pluginutils@3.1.0(rollup@2.80.0)':
@@ -22016,14 +22023,6 @@ snapshots:
       '@types/estree': 0.0.39
       estree-walker: 1.0.1
       picomatch: 2.3.2
-      rollup: 2.80.0
-
-  '@rollup/pluginutils@5.3.0(rollup@2.80.0)':
-    dependencies:
-      '@types/estree': 1.0.8
-      estree-walker: 2.0.2
-      picomatch: 4.0.3
-    optionalDependencies:
       rollup: 2.80.0
 
   '@rollup/pluginutils@5.3.0(rollup@4.57.0)':
@@ -25487,7 +25486,11 @@ snapshots:
     dependencies:
       luxon: 3.7.2
 
-  cronstrue@3.14.0: {}
+  cron-parser@5.6.2:
+    dependencies:
+      luxon: 3.7.2
+
+  cronstrue@3.24.0: {}
 
   cross-env@7.0.3:
     dependencies:
@@ -32090,9 +32093,9 @@ snapshots:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
 
-  react-vnc@2.0.3(react-dom@18.3.1(react@18.3.1))(react-scripts@5.0.1(@babel/plugin-syntax-flow@7.29.7(@babel/core@7.28.6))(@babel/plugin-transform-react-jsx@7.29.7(@babel/core@7.28.6))(@types/babel__core@7.20.5)(eslint@8.57.1)(lightningcss@1.32.0)(react@18.3.1)(type-fest@4.41.0)(typescript@5.9.3))(react@18.3.1)(rollup@2.80.0)(tslib@2.8.1)(typescript@5.9.3):
+  react-vnc@2.0.3(react-dom@18.3.1(react@18.3.1))(react-scripts@5.0.1(@babel/plugin-syntax-flow@7.29.7(@babel/core@7.28.6))(@babel/plugin-transform-react-jsx@7.29.7(@babel/core@7.28.6))(@types/babel__core@7.20.5)(eslint@8.57.1)(lightningcss@1.32.0)(react@18.3.1)(type-fest@4.41.0)(typescript@5.9.3))(react@18.3.1)(rollup@4.57.0)(tslib@2.8.1)(typescript@5.9.3):
     dependencies:
-      '@rollup/plugin-typescript': 11.1.6(rollup@2.80.0)(tslib@2.8.1)(typescript@5.9.3)
+      '@rollup/plugin-typescript': 11.1.6(rollup@4.57.0)(tslib@2.8.1)(typescript@5.9.3)
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
       react-scripts: 5.0.1(@babel/plugin-syntax-flow@7.29.7(@babel/core@7.28.6))(@babel/plugin-transform-react-jsx@7.29.7(@babel/core@7.28.6))(@types/babel__core@7.20.5)(eslint@8.57.1)(lightningcss@1.32.0)(react@18.3.1)(type-fest@4.41.0)(typescript@5.9.3)
@@ -32505,14 +32508,14 @@ snapshots:
       serialize-javascript: 4.0.0
       terser: 5.48.0
 
-  rollup-plugin-visualizer@5.14.0(rollup@2.80.0):
+  rollup-plugin-visualizer@5.14.0(rollup@4.57.0):
     dependencies:
       open: 8.4.2
       picomatch: 4.0.3
       source-map: 0.7.6
       yargs: 17.7.2
     optionalDependencies:
-      rollup: 2.80.0
+      rollup: 4.57.0
 
   rollup@2.80.0:
     optionalDependencies:
@@ -34313,18 +34316,18 @@ snapshots:
       d3-time: 3.1.0
       d3-timer: 3.0.1
 
-  vite-bundle-visualizer@0.11.0(rollup@2.80.0):
+  vite-bundle-visualizer@0.11.0(rollup@4.57.0):
     dependencies:
       cac: 6.7.14
-      rollup-plugin-visualizer: 5.14.0(rollup@2.80.0)
+      rollup-plugin-visualizer: 5.14.0(rollup@4.57.0)
       tmp: 0.2.5
     transitivePeerDependencies:
       - rolldown
       - rollup
 
-  vite-imagetools@7.1.1(rollup@2.80.0):
+  vite-imagetools@7.1.1(rollup@4.57.0):
     dependencies:
-      '@rollup/pluginutils': 5.3.0(rollup@2.80.0)
+      '@rollup/pluginutils': 5.3.0(rollup@4.57.0)
       imagetools-core: 7.1.0
       sharp: 0.34.5
     transitivePeerDependencies:
