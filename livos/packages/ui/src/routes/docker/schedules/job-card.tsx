@@ -2,12 +2,20 @@
 // routes/settings/_components/scheduler-section.tsx (lines 87-148, 299-384,
 // deleted Phase 27-02). Sub-components extracted to a sibling file for
 // SchedulerSection clarity.
+//
+// Phase 329-08 APPS-04 (D-14): a `custom-command` job additionally surfaces its
+// recent run history from the job_runs-backed `scheduler.listJobRuns` route —
+// per run: started/finished, status, and the truncated output/error
+// (collapsible). Built-in + volume-backup rendering is unchanged.
 
-import {TbLoader2, TbPlayerPlay, TbTrash} from 'react-icons/tb'
+import {useState} from 'react'
+import {TbChevronDown, TbChevronRight, TbLoader2, TbPlayerPlay, TbTrash} from 'react-icons/tb'
 
 import {Button} from '@/shadcn-components/ui/button'
 import {Switch} from '@/shadcn-components/ui/switch'
 import {cn} from '@/shadcn-lib/utils'
+import {trpcReact} from '@/trpc/trpc'
+import {t} from '@/utils/i18n'
 
 // ---------------------------------------------------------------------------
 // Types — mirror server-side BackupDestination configs (without secrets)
@@ -17,7 +25,12 @@ export interface JobRow {
 	id: string
 	name: string
 	schedule: string
-	type: 'image-prune' | 'container-update-check' | 'git-stack-sync' | 'volume-backup'
+	type:
+		| 'image-prune'
+		| 'container-update-check'
+		| 'git-stack-sync'
+		| 'volume-backup'
+		| 'custom-command'
 	config: Record<string, unknown>
 	enabled: boolean
 	lastRun: string | Date | null
@@ -34,6 +47,7 @@ export const TYPE_LABELS: Record<JobRow['type'], string> = {
 	'container-update-check': 'Update Check',
 	'git-stack-sync': 'Git Stack Sync',
 	'volume-backup': 'Volume Backup',
+	'custom-command': 'Custom Command',
 }
 
 const STATUS_STYLES: Record<string, {bg: string; text: string; label: string}> = {
@@ -77,6 +91,109 @@ export function relTime(d: string | Date | null): string {
 }
 
 // ---------------------------------------------------------------------------
+// Custom-command run history (D-14) — collapsible list of the last runs from the
+// job_runs table via scheduler.listJobRuns. Each run: status, started (rel),
+// duration, and a collapsible truncated output/error block. Only fetched while
+// the section is expanded (enabled: expanded) so idle cards make no query.
+// ---------------------------------------------------------------------------
+
+function statusLabel(status: string): string {
+	switch (status) {
+		case 'success':
+			return t('custom-job.status-success')
+		case 'failure':
+			return t('custom-job.status-failure')
+		case 'skipped':
+			return t('custom-job.status-skipped')
+		case 'running':
+			return t('custom-job.status-running')
+		default:
+			return status
+	}
+}
+
+function RunHistory({jobName}: {jobName: string}) {
+	const [expanded, setExpanded] = useState(false)
+	const [openRun, setOpenRun] = useState<string | null>(null)
+	const runsQ = trpcReact.scheduler.listJobRuns.useQuery(
+		{jobName},
+		{enabled: expanded, refetchInterval: expanded ? 15_000 : false},
+	)
+	const runs = runsQ.data ?? []
+
+	return (
+		<div className='mt-3 border-t border-border-default pt-2'>
+			<button
+				type='button'
+				className='flex items-center gap-1 text-caption text-text-secondary hover:text-text-primary'
+				onClick={() => setExpanded((v) => !v)}
+			>
+				{expanded ? (
+					<TbChevronDown className='h-3.5 w-3.5' />
+				) : (
+					<TbChevronRight className='h-3.5 w-3.5' />
+				)}
+				{expanded ? t('custom-job.hide-history') : t('custom-job.show-history')}
+			</button>
+
+			{expanded && (
+				<div className='mt-2 space-y-1.5'>
+					{runsQ.isLoading ? (
+						<div className='flex items-center gap-2 text-caption text-text-tertiary'>
+							<TbLoader2 className='h-3.5 w-3.5 animate-spin' />
+							{t('custom-job.history-loading')}
+						</div>
+					) : runs.length === 0 ? (
+						<div className='text-caption text-text-tertiary'>{t('custom-job.history-empty')}</div>
+					) : (
+						runs.map((run) => {
+							const detail = run.error ?? run.output
+							const isOpen = openRun === run.id
+							return (
+								<div
+									key={run.id}
+									className='rounded-radius-sm border border-border-default bg-surface-2/40 p-2'
+								>
+									<div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+										<StatusBadge status={run.status as JobRow['lastRunStatus']} />
+										<span className='text-caption text-text-tertiary'>
+											{relTime(run.startedAt)}
+										</span>
+										{detail && (
+											<button
+												type='button'
+												className='ml-auto text-caption text-text-secondary hover:text-text-primary'
+												onClick={() => setOpenRun(isOpen ? null : run.id)}
+											>
+												{isOpen
+													? t('custom-job.hide-output')
+													: run.error
+														? t('custom-job.show-error')
+														: t('custom-job.show-output')}
+											</button>
+										)}
+									</div>
+									{isOpen && detail && (
+										<pre
+											className={cn(
+												'mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-surface-base p-2 font-mono text-[11px]',
+												run.error ? 'text-accent-red' : 'text-text-secondary',
+											)}
+										>
+											{detail}
+										</pre>
+									)}
+								</div>
+							)
+						})
+					)}
+				</div>
+			)}
+		</div>
+	)
+}
+
+// ---------------------------------------------------------------------------
 // Job row card
 // ---------------------------------------------------------------------------
 
@@ -93,7 +210,12 @@ export function JobCard({
 	onDelete: () => void
 	isRunning: boolean
 }) {
-	const isBuiltIn = job.type !== 'volume-backup'
+	// A volume-backup OR a custom-command job is user-defined (deletable, not a
+	// "Built-in" seed). Everything else is a built-in maintenance job.
+	const isUserDefined = job.type === 'volume-backup' || job.type === 'custom-command'
+	const isBuiltIn = !isUserDefined
+	const isCustom = job.type === 'custom-command'
+	const typeLabel = isCustom ? t('custom-job.type-label') : TYPE_LABELS[job.type]
 	return (
 		<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
 			<div className='flex flex-wrap items-start gap-4'>
@@ -101,7 +223,7 @@ export function JobCard({
 					<div className='flex flex-wrap items-center gap-2'>
 						<span className='text-body-sm font-medium text-text-primary'>{job.name}</span>
 						<span className='rounded-full bg-surface-2 px-2 py-0.5 text-xs text-text-tertiary'>
-							{TYPE_LABELS[job.type]}
+							{typeLabel}
 						</span>
 						{isBuiltIn && (
 							<span className='rounded-full bg-accent-blue/15 px-2 py-0.5 text-xs text-accent-blue'>
@@ -151,7 +273,7 @@ export function JobCard({
 						)}
 						Run Now
 					</Button>
-					{!isBuiltIn && (
+					{isUserDefined && (
 						<Button
 							variant='destructive'
 							size='sm'
@@ -163,6 +285,9 @@ export function JobCard({
 					)}
 				</div>
 			</div>
+
+			{/* Custom-command run history (D-14) */}
+			{isCustom && <RunHistory jobName={job.name} />}
 		</div>
 	)
 }

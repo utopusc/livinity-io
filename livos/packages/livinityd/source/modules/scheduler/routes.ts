@@ -20,7 +20,13 @@ import {z} from 'zod'
 import {adminProcedure, router} from '../server/trpc/trpc.js'
 import {testDestination, type BackupDestination} from './backup.js'
 import {getBackupSecretStore} from './backup-secrets.js'
-import {deleteJob as deleteJobRow, insertJob, listJobs as listAllJobs, updateJob} from './store.js'
+import {
+	deleteJob as deleteJobRow,
+	insertJob,
+	listJobRuns as listJobRunHistory,
+	listJobs as listAllJobs,
+	updateJob,
+} from './store.js'
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -141,6 +147,16 @@ export default router({
 	listJobs: adminProcedure.query(async () => {
 		return listAllJobs()
 	}),
+
+	// Phase 329-08 APPS-04 (D-14): per-job run history from the job_runs table.
+	// The 329-08 schedules UI surfaces the last runs (status + truncated
+	// output/error) for a custom-command job. Hard-capped at 20 (the retention
+	// ceiling); fail-open ([] when PG is unavailable).
+	listJobRuns: adminProcedure
+		.input(z.object({jobName: z.string().min(1).max(100), limit: z.number().int().min(1).max(20).optional()}))
+		.query(async ({input}) => {
+			return listJobRunHistory(input.jobName, input.limit ?? 20)
+		}),
 
 	// Insert new or update existing. For backup jobs, encrypts and stores creds
 	// in Redis vault; the PG row never sees the secrets. Triggers

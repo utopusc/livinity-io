@@ -183,6 +183,66 @@ export async function recordRunResult(
 	)
 }
 
+// ---------------------------------------------------------------------------
+// Job run history (Phase 329-08 APPS-04 / D-14)
+// Read side for the `job_runs` table written by scheduler.customCommandHandler
+// (recordJobRun) and retention-pruned in-tick (pruneJobRuns: keep 20/job_name +
+// 30-day cap). The 329-08 schedules UI surfaces the last runs per custom-command
+// job (status + truncated output/error). Fail-open like listJobs (no pool → []).
+// ---------------------------------------------------------------------------
+
+export interface JobRunHistoryEntry {
+	id: string
+	jobId: string | null
+	jobName: string
+	startedAt: string | Date
+	finishedAt: string | Date | null
+	status: JobRunStatus
+	output: string | null
+	error: string | null
+}
+
+interface JobRunRow {
+	id: string
+	job_id: string | null
+	job_name: string
+	started_at: string | Date
+	finished_at: string | Date | null
+	status: string
+	output: string | null
+	error: string | null
+}
+
+/**
+ * List the most-recent runs for one job_name (newest first), hard-capped at 20
+ * (the retention ceiling pruneJobRuns already enforces). Returns [] when the DB
+ * is unavailable. The output/error columns are already LAST-16 KB truncated at
+ * write time — this route surfaces them verbatim.
+ */
+export async function listJobRuns(jobName: string, limit = 20): Promise<JobRunHistoryEntry[]> {
+	const pool = getPool()
+	if (!pool) return []
+	const capped = Math.min(Math.max(1, Math.floor(limit)), 20)
+	const {rows} = await pool.query<JobRunRow>(
+		`SELECT id, job_id, job_name, started_at, finished_at, status, output, error
+		   FROM job_runs
+		  WHERE job_name = $1
+		  ORDER BY started_at DESC
+		  LIMIT $2`,
+		[jobName, capped],
+	)
+	return rows.map((r) => ({
+		id: r.id,
+		jobId: r.job_id,
+		jobName: r.job_name,
+		startedAt: r.started_at,
+		finishedAt: r.finished_at,
+		status: r.status as JobRunStatus,
+		output: r.output,
+		error: r.error,
+	}))
+}
+
 /**
  * Idempotent seed of built-in default jobs on every boot. Existing rows
  * (matched by unique `name`) are NOT touched — a user who manually disables
