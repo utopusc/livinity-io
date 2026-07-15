@@ -3391,6 +3391,61 @@ _dld_template_app_units() {
         info "sudoers.d/livos-webdav source not found — skipping (WebDAV control unavailable)"
     fi
 
+    # 2a-net-expose. Phase 329 (NET-04) — root-owned raw TCP/UDP port-exposure wrapper
+    # (validates proto/port/CIDR, keeps a parsed openings state file, regenerates the
+    # WHOLE /etc/livos/docker-firewall.sh inserting -j RETURN openings BEFORE the DROP,
+    # then re-execs it directly). The livos-net-expose sudoers grant (2b-net-expose below)
+    # is on THIS binary only; the wrapper validates a fixed action enum
+    # {status|open|close|list} and builds every DOCKER-USER rule + the firewall file body
+    # itself. Install it BEFORE the grant. Idempotent (content-diffed), byte-for-byte
+    # parallel to the livos-webdav wrapper block above. Serialized AFTER 329-04's WebDAV
+    # block by wave; prior blocks untouched.
+    local _newrap_src="${_DLD_STAGE_DIR}/scripts/install/livos-net-expose.sh"
+    [[ -f "$_newrap_src" ]] || _newrap_src="${_DLD_LIVOS_DIR}/scripts/install/livos-net-expose.sh"
+    local _newrap_dst="/usr/local/lib/livos/livos-net-expose.sh"
+    if [[ -f "$_newrap_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_newrap_dst" ]] || ! cmp -s "$_newrap_src" "$_newrap_dst"; then
+            if install -m 0755 -o root -g root "$_newrap_src" /usr/local/lib/livos/livos-net-expose.sh; then
+                ok "livos-net-expose.sh installed at $_newrap_dst"
+            else
+                warn "Failed to install livos-net-expose.sh (non-fatal; TCP/UDP exposure unavailable until fixed)"
+            fi
+        fi
+    else
+        info "livos-net-expose.sh source not found — skipping (TCP/UDP exposure unavailable)"
+    fi
+
+    # 2b-net-expose. Phase 329 (NET-04) — sudoers.d/livos-net-expose (exposure wrapper grant)
+    # — install + template. Byte-for-byte parallel to the livos-webdav block above,
+    # retargeted at livos-net-expose. Runs on EVERY deploy (idempotent, content-diffed).
+    # Wrapper install (0755) BEFORE grant install (0440).
+    local _netexpose_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-net-expose"
+    [[ -f "$_netexpose_src" ]] || _netexpose_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-net-expose"
+    local _netexpose_dst="/etc/sudoers.d/livos-net-expose"
+    if [[ -f "$_netexpose_src" ]]; then
+        local _netexpose_tmp
+        _netexpose_tmp=$(mktemp)
+        if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                "$_netexpose_src" > "$_netexpose_tmp"
+        else
+            cp -f "$_netexpose_src" "$_netexpose_tmp"
+        fi
+        if [[ ! -f "$_netexpose_dst" ]] || ! cmp -s "$_netexpose_tmp" "$_netexpose_dst"; then
+            install -m 0440 -o root -g root "$_netexpose_tmp" "$_netexpose_dst"
+            if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_netexpose_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_netexpose_dst — removing (TCP/UDP exposure stays denied until fixed)"
+                rm -f "$_netexpose_dst"
+            else
+                ok "sudoers.d/livos-net-expose installed (user-spec: ${_DLD_DESKTOP_USER})"
+            fi
+        fi
+        rm -f "$_netexpose_tmp"
+    else
+        info "sudoers.d/livos-net-expose source not found — skipping (TCP/UDP exposure unavailable)"
+    fi
+
     # 2c-gpu. Phase 316 (GPU-01) — NVIDIA container-toolkit, GATED behind an
     # `lspci` NVIDIA-GPU probe so NON-NVIDIA boxes (the overwhelming majority) see
     # ZERO install change. On an NVIDIA box we shell out to the SAME root-owned
