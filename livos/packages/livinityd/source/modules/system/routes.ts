@@ -454,7 +454,7 @@ async function runNetwork(args: string[]): Promise<{ok: true; stdout: string} | 
 const TAILSCALE_WRAPPER = '/usr/local/lib/livos/livos-tailscale.sh'
 
 async function runTailscale(
-	action: 'install' | 'login' | 'set' | 'down' | 'status',
+	action: 'install' | 'login' | 'login-start' | 'login-finish' | 'set' | 'down' | 'status',
 ): Promise<{ok: true; stdout: string} | {ok: false; reason: string}> {
 	return new Promise((resolve) => {
 		// `login` spawns `tailscale login` then polls BackendState=Running while the
@@ -516,12 +516,22 @@ async function runTailscale(
 // emits `tailscale status --json` + a trailing `tailscale ip -4` line; login echoes
 // `logged-in overlay=<ip>`. BackendState/HostName come from the JSON; the overlay
 // IPv4 from either the trailing line or the `overlay=<ip>` echo.
-function parseTailscaleState(stdout: string): {backendState?: string; overlayIp?: string; hostname?: string} {
+function parseTailscaleState(stdout: string): {
+	backendState?: string
+	overlayIp?: string
+	hostname?: string
+	authUrl?: string
+} {
 	const backendState = /"BackendState"\s*:\s*"([^"]*)"/.exec(stdout)?.[1]
 	const hostname = /"HostName"\s*:\s*"([^"]*)"/.exec(stdout)?.[1]
 	const octet = '(?:25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])'
 	const overlayIp = new RegExp(`(?:^|overlay=)(${octet}(?:\\.${octet}){3})`, 'm').exec(stdout)?.[1]
-	return {backendState, hostname, overlayIp}
+	// WR-01: `tailscale status --json` exposes a non-empty top-level AuthURL WHILE a
+	// login is pending (empty once Running / logged-out), and login-start echoes
+	// `AuthURL: <url>`. Surface it so the card can render the link/QR during a pending
+	// login even if the login-start response was missed. Empty string → undefined.
+	const authUrl = /(?:"AuthURL"\s*:\s*"([^"]+)"|AuthURL:\s*(\S+))/.exec(stdout)?.slice(1).find(Boolean)
+	return {backendState, hostname, overlayIp, authUrl}
 }
 
 // ── Phase 306 — desktop-user OS password credentials ─────────────────────────
@@ -1303,8 +1313,12 @@ export default router({
 	// process.env, NOT this key). A dropped mirror write only staleness the card.
 	tailscaleStatus: adminProcedure.query(async ({ctx}) => {
 		const result = await runTailscale('status')
+		let authUrl: string | undefined
 		if (result.ok) {
-			const {backendState, overlayIp, hostname} = parseTailscaleState(result.stdout)
+			const {backendState, overlayIp, hostname, authUrl: parsedAuthUrl} = parseTailscaleState(result.stdout)
+			// WR-01 — surface a still-pending login's AuthURL so the card can render the
+			// link/QR while the UI polls status through the browser-authorize window.
+			authUrl = backendState === 'Running' ? undefined : parsedAuthUrl
 			const enabled = backendState === 'Running'
 			const prior = await ctx.livinityd?.store.get('tailscale')
 			await ctx.livinityd?.store.set('tailscale', {
@@ -1317,10 +1331,10 @@ export default router({
 		// Surface the UI-display mirror so the VPN card can render last-known state
 		// even when the wrapper is undeployed / the daemon is unreachable ({ok:false}).
 		const mirror = (await ctx.livinityd?.store.get('tailscale')) ?? {enabled: false}
-		return {...result, mirror}
+		return {...result, mirror, authUrl}
 	}),
 	tailscale: adminProcedure
-		.input(z.object({action: z.enum(['install', 'login', 'set', 'down', 'status'])}))
+		.input(z.object({action: z.enum(['install', 'login', 'login-start', 'login-finish', 'set', 'down', 'status'])}))
 		.mutation(async ({ctx, input}) => {
 			const result = await runTailscale(input.action)
 			if (result.ok) {

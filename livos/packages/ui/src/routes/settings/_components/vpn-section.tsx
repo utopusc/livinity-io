@@ -1,4 +1,4 @@
-import {useState} from 'react'
+import {useEffect, useRef, useState} from 'react'
 import QRCode from 'react-qr-code'
 import {TbLock, TbLoader2, TbAlertTriangle, TbShieldCheck, TbExternalLink} from 'react-icons/tb'
 
@@ -17,12 +17,14 @@ import {t} from '@/utils/i18n'
  * livinityd never runs apt/tailscale/ufw/systemctl directly. The action is
  * z.enum-constrained server-side; the UI carries no trust.
  *
- * GUIDED LOGIN (D-11): enabling the toggle runs the wrapper's `login` flow, which
- * prints an `AuthURL:` the admin opens on their phone (rendered here as a clickable
- * link + a QR code) to authorize this device on their Tailscale network, then polls
- * until the tailnet backend is Running. Once up, the wrapper applies the MagicDNS
- * fix (`set --accept-dns=false`, the cloudflared-1033 house fix) and persists the
- * overlay bind in /opt/livos/.env (325-09) — NOT this card. Disabling runs `down`.
+ * GUIDED LOGIN (D-11 + WR-01): enabling the toggle runs the wrapper's `login-start`
+ * action, which spawns a DETACHED `tailscale login` and returns the `AuthURL:`
+ * IMMEDIATELY (rendered here as a clickable link + QR) so the admin can authorize this
+ * device on their phone WHILE the login is still pending. The card then POLLS
+ * `tailscaleStatus` (which also surfaces the pending AuthURL) until the backend is
+ * Running, at which point it fires `login-finish` (persist the overlay bind in
+ * /opt/livos/.env + restart the unit — 325-09) followed by `set` (the MagicDNS
+ * `accept-dns=false` cloudflared-1033 house fix). Disabling runs `down`.
  *
  * DISPLAY MIRROR: the card renders last-known {enabled, overlayIp, backendState}
  * from the UI-display `tailscale` StoreSchema key (surfaced by `tailscaleStatus` as
@@ -39,22 +41,58 @@ export function VpnSection() {
 	// T-325-30 — host-mutating controls render for admins only.
 	const {isAdmin} = useCurrentUser()
 
-	const statusQ = trpcReact.system.tailscaleStatus.useQuery()
+	// WR-01 — while a guided login is pending we POLL status (every ~3s) so the
+	// browser-authorize → Running transition is observed even across a WS reconnect.
+	const [loginPending, setLoginPending] = useState(false)
+	const statusQ = trpcReact.system.tailscaleStatus.useQuery(undefined, {
+		refetchInterval: loginPending ? 3000 : false,
+	})
 	const refetchStatus = () => void statusQ.refetch()
 	const tailscaleMut = trpcReact.system.tailscale.useMutation()
 
-	// The AuthURL captured from the most recent `login` mutation stdout (the wrapper
-	// prints `AuthURL: <url>` for the guided browser/QR authorize step).
+	// The AuthURL captured from `login-start` stdout (`AuthURL: <url>`) or, as a
+	// fallback, from the pending-login status poll.
 	const [authUrl, setAuthUrl] = useState<string | null>(null)
 	const [flowError, setFlowError] = useState<string | null>(null)
+	// Re-entrancy guard so the Running-transition effect fires login-finish only once.
+	const finishingRef = useRef(false)
 
-	const busy = tailscaleMut.isPending
+	const busy = tailscaleMut.isPending || loginPending
 
 	const mirror = statusQ.data?.mirror
 	const status = statusQ.data
 	const enabled = mirror?.enabled === true
 	const overlayIp = mirror?.overlayIp
 	const backendState = mirror?.backendState
+
+	// WR-01 fallback — if login-start did not return an AuthURL in time, adopt the one
+	// the status poll surfaces while the login is still pending.
+	useEffect(() => {
+		if (loginPending && !authUrl && status?.authUrl) setAuthUrl(status.authUrl)
+	}, [loginPending, authUrl, status?.authUrl])
+
+	// WR-01 — once the polled backend reaches Running, complete the login exactly once:
+	// login-finish persists the overlay bind (+ restarts the unit); set applies the
+	// MagicDNS fix. Then stop polling + clear the QR.
+	useEffect(() => {
+		if (!loginPending || backendState !== 'Running' || finishingRef.current) return
+		finishingRef.current = true
+		void (async () => {
+			try {
+				const finished = await tailscaleMut.mutateAsync({action: 'login-finish'})
+				if (!finished.ok) setFlowError(finished.reason)
+				await tailscaleMut.mutateAsync({action: 'set'}).catch(() => {})
+			} catch (e) {
+				setFlowError(e instanceof Error ? e.message : String(e))
+			} finally {
+				setLoginPending(false)
+				setAuthUrl(null)
+				finishingRef.current = false
+				refetchStatus()
+			}
+		})()
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [loginPending, backendState])
 
 	const header = (
 		<div className='flex items-center gap-2'>
@@ -87,13 +125,12 @@ export function VpnSection() {
 		)
 	}
 
-	// Enable = install-if-needed → login (surfaces AuthURL) → set (MagicDNS fix).
-	// Disable = down. The login mutation is long-running (the wrapper polls until the
-	// tailnet backend is Running while the admin authorizes) — the AuthURL/QR is
-	// surfaced from its returned stdout for the guided browser step.
+	// Enable = install-if-needed → login-start (surfaces AuthURL fast) → poll status;
+	// login-finish + set run from the Running-transition effect above. Disable = down.
 	const onToggle = async (next: boolean) => {
 		setFlowError(null)
 		setAuthUrl(null)
+		setLoginPending(false)
 		try {
 			if (next) {
 				if (backendState === 'NotInstalled') {
@@ -103,17 +140,18 @@ export function VpnSection() {
 						return
 					}
 				}
-				const loggedIn = await tailscaleMut.mutateAsync({action: 'login'})
-				if (!loggedIn.ok) {
-					setFlowError(loggedIn.reason)
+				const started = await tailscaleMut.mutateAsync({action: 'login-start'})
+				if (!started.ok) {
+					setFlowError(started.reason)
 					refetchStatus()
 					return
 				}
-				// The wrapper prints `AuthURL: <url>` for the guided authorize step.
-				const match = /AuthURL:\s*(\S+)/.exec(loggedIn.stdout)
+				// login-start echoes `AuthURL: <url>` immediately (or `already-running`
+				// / `auth-url-pending` — the status poll then surfaces the URL).
+				const match = /AuthURL:\s*(\S+)/.exec(started.stdout)
 				if (match) setAuthUrl(match[1])
-				// Apply the MagicDNS/cloudflared-1033 house fix (best-effort).
-				await tailscaleMut.mutateAsync({action: 'set'}).catch(() => {})
+				// Poll status until Running; the effect fires login-finish + set once up.
+				setLoginPending(true)
 			} else {
 				const down = await tailscaleMut.mutateAsync({action: 'down'})
 				if (!down.ok) {

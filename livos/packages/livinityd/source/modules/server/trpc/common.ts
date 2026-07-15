@@ -48,6 +48,14 @@ export const httpOnlyPaths = [
 	// extends Phase 33 OBS-01 schema with status:"factory-reset"). HTTP only —
 	// the WS would 401 mid-wipe when livinityd is killed. Mirror system.update.
 	'system.factoryReset',
+	// Phase 325 (NET-02) WR-01 — Tailscale guided login. system.tailscale is a
+	// long-ish mutation whose login-finish/down actions `systemctl restart
+	// livos.service` (the daemon serving the request), and system.tailscaleStatus is
+	// POLLED (every ~3s) through the browser-authorize window while a login is
+	// pending. Both must ride HTTP to survive the WS reconnect during the restart /
+	// polling window (same B-12/X-04 rationale as system.update + system.updateStatus).
+	'system.tailscale',
+	'system.tailscaleStatus',
 	// Phase 306 — desktop-user OS password: info read + 2FA-gated reveal/regenerate
 	// (regenerate shells out to sudo + chpasswd) + the one-time onboarding consume.
 	// All admin-gated and must survive WS reconnect across a `systemctl restart

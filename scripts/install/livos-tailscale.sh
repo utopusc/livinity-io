@@ -39,8 +39,15 @@
 # `down` removes/blanks that one line + restarts, dropping the overlay listener.
 # The loopback listener is NEVER touched (Caddy 127.0.0.1:8080 + liv-core survive).
 #
+# WR-01 (guided-login AuthURL delivery): the browser AuthURL/QR MUST be shown while
+# the login is still PENDING, not after Running is reached. So the login flow is split
+# into `login-start` (spawn a DETACHED `tailscale login`, poll only for the AuthURL,
+# print it, and return immediately) and `login-finish` (called once the UI's `status`
+# poll shows Running — resolves+persists the overlay bind + restarts the unit). The
+# legacy blocking `login` action is retained for direct install-test only.
+#
 # Args (the enum is the ONLY input; anything else -> exit 2, nothing privileged runs):
-#   $1  action — install | login | set | down | status
+#   $1  action — install | login | login-start | login-finish | set | down | status
 #
 # Exit codes: 2 = bad usage / unknown action. Otherwise the underlying command's status.
 
@@ -131,7 +138,63 @@ case "$ACTION" in
 		exit 0
 		;;
 
+	login-start)
+		# WR-01 fix — decouple AuthURL delivery from the Running-poll. Spawn
+		# `tailscale login` DETACHED via setsid (new session, so the pending login
+		# survives THIS wrapper exiting; tailscaled holds the login state and
+		# completes it when the browser auth lands, even if the CLI client is gone).
+		# Poll ONLY for the AuthURL (~30s @ 2s) and PRINT it IMMEDIATELY, then return
+		# so the UI can render the link/QR right away and poll `status` for Running,
+		# calling `login-finish` once up. No auth secret is ever echoed.
+		setsid tailscale login >/dev/null 2>&1 </dev/null &
+		_auth_url=''
+		for _i in $(seq 1 15); do
+			_auth_url="$(tailscale status --json 2>/dev/null | _json_str AuthURL)"
+			if [[ -n "$_auth_url" ]]; then
+				echo "AuthURL: ${_auth_url}"
+				exit 0
+			fi
+			# Already-authenticated boxes go straight to Running with no AuthURL.
+			if [[ "$(tailscale status --json 2>/dev/null | _json_str BackendState)" == "Running" ]]; then
+				echo "already-running"
+				exit 0
+			fi
+			sleep 2
+		done
+		# Timed out resolving an AuthURL — STILL exit 0 (never discard the flow): the
+		# UI falls back to polling `status`, which surfaces AuthURL while pending.
+		echo "auth-url-pending"
+		exit 0
+		;;
+
+	login-finish)
+		# WR-01 fix — called by the UI once its `status` poll shows Running. Verify
+		# Running (short bounded poll ~30s @ 2s), then resolve + VALIDATE the overlay
+		# IP and PERSIST it (D-12): read-merge LIVOS_TAILSCALE_BIND into /opt/livos/.env
+		# and restart the unit so the additive overlay listener binds the tailnet IP.
+		_state=''
+		for _i in $(seq 1 15); do
+			_state="$(tailscale status --json 2>/dev/null | _json_str BackendState)"
+			[[ "$_state" == "Running" ]] && break
+			sleep 2
+		done
+		if [[ "$_state" != "Running" ]]; then
+			echo "[livos-tailscale] login has not reached Running yet (state: ${_state:-unknown})" >&2
+			exit 1
+		fi
+		_overlay_ip="$(tailscale ip -4 2>/dev/null | head -n1 | tr -d '[:space:]')"
+		if ! _valid_ipv4 "$_overlay_ip"; then
+			echo "[livos-tailscale] could not resolve a valid overlay IPv4 (got: '${_overlay_ip}')" >&2
+			exit 1
+		fi
+		_env_merge LIVOS_TAILSCALE_BIND "$_overlay_ip"
+		systemctl restart livos.service 2>/dev/null || true
+		echo "logged-in overlay=${_overlay_ip}"
+		exit 0
+		;;
+
 	login)
+		# Legacy blocking flow (install-test only; the UI uses login-start/login-finish).
 		# Guided login-URL flow (D-11): spawn `tailscale login` (NOT `up`, which would
 		# reset unspecified flags) in the background, then poll `tailscale status --json`
 		# for the top-level AuthURL (empty until a login attempt is initiated —
@@ -217,7 +280,7 @@ case "$ACTION" in
 		;;
 
 	*)
-		echo "[livos-tailscale] invalid action: '${ACTION}' — expected one of: install login set down status" >&2
+		echo "[livos-tailscale] invalid action: '${ACTION}' — expected one of: install login login-start login-finish set down status" >&2
 		exit 2
 		;;
 esac
