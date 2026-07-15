@@ -410,6 +410,91 @@ async function runNetExpose(args: string[]): Promise<{ok: true; stdout: string} 
 	})
 }
 
+// ── Phase 329 (HW-02, 329-06) — power management (spindown / schedule / WoL) ──
+// Managed through the root-owned closed-enum wrapper
+// (scripts/install/livos-power.sh → /usr/local/lib/livos/livos-power.sh, built in
+// 329-03) via the scoped /etc/sudoers.d/livos-power NOPASSWD grant. A direct clone
+// of the runNetwork shape (stdout-capturing, never-throw discriminated union, full
+// argv array). The wrapper enum is
+// {install|status|spindown-set <dev> <timeout>|spindown-clear <dev>|
+//  schedule-set <HH:MM> <HH:MM|secs>|schedule-clear|test-wake|
+//  wol-enable <iface>|wol-disable <iface>}.
+//
+// STDOUT is captured because `status` returns the wrapper's own labeled probe
+// lines (spin-down stanzas / schedule + RTC-alarm state / WoL units) the Settings
+// card parses. Every positional value is zod-constrained at the route boundary
+// below (device /^sd[a-z]$/, timeout int 0-255, HH:MM via the rebootTime regex,
+// iface name regex) BEFORE it reaches the wrapper — defense-in-depth on top of the
+// wrapper's own _normalize_dev/_valid_timeout/_valid_hhmm/_valid_iface checks
+// (T-329-17). livinityd never runs hdparm/ethtool/rtcwake/systemctl directly.
+// runPower never throws, so an undeployed wrapper degrades to {ok:false} instead
+// of 500-ing the Settings card.
+//
+// WSL2 note: detection is handled ROUTE-SIDE in powerStatus (reuses the existing
+// `isWsl2` imported from './gpu.js') — the wrapper is NEVER invoked under WSL2
+// because the card is hard-hidden there (D-11/D-20: host shutdown/spin-down/WoL
+// are meaningless under a Windows-managed WSL2 VM).
+//
+// ⚠ HIGHEST-RISK action: schedule-set arms a real power-off with NO software
+// revert once the box is down (329-03). The route below therefore REFUSES to arm
+// unless the caller passes an explicit lockoutAcknowledged:true (mirrors the NET-01
+// fail-closed discipline; the live arm/wake cycle stays STRICT HUMAN-UAT, D-18).
+const POWER_WRAPPER = '/usr/local/lib/livos/livos-power.sh'
+
+async function runPower(args: string[]): Promise<{ok: true; stdout: string} | {ok: false; reason: string}> {
+	return new Promise((resolve) => {
+		// `install` runs apt-get install hdparm ethtool; give it 5-min headroom.
+		const timeoutMs = 300_000
+		let settled = false
+		let stdout = ''
+		let stderr = ''
+		const settle = (result: {ok: true; stdout: string} | {ok: false; reason: string}): void => {
+			if (settled) return
+			settled = true
+			clearTimeout(timer)
+			resolve(result)
+		}
+
+		const child = spawn('sudo', ['-n', POWER_WRAPPER, ...args], {
+			stdio: ['ignore', 'pipe', 'pipe'],
+			windowsHide: true,
+		})
+
+		const timer = setTimeout(() => {
+			try {
+				child.kill('SIGTERM')
+			} catch {
+				/* best-effort */
+			}
+			settle({ok: false, reason: `timeout after ${timeoutMs}ms`})
+		}, timeoutMs)
+
+		child.stdout?.on('data', (chunk: Buffer) => {
+			stdout += chunk.toString('utf8')
+		})
+
+		child.stderr?.on('data', (chunk: Buffer) => {
+			stderr += chunk.toString('utf8')
+		})
+
+		// Fires for ENOENT (sudo not on PATH) / EACCES — degrade, do not throw.
+		child.on('error', (err: Error) => {
+			settle({ok: false, reason: err.message || 'sudo spawn failed'})
+		})
+
+		child.on('close', (code) => {
+			if (code === 0) {
+				settle({ok: true, stdout})
+				return
+			}
+			settle({
+				ok: false,
+				reason: stderr.trim().slice(0, 500) || `wrapper exited with code ${code ?? 'unknown'}`,
+			})
+		})
+	})
+}
+
 // ── Phase 325 (STOR-01, 325-05) — gocryptfs encrypted-folder management ──────
 // Managed through the root-owned closed-enum wrapper
 // (scripts/install/livos-crypto.sh → /usr/local/lib/livos/livos-crypto.sh, built
@@ -1271,6 +1356,126 @@ export default router({
 					(o) => !(o.proto === input.proto && o.port === input.port && o.src === input.src),
 				)
 				await ctx.livinityd?.store.set('netExpose', {openings, lastAppliedAt: Date.now()})
+			}
+			return result
+		}),
+	// ── Phase 329 (HW-02, 329-06) — power management from the UI ─────────────────
+	// FLAT route names (matches the network*/webdav*/netExpose* convention above).
+	// All adminProcedure: hdparm/ethtool/rtcwake/systemctl are host-level root
+	// operations. Every positional value is zod-constrained BEFORE the wrapper
+	// (defense-in-depth on top of the wrapper's own _normalize_dev/_valid_timeout/
+	// _valid_hhmm/_valid_iface — T-329-17); runPower never throws, so an undeployed
+	// wrapper degrades to {ok:false} instead of 500-ing the Settings card.
+	//
+	// powerStatus returns the wrapper's raw probe stdout PLUS `isWsl2` (reuses the
+	// existing async isWsl2 imported from './gpu.js' — NOT re-implemented). The UI
+	// HARD-HIDES the entire card when isWsl2 is true (D-11/D-20): host shutdown /
+	// spin-down / WoL are meaningless under a Windows-managed WSL2 VM, so the wrapper
+	// is never invoked there. On a successful mutating action the observed state is
+	// mirrored into the dedicated top-level `power` StoreSchema key (display-only
+	// bookkeeping; the authoritative state is the wrapper-owned hdparm.conf/udev
+	// stanzas + systemd timer + WoL units, 329-03).
+	powerStatus: adminProcedure.query(async () => {
+		const status = await runPower(['status'])
+		return {status, isWsl2: await isWsl2()}
+	}),
+	powerInstall: adminProcedure.mutation(async () => runPower(['install'])),
+	// powerSpindownSet: opt-in per-drive HDD spin-down. device is validated /^sd[a-z]$/
+	// here (NVMe/system-disk are refused wrapper-side with a distinct exit code);
+	// timeout is the hdparm -S value 0-255. Mirror the (deduped) drive into the store.
+	powerSpindownSet: adminProcedure
+		.input(
+			z.object({
+				device: z.string().regex(/^sd[a-z]$/, 'must be a bare block device name (e.g. sdb)'),
+				timeout: z.number().int().min(0).max(255),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			const result = await runPower(['spindown-set', input.device, String(input.timeout)])
+			if (result.ok) {
+				const existing = (await ctx.livinityd?.store.get('power')) ?? {}
+				const spindown = (existing.spindown ?? []).filter((s) => s.device !== input.device)
+				spindown.push({device: input.device, timeout: input.timeout})
+				await ctx.livinityd?.store.set('power', {...existing, spindown, lastAppliedAt: Date.now()})
+			}
+			return result
+		}),
+	// powerSpindownClear: removes exactly that drive's hdparm.conf + udev stanzas.
+	powerSpindownClear: adminProcedure
+		.input(z.object({device: z.string().regex(/^sd[a-z]$/, 'must be a bare block device name (e.g. sdb)')}))
+		.mutation(async ({ctx, input}) => {
+			const result = await runPower(['spindown-clear', input.device])
+			if (result.ok) {
+				const existing = (await ctx.livinityd?.store.get('power')) ?? {}
+				const spindown = (existing.spindown ?? []).filter((s) => s.device !== input.device)
+				await ctx.livinityd?.store.set('power', {...existing, spindown, lastAppliedAt: Date.now()})
+			}
+			return result
+		}),
+	// powerScheduleSet: arms a DEFAULT-OFF scheduled shutdown (systemd timer) + RTC
+	// wake (rtcwake alarm). shutdown/wake are HH:MM (rebootTime regex). ⚠ This is the
+	// phase's HIGHEST-RISK action: once the box powers off there is NO software
+	// revert. It therefore REFUSES to arm unless the caller passes an explicit
+	// lockoutAcknowledged:true (z.literal(true)) — the fail-closed ack gate mirroring
+	// NET-01 discipline (D-18). The live arm/wake cycle stays STRICT HUMAN-UAT.
+	powerScheduleSet: adminProcedure
+		.input(
+			z.object({
+				shutdown: z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, 'must be a HH:MM time'),
+				wake: z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, 'must be a HH:MM time'),
+				// Fail-closed lockout-acknowledgment gate: arming a scheduled power-off is
+				// irreversible in software, so the caller MUST explicitly acknowledge the
+				// lockout risk. Only the literal `true` is accepted (D-18).
+				lockoutAcknowledged: z.literal(true),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			const result = await runPower(['schedule-set', input.shutdown, input.wake])
+			if (result.ok) {
+				const existing = (await ctx.livinityd?.store.get('power')) ?? {}
+				await ctx.livinityd?.store.set('power', {
+					...existing,
+					schedule: {shutdown: input.shutdown, wake: input.wake},
+					lastAppliedAt: Date.now(),
+				})
+			}
+			return result
+		}),
+	// powerScheduleClear: disables+removes the timer/service and zeroes the RTC alarm.
+	powerScheduleClear: adminProcedure.mutation(async ({ctx}) => {
+		const result = await runPower(['schedule-clear'])
+		if (result.ok) {
+			const existing = (await ctx.livinityd?.store.get('power')) ?? {}
+			await ctx.livinityd?.store.set('power', {...existing, schedule: undefined, lastAppliedAt: Date.now()})
+		}
+		return result
+	}),
+	// powerTestWake: non-destructive ~180s RTC-alarm pre-flight (never suspends) — the
+	// recommended check before ever arming a real schedule. No store mutation.
+	powerTestWake: adminProcedure.mutation(async () => runPower(['test-wake'])),
+	// powerWolEnable: `ethtool -s <iface> wol g` persisted in a dedicated instanced
+	// oneshot unit (never the network-config file). iface name validated here.
+	powerWolEnable: adminProcedure
+		.input(z.object({iface: z.string().regex(/^[a-z0-9]([a-z0-9._-]{0,13}[a-z0-9])?$/i, 'must be a network interface name')}))
+		.mutation(async ({ctx, input}) => {
+			const result = await runPower(['wol-enable', input.iface])
+			if (result.ok) {
+				const existing = (await ctx.livinityd?.store.get('power')) ?? {}
+				const wol = (existing.wol ?? []).filter((i) => i !== input.iface)
+				wol.push(input.iface)
+				await ctx.livinityd?.store.set('power', {...existing, wol, lastAppliedAt: Date.now()})
+			}
+			return result
+		}),
+	// powerWolDisable: `ethtool wol d` + disables/removes the oneshot unit.
+	powerWolDisable: adminProcedure
+		.input(z.object({iface: z.string().regex(/^[a-z0-9]([a-z0-9._-]{0,13}[a-z0-9])?$/i, 'must be a network interface name')}))
+		.mutation(async ({ctx, input}) => {
+			const result = await runPower(['wol-disable', input.iface])
+			if (result.ok) {
+				const existing = (await ctx.livinityd?.store.get('power')) ?? {}
+				const wol = (existing.wol ?? []).filter((i) => i !== input.iface)
+				await ctx.livinityd?.store.set('power', {...existing, wol, lastAppliedAt: Date.now()})
 			}
 			return result
 		}),

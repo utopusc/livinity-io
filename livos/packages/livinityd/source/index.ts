@@ -473,6 +473,23 @@ type StoreSchema = {
 		openings?: {proto: 'tcp' | 'udp'; port: number; src?: string}[]
 		lastAppliedAt?: number
 	}
+	// Phase 329 HW-02 (329-06) — UI-DISPLAY-ONLY power-management mirror. Written by
+	// system.powerSpindownSet/Clear, powerScheduleSet/Clear, powerWolEnable/Disable
+	// AFTER a successful wrapper action so the Settings card can render last-known
+	// state (opt-in spin-down drives / armed schedule / WoL ifaces) even when the
+	// wrapper is undeployed / unreachable. Dedicated top-level key (NOT nested under
+	// `netExpose`/`webdav`/any array or scalar — dot-prop path collisions silently
+	// drop the write, same convention as the keys above). This key is NOT the source
+	// of truth: the authoritative state is the wrapper-owned hdparm.conf/udev
+	// stanzas + systemd shutdown timer + RTC alarm + WoL oneshot units (329-03); a
+	// dropped mirror write only staleness the card. schedule is DEFAULT-OFF (absent
+	// until an admin explicitly arms it through the lockout-acknowledged gate, D-18).
+	power: {
+		spindown?: {device: string; timeout: number}[]
+		schedule?: {shutdown: string; wake: string}
+		wol?: string[]
+		lastAppliedAt?: number
+	}
 	backups: {
 		repositories: {
 			id: string
