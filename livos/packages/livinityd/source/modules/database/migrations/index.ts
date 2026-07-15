@@ -49,9 +49,28 @@ export const V47_P329_JOB_RUNS_MIGRATIONS: ReadonlyArray<string> = [
 	'2026-07-15-p329-job-runs.sql',
 ] as const
 
+// Phase 325 (STOR-02) — user quota_bytes column. INCIDENTAL CROSS-PHASE FIX
+// (324-01): the migration file has shipped on disk since Phase 325 but was
+// NEVER registered here — the exact drift-#7 omission the p329 comment above
+// warns about. Left unregistered, the STOR-02 quota surface has no reviewable /
+// hand-runnable artifact in ALL_MIGRATIONS even though schema.sql already
+// applies the column at boot. Registered here so the migration-registration
+// guard (share-tokens.test.ts) stays green and the artifact is discoverable.
+export const V47_P325_USER_QUOTA_MIGRATIONS: ReadonlyArray<string> = [
+	'2026-07-15-p325-user-quota.sql',
+] as const
+
+// Phase 324-01 (FILES-01) — file_shares public-share table. Registered here
+// (drift #7 / 325 omission lesson) — additive-only per the expand invariant.
+export const V47_P324_FILE_SHARES_MIGRATIONS: ReadonlyArray<string> = [
+	'2026-07-15-p324-file-shares.sql',
+] as const
+
 export const ALL_MIGRATIONS: ReadonlyArray<string> = [
 	...V32_AGENTS_MIGRATIONS,
 	...V36_P131_PINNED_WINDOWS_MIGRATIONS,
 	...V47_P322_GROUPS_MIGRATIONS,
 	...V47_P329_JOB_RUNS_MIGRATIONS,
+	...V47_P325_USER_QUOTA_MIGRATIONS, // incidental cross-phase fix (324-01)
+	...V47_P324_FILE_SHARES_MIGRATIONS,
 ] as const

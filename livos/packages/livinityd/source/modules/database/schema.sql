@@ -921,3 +921,33 @@ DO $$
 BEGIN
   ALTER TABLE users ADD COLUMN IF NOT EXISTS quota_bytes BIGINT;
 END$$;
+
+-- =========================================================================
+-- Phase 324 (FILES-01) — public share links (opaque-token, api_keys pattern).
+-- The signed opaque token IS the auth for the one deliberate unauthenticated
+-- surface (D-01/D-02). Only SHA-256(token) is persisted (token_hash CHAR(64)
+-- UNIQUE) — a leaked DB never reveals a usable link; the raw `liv_share_<32>`
+-- token is shown to the owner ONCE. password_hash is bcryptjs (NULL = no
+-- password); expires_at / max_downloads NULL = never / unlimited. Rows are
+-- soft-revoked (revoked_at) and NEVER hard-deleted so the owner's "my shares"
+-- audit list can surface every share ever minted (D-05, CVE-2026-45285).
+-- Additive/expand-only per migrations/index.ts:16-26 (no destructive ALTER/DROP).
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS file_shares (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  virtual_path     TEXT NOT NULL,
+  token_hash       CHAR(64) NOT NULL UNIQUE,
+  token_prefix     TEXT NOT NULL,
+  password_hash    TEXT,                       -- bcryptjs, NULL = no password
+  expires_at       TIMESTAMPTZ,                -- NULL = never
+  max_downloads    INTEGER,                    -- NULL = unlimited
+  download_count   INTEGER NOT NULL DEFAULT 0,
+  last_accessed_at TIMESTAMPTZ,
+  revoked_at       TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+-- Hot-path partial index for the token-hash lookup (only live shares).
+CREATE INDEX IF NOT EXISTS idx_file_shares_active ON file_shares (token_hash) WHERE revoked_at IS NULL;
+-- Owner "my shares" audit list.
+CREATE INDEX IF NOT EXISTS idx_file_shares_owner ON file_shares (owner_user_id);
