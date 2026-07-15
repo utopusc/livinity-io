@@ -3171,6 +3171,60 @@ _dld_template_app_units() {
         info "sudoers.d/livos-ups source not found — skipping (UPS control unavailable)"
     fi
 
+    # 2a-crypto. Phase 325 (STOR-01) — root-owned gocryptfs (encrypted folders)
+    # wrapper. The livos-crypto sudoers grant (2b-crypto below) is on THIS binary
+    # only; the wrapper validates a fixed action enum {install|create|unlock|lock|
+    # status}, regex-validates + data-root-anchors every path arg, and builds every
+    # gocryptfs/fusermount/apt argv itself — the passphrase reaches gocryptfs via
+    # stdin (-extpass), never argv. Install it BEFORE the grant. Idempotent
+    # (content-diffed), byte-for-byte parallel to the livos-ups wrapper block above
+    # (the install call names the literal dst path so the grant target is auditable).
+    local _cryptowrap_src="${_DLD_STAGE_DIR}/scripts/install/livos-crypto.sh"
+    [[ -f "$_cryptowrap_src" ]] || _cryptowrap_src="${_DLD_LIVOS_DIR}/scripts/install/livos-crypto.sh"
+    local _cryptowrap_dst="/usr/local/lib/livos/livos-crypto.sh"
+    if [[ -f "$_cryptowrap_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_cryptowrap_dst" ]] || ! cmp -s "$_cryptowrap_src" "$_cryptowrap_dst"; then
+            if install -m 0755 -o root -g root "$_cryptowrap_src" /usr/local/lib/livos/livos-crypto.sh; then
+                ok "livos-crypto.sh installed at $_cryptowrap_dst"
+            else
+                warn "Failed to install livos-crypto.sh (non-fatal; encrypted-folder control unavailable until fixed)"
+            fi
+        fi
+    else
+        info "livos-crypto.sh source not found — skipping (encrypted-folder control unavailable)"
+    fi
+
+    # 2b-crypto. Phase 325 (STOR-01) — sudoers.d/livos-crypto (gocryptfs wrapper
+    # grant) — install + template. Byte-for-byte parallel to the livos-ups block
+    # above, retargeted at livos-crypto. Runs on EVERY deploy (idempotent,
+    # content-diffed). Wrapper install (0755) BEFORE grant install (0440).
+    local _crypto_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-crypto"
+    [[ -f "$_crypto_src" ]] || _crypto_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-crypto"
+    local _crypto_dst="/etc/sudoers.d/livos-crypto"
+    if [[ -f "$_crypto_src" ]]; then
+        local _crypto_tmp
+        _crypto_tmp=$(mktemp)
+        if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                "$_crypto_src" > "$_crypto_tmp"
+        else
+            cp -f "$_crypto_src" "$_crypto_tmp"
+        fi
+        if [[ ! -f "$_crypto_dst" ]] || ! cmp -s "$_crypto_tmp" "$_crypto_dst"; then
+            install -m 0440 -o root -g root "$_crypto_tmp" "$_crypto_dst"
+            if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_crypto_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_crypto_dst — removing (encrypted-folder control stays denied until fixed)"
+                rm -f "$_crypto_dst"
+            else
+                ok "sudoers.d/livos-crypto installed (user-spec: ${_DLD_DESKTOP_USER})"
+            fi
+        fi
+        rm -f "$_crypto_tmp"
+    else
+        info "sudoers.d/livos-crypto source not found — skipping (encrypted-folder control unavailable)"
+    fi
+
     # 2c-gpu. Phase 316 (GPU-01) — NVIDIA container-toolkit, GATED behind an
     # `lspci` NVIDIA-GPU probe so NON-NVIDIA boxes (the overwhelming majority) see
     # ZERO install change. On an NVIDIA box we shell out to the SAME root-owned
