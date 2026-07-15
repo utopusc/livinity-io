@@ -33,6 +33,18 @@ import {isTransientAppState, reconcileTransientAppState} from './app-state-recon
 // declaration is ever downgraded).
 import {assertInstallAllowed, InstallForbidden} from './install-admin-gate.js'
 
+// 326-review (CR-01): admin-only gate for secret-bearing fields surfaced by the
+// `apps.list` privateProcedure. `environmentOverrides` holds the raw install/
+// Configure form values incl. type:'password' secrets (GF_SECURITY_ADMIN_PASSWORD,
+// N8N_BASIC_AUTH_PASSWORD, NEXTCLOUD_ADMIN_PASSWORD, …). Non-admin callers must
+// receive `undefined` (their Configure section is disabled anyway). Single-user
+// (no currentUser) stays admin-equivalent — mirrors the install gate + the
+// immichApiKeySet discretion in the same file.
+export function gateAdminOnlyField<T>(value: T, currentUser?: {role?: string} | null): T | undefined {
+	const isAdmin = currentUser ? currentUser.role === 'admin' : true
+	return isAdmin ? value : undefined
+}
+
 export const appStore = router({
 	// Returns builtin apps (priority apps with official Docker images)
 	builtinApps: privateProcedure.query(() => BUILTIN_APPS),
@@ -206,7 +218,9 @@ export const apps = router({
 						// (see destructure above). installOptions is the raw manifest install options — the
 						// Configure dialog reads installOptions.environmentOverrides for its field spec.
 						installOptions,
-						environmentOverrides,
+						// 326-review (CR-01): admin-only — non-admins get `undefined` so
+						// app-page prefill secrets never cross the admin→member boundary.
+						environmentOverrides: gateAdminOnlyField(environmentOverrides, ctx.currentUser),
 						autoUpdatePolicy,
 						ignoredVersion,
 						cpuLimit,
