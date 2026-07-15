@@ -1306,15 +1306,18 @@ export default router({
 		if (result.ok) {
 			const {backendState, overlayIp, hostname} = parseTailscaleState(result.stdout)
 			const enabled = backendState === 'Running'
-			const existing = await ctx.livinityd?.store.get('tailscale')
+			const prior = await ctx.livinityd?.store.get('tailscale')
 			await ctx.livinityd?.store.set('tailscale', {
 				enabled,
-				overlayIp: enabled ? (overlayIp ?? existing?.overlayIp) : undefined,
-				hostname: hostname ?? existing?.hostname,
-				backendState: backendState ?? existing?.backendState,
+				overlayIp: enabled ? (overlayIp ?? prior?.overlayIp) : undefined,
+				hostname: hostname ?? prior?.hostname,
+				backendState: backendState ?? prior?.backendState,
 			})
 		}
-		return result
+		// Surface the UI-display mirror so the VPN card can render last-known state
+		// even when the wrapper is undeployed / the daemon is unreachable ({ok:false}).
+		const mirror = (await ctx.livinityd?.store.get('tailscale')) ?? {enabled: false}
+		return {...result, mirror}
 	}),
 	tailscale: adminProcedure
 		.input(z.object({action: z.enum(['install', 'login', 'set', 'down', 'status'])}))
