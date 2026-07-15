@@ -13,6 +13,8 @@ import {
 	createUser,
 	getAdminUser,
 	listUsers,
+	listUserQuotas,
+	updateUserQuota,
 	updateUserRole,
 	toggleUserActive,
 	updateUserDisplayName,
@@ -610,8 +612,23 @@ export default router({
 	}),
 
 	// Admin only - list all users with full details
-	listAllUsers: adminProcedure.query(async () => {
+	listAllUsers: adminProcedure.query(async ({ctx}) => {
 		const users = await listUsers()
+		// Phase 325 STOR-02 — enrich each row with its quota (PG) + last-scanned
+		// used bytes (cached in the FileStore by the user-quota-scan job). Both are
+		// best-effort reads: a missing quota → null (unlimited), a not-yet-run scan
+		// → null used (the UI shows "—" until the first tick).
+		const quotas = await listUserQuotas().catch(() => [] as Array<{id: string; quotaBytes: number | null}>)
+		const quotaById = new Map(quotas.map((q) => [q.id, q.quotaBytes]))
+		let usedByUsername: Record<string, number> = {}
+		try {
+			const sq = await ctx.livinityd?.store.get('storageQuota')
+			if (sq && typeof sq === 'object' && 'usedBytes' in sq) {
+				usedByUsername = ((sq as {usedBytes?: Record<string, number>}).usedBytes ?? {}) as Record<string, number>
+			}
+		} catch {
+			// Cache read failure → leave used bytes empty; quotas still surface.
+		}
 		return users.map((u) => ({
 			id: u.id,
 			username: u.username,
@@ -621,6 +638,8 @@ export default router({
 			is_active: u.isActive,
 			created_at: u.createdAt.toISOString(),
 			updated_at: u.updatedAt.toISOString(),
+			quota_bytes: quotaById.get(u.id) ?? null,
+			used_bytes: usedByUsername[u.username] ?? null,
 		}))
 	}),
 
@@ -720,6 +739,28 @@ export default router({
 				throw new TRPCError({code: 'NOT_FOUND', message: 'User not found'})
 			}
 
+			return {success: true}
+		}),
+
+	// Phase 325 STOR-02 — admin sets a user's storage quota (bytes). A value <= 0
+	// is treated as "no effective quota" (unlimited) by the enforcement path
+	// (files.assertWithinQuota + usersOverSoftQuota), same as a NULL column; a
+	// positive value is the hard byte ceiling. Clearing back to NULL has no UI
+	// affordance yet (deferred) — set 0 for the unlimited-equivalent.
+	// T-325-01: adminProcedure (Phase-328 audited) + z.uuid + z.int().nonnegative()
+	// + parameterized UPDATE (updateUserQuota) — no string interpolation.
+	setUserQuota: adminProcedure
+		.input(
+			z.object({
+				userId: z.string().uuid(),
+				quotaBytes: z.number().int().nonnegative(),
+			}),
+		)
+		.mutation(async ({input}) => {
+			const ok = await updateUserQuota(input.userId, input.quotaBytes)
+			if (!ok) {
+				throw new TRPCError({code: 'NOT_FOUND', message: 'User not found'})
+			}
 			return {success: true}
 		}),
 

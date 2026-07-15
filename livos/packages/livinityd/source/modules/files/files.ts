@@ -27,6 +27,7 @@ import pRetry from 'p-retry'
 import {copyWithProgress} from '../utilities/copy-with-progress.js'
 
 import {getDiskUsageByPath} from '../system/system.js'
+import {getUserQuotaBytes} from '../database/index.js'
 
 import Watcher from './watcher.js'
 import Recents from './recents.js'
@@ -108,6 +109,11 @@ export interface FileUserInfo {
 }
 
 export const fileUserContext = new AsyncLocalStorage<FileUserInfo | undefined>()
+
+// Phase 325 STOR-02 — soft-warn threshold, kept in sync with the scheduler's
+// QUOTA_SOFT_RATIO (scheduler/jobs.ts). Duplicated as a local const rather than
+// imported to avoid pulling the whole scheduler module graph into files.ts.
+const QUOTA_SOFT_RATIO = 0.9
 
 export default class Files {
 	#livinityd: Livinityd
@@ -531,6 +537,46 @@ export default class Files {
 		}
 	}
 	// Copies a file or directory from one virtual path to another.
+	// Phase 325 STOR-02 — soft per-user quota pre-check (D-05/D-06). Reads the
+	// user's quota_bytes (PG) + the cached used_bytes map written by the
+	// `user-quota-scan` scheduler job, and:
+	//   - HARD: rejects the write if used + addBytes would exceed quota_bytes.
+	//   - SOFT: past QUOTA_SOFT_RATIO of quota (but still under it), fires a
+	//     fire-and-forget 'quota-exceeded' warning bell (does NOT block).
+	// Residual gap (D-05): enforcement is APPROXIMATE — it trusts the last scan
+	// tick's cached used_bytes and only covers writes routed through the files
+	// module. Between-tick growth + non-files-module writes (docker app writes,
+	// SMB) are NOT hard-blocked here; kernel/project quotas are DEFERRED.
+	// quota_bytes NULL or <= 0 = unlimited (matches usersOverSoftQuota); an
+	// undefined username (admin / global tree) is exempt.
+	async assertWithinQuota(username: string | undefined, addBytes: number): Promise<void> {
+		if (!username) return
+		let quotaBytes: number | null = null
+		try {
+			quotaBytes = await getUserQuotaBytes(username)
+		} catch {
+			// Fail-open on a quota-lookup error — never block a write on infra failure.
+			return
+		}
+		if (quotaBytes == null || quotaBytes <= 0) return // unlimited
+		let used = 0
+		try {
+			const sq = await this.#livinityd.store.get('storageQuota')
+			if (sq && typeof sq === 'object' && 'usedBytes' in sq) {
+				used = (sq as {usedBytes?: Record<string, number>}).usedBytes?.[username] ?? 0
+			}
+		} catch {
+			// No cache yet (scan hasn't run) → treat used as 0; the next scan catches up.
+		}
+		const projected = used + Math.max(0, addBytes)
+		if (projected > quotaBytes) {
+			throw new Error('[quota-exceeded]')
+		}
+		if (projected >= quotaBytes * QUOTA_SOFT_RATIO) {
+			await this.#livinityd.notifications.add('quota-exceeded', {severity: 'warning', external: false}).catch(() => {})
+		}
+	}
+
 	async copy(sourceVirtualPath: string, destinationVirtualDirectory: string, {collision = 'error'} = {}) {
 		// Check if operation is allowed
 		const allowedOperations = await this.getAllowedOperations(destinationVirtualDirectory)
@@ -554,6 +600,12 @@ export default class Files {
 		const buffer = 1024 * 1024 * 1024 * 1 // 1GB
 		const neededSpace = sourceStats.size + buffer
 		if (diskUsage.available < neededSpace) throw new Error('[not-enough-space]')
+
+		// Phase 325 STOR-02 — soft per-user quota gate BEFORE writing. Admins use
+		// the global tree (no per-user quota) so they are exempt; members/guests are
+		// checked against their cached usage + quota_bytes.
+		const quotaUser = fileUserContext.getStore()
+		await this.assertWithinQuota(quotaUser && quotaUser.role !== 'admin' ? quotaUser.username : undefined, sourceStats.size)
 
 		// Add trailing slash to source path if it's a directoryso we only copy the contents
 		if (sourceStats.isDirectory()) sourceSystemPath = `${sourceSystemPath}/`
