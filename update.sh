@@ -3101,6 +3101,100 @@ else
     info "sudoers.d/livos-os-patch source not found — skipping (unattended-upgrades control unavailable)"
 fi
 
+# ── Step 7.10e: Phase 326 (HW-01) — NUT/UPS provisioning (sudoers.d/livos-ups + wrappers) ──
+# The livos-ups NOPASSWD grant + the root-owned NUT wrapper + the root SHUTDOWNCMD
+# script must reach ALREADY-DEPLOYED boxes on Update, not just fresh installs. Mirrors
+# Step 7.10d (livos-os-patch) VERBATIM (content-diff + visudo validate-or-remove),
+# retargeted to livos-ups. TWO scripts are installed (both root-owned 0755): the wrapper
+# livinityd calls via `sudo -n <wrapper> <action>`, and the root SHUTDOWNCMD script
+# upsmon runs AS ROOT directly (no grant — only deployment). Missing this is the "looks
+# wired, silently no-ops" failure class. Fully fail-tolerant: a missing source or a
+# visudo rejection never aborts the Update.
+step "Phase 326 (HW-01): NUT/UPS provisioning (sudoers.d/livos-ups + install wrappers)"
+
+_set_desktop_identity   # Phase 277.1 — self-derive the desktop user (no literal bruce)
+
+# --- (a0) livos-ups.sh wrapper — install BEFORE the grant ---
+# The livos-ups grant (a) is on this ONE root-owned binary; the wrapper validates a
+# fixed action enum {detect|install|configure|status|remove} and hardcodes every
+# apt/systemctl/nut argv + /etc/nut body, so no caller flag can be appended. livinityd
+# invokes `sudo -n <wrapper> <action>`, so the wrapper must exist on day-2 boxes too.
+_UPS_WRAP_SRC="$LIVOS_DIR/scripts/install/livos-ups.sh"
+if [[ ! -f "$_UPS_WRAP_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _UPS_WRAP_SRC="$TEMP_DIR/scripts/install/livos-ups.sh"
+fi
+_UPS_WRAP_DST="/usr/local/lib/livos/livos-ups.sh"
+if [[ -f "$_UPS_WRAP_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_UPS_WRAP_DST" ]] || ! cmp -s "$_UPS_WRAP_SRC" "$_UPS_WRAP_DST"; then
+        if install -m 0755 -o root -g root "$_UPS_WRAP_SRC" "$_UPS_WRAP_DST"; then
+            ok "livos-ups.sh installed at $_UPS_WRAP_DST"
+        else
+            warn "Failed to install livos-ups.sh (non-fatal — UPS control unavailable until fixed)"
+        fi
+    else
+        info "livos-ups.sh already current"
+    fi
+else
+    info "livos-ups.sh source not found — skipping (UPS control unavailable)"
+fi
+
+# --- (a1) livos-ups-shutdown.sh root SHUTDOWNCMD — install root-owned 0755 (no grant) ---
+# upsmon runs this AS ROOT from its FSD flow, so it needs no sudoers grant — only to be
+# deployed root-owned 0755 on day-2 boxes.
+_UPS_SHUT_SRC="$LIVOS_DIR/scripts/install/livos-ups-shutdown.sh"
+if [[ ! -f "$_UPS_SHUT_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _UPS_SHUT_SRC="$TEMP_DIR/scripts/install/livos-ups-shutdown.sh"
+fi
+_UPS_SHUT_DST="/usr/local/lib/livos/livos-ups-shutdown.sh"
+if [[ -f "$_UPS_SHUT_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_UPS_SHUT_DST" ]] || ! cmp -s "$_UPS_SHUT_SRC" "$_UPS_SHUT_DST"; then
+        if install -m 0755 -o root -g root "$_UPS_SHUT_SRC" "$_UPS_SHUT_DST"; then
+            ok "livos-ups-shutdown.sh installed at $_UPS_SHUT_DST"
+        else
+            warn "Failed to install livos-ups-shutdown.sh (non-fatal — UPS auto-shutdown unavailable until fixed)"
+        fi
+    else
+        info "livos-ups-shutdown.sh already current"
+    fi
+else
+    info "livos-ups-shutdown.sh source not found — skipping (UPS auto-shutdown unavailable)"
+fi
+
+# --- (a) sudoers.d/livos-ups — install + template the subject to the desktop user ---
+_UPS_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-ups"
+if [[ ! -f "$_UPS_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _UPS_SUDOERS_SRC="$TEMP_DIR/scripts/install/sudoers.d/livos-ups"
+fi
+_UPS_SUDOERS_DST="/etc/sudoers.d/livos-ups"
+if [[ -f "$_UPS_SUDOERS_SRC" ]]; then
+    _UPS_SUDOERS_TMP=$(mktemp)
+    if [[ "$_DESKTOP_USER" != "bruce" ]]; then
+        sed -E "s/^bruce([[:space:]]+ALL=)/${_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DESKTOP_USER})/g" \
+            "$_UPS_SUDOERS_SRC" > "$_UPS_SUDOERS_TMP"
+    else
+        cp -f "$_UPS_SUDOERS_SRC" "$_UPS_SUDOERS_TMP"
+    fi
+    if [[ ! -f "$_UPS_SUDOERS_DST" ]] || ! cmp -s "$_UPS_SUDOERS_TMP" "$_UPS_SUDOERS_DST"; then
+        install -m 0440 -o root -g root "$_UPS_SUDOERS_TMP" "$_UPS_SUDOERS_DST"
+        # SAFETY-CRITICAL: a malformed sudoers file can break sudo system-wide.
+        # Validate the INSTALLED file; if visudo rejects it, REMOVE it (UPS control stays
+        # denied — the prior state — rather than risk broken sudo).
+        if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_UPS_SUDOERS_DST" >/dev/null 2>&1; then
+            warn "visudo rejected $_UPS_SUDOERS_DST — removing (UPS control stays denied until fixed)"
+            rm -f "$_UPS_SUDOERS_DST"
+        else
+            ok "sudoers.d/livos-ups installed (subject: ${_DESKTOP_USER})"
+        fi
+    else
+        info "sudoers.d/livos-ups already current (subject: ${_DESKTOP_USER})"
+    fi
+    rm -f "$_UPS_SUDOERS_TMP"
+else
+    info "sudoers.d/livos-ups source not found — skipping (UPS control unavailable)"
+fi
+
 # ── Step 7.11: Phase 306 — desktop-user password helper (wrapper + sudoers + bootstrap) ──
 # The "Regenerate" button on the Desktop password row in Settings → Account calls
 # livinityd's system.regenerateDesktopPassword, which runs

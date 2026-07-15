@@ -3102,6 +3102,75 @@ _dld_template_app_units() {
         info "sudoers.d/livos-os-patch source not found — skipping (unattended-upgrades control unavailable)"
     fi
 
+    # 2a-ups. Phase 326 (HW-01) — root-owned NUT wrapper + root SHUTDOWNCMD script.
+    # The livos-ups sudoers grant (2b-ups below) is on the WRAPPER binary only; the
+    # wrapper validates a fixed action enum {detect|install|configure|status|remove}
+    # and builds every apt/systemctl/nut argv + /etc/nut body itself. The SHUTDOWNCMD
+    # script is invoked by upsmon AS ROOT (never via sudo) so it needs no grant — only
+    # to be deployed root-owned 0755. Install BOTH BEFORE the grant. Idempotent
+    # (content-diffed), byte-parallel to the livos-gpu / livos-os-patch wrapper blocks
+    # (each install call names the literal dst path so the grant target is auditable).
+    local _upswrap_src="${_DLD_STAGE_DIR}/scripts/install/livos-ups.sh"
+    [[ -f "$_upswrap_src" ]] || _upswrap_src="${_DLD_LIVOS_DIR}/scripts/install/livos-ups.sh"
+    local _upswrap_dst="/usr/local/lib/livos/livos-ups.sh"
+    if [[ -f "$_upswrap_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_upswrap_dst" ]] || ! cmp -s "$_upswrap_src" "$_upswrap_dst"; then
+            if install -m 0755 -o root -g root "$_upswrap_src" /usr/local/lib/livos/livos-ups.sh; then
+                ok "livos-ups.sh installed at $_upswrap_dst"
+            else
+                warn "Failed to install livos-ups.sh (non-fatal; UPS control unavailable until fixed)"
+            fi
+        fi
+    else
+        info "livos-ups.sh source not found — skipping (UPS control unavailable)"
+    fi
+
+    local _upsshut_src="${_DLD_STAGE_DIR}/scripts/install/livos-ups-shutdown.sh"
+    [[ -f "$_upsshut_src" ]] || _upsshut_src="${_DLD_LIVOS_DIR}/scripts/install/livos-ups-shutdown.sh"
+    local _upsshut_dst="/usr/local/lib/livos/livos-ups-shutdown.sh"
+    if [[ -f "$_upsshut_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_upsshut_dst" ]] || ! cmp -s "$_upsshut_src" "$_upsshut_dst"; then
+            if install -m 0755 -o root -g root "$_upsshut_src" /usr/local/lib/livos/livos-ups-shutdown.sh; then
+                ok "livos-ups-shutdown.sh installed at $_upsshut_dst"
+            else
+                warn "Failed to install livos-ups-shutdown.sh (non-fatal; UPS auto-shutdown unavailable until fixed)"
+            fi
+        fi
+    else
+        info "livos-ups-shutdown.sh source not found — skipping (UPS auto-shutdown unavailable)"
+    fi
+
+    # 2b-ups. Phase 326 (HW-01) — sudoers.d/livos-ups (NUT wrapper grant) — install +
+    # template. Byte-for-byte parallel to the livos-os-patch block above, retargeted at
+    # livos-ups. The root SHUTDOWNCMD script gets NO grant (root-invoked by upsmon).
+    local _ups_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-ups"
+    [[ -f "$_ups_src" ]] || _ups_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-ups"
+    local _ups_dst="/etc/sudoers.d/livos-ups"
+    if [[ -f "$_ups_src" ]]; then
+        local _ups_tmp
+        _ups_tmp=$(mktemp)
+        if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                "$_ups_src" > "$_ups_tmp"
+        else
+            cp -f "$_ups_src" "$_ups_tmp"
+        fi
+        if [[ ! -f "$_ups_dst" ]] || ! cmp -s "$_ups_tmp" "$_ups_dst"; then
+            install -m 0440 -o root -g root "$_ups_tmp" "$_ups_dst"
+            if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_ups_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_ups_dst — removing (UPS control stays denied until fixed)"
+                rm -f "$_ups_dst"
+            else
+                ok "sudoers.d/livos-ups installed (user-spec: ${_DLD_DESKTOP_USER})"
+            fi
+        fi
+        rm -f "$_ups_tmp"
+    else
+        info "sudoers.d/livos-ups source not found — skipping (UPS control unavailable)"
+    fi
+
     # 2c-gpu. Phase 316 (GPU-01) — NVIDIA container-toolkit, GATED behind an
     # `lspci` NVIDIA-GPU probe so NON-NVIDIA boxes (the overwhelming majority) see
     # ZERO install change. On an NVIDIA box we shell out to the SAME root-owned

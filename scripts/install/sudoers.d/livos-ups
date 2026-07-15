@@ -1,0 +1,8 @@
+# Phase 326 (HW-01) — sudoers grant for the NUT (UPS) wrapper.
+# Security model: grant on ONE explicit binary path, NO glob, NO arg wildcard.
+# The wrapper validates its action enum and builds every apt/systemctl/nut argv itself.
+# NOTE: the root SHUTDOWNCMD script is invoked by upsmon AS ROOT directly (never via
+# sudo), so it needs NO grant here — it is only deployed root-owned 0755.
+# Deploy: deploy-livinityd.sh block 2a/2b-ups; day-2: update.sh Step 7.10e.
+Cmnd_Alias LIVINITYD_UPS = /usr/local/lib/livos/livos-ups.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_UPS
