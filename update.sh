@@ -3617,6 +3617,78 @@ else
     info "sudoers.d/livos-power source not found — skipping (power management unavailable)"
 fi
 
+# ── Step 7.10m: Phase 324 (FILES-03) — rclone (cloud-drive) provisioning (sudoers.d/livos-rclone + wrapper) ──
+# The livos-rclone NOPASSWD grant + the root-owned rclone wrapper (sha256-pinned v1.74.4
+# GitHub-Release .deb install + templated rclone-mount@ systemd unit with --allow-other +
+# fuse.conf user_allow_other reuse + OAuth token blob on stdin -> rclone.conf 0600, secret
+# via ENV never argv) must reach ALREADY-DEPLOYED boxes on Update, not just fresh installs.
+# Mirrors Step 7.10k (livos-power) VERBATIM (content-diff + visudo validate-or-remove),
+# retargeted to livos-rclone. livinityd invokes
+# `sudo -n /usr/local/lib/livos/livos-rclone.sh <action> [args...]`, so the wrapper + grant
+# must exist on day-2 boxes too. Missing this is the "looks wired, silently no-ops" failure class.
+# Fully fail-tolerant: a missing source or a visudo rejection never aborts the Update.
+step "Phase 324 (FILES-03): rclone (cloud-drive) provisioning (sudoers.d/livos-rclone + install wrapper)"
+
+_set_desktop_identity   # Phase 277.1 — self-derive the desktop user (no literal bruce)
+
+# --- (a0) livos-rclone.sh wrapper — install BEFORE the grant ---
+# The livos-rclone grant (a) is on this ONE root-owned binary; the wrapper validates a fixed
+# action enum {install|authorize-start|config-write|mount|unmount|status|remove} and builds
+# the pinned rclone download URL + sha256 pin + every apt/rclone/systemctl argv + the entire
+# rclone-mount@ unit body itself.
+_RCLONE_WRAP_SRC="$LIVOS_DIR/scripts/install/livos-rclone.sh"
+if [[ ! -f "$_RCLONE_WRAP_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _RCLONE_WRAP_SRC="$TEMP_DIR/scripts/install/livos-rclone.sh"
+fi
+_RCLONE_WRAP_DST="/usr/local/lib/livos/livos-rclone.sh"
+if [[ -f "$_RCLONE_WRAP_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_RCLONE_WRAP_DST" ]] || ! cmp -s "$_RCLONE_WRAP_SRC" "$_RCLONE_WRAP_DST"; then
+        if install -m 0755 -o root -g root "$_RCLONE_WRAP_SRC" "$_RCLONE_WRAP_DST"; then
+            ok "livos-rclone.sh installed at $_RCLONE_WRAP_DST"
+        else
+            warn "Failed to install livos-rclone.sh (non-fatal — cloud-drive control unavailable until fixed)"
+        fi
+    else
+        info "livos-rclone.sh already current"
+    fi
+else
+    info "livos-rclone.sh source not found — skipping (cloud-drive control unavailable)"
+fi
+
+# --- (a) sudoers.d/livos-rclone — install + template the subject to the desktop user ---
+_RCLONE_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-rclone"
+if [[ ! -f "$_RCLONE_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _RCLONE_SUDOERS_SRC="$TEMP_DIR/scripts/install/sudoers.d/livos-rclone"
+fi
+_RCLONE_SUDOERS_DST="/etc/sudoers.d/livos-rclone"
+if [[ -f "$_RCLONE_SUDOERS_SRC" ]]; then
+    _RCLONE_SUDOERS_TMP=$(mktemp)
+    if [[ "$_DESKTOP_USER" != "bruce" ]]; then
+        sed -E "s/^bruce([[:space:]]+ALL=)/${_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DESKTOP_USER})/g" \
+            "$_RCLONE_SUDOERS_SRC" > "$_RCLONE_SUDOERS_TMP"
+    else
+        cp -f "$_RCLONE_SUDOERS_SRC" "$_RCLONE_SUDOERS_TMP"
+    fi
+    if [[ ! -f "$_RCLONE_SUDOERS_DST" ]] || ! cmp -s "$_RCLONE_SUDOERS_TMP" "$_RCLONE_SUDOERS_DST"; then
+        install -m 0440 -o root -g root "$_RCLONE_SUDOERS_TMP" "$_RCLONE_SUDOERS_DST"
+        # SAFETY-CRITICAL: a malformed sudoers file can break sudo system-wide.
+        # Validate the INSTALLED file; if visudo rejects it, REMOVE it (cloud-drive control
+        # stays denied — the prior state — rather than risk broken sudo).
+        if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_RCLONE_SUDOERS_DST" >/dev/null 2>&1; then
+            warn "visudo rejected $_RCLONE_SUDOERS_DST — removing (cloud-drive control stays denied until fixed)"
+            rm -f "$_RCLONE_SUDOERS_DST"
+        else
+            ok "sudoers.d/livos-rclone installed (subject: ${_DESKTOP_USER})"
+        fi
+    else
+        info "sudoers.d/livos-rclone already current (subject: ${_DESKTOP_USER})"
+    fi
+    rm -f "$_RCLONE_SUDOERS_TMP"
+else
+    info "sudoers.d/livos-rclone source not found — skipping (cloud-drive control unavailable)"
+fi
+
 # ── Step 7.11: Phase 306 — desktop-user password helper (wrapper + sudoers + bootstrap) ──
 # The "Regenerate" button on the Desktop password row in Settings → Account calls
 # livinityd's system.regenerateDesktopPassword, which runs

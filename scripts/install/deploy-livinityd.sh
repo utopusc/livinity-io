@@ -3502,6 +3502,62 @@ _dld_template_app_units() {
         info "sudoers.d/livos-power source not found — skipping (power management unavailable)"
     fi
 
+    # 2a-rclone. Phase 324 (FILES-03) — root-owned rclone (cloud-drive) wrapper
+    # (sha256-pinned v1.74.4 GitHub-Release .deb install + templated rclone-mount@
+    # systemd unit with --allow-other + fuse.conf user_allow_other reuse + OAuth
+    # token blob on stdin -> rclone.conf 0600, secret via ENV never argv). The
+    # livos-rclone sudoers grant (2b-rclone below) is on THIS binary only; the wrapper
+    # validates a fixed action enum {install|authorize-start|config-write|mount|unmount|status|remove}
+    # and builds the exact rclone download URL + digest + every apt/rclone/systemctl argv
+    # + the entire mount unit body itself. Install it BEFORE the grant. Idempotent
+    # (content-diffed), byte-for-byte parallel to the livos-power wrapper block above.
+    # Serialized AFTER 329-02's power block by wave; prior blocks untouched.
+    local _rclonewrap_src="${_DLD_STAGE_DIR}/scripts/install/livos-rclone.sh"
+    [[ -f "$_rclonewrap_src" ]] || _rclonewrap_src="${_DLD_LIVOS_DIR}/scripts/install/livos-rclone.sh"
+    local _rclonewrap_dst="/usr/local/lib/livos/livos-rclone.sh"
+    if [[ -f "$_rclonewrap_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_rclonewrap_dst" ]] || ! cmp -s "$_rclonewrap_src" "$_rclonewrap_dst"; then
+            if install -m 0755 -o root -g root "$_rclonewrap_src" /usr/local/lib/livos/livos-rclone.sh; then
+                ok "livos-rclone.sh installed at $_rclonewrap_dst"
+            else
+                warn "Failed to install livos-rclone.sh (non-fatal; cloud-drive control unavailable until fixed)"
+            fi
+        fi
+    else
+        info "livos-rclone.sh source not found — skipping (cloud-drive control unavailable)"
+    fi
+
+    # 2b-rclone. Phase 324 (FILES-03) — sudoers.d/livos-rclone (rclone wrapper grant)
+    # — install + template. Byte-for-byte parallel to the livos-power block above,
+    # retargeted at livos-rclone. Runs on EVERY deploy (idempotent, content-diffed).
+    # Wrapper install (0755) BEFORE grant install (0440).
+    local _rclone_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-rclone"
+    [[ -f "$_rclone_src" ]] || _rclone_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-rclone"
+    local _rclone_dst="/etc/sudoers.d/livos-rclone"
+    if [[ -f "$_rclone_src" ]]; then
+        local _rclone_tmp
+        _rclone_tmp=$(mktemp)
+        if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                "$_rclone_src" > "$_rclone_tmp"
+        else
+            cp -f "$_rclone_src" "$_rclone_tmp"
+        fi
+        if [[ ! -f "$_rclone_dst" ]] || ! cmp -s "$_rclone_tmp" "$_rclone_dst"; then
+            install -m 0440 -o root -g root "$_rclone_tmp" "$_rclone_dst"
+            if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_rclone_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_rclone_dst — removing (cloud-drive control stays denied until fixed)"
+                rm -f "$_rclone_dst"
+            else
+                ok "sudoers.d/livos-rclone installed (user-spec: ${_DLD_DESKTOP_USER})"
+            fi
+        fi
+        rm -f "$_rclone_tmp"
+    else
+        info "sudoers.d/livos-rclone source not found — skipping (cloud-drive control unavailable)"
+    fi
+
     # 2c-gpu. Phase 316 (GPU-01) — NVIDIA container-toolkit, GATED behind an
     # `lspci` NVIDIA-GPU probe so NON-NVIDIA boxes (the overwhelming majority) see
     # ZERO install change. On an NVIDIA box we shell out to the SAME root-owned
