@@ -1,0 +1,10 @@
+# Phase 324 (FILES-03) — sudoers grant for the rclone (cloud-drive) wrapper.
+# Security model: grant on ONE explicit binary path, NO glob, NO arg wildcard.
+# The wrapper validates its action enum
+# {install|authorize-start|config-write|mount|unmount|status|remove}, builds the
+# pinned+sha256-verified rclone download itself, owns the entire templated
+# rclone-mount@ systemd unit body, and keeps every OAuth token/pass off argv — so no
+# caller-supplied string reaches a privileged command.
+# Deploy: deploy-livinityd.sh block 2a/2b-rclone; day-2: update.sh Step 7.10m.
+Cmnd_Alias LIVINITYD_RCLONE = /usr/local/lib/livos/livos-rclone.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_RCLONE
