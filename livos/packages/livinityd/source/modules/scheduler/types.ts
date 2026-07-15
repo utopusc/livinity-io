@@ -18,6 +18,7 @@ export type JobType =
 	| 'security-advisor-scan' // Phase 328 SEC-02 — weekly Trivy + weak-config scan
 	| 'app-auto-update' // Phase 326 APPS-02 — daily opt-in true auto-update (policy==='auto', pin-aware)
 	| 'ups-watch' // Phase 326 HW-01 — ≥1-min UPS status poll → power-loss/restore external alert
+	| 'user-quota-scan' // Phase 325 STOR-02 — app-layer per-user du accounting → quota-exceeded bell
 
 export type JobRunStatus = 'success' | 'failure' | 'skipped' | 'running'
 

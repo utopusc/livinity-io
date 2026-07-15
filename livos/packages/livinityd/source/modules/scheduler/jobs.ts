@@ -5,9 +5,13 @@
 // for per-target errors — they should aggregate per-target failures into the
 // output JSON and only throw for catastrophic, job-wide failures.
 
+import path from 'node:path'
+
 import {execa} from 'execa'
 import systemInformation from 'systeminformation'
 
+import getDirectorySize from '../utilities/get-directory-size.js'
+import {listUserQuotas} from '../database/index.js'
 import {listContainers, pruneImages, isProtectedContainer} from '../docker/docker.js'
 import {listGitStacks, updateGitStackSyncSha, controlStack} from '../docker/stacks.js'
 import {syncRepo, copyComposeToStackDir} from '../docker/git-deploy.js'
@@ -603,6 +607,88 @@ export const upsWatchHandler: BuiltInJobHandler = async (job, ctx) => {
 }
 
 // =========================================================================
+// user-quota-scan — Phase 325 STOR-02.
+// App-layer soft per-user quota accounting. Walks each user's data subtree with
+// `du` (serialized, one user at a time so the scan can never saturate disk I/O —
+// T-325-02), caches the per-user byte map into the shared FileStore
+// (`storageQuota`) so the setUserQuota/listAllUsers routes + the files-module
+// write pre-check can read used-vs-quota WITHOUT re-walking the tree, and fires a
+// single 'quota-exceeded' warning bell when ANY user crosses the soft ratio of
+// their quota (clears it when nobody is over). Reaches the daemon EXCLUSIVELY
+// through ctx.livinityd and NEVER throws out of the tick.
+//
+// Residual gap (D-05): enforcement is APPROXIMATE — the cached usage is only as
+// fresh as the last tick, and non-files-module writes (docker app writes, SMB)
+// grow the tree between ticks. Kernel/project quotas are DEFERRED.
+// =========================================================================
+
+// Soft-warn threshold: at/above this fraction of a user's quota we raise the
+// 'quota-exceeded' bell (the hard block itself lives in the files write path).
+export const QUOTA_SOFT_RATIO = 0.9
+
+// Pure, exported so the threshold logic is unit-testable without disk I/O.
+// Returns the usernames whose cached usage is at/over the soft ratio of their
+// quota. quota null/<=0 = unlimited → never breaches.
+export function usersOverSoftQuota(
+	usage: Record<string, number>,
+	quotas: Record<string, number | null>,
+	softRatio: number = QUOTA_SOFT_RATIO,
+): string[] {
+	const over: string[] = []
+	for (const [username, used] of Object.entries(usage)) {
+		const quota = quotas[username]
+		if (quota == null || quota <= 0) continue // unlimited
+		if (used >= quota * softRatio) over.push(username)
+	}
+	return over
+}
+
+export const userQuotaScanHandler: BuiltInJobHandler = async (job, ctx) => {
+	// Guard: no daemon ref (isolated unit test / Scheduler built without
+	// livinityd) → skip cleanly, never throw.
+	if (!ctx.livinityd) {
+		ctx.logger.log(`[scheduler/user-quota-scan] no daemon reference — skipping job ${job.name}`)
+		return {status: 'skipped', error: 'daemon reference unavailable'}
+	}
+	try {
+		ctx.logger.log(`[scheduler/user-quota-scan] running job ${job.name}`)
+		const users = await listUserQuotas()
+		const usage: Record<string, number> = {}
+		const quotas: Record<string, number | null> = {}
+		// Serialized (NOT Promise.all) — one du at a time bounds the I/O the scan
+		// can generate on a small box (T-325-02).
+		for (const u of users) {
+			quotas[u.username] = u.quotaBytes
+			const userDir = path.join(ctx.livinityd.dataDirectory, 'users', u.username)
+			try {
+				usage[u.username] = await getDirectorySize(userDir)
+			} catch {
+				// A missing/racing dir must not fail the whole tick — record 0 and
+				// move on (per-target degrade; the job overall still returns success).
+				usage[u.username] = 0
+			}
+		}
+		// Cache onto the shared store so routes + the files write pre-check can read
+		// used-vs-quota without re-walking. Dedicated top-level key (dot-prop-safe).
+		await ctx.livinityd.store.set('storageQuota', {usedBytes: usage, lastScanAt: Date.now()})
+		const over = usersOverSoftQuota(usage, quotas)
+		if (over.length > 0) {
+			// Fire-and-forget: a notification failure must not fail the tick.
+			// external:false — a soft over-quota warning is an in-app bell, not an
+			// ops page-out (unlike disk-critical / ups-power-loss).
+			await ctx.livinityd.notifications.add('quota-exceeded', {severity: 'warning', external: false}).catch(() => {})
+		} else {
+			// Clear-on-recovery (mirrors disk-critical-watch).
+			await ctx.livinityd.notifications.clear('quota-exceeded').catch(() => {})
+		}
+		return {status: 'success', output: {perUser: usage, over}}
+	} catch (err) {
+		// NOTE: 'failure', NOT 'error' — JobRunResult.status has no 'error' member.
+		return {status: 'failure', error: err instanceof Error ? err.message : String(err)}
+	}
+}
+
+// =========================================================================
 // Registry: jobType -> handler mapping.
 // volume-backup wired by Plan 20-02 (alpine-tar streaming to S3/SFTP/local).
 // ai-resource-watch wired by Plan 23-02 (Phase 23 AID-02 proactive alerts).
@@ -622,6 +708,7 @@ export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'security-advisor-scan': securityAdvisorScanHandler,
 	'app-auto-update': appAutoUpdateHandler,
 	'ups-watch': upsWatchHandler,
+	'user-quota-scan': userQuotaScanHandler,
 }
 
 // =========================================================================
@@ -681,4 +768,10 @@ export const DEFAULT_JOB_DEFINITIONS: Array<{
 	// with no Settings tab open. This poll is STATUS/ALERT-only — upsmon (POLLFREQ 5s)
 	// owns the actual shutdown decision, never this ≥1-min tick.
 	{name: 'ups-watch', schedule: '* * * * *', type: 'ups-watch', enabled: true},
+	// Phase 325 STOR-02 — app-layer per-user du accounting, every 30 min. enabled=true:
+	// a du walk is cheap (no LLM spend) and a user approaching their quota must be warned
+	// even with no Settings tab open. Serialized per-user under nice/ionice on the box.
+	// Between-ticks enforcement is APPROXIMATE — D-05 residual gap (documented in-handler):
+	// the hard block is best-effort against the last-scan cache; kernel quotas DEFERRED.
+	{name: 'user-quota-scan', schedule: '*/30 * * * *', type: 'user-quota-scan', enabled: true},
 ]

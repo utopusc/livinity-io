@@ -389,6 +389,18 @@ type StoreSchema = {
 	security: {
 		require2fa?: boolean
 	}
+	// Phase 325 STOR-02 — cached per-user data-dir byte accounting written by the
+	// `user-quota-scan` scheduler job. Dedicated top-level key (NOT nested under
+	// any array/scalar — dot-prop path collisions silently drop the write, same
+	// convention as `monitoring`/`security`/`alerts` above). `usedBytes` maps
+	// username → last-scanned bytes; the setUserQuota/listAllUsers routes + the
+	// files-module write pre-check read it as the soft-enforcement baseline
+	// WITHOUT re-walking the tree (D-05 residual gap: it is only as fresh as the
+	// last scan tick).
+	storageQuota: {
+		usedBytes: Record<string, number>
+		lastScanAt?: number
+	}
 	backups: {
 		repositories: {
 			id: string

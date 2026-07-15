@@ -353,6 +353,48 @@ export async function listUsers(): Promise<DatabaseUser[]> {
 }
 
 /**
+ * Phase 325 STOR-02 — per-user storage quota (app-layer, soft).
+ *
+ * Dedicated queries on the new `quota_bytes` column, mirroring the TOTP
+ * dedicated-query approach (findUserByUsername/rowToUser stay untouched so the
+ * hot login path never selects the extra column). All fail-closed on a null
+ * pool. `quota_bytes` NULL = unlimited / no quota.
+ */
+
+// Every user + their quota — consumed by the `user-quota-scan` scheduler job to
+// know which dirs to walk and which quota to compare the du result against.
+export async function listUserQuotas(): Promise<Array<{id: string; username: string; quotaBytes: number | null}>> {
+	if (!pool) return []
+	const {rows} = await pool.query('SELECT id, username, quota_bytes FROM users ORDER BY created_at ASC')
+	return rows.map((r) => ({
+		id: r.id,
+		username: r.username,
+		// pg returns BIGINT as a string; coerce to number (a quota fits in a JS
+		// safe integer up to ~9PB, far beyond any single-box user quota).
+		quotaBytes: r.quota_bytes == null ? null : Number(r.quota_bytes),
+	}))
+}
+
+// Single-user quota lookup — the files-module write pre-check reads this.
+export async function getUserQuotaBytes(username: string): Promise<number | null> {
+	if (!pool) return null
+	const {rows} = await pool.query('SELECT quota_bytes FROM users WHERE username = $1', [username])
+	if (rows.length === 0 || rows[0].quota_bytes == null) return null
+	return Number(rows[0].quota_bytes)
+}
+
+// Admin sets/updates a user's quota (setUserQuota route). Returns whether a row
+// matched so the caller can surface NOT_FOUND. Parameterized UPDATE (T-325-01).
+export async function updateUserQuota(userId: string, quotaBytes: number): Promise<boolean> {
+	if (!pool) return false
+	const {rowCount} = await pool.query('UPDATE users SET quota_bytes = $1, updated_at = NOW() WHERE id = $2', [
+		quotaBytes,
+		userId,
+	])
+	return (rowCount ?? 0) > 0
+}
+
+/**
  * Update a user's role.
  */
 export async function updateUserRole(userId: string, role: string): Promise<DatabaseUser | null> {
