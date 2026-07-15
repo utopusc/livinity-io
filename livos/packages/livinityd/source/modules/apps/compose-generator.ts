@@ -147,6 +147,12 @@ export async function generateAppTemplate(appId: string): Promise<string | null>
 	// like reapplyAppConfig that read manifest from disk get an undefined
 	// installOptions and skip subdomain resolution — falling back to appId).
 	if ((app as any).installOptions) manifest.installOptions = (app as any).installOptions
+	// 329-11 (MEDIA-02, D-21 + PATTERNS drift #6): propagate the manifest GPU-permission
+	// declaration (e.g. Jellyfin's ['GPU']) into the generated livinity-app.yml. Without
+	// this the on-disk manifest read by app.readManifest() → surfaced by apps.list →
+	// gating the POST-install GpuAccessSection (app-settings-dialog.tsx) would be absent,
+	// so gpuCapable would give ONLY the install-time toggle, never the post-install section.
+	if ((app as any).permissions) manifest.permissions = (app as any).permissions
 
 	// Write livinity-app.yml
 	await fse.writeFile(

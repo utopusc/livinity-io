@@ -59,6 +59,13 @@ export interface BuiltinAppManifest {
   // reaches the user's Claude subscription via livinity-broker without any
   // LLM-key prompt inside the app's UI.
   requiresAiProvider?: boolean
+  // 329-11 (MEDIA-02, D-21 + PATTERNS drift #6): manifest GPU-permission declaration
+  // (e.g. ['GPU']). Surfaced by apps.list (routes.ts) and gates the POST-install
+  // GpuAccessSection (app-settings-dialog.tsx). Distinct from installOptions.gpuCapable
+  // (the install-time toggle visibility). Mirrors the zod AppManifestSchema.permissions
+  // field (schema.ts:49). Propagated into the generated livinity-app.yml by
+  // compose-generator.ts so the on-disk manifest read by app.readManifest() carries it.
+  permissions?: string[]
   docker: {
     image: string
     environment?: Record<string, string>
@@ -230,11 +237,20 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
     website: 'https://jellyfin.org',
     developer: 'Jellyfin Contributors',
     icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/jellyfin.svg',
+    // 329-11 (MEDIA-02, D-21 + PATTERNS drift #6): Jellyfin GPU wiring needs BOTH
+    // fields — `installOptions.gpuCapable: true` (Ollama donor shape, :528) drives
+    // the INSTALL-time GPU toggle (environment-overrides-dialog.tsx:77) → gpuAccess
+    // override → patchComposeFile reservation, AND `permissions: ['GPU']` mounts the
+    // POST-install GpuAccessSection (app-settings-dialog.tsx:145-147,187 gates on
+    // app.permissions.includes('GPU')). Ollama's manifest has NO permissions array,
+    // so gpuCapable ALONE would NOT light up the post-install section — the
+    // permissions field is the deliberate divergence from the Ollama donor.
+    permissions: ['GPU'],
     docker: {
       image: 'jellyfin/jellyfin:latest',
       volumes: ['/config', '/cache', '/media'],
     },
-    installOptions: { subdomain: 'media' },
+    installOptions: { subdomain: 'media', gpuCapable: true },
     compose: {
       mainService: 'server',
       services: {
