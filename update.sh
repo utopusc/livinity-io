@@ -3547,6 +3547,76 @@ else
     info "sudoers.d/livos-net-expose source not found — skipping (TCP/UDP exposure unavailable)"
 fi
 
+# ── Step 7.10k: Phase 329 (HW-02) — power management provisioning (sudoers.d/livos-power + wrapper) ──
+# The livos-power NOPASSWD grant + the root-owned power wrapper (validates every
+# device/iface/time token, refuses NVMe + the boot/root disk for spin-down, keeps the
+# scheduled wake DEFAULT OFF, and builds every hdparm/ethtool/rtcwake/systemctl argv +
+# /etc file body itself) must reach ALREADY-DEPLOYED boxes on Update, not just fresh
+# installs. Mirrors Step 7.10j (livos-net-expose) VERBATIM (content-diff + visudo
+# validate-or-remove), retargeted to livos-power. livinityd invokes
+# `sudo -n /usr/local/lib/livos/livos-power.sh <action> [args...]`, so the wrapper + grant
+# must exist on day-2 boxes too. Missing this is the "looks wired, silently no-ops" failure class.
+# Fully fail-tolerant: a missing source or a visudo rejection never aborts the Update.
+step "Phase 329 (HW-02): power management provisioning (sudoers.d/livos-power + install wrapper)"
+
+_set_desktop_identity   # Phase 277.1 — self-derive the desktop user (no literal bruce)
+
+# --- (a0) livos-power.sh wrapper — install BEFORE the grant ---
+# The livos-power grant (a) is on this ONE root-owned binary; the wrapper validates a fixed
+# 9-action enum and builds every privileged argv + /etc file body itself.
+_POWER_WRAP_SRC="$LIVOS_DIR/scripts/install/livos-power.sh"
+if [[ ! -f "$_POWER_WRAP_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _POWER_WRAP_SRC="$TEMP_DIR/scripts/install/livos-power.sh"
+fi
+_POWER_WRAP_DST="/usr/local/lib/livos/livos-power.sh"
+if [[ -f "$_POWER_WRAP_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_POWER_WRAP_DST" ]] || ! cmp -s "$_POWER_WRAP_SRC" "$_POWER_WRAP_DST"; then
+        if install -m 0755 -o root -g root "$_POWER_WRAP_SRC" "$_POWER_WRAP_DST"; then
+            ok "livos-power.sh installed at $_POWER_WRAP_DST"
+        else
+            warn "Failed to install livos-power.sh (non-fatal — power management unavailable until fixed)"
+        fi
+    else
+        info "livos-power.sh already current"
+    fi
+else
+    info "livos-power.sh source not found — skipping (power management unavailable)"
+fi
+
+# --- (a) sudoers.d/livos-power — install + template the subject to the desktop user ---
+_POWER_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-power"
+if [[ ! -f "$_POWER_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _POWER_SUDOERS_SRC="$TEMP_DIR/scripts/install/sudoers.d/livos-power"
+fi
+_POWER_SUDOERS_DST="/etc/sudoers.d/livos-power"
+if [[ -f "$_POWER_SUDOERS_SRC" ]]; then
+    _POWER_SUDOERS_TMP=$(mktemp)
+    if [[ "$_DESKTOP_USER" != "bruce" ]]; then
+        sed -E "s/^bruce([[:space:]]+ALL=)/${_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DESKTOP_USER})/g" \
+            "$_POWER_SUDOERS_SRC" > "$_POWER_SUDOERS_TMP"
+    else
+        cp -f "$_POWER_SUDOERS_SRC" "$_POWER_SUDOERS_TMP"
+    fi
+    if [[ ! -f "$_POWER_SUDOERS_DST" ]] || ! cmp -s "$_POWER_SUDOERS_TMP" "$_POWER_SUDOERS_DST"; then
+        install -m 0440 -o root -g root "$_POWER_SUDOERS_TMP" "$_POWER_SUDOERS_DST"
+        # SAFETY-CRITICAL: a malformed sudoers file can break sudo system-wide.
+        # Validate the INSTALLED file; if visudo rejects it, REMOVE it (power management
+        # stays denied — the prior state — rather than risk broken sudo).
+        if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_POWER_SUDOERS_DST" >/dev/null 2>&1; then
+            warn "visudo rejected $_POWER_SUDOERS_DST — removing (power management stays denied until fixed)"
+            rm -f "$_POWER_SUDOERS_DST"
+        else
+            ok "sudoers.d/livos-power installed (subject: ${_DESKTOP_USER})"
+        fi
+    else
+        info "sudoers.d/livos-power already current (subject: ${_DESKTOP_USER})"
+    fi
+    rm -f "$_POWER_SUDOERS_TMP"
+else
+    info "sudoers.d/livos-power source not found — skipping (power management unavailable)"
+fi
+
 # ── Step 7.11: Phase 306 — desktop-user password helper (wrapper + sudoers + bootstrap) ──
 # The "Regenerate" button on the Desktop password row in Settings → Account calls
 # livinityd's system.regenerateDesktopPassword, which runs

@@ -3446,6 +3446,62 @@ _dld_template_app_units() {
         info "sudoers.d/livos-net-expose source not found — skipping (TCP/UDP exposure unavailable)"
     fi
 
+    # 2a-power. Phase 329 (HW-02) — root-owned power-management wrapper (opt-in
+    # per-drive HDD spin-down via hdparm.conf + a udev rule with NVMe/boot-disk
+    # exclusion, rtcwake test-wake + default-OFF scheduled shutdown/wake, WoL enable via
+    # a dedicated systemd oneshot unit). The livos-power sudoers grant (2b-power below) is
+    # on THIS binary only; the wrapper validates a fixed 9-action enum
+    # {install|status|spindown-set|spindown-clear|schedule-set|schedule-clear|test-wake|wol-enable|wol-disable}
+    # and builds every hdparm/ethtool/rtcwake/systemctl argv + every /etc file body itself.
+    # Install it BEFORE the grant. Idempotent (content-diffed), byte-for-byte parallel to
+    # the livos-net-expose wrapper block above. Serialized AFTER 329-02's net-expose block
+    # by wave; prior blocks untouched.
+    local _pwrwrap_src="${_DLD_STAGE_DIR}/scripts/install/livos-power.sh"
+    [[ -f "$_pwrwrap_src" ]] || _pwrwrap_src="${_DLD_LIVOS_DIR}/scripts/install/livos-power.sh"
+    local _pwrwrap_dst="/usr/local/lib/livos/livos-power.sh"
+    if [[ -f "$_pwrwrap_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_pwrwrap_dst" ]] || ! cmp -s "$_pwrwrap_src" "$_pwrwrap_dst"; then
+            if install -m 0755 -o root -g root "$_pwrwrap_src" /usr/local/lib/livos/livos-power.sh; then
+                ok "livos-power.sh installed at $_pwrwrap_dst"
+            else
+                warn "Failed to install livos-power.sh (non-fatal; power management unavailable until fixed)"
+            fi
+        fi
+    else
+        info "livos-power.sh source not found — skipping (power management unavailable)"
+    fi
+
+    # 2b-power. Phase 329 (HW-02) — sudoers.d/livos-power (power wrapper grant) — install
+    # + template. Byte-for-byte parallel to the livos-net-expose block above, retargeted at
+    # livos-power. Runs on EVERY deploy (idempotent, content-diffed). Wrapper install (0755)
+    # BEFORE grant install (0440).
+    local _power_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-power"
+    [[ -f "$_power_src" ]] || _power_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-power"
+    local _power_dst="/etc/sudoers.d/livos-power"
+    if [[ -f "$_power_src" ]]; then
+        local _power_tmp
+        _power_tmp=$(mktemp)
+        if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                "$_power_src" > "$_power_tmp"
+        else
+            cp -f "$_power_src" "$_power_tmp"
+        fi
+        if [[ ! -f "$_power_dst" ]] || ! cmp -s "$_power_tmp" "$_power_dst"; then
+            install -m 0440 -o root -g root "$_power_tmp" "$_power_dst"
+            if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_power_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_power_dst — removing (power management stays denied until fixed)"
+                rm -f "$_power_dst"
+            else
+                ok "sudoers.d/livos-power installed (user-spec: ${_DLD_DESKTOP_USER})"
+            fi
+        fi
+        rm -f "$_power_tmp"
+    else
+        info "sudoers.d/livos-power source not found — skipping (power management unavailable)"
+    fi
+
     # 2c-gpu. Phase 316 (GPU-01) — NVIDIA container-toolkit, GATED behind an
     # `lspci` NVIDIA-GPU probe so NON-NVIDIA boxes (the overwhelming majority) see
     # ZERO install change. On an NVIDIA box we shell out to the SAME root-owned
