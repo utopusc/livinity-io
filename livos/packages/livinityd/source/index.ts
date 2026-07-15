@@ -401,6 +401,21 @@ type StoreSchema = {
 		usedBytes: Record<string, number>
 		lastScanAt?: number
 	}
+	// Phase 325 STOR-01 (325-05) — registry of gocryptfs encrypted folders. Written
+	// by system.cryptoCreate (append) / read by system.cryptoStatus + cryptoLock.
+	// Dedicated top-level key (NOT nested under `storageQuota` or any array/scalar —
+	// dot-prop path collisions silently drop the write, same convention as
+	// `monitoring`/`security`/`alerts` above). Holds only NON-secret metadata (folder
+	// name + cipher/plain dir paths): the passphrase and the gocryptfs master key are
+	// NEVER persisted here (D-02/D-03 — passphrase is the sole KDF factor, locked
+	// after reboot by design).
+	storage: {
+		encryptedFolders: {
+			name: string
+			cipherDir: string
+			plainDir: string
+		}[]
+	}
 	backups: {
 		repositories: {
 			id: string
