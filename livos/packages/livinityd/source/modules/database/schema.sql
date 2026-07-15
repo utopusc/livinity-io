@@ -884,3 +884,17 @@ BEGIN
   ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_recovery_codes_enc TEXT;
 END$$;
+
+-- =========================================================================
+-- Phase 325 STOR-02 — app-layer soft per-user storage quota (D-05/D-06).
+-- `quota_bytes` is the hard byte ceiling for a user's data subtree; NULL =
+-- unlimited / no quota (the default for every existing + new user, so this is
+-- backward-compatible). Cached USAGE is NOT a PG column — the `user-quota-scan`
+-- scheduler job du-accounts each user's dir and caches the per-user byte map in
+-- the FileStore (`storageQuota` key), so no second migration is needed.
+-- Idempotent ADD COLUMN IF NOT EXISTS in a DO-block (mirrors the totp block).
+-- =========================================================================
+DO $$
+BEGIN
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS quota_bytes BIGINT;
+END$$;
