@@ -3049,6 +3049,59 @@ _dld_template_app_units() {
         info "sudoers.d/livos-gpu source not found — skipping (guided GPU install unavailable)"
     fi
 
+    # 2a-ospatch. Phase 326 (OS-01) — root-owned unattended-upgrades wrapper. The
+    # livos-os-patch sudoers grant (2b-ospatch below) is on THIS binary only; the
+    # wrapper validates a fixed action enum {status|enable|disable|set-options|
+    # dry-run|run-now|report}, regex-validates its set-options args, and builds every
+    # apt argv + /etc/apt config body itself, so no caller flag can reach /etc/apt.
+    # Install it BEFORE the grant. Idempotent (content-diffed), byte-for-byte parallel
+    # to the livos-gpu wrapper block above (the install call names the literal dst path
+    # so the grant target is explicit + auditable in the deploy source).
+    local _ospatchwrap_src="${_DLD_STAGE_DIR}/scripts/install/livos-os-patch.sh"
+    [[ -f "$_ospatchwrap_src" ]] || _ospatchwrap_src="${_DLD_LIVOS_DIR}/scripts/install/livos-os-patch.sh"
+    local _ospatchwrap_dst="/usr/local/lib/livos/livos-os-patch.sh"
+    if [[ -f "$_ospatchwrap_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_ospatchwrap_dst" ]] || ! cmp -s "$_ospatchwrap_src" "$_ospatchwrap_dst"; then
+            if install -m 0755 -o root -g root "$_ospatchwrap_src" /usr/local/lib/livos/livos-os-patch.sh; then
+                ok "livos-os-patch.sh installed at $_ospatchwrap_dst"
+            else
+                warn "Failed to install livos-os-patch.sh (non-fatal; unattended-upgrades control unavailable until fixed)"
+            fi
+        fi
+    else
+        info "livos-os-patch.sh source not found — skipping (unattended-upgrades control unavailable)"
+    fi
+
+    # 2b-ospatch. Phase 326 (OS-01) — sudoers.d/livos-os-patch (unattended-upgrades
+    # grant) — install + template. Byte-for-byte parallel to the livos-gpu block above,
+    # retargeted at livos-os-patch. Runs on EVERY deploy (idempotent, content-diffed).
+    local _ospatch_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-os-patch"
+    [[ -f "$_ospatch_src" ]] || _ospatch_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-os-patch"
+    local _ospatch_dst="/etc/sudoers.d/livos-os-patch"
+    if [[ -f "$_ospatch_src" ]]; then
+        local _ospatch_tmp
+        _ospatch_tmp=$(mktemp)
+        if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                "$_ospatch_src" > "$_ospatch_tmp"
+        else
+            cp -f "$_ospatch_src" "$_ospatch_tmp"
+        fi
+        if [[ ! -f "$_ospatch_dst" ]] || ! cmp -s "$_ospatch_tmp" "$_ospatch_dst"; then
+            install -m 0440 -o root -g root "$_ospatch_tmp" "$_ospatch_dst"
+            if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_ospatch_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_ospatch_dst — removing (unattended-upgrades control stays denied until fixed)"
+                rm -f "$_ospatch_dst"
+            else
+                ok "sudoers.d/livos-os-patch installed (user-spec: ${_DLD_DESKTOP_USER})"
+            fi
+        fi
+        rm -f "$_ospatch_tmp"
+    else
+        info "sudoers.d/livos-os-patch source not found — skipping (unattended-upgrades control unavailable)"
+    fi
+
     # 2c-gpu. Phase 316 (GPU-01) — NVIDIA container-toolkit, GATED behind an
     # `lspci` NVIDIA-GPU probe so NON-NVIDIA boxes (the overwhelming majority) see
     # ZERO install change. On an NVIDIA box we shell out to the SAME root-owned

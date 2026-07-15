@@ -1,0 +1,6 @@
+# Phase 326 (OS-01) — sudoers grant for the unattended-upgrades wrapper.
+# Security model: grant on ONE explicit binary path, NO glob, NO arg wildcard.
+# The wrapper validates its action enum + set-options args and builds every apt argv itself.
+# Deploy: deploy-livinityd.sh block 2a/2b-ospatch; day-2: update.sh Step 7.10d.
+Cmnd_Alias LIVINITYD_OS_PATCH = /usr/local/lib/livos/livos-os-patch.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_OS_PATCH
