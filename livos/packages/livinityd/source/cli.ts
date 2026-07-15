@@ -6,6 +6,7 @@ import camelcaseKeys from 'camelcase-keys'
 
 import {cliClient} from './modules/cli-client.js'
 import blacklistUas from './modules/blacklist-uas/blacklist-uas.js'
+import {shutdown} from './modules/system/system.js'
 
 import Livinityd, {type LivinitydOptions} from './index.js'
 
@@ -87,6 +88,23 @@ function cleanShutdown(signal: string) {
 }
 process.on('SIGINT', cleanShutdown.bind(null, 'SIGINT'))
 process.on('SIGTERM', cleanShutdown.bind(null, 'SIGTERM'))
+
+// HW-01 (326-03, D-15/D-17): UPS clean-shutdown signal. Distinct from SIGTERM (which
+// exits immediately to release the port — the contract update.sh/systemd-restart rely
+// on, left UNCHANGED). SIGUSR2 is sent ONLY by the root upsmon SHUTDOWNCMD wrapper
+// (livos-ups-shutdown.sh). It replicates the system.shutdown route: dispatch the
+// critical UPS ALERT, stop all apps cleanly (livinityd.stop()), then poweroff.
+let isUpsShutdown = false
+process.on('SIGUSR2', () => {
+	if (isUpsShutdown) return
+	isUpsShutdown = true
+	void (async () => {
+		livinityd.logger.log('Received SIGUSR2 (UPS FSD) — clean shutdown')
+		await livinityd.notifications.add('ups-power-loss', {severity: 'critical', external: true}).catch(() => {})
+		await livinityd.stop().catch((e) => livinityd.logger.error('UPS clean stop failed', e))
+		await shutdown().catch((e) => livinityd.logger.error('UPS poweroff failed', e))
+	})()
+})
 
 try {
 	await livinityd.start()
