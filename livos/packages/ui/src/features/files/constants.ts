@@ -23,6 +23,8 @@ import {AudioViewer} from '@/features/files/components/file-viewer/audio-viewer'
 const ImageViewer = lazy(() => import('@/features/files/components/file-viewer/image-viewer'))
 const PdfViewer = lazy(() => import('@/features/files/components/file-viewer/pdf-viewer'))
 const VideoViewer = lazy(() => import('@/features/files/components/file-viewer/video-viewer'))
+const TextEditorViewer = lazy(() => import('@/features/files/components/file-viewer/text-editor'))
+const MarkdownViewer = lazy(() => import('@/features/files/components/file-viewer/markdown-viewer'))
 
 export const BASE_ROUTE_PATH = '/files' as const
 export const HOME_PATH = '/Home' as const
@@ -102,8 +104,9 @@ export const FILE_TYPE_MAP = {
 
 	// Documents
 	'application/pdf': {nameTKey: 'files-type.pdf', thumbnail: PdfThumbnail, viewer: PdfViewer},
-	'text/plain': {nameTKey: 'files-type.txt', thumbnail: TxtThumbnail, viewer: null},
-	'text/csv': {nameTKey: 'files-type.csv', thumbnail: CsvThumbnail, viewer: null},
+	'text/plain': {nameTKey: 'files-type.txt', thumbnail: TxtThumbnail, viewer: TextEditorViewer},
+	'text/csv': {nameTKey: 'files-type.csv', thumbnail: CsvThumbnail, viewer: TextEditorViewer},
+	'text/markdown': {nameTKey: 'files-type.markdown', thumbnail: TxtThumbnail, viewer: MarkdownViewer},
 
 	// Ebooks
 	'application/epub+zip': {nameTKey: 'files-type.epub', thumbnail: EbookThumbnail, viewer: null},
