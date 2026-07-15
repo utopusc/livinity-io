@@ -66,6 +66,14 @@ export const V47_P324_FILE_SHARES_MIGRATIONS: ReadonlyArray<string> = [
 	'2026-07-15-p324-file-shares.sql',
 ] as const
 
+// Phase 324-02 (FILES-02) — file_acls per-path user/group grant table.
+// Registered here (drift #7 / 325 omission lesson) — additive-only per the
+// expand invariant. Appended AFTER file_shares; the 324-01 entries + the p325
+// incidental fix above are untouched.
+export const V47_P324_FILE_ACLS_MIGRATIONS: ReadonlyArray<string> = [
+	'2026-07-15-p324-file-acls.sql',
+] as const
+
 export const ALL_MIGRATIONS: ReadonlyArray<string> = [
 	...V32_AGENTS_MIGRATIONS,
 	...V36_P131_PINNED_WINDOWS_MIGRATIONS,
@@ -73,4 +81,5 @@ export const ALL_MIGRATIONS: ReadonlyArray<string> = [
 	...V47_P329_JOB_RUNS_MIGRATIONS,
 	...V47_P325_USER_QUOTA_MIGRATIONS, // incidental cross-phase fix (324-01)
 	...V47_P324_FILE_SHARES_MIGRATIONS,
+	...V47_P324_FILE_ACLS_MIGRATIONS,
 ] as const

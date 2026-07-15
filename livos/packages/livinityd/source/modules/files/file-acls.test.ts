@@ -74,16 +74,6 @@ function makeFakeRunner(seed?: {acls?: AclRec[]; members?: MemberRec[]}): {
 				return {rows, rowCount: rows.length}
 			}
 
-			// listAclsForPath — SELECT ... FROM file_acls WHERE virtual_path=$1 (no subquery)
-			if (/FROM file_acls/i.test(sql)) {
-				const rows = acls
-					.filter((a) => a.virtual_path === params[0])
-					.sort((x, y) =>
-						`${x.principal_type}:${x.principal_id}`.localeCompare(`${y.principal_type}:${y.principal_id}`),
-					)
-				return {rows, rowCount: rows.length}
-			}
-
 			// grantAcl — INSERT INTO file_acls (...) ON CONFLICT ... DO UPDATE ... RETURNING ...
 			if (/INSERT INTO file_acls/i.test(sql)) {
 				const [virtual_path, principal_type, principal_id, level, granted_by] = params
@@ -118,6 +108,18 @@ function makeFakeRunner(seed?: {acls?: AclRec[]; members?: MemberRec[]}): {
 				if (i < 0) return {rows: [], rowCount: 0}
 				acls.splice(i, 1)
 				return {rows: [], rowCount: 1}
+			}
+
+			// listAclsForPath — SELECT ... FROM file_acls WHERE virtual_path=$1 (no subquery).
+			// Checked LAST so the INSERT/DELETE branches (which also contain the
+			// substring "file_acls") win first.
+			if (/SELECT[\s\S]*FROM file_acls/i.test(sql)) {
+				const rows = acls
+					.filter((a) => a.virtual_path === params[0])
+					.sort((x, y) =>
+						`${x.principal_type}:${x.principal_id}`.localeCompare(`${y.principal_type}:${y.principal_id}`),
+					)
+				return {rows, rowCount: rows.length}
 			}
 
 			throw new Error(`unexpected SQL: ${sql}`)

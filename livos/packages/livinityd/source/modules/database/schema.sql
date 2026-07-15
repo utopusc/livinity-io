@@ -951,3 +951,31 @@ CREATE TABLE IF NOT EXISTS file_shares (
 CREATE INDEX IF NOT EXISTS idx_file_shares_active ON file_shares (token_hash) WHERE revoked_at IS NULL;
 -- Owner "my shares" audit list.
 CREATE INDEX IF NOT EXISTS idx_file_shares_owner ON file_shares (owner_user_id);
+
+-- =========================================================================
+-- Phase 324 (FILES-02) — per-path user/group ACLs (D-07/D-08).
+-- Superset of user_app_access (line 43): a grant is keyed on (virtual_path,
+-- principal_type, principal_id) and carries a level. principal_type is 'user'
+-- or 'group' (the Phase-322 groups table is the group source); principal_id is
+-- the users.id or groups.id UUID. level is 'none' | 'read' | 'write' — evaluated
+-- as the most-permissive UNION of the user's direct grant + all their group
+-- grants at the EXACT path (`none` overrides only when it is the sole rule,
+-- D-08). NON-inheriting, explicit-path v1 (NO subtree tree-walk). granted_by is
+-- the admin who set it (ON DELETE SET NULL keeps the grant if that admin is
+-- deleted). This ADDS cross-user visibility on top of the structural per-user
+-- isolation — it can NEVER escape virtualToSystemPath containment. NO POSIX
+-- ACLs / setfacl (every file is one OS uid). Additive/expand-only per
+-- migrations/index.ts:16-26 (no destructive ALTER/DROP).
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS file_acls (
+  virtual_path   TEXT NOT NULL,
+  principal_type TEXT NOT NULL CHECK (principal_type IN ('user','group')),
+  principal_id   UUID NOT NULL,
+  level          TEXT NOT NULL CHECK (level IN ('none','read','write')),
+  granted_by     UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (virtual_path, principal_type, principal_id)
+);
+-- Hot-path lookup: every grant at a given path (getEffectiveLevel + render-time
+-- Samba `valid users`).
+CREATE INDEX IF NOT EXISTS idx_file_acls_path ON file_acls (virtual_path);
