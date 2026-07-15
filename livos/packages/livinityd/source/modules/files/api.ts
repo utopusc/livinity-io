@@ -5,11 +5,20 @@ import express from 'express'
 import fse from 'fs-extra'
 import bcrypt from 'bcryptjs'
 
-import {findUserByUsername} from '../database/index.js'
+import {findUserByUsername, findUserById} from '../database/index.js'
 
 import type {ApiOptions} from '../server/index.js'
 import {fileUserContext, type FileUserInfo} from './files.js'
 import {webdavHomeDir} from './webdav.js'
+import {
+	hashKey,
+	findShareByHash,
+	incrementDownload,
+	touchLastAccessed,
+	constantTimeHashEqual,
+	ShareTokenNegativeCache,
+	type FileShareRow,
+} from './share-tokens.js'
 
 // Extract FileUserInfo from Express request (set by privateApi middleware in server/index.ts)
 function getFileUserFromRequest(request: express.Request): FileUserInfo | undefined {
@@ -310,6 +319,263 @@ export default function api({publicApi, privateApi, livinityd}: ApiOptions) {
 
 			// Return success
 			return response.status(200).json({path: livinityd.files.systemToVirtualPath(systemPath)})
+		})
+	})
+
+	// ═══════════════════════════════════════════════════════════════════════
+	// Phase 324-01 FILES-01 — PUBLIC share links (D-01..D-05, D-18).
+	//
+	// The ONE deliberate unauthenticated surface in the file API. Registered on
+	// `publicApi` (NO LIVINITY_PROXY_TOKEN gate) with `/api/files/share/` added
+	// to APEX_PUBLIC_PREFIXES. The signed opaque `liv_share_<32>` token IS the
+	// auth. THREE independent GET routes — /share/:token, /:token/download,
+	// /:token/thumbnail — each INDEPENDENTLY re-run the FULL validation chain via
+	// resolveShare(): NO `req.shareOk` trusted across handlers (CVE-2026-45282).
+	// Path resolution ALWAYS runs inside fileUserContext.run(owner) — a no-cookie
+	// request resolves the OWNER's tree, never anon/admin/another-user (D-04).
+	// not-found / revoked / expired / exhausted / deactivated-owner / escaped
+	// sub-path ALL collapse to the IDENTICAL generic 404 `[share-not-available]`
+	// (D-05 enumeration resistance). Password-required MAY differ (401); wrong-
+	// password vs rate-limited MUST NOT differ (Task 3 / D-05).
+	// ═══════════════════════════════════════════════════════════════════════
+
+	// Per-process negative cache for the token-hash hot path (D-01) — a
+	// brute-force-throttle aid; the per-token Redis rate-limit (D-03) is the
+	// non-negotiable control.
+	const shareNegCache = new ShareTokenNegativeCache()
+
+	// The single generic "not available" response. not-found == revoked ==
+	// expired == exhausted == deactivated-owner == escaped-path (D-05).
+	const shareNotAvailable = (response: express.Response) =>
+		response.status(404).json({error: '[share-not-available]'})
+
+	// Per-share unlock-grant cookie name (D-03). Bound to the row id; a UUID
+	// stripped to alnum is a valid cookie-name token.
+	const shareCookieName = (shareId: string) => `livshare_${shareId.replace(/[^a-zA-Z0-9]/g, '')}`
+
+	// Confine a client-supplied sub-path to WITHIN the share's virtual path
+	// (directory shares, D-06). Reject anything that normalises outside the share
+	// root BEFORE it reaches virtualToSystemPath (which independently re-checks
+	// escapes-base against the owner's base dir — belt AND suspenders, D-04).
+	const confineSubPath = (shareVirtualPath: string, sub: string): string => {
+		if (!sub) return shareVirtualPath
+		const joined = nodePath.posix.normalize(nodePath.posix.join(shareVirtualPath, sub))
+		if (joined !== shareVirtualPath && !joined.startsWith(`${shareVirtualPath}/`)) {
+			throw new Error('[escapes-share]')
+		}
+		return joined
+	}
+
+	type ResolvedShare = {row: FileShareRow; owner: FileUserInfo}
+
+	// Verify the per-token unlock-grant cookie (D-03). True IFF a valid,
+	// unexpired grant bound to THIS shareId is present (audience + shareId
+	// binding — a grant for another share is rejected).
+	const shareGrantValid = async (request: express.Request, shareId: string): Promise<boolean> => {
+		const cookie = request.cookies?.[shareCookieName(shareId)]
+		if (typeof cookie !== 'string' || !cookie) return false
+		try {
+			const claims = await livinityd.server.verifyShareGrant(cookie)
+			return claims.shareId === shareId
+		} catch {
+			return false
+		}
+	}
+
+	// The FULL validation chain, re-run independently by EVERY sub-route. Returns
+	// the resolved {row, owner} on success, or null AFTER having already written
+	// the (generic) failure response. NEVER trusts a caller-supplied "ok" flag.
+	//
+	// Task 2 scope: hash → not-revoked → not-expired (baked into findShareByHash)
+	// → constant-time compare → password-grant-cookie → download-limit → owner.
+	// Task 3 augments the password branch with the bcryptjs submission compare +
+	// the per-token Redis rate-limit + grant-cookie minting.
+	const resolveShare = async (
+		request: express.Request,
+		response: express.Response,
+	): Promise<ResolvedShare | null> => {
+		const token = request.params.token
+		if (typeof token !== 'string' || !token) {
+			shareNotAvailable(response)
+			return null
+		}
+		const tokenHash = hashKey(token)
+
+		// Negative-cache fast path — an already-known-invalid token skips PG.
+		if (shareNegCache.isInvalid(tokenHash)) {
+			shareNotAvailable(response)
+			return null
+		}
+
+		// findShareByHash filters revoked_at IS NULL AND not-expired in SQL, so a
+		// not-found / revoked / expired share ALL map to null — indistinguishable.
+		let row: FileShareRow | null = null
+		try {
+			row = await findShareByHash(tokenHash)
+		} catch (error) {
+			// Fail closed — a PG outage must not leak a 500 stack to the public.
+			livinityd.logger.error('[files.share] findShareByHash threw — failing closed', error)
+			shareNotAvailable(response)
+			return null
+		}
+		if (!row) {
+			shareNegCache.setInvalid(tokenHash)
+			shareNotAvailable(response)
+			return null
+		}
+
+		// Defense-in-depth constant-time compare (T-324-01). SELECT_COLS excludes
+		// token_hash so this is a degenerate self-compare that pins the code path
+		// to the constant-time primitive without changing the posture (mirrors
+		// api-keys/bearer-auth.ts:205-210).
+		const rowHash = (row as {tokenHash?: string}).tokenHash ?? tokenHash
+		if (!constantTimeHashEqual(tokenHash, rowHash)) {
+			shareNegCache.setInvalid(tokenHash)
+			shareNotAvailable(response)
+			return null
+		}
+
+		// ── Password branch (D-03) ───────────────────────────────────────────
+		// Task 2: a password-protected share requires a valid per-token unlock
+		// grant cookie; absent → 401 password-required (this MAY differ per D-05).
+		// Task 3 adds the bcryptjs submission compare + Redis rate-limit here.
+		if (row.passwordHash) {
+			const unlocked = await shareGrantValid(request, row.id)
+			if (!unlocked) {
+				response.status(401).json({error: '[share-password-required]'})
+				return null
+			}
+		}
+
+		// ── Download-limit (D-01) ────────────────────────────────────────────
+		// An exhausted share is indistinguishable from not-available (D-05).
+		if (row.maxDownloads !== null && row.downloadCount >= row.maxDownloads) {
+			shareNotAvailable(response)
+			return null
+		}
+
+		// ── Owner resolution (D-04) ──────────────────────────────────────────
+		// Resolve the OWNER (never anon/admin). A deleted / deactivated owner →
+		// generic not-available. The path is resolved by the CALLER inside
+		// fileUserContext.run(owner) so it can only reach the owner's tree.
+		let owner
+		try {
+			owner = await findUserById(row.ownerUserId)
+		} catch (error) {
+			livinityd.logger.error('[files.share] owner lookup threw — failing closed', error)
+			shareNotAvailable(response)
+			return null
+		}
+		if (!owner || !owner.isActive) {
+			shareNotAvailable(response)
+			return null
+		}
+
+		return {row, owner: {username: owner.username, role: owner.role as FileUserInfo['role']}}
+	}
+
+	// GET /api/files/share/:token — share metadata (+ directory listing). The
+	// full chain is re-run here independently (CVE-2026-45282).
+	publicApi.get('/share/:token', async (request, response) => {
+		const resolved = await resolveShare(request, response)
+		if (!resolved) return
+		await fileUserContext.run(resolved.owner, async () => {
+			try {
+				const sub = typeof request.query.path === 'string' ? request.query.path : ''
+				const targetVirtual = confineSubPath(resolved.row.virtualPath, sub)
+				const systemPath = await livinityd.files.virtualToSystemPath(targetVirtual)
+				const status = await livinityd.files.status(systemPath)
+
+				// Best-effort access accounting (not a download).
+				await touchLastAccessed(resolved.row.id).catch(() => {})
+
+				const base = {
+					name: status.name,
+					type: status.type,
+					size: status.size,
+					modified: status.modified,
+					hasPassword: resolved.row.passwordHash !== null,
+					expiresAt: resolved.row.expiresAt,
+					downloadsRemaining:
+						resolved.row.maxDownloads === null
+							? null
+							: Math.max(0, resolved.row.maxDownloads - resolved.row.downloadCount),
+				}
+
+				if (status.type === 'directory') {
+					const listing = await livinityd.files.list(targetVirtual)
+					// Project children to sub-paths RELATIVE to the share root — never
+					// leak the owner's absolute base-dir layout; these relative paths
+					// feed straight back into /download?path= and /thumbnail?path=.
+					const entries = (listing.files ?? [])
+						.filter((f): f is NonNullable<typeof f> => Boolean(f))
+						.map((f) => ({
+							name: f.name,
+							type: f.type,
+							size: f.size,
+							modified: f.modified,
+							subPath: nodePath.posix.relative(resolved.row.virtualPath, f.path),
+							hasThumbnail: Boolean(f.thumbnail),
+						}))
+					return response.json({...base, entries})
+				}
+				return response.json(base)
+			} catch (error) {
+				// Deleted / escaped / unreadable → generic not-available (D-04/D-05).
+				return shareNotAvailable(response)
+			}
+		})
+	})
+
+	// GET /api/files/share/:token/download[?path=<subpath>] — stream a shared
+	// file (or a confined file within a shared directory). Re-runs the FULL chain.
+	publicApi.get('/share/:token/download', async (request, response) => {
+		const resolved = await resolveShare(request, response)
+		if (!resolved) return
+		await fileUserContext.run(resolved.owner, async () => {
+			let systemPath: string
+			try {
+				const sub = typeof request.query.path === 'string' ? request.query.path : ''
+				const targetVirtual = confineSubPath(resolved.row.virtualPath, sub)
+				systemPath = await livinityd.files.virtualToSystemPath(targetVirtual)
+				if (!(await fse.exists(systemPath))) throw new Error('not found')
+			} catch (error) {
+				return shareNotAvailable(response)
+			}
+
+			const stat = await fse.stat(systemPath)
+			if (stat.isDirectory()) {
+				// Directory zip-download is DEFERRED (D-06). The share itself is
+				// valid (already authenticated) so this is not an enumeration oracle.
+				return response.status(400).json({error: '[directory-download-unsupported]'})
+			}
+
+			// Best-effort download accounting BEFORE streaming (D-01).
+			await incrementDownload(resolved.row.id).catch(() => {})
+
+			const filename = nodePath.basename(systemPath)
+			response.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`)
+			return response.sendFile(systemPath)
+		})
+	})
+
+	// GET /api/files/share/:token/thumbnail[?path=<subpath>] — serve an EXISTING
+	// thumbnail for a shared file (never generates one). Re-runs the FULL chain.
+	publicApi.get('/share/:token/thumbnail', async (request, response) => {
+		const resolved = await resolveShare(request, response)
+		if (!resolved) return
+		await fileUserContext.run(resolved.owner, async () => {
+			try {
+				const sub = typeof request.query.path === 'string' ? request.query.path : ''
+				const targetVirtual = confineSubPath(resolved.row.virtualPath, sub)
+				const systemPath = await livinityd.files.virtualToSystemPath(targetVirtual)
+				const hash = await livinityd.files.thumbnails.getThumbnailHash(systemPath)
+				const thumbnailSystemPath = livinityd.files.thumbnails.hashToThumbnailSystemPath(hash)
+				if (!(await fse.exists(thumbnailSystemPath))) return shareNotAvailable(response)
+				return response.sendFile(thumbnailSystemPath)
+			} catch (error) {
+				return shareNotAvailable(response)
+			}
 		})
 	})
 }

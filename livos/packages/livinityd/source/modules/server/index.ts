@@ -155,6 +155,18 @@ const APEX_PUBLIC_PREFIXES = [
 	'/oidc/jwks',
 	'/oidc/token',
 	'/oidc/userinfo',
+	// Phase 324-01 (FILES-01, D-02) — public file-share links. The signed opaque
+	// share token (`liv_share_<32>`, sha256-hashed, constant-time compared) IS
+	// the auth here, exactly like `/api/webhooks/`'s HMAC signature — a public
+	// link carries no LIVINITY_SESSION cookie, so gating it would break the
+	// feature. Registered on the `publicApi` router (no LIVINITY_PROXY_TOKEN
+	// gate) and owner-scoped: EVERY sub-route (/share/:token, /download,
+	// /thumbnail) INDEPENDENTLY re-runs the full validation chain and resolves
+	// the path inside fileUserContext.run(owner) (CVE-2026-45282 — no trusted
+	// cross-handler gate). Trailing slash keeps the prefix from matching any
+	// unrelated `/api/files/share…` path. This is the ONE deliberate
+	// unauthenticated surface in the otherwise fully-gated file API.
+	'/api/files/share/',
 ]
 
 // Pre-auth static assets (login wallpaper, hashed bundle chunks, fonts the
@@ -293,6 +305,16 @@ class Server {
 	/** Phase 259 — verify an SSO bounce token (audience-bound, throws on failure). */
 	async verifySsoToken(token: string) {
 		return jwt.verifySsoToken(token, await this.getJwtSecret())
+	}
+
+	/** Phase 324-01 (FILES-01, D-03) — mint a ~30-min share unlock grant bound to one shareId. */
+	async signShareGrant(shareId: string) {
+		return jwt.signShareGrant(await this.getJwtSecret(), shareId)
+	}
+
+	/** Phase 324-01 (FILES-01, D-03) — verify a share unlock grant (audience-bound, throws on failure). */
+	async verifyShareGrant(token: string) {
+		return jwt.verifyShareGrant(token, await this.getJwtSecret())
 	}
 
 	/**

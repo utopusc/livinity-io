@@ -24,6 +24,16 @@ const PROXY_AUDIENCE = 'livinityd-proxy'
 // rejected) and a jti for single-use consumption via Redis.
 const SSO_AUDIENCE = 'livinityd-sso'
 const SSO_TTL_SECONDS = 30
+// Phase 324-01 (FILES-01, D-03) — the short-lived "unlocked" grant a password-
+// protected public share mints AFTER a correct bcryptjs compare, so the browser
+// does not resubmit the password on every sub-route (/download, /thumbnail).
+// Distinct audience so it is NOT interchangeable with a session / proxy / SSO
+// token; it carries the ONE shareId it was minted for (replay to a different
+// share is rejected by the route comparing the claim to the resolved row.id —
+// mirrors the SSO targetHost binding) and a jti. Scoped to that share's token
+// cookie path so it never rides another share's request.
+const SHARE_AUDIENCE = 'livinityd-share'
+const SHARE_GRANT_TTL_SECONDS = 30 * 60 // ~30 min (D-03)
 
 /**
  * Phase 257-04 WS-A (LIVOS-028): derive a SEPARATE proxy signing secret from the
@@ -172,6 +182,61 @@ export async function verifySsoToken(token: string, secret: string): Promise<Ver
 		legacy: payload.legacy === true,
 		jti: payload.jti,
 	}
+}
+
+/**
+ * Phase 324-01 (FILES-01, D-03) — mint a short-lived share unlock grant, bound
+ * to the ONE shareId it is issued for (replay to another share is rejected at
+ * the route by comparing the returned claim to the resolved row.id — mirrors
+ * signSsoToken's targetHost binding). The `jti` is returned for optional
+ * single-use bookkeeping. Signed with the same session secret + the distinct
+ * SHARE_AUDIENCE so it is never interchangeable with a session/proxy/SSO token.
+ */
+export async function signShareGrant(
+	secret: string,
+	shareId: string,
+): Promise<{token: string; jti: string}> {
+	validateSecret(secret)
+	const jti = crypto.randomUUID()
+	const payload = {share: true, shareId, jti}
+	const token = jwt.sign(payload, secret, {
+		expiresIn: SHARE_GRANT_TTL_SECONDS,
+		algorithm: JWT_ALGORITHM,
+		audience: SHARE_AUDIENCE,
+		issuer: TOKEN_ISSUER,
+	})
+	return {token, jti}
+}
+
+export type VerifiedShareGrant = {
+	shareId: string
+	jti: string
+}
+
+/**
+ * Phase 324-01 (FILES-01, D-03) — verify a share unlock grant. Enforces the
+ * SHARE audience + issuer (a session/proxy/SSO token can NOT be presented here,
+ * and vice-versa) and returns the bound shareId. Throws on any failure
+ * (signature, expiry, wrong audience, missing shareId) — the caller fails
+ * closed (re-prompts for the password). The caller MUST additionally check the
+ * returned shareId equals the share being accessed (replay-to-another-share
+ * defense — the audience alone does not bind the specific share).
+ */
+export async function verifyShareGrant(token: string, secret: string): Promise<VerifiedShareGrant> {
+	validateSecret(secret)
+	const payload = jwt.verify(token, secret, {
+		algorithms: [JWT_ALGORITHM],
+		audience: SHARE_AUDIENCE,
+		issuer: TOKEN_ISSUER,
+	}) as any
+	if (payload.share !== true) throw new Error('Invalid share grant')
+	if (typeof payload.shareId !== 'string' || payload.shareId.length === 0) {
+		throw new Error('Invalid share grant (no shareId)')
+	}
+	if (typeof payload.jti !== 'string' || payload.jti.length === 0) {
+		throw new Error('Invalid share grant (no jti)')
+	}
+	return {shareId: payload.shareId, jti: payload.jti}
 }
 
 /**
