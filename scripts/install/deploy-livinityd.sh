@@ -3336,6 +3336,61 @@ _dld_template_app_units() {
         info "sudoers.d/livos-tailscale source not found — skipping (VPN control unavailable)"
     fi
 
+    # 2a-webdav. Phase 329 (FILES-05) — root-owned SFTPGo (WebDAV) wrapper
+    # (sha256-pinned v2.7.4 .deb install + wrapper-owned webdavd-only 127.0.0.1
+    # config with external_auth_hook to livinityd + SFTP/FTP/HTTPS off). The
+    # livos-webdav sudoers grant (2b-webdav below) is on THIS binary only; the
+    # wrapper validates a fixed action enum {install|configure|status|remove} and
+    # builds the exact SFTPGo download URL + digest + every apt argv + the entire
+    # /etc/sftpgo config body itself. Install it BEFORE the grant. Idempotent
+    # (content-diffed), byte-for-byte parallel to the livos-tailscale wrapper block
+    # above. Serialized AFTER 325-06's Tailscale block by wave; prior blocks untouched.
+    local _wdwrap_src="${_DLD_STAGE_DIR}/scripts/install/livos-webdav.sh"
+    [[ -f "$_wdwrap_src" ]] || _wdwrap_src="${_DLD_LIVOS_DIR}/scripts/install/livos-webdav.sh"
+    local _wdwrap_dst="/usr/local/lib/livos/livos-webdav.sh"
+    if [[ -f "$_wdwrap_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_wdwrap_dst" ]] || ! cmp -s "$_wdwrap_src" "$_wdwrap_dst"; then
+            if install -m 0755 -o root -g root "$_wdwrap_src" /usr/local/lib/livos/livos-webdav.sh; then
+                ok "livos-webdav.sh installed at $_wdwrap_dst"
+            else
+                warn "Failed to install livos-webdav.sh (non-fatal; WebDAV control unavailable until fixed)"
+            fi
+        fi
+    else
+        info "livos-webdav.sh source not found — skipping (WebDAV control unavailable)"
+    fi
+
+    # 2b-webdav. Phase 329 (FILES-05) — sudoers.d/livos-webdav (SFTPGo wrapper grant)
+    # — install + template. Byte-for-byte parallel to the livos-tailscale block above,
+    # retargeted at livos-webdav. Runs on EVERY deploy (idempotent, content-diffed).
+    # Wrapper install (0755) BEFORE grant install (0440).
+    local _webdav_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-webdav"
+    [[ -f "$_webdav_src" ]] || _webdav_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-webdav"
+    local _webdav_dst="/etc/sudoers.d/livos-webdav"
+    if [[ -f "$_webdav_src" ]]; then
+        local _webdav_tmp
+        _webdav_tmp=$(mktemp)
+        if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                "$_webdav_src" > "$_webdav_tmp"
+        else
+            cp -f "$_webdav_src" "$_webdav_tmp"
+        fi
+        if [[ ! -f "$_webdav_dst" ]] || ! cmp -s "$_webdav_tmp" "$_webdav_dst"; then
+            install -m 0440 -o root -g root "$_webdav_tmp" "$_webdav_dst"
+            if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_webdav_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_webdav_dst — removing (WebDAV control stays denied until fixed)"
+                rm -f "$_webdav_dst"
+            else
+                ok "sudoers.d/livos-webdav installed (user-spec: ${_DLD_DESKTOP_USER})"
+            fi
+        fi
+        rm -f "$_webdav_tmp"
+    else
+        info "sudoers.d/livos-webdav source not found — skipping (WebDAV control unavailable)"
+    fi
+
     # 2c-gpu. Phase 316 (GPU-01) — NVIDIA container-toolkit, GATED behind an
     # `lspci` NVIDIA-GPU probe so NON-NVIDIA boxes (the overwhelming majority) see
     # ZERO install change. On an NVIDIA box we shell out to the SAME root-owned
