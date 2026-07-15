@@ -26,7 +26,7 @@ import crypto from 'node:crypto'
 import jwt from 'jsonwebtoken'
 import {describe, expect, test} from 'vitest'
 
-import {sign, signUserToken, verify, signProxyToken, verifyProxyToken, signSsoToken, verifySsoToken} from './jwt.js'
+import {sign, signUserToken, verify, signProxyToken, verifyProxyToken, signSsoToken, verifySsoToken, signShareGrant, verifyShareGrant} from './jwt.js'
 
 // Two valid 64-hex (256-bit) secrets.
 const SESSION_SECRET = 'a'.repeat(64)
@@ -176,5 +176,53 @@ describe('jwt — Phase 259 SSO bounce token', () => {
 			{algorithm: 'HS256', audience: 'livinityd-sso', issuer: 'livinityd', expiresIn: -10},
 		)
 		await expect(verifySsoToken(expired, SESSION_SECRET)).rejects.toThrow()
+	})
+})
+
+describe('jwt — Phase 324-01 FILES-01 share unlock grant (D-03)', () => {
+	test('signShareGrant round-trips shareId + jti', async () => {
+		const {token, jti} = await signShareGrant(SESSION_SECRET, 'share-A')
+		const claims = await verifyShareGrant(token, SESSION_SECRET)
+		expect(claims.shareId).toBe('share-A')
+		expect(claims.jti).toBe(jti)
+	})
+
+	test('a grant minted for share A carries share A (route can reject B) — shareId binding', async () => {
+		// The grant is BOUND to one share via shareId (mirrors the SSO targetHost
+		// binding). Replay to another share is rejected by the ROUTE comparing
+		// claims.shareId to the current row.id — the verifier surfaces the bound id.
+		const {token} = await signShareGrant(SESSION_SECRET, 'share-A')
+		const claims = await verifyShareGrant(token, SESSION_SECRET)
+		expect(claims.shareId).toBe('share-A')
+		expect(claims.shareId).not.toBe('share-B')
+	})
+
+	test('a share grant is NOT accepted by the session verifier (audience binding)', async () => {
+		const {token} = await signShareGrant(SESSION_SECRET, 'share-A')
+		await expect(verify(token, SESSION_SECRET)).rejects.toThrow()
+	})
+
+	test('a session token is NOT accepted by the share-grant verifier', async () => {
+		const sess = await signUserToken(SESSION_SECRET, 'u1', 'member')
+		await expect(verifyShareGrant(sess, SESSION_SECRET)).rejects.toThrow()
+	})
+
+	test('an SSO token is NOT accepted by the share-grant verifier (distinct audience)', async () => {
+		const {token} = await signSsoToken(SESSION_SECRET, {targetHost: 'x-bruce.livinity.io', userId: 'u1', role: 'member'})
+		await expect(verifyShareGrant(token, SESSION_SECRET)).rejects.toThrow()
+	})
+
+	test('a wrong-secret share grant fails verification', async () => {
+		const {token} = await signShareGrant(SESSION_SECRET, 'share-A')
+		await expect(verifyShareGrant(token, OTHER_SECRET)).rejects.toThrow()
+	})
+
+	test('an expired share grant fails verification', async () => {
+		const expired = jwt.sign(
+			{share: true, shareId: 'share-A', jti: 'j1'},
+			SESSION_SECRET,
+			{algorithm: 'HS256', audience: 'livinityd-share', issuer: 'livinityd', expiresIn: -10},
+		)
+		await expect(verifyShareGrant(expired, SESSION_SECRET)).rejects.toThrow()
 	})
 })
