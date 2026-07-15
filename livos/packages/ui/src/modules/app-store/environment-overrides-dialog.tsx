@@ -7,7 +7,7 @@ import {Input, PasswordInput} from '@/shadcn-components/ui/input'
 import {Switch} from '@/shadcn-components/ui/switch'
 import {t} from '@/utils/i18n'
 
-type EnvironmentOverride = {
+export type EnvironmentOverride = {
 	name: string
 	label: string
 	type: 'string' | 'password'
@@ -25,6 +25,13 @@ export function EnvironmentOverridesDialog({
 	appName,
 	overrides,
 	onNext,
+	// 326-04 (APPS-01 Configure) — when this dialog is reopened from the App
+	// Settings "Configure" section (rather than at install time) it is seeded with
+	// the app's persisted overrides and its submit button reads a save label
+	// instead of "Install {appName}". Both optional so the install-time call site
+	// stays byte-unchanged (undefined → default install behaviour).
+	initialValues,
+	submitLabel,
 	// Phase 330 (GPU-05) — host-supplied GPU context. When the installed app is
 	// gpu-capable AND a GPU is present, the popup renders a default-OFF "Use GPU"
 	// Switch (opt-in). All of this is host-tier (Pitfall 5): the store iframe
@@ -41,6 +48,8 @@ export function EnvironmentOverridesDialog({
 	// FLAG 1 — a single optional boolean sibling folds the GPU choice back to
 	// handleInstall (do NOT redesign the resolve contract).
 	onNext: (values: Record<string, string>, gpuAccess?: boolean) => void
+	initialValues?: Record<string, string>
+	submitLabel?: string
 	gpuCapable?: boolean
 	gpuVendor?: GpuVendor
 	gpuWsl2?: boolean
@@ -49,7 +58,9 @@ export function EnvironmentOverridesDialog({
 	const [values, setValues] = useState<Record<string, string>>(() => {
 		const initial: Record<string, string> = {}
 		for (const override of overrides) {
-			initial[override.name] = override.default ?? ''
+			// Configure mode (326-04) prefills from the app's persisted values; install
+			// mode passes no initialValues and falls back to the manifest default.
+			initial[override.name] = initialValues?.[override.name] ?? override.default ?? ''
 		}
 		return initial
 	})
@@ -159,7 +170,7 @@ export function EnvironmentOverridesDialog({
 						disabled={!allRequiredFilled}
 						onClick={handleSubmit}
 					>
-						Install {appName}
+						{submitLabel ?? `Install ${appName}`}
 					</Button>
 					<Button size='dialog' onClick={() => onOpenChange(false)}>
 						Cancel
