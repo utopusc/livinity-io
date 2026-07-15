@@ -16,6 +16,12 @@ function getFileUserFromRequest(request: express.Request): FileUserInfo | undefi
 	return undefined
 }
 
+// Phase 329-07 FILES-04 (D-02) — server-side size ceilings enforced BEFORE any
+// content crosses to the browser viewers/editor. Over-cap → the client falls back
+// to the existing DownloadDialog. Text edit ≤ 5 MB, read-only preview ≤ 25 MB.
+const TEXT_EDIT_MAX_BYTES = 5 * 1024 * 1024 // 5 MB (editor)
+const PREVIEW_MAX_BYTES = 25 * 1024 * 1024 // 25 MB (docx/xlsx/pdf preview)
+
 export default function api({publicApi, privateApi, livinityd}: ApiOptions) {
 	// Serve thumbnails from the thumbnails directory
 	// GET /api/files/thumbnail/:thumbnail
@@ -98,9 +104,62 @@ export default function api({publicApi, privateApi, livinityd}: ApiOptions) {
 				const systemPath = await livinityd.files.virtualToSystemPath(request.query.path)
 				const status = await livinityd.files.status(systemPath)
 				if (status.type === 'directory') return response.status(400).json({error: 'cannot view a directory'})
+
+				// Phase 329-07 FILES-04 (D-02) — expose the file size + the text-edit
+				// ceiling so the editor UI can route text files > 5 MB to the
+				// DownloadDialog itself, and HARD-reject anything past the 25 MB preview
+				// ceiling before streaming — no unbounded content reaches the browser
+				// viewers. Small text/preview files serve exactly as before.
+				response.setHeader('X-File-Size', String(status.size))
+				response.setHeader('X-Edit-Max-Bytes', String(TEXT_EDIT_MAX_BYTES))
+				if (status.size > PREVIEW_MAX_BYTES) {
+					return response.status(413).json({
+						error: '[file-too-large]',
+						size: status.size,
+						maxBytes: PREVIEW_MAX_BYTES,
+					})
+				}
+
 				response.sendFile(systemPath)
 			} catch (error) {
 				return response.status(404).json({error: 'not found'})
+			}
+		})
+	})
+
+	// Saves UTF-8 text content to a file (in-browser editor save path)
+	// POST /api/files/save-text   body: {path, content}
+	// Phase 329-07 FILES-04 (D-05). Delegates to files.saveTextFile(), which applies
+	// the `writable` + per-user quota gate (unlike /upload) and writes atomically.
+	// This is a DEDICATED route — the /upload quota bypass is neither reused nor
+	// touched. express.json is scoped to this route (the module has no global JSON
+	// body parser); the limit is generous enough for a 5 MB text body + JSON
+	// envelope, with the exact 5 MB ceiling enforced on `content` below.
+	privateApi.post('/save-text', express.json({limit: '8mb'}), async (request, response) => {
+		const userInfo = getFileUserFromRequest(request)
+		await fileUserContext.run(userInfo, async () => {
+			const {path, content} = (request.body ?? {}) as {path?: unknown; content?: unknown}
+			if (typeof path !== 'string' || typeof content !== 'string') {
+				return response.status(400).json({error: 'path and content are required'})
+			}
+
+			// Server-side text-edit ceiling (D-02): reject > 5 MB; the editor UI routes
+			// oversize files to the DownloadDialog rather than the editor.
+			if (Buffer.byteLength(content, 'utf8') > TEXT_EDIT_MAX_BYTES) {
+				return response.status(413).json({error: '[file-too-large]', maxBytes: TEXT_EDIT_MAX_BYTES})
+			}
+
+			try {
+				const savedPath = await livinityd.files.saveTextFile(path, content)
+				return response.status(200).json({path: savedPath})
+			} catch (error) {
+				const message = (error as Error)?.message ?? 'error saving file'
+				// Surface the module's standard error tokens as sensible HTTP statuses.
+				if (message === '[quota-exceeded]') return response.status(413).json({error: message})
+				if (message === '[operation-not-allowed]') return response.status(403).json({error: message})
+				// Path-resolution rejections ([invalid-base]/[escapes-base]/[path-not-absolute]).
+				if (message.startsWith('[')) return response.status(400).json({error: message})
+				return response.status(500).json({error: 'error saving file'})
 			}
 		})
 	})
