@@ -1377,6 +1377,43 @@ export default class Apps {
 		return app.setGpuAccess(enabled)
 	}
 
+	// 326-01 APPS-01 (D-02): set post-install env overrides. RE-RUNS the install-time
+	// manifest allowlist BEFORE delegating — unknown keys are post-install arbitrary env
+	// injection, so reject + log them here (same filter as install(), apps.ts:769-782).
+	// The app-instance setter persists the ALREADY-filtered map + patch-then-restarts.
+	async setEnvironmentOverrides(appId: string, overrides: Record<string, string>) {
+		const app = this.getApp(appId)
+		const builtinApp = getBuiltinApp(appId)
+		const allowedKeys = new Set(builtinApp?.installOptions?.environmentOverrides?.map((o) => o.name) ?? [])
+		const filtered: Record<string, string> = {}
+		for (const [key, value] of Object.entries(overrides)) {
+			if (allowedKeys.has(key)) filtered[key] = value
+			else this.logger.error(`Rejected unknown environment override key '${key}' for app ${appId}`)
+		}
+		return app.setEnvironmentOverrides(filtered)
+	}
+
+	// 326-01 APPS-03 (D-07): set per-app CPU/RAM limits (delegates; app instance
+	// patch-then-restarts so deploy.resources.limits reconciles via compose recreation).
+	async setResourceLimits(appId: string, limits: {cpuLimit?: number; memoryLimit?: number}) {
+		return this.getApp(appId).setResourceLimits(limits)
+	}
+
+	// 326-01 APPS-02 (D-04): set the per-app auto-update policy (plain store write).
+	async setUpdatePolicy(appId: string, policy: 'auto' | 'manual') {
+		return this.getApp(appId).setUpdatePolicy(policy)
+	}
+
+	// 326-01 APPS-02 (D-05): pin/un-pin an exact ignored version (plain store write).
+	async setIgnoredVersion(appId: string, version: string | undefined) {
+		return this.getApp(appId).setIgnoredVersion(version)
+	}
+
+	// 326-01 MEDIA-01 (D-19): remember the Immich onboarding QR-card dismissal (UI-only).
+	async setImmichCardDismissed(appId: string, dismissed: boolean) {
+		return this.getApp(appId).setImmichCardDismissed(dismissed)
+	}
+
 	// 316-02 (GPU-02): list the ids of every app currently claiming GPU access,
 	// so the UI can warn about GPU exclusivity. Mirrors getDependents' cross-app
 	// scan — catch-per-app so one unreadable app never fails the whole scan.

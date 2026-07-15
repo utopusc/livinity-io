@@ -119,12 +119,28 @@ export const apps = router({
 						// The ciphertext itself NEVER leaves the server — only the boolean immichApiKeySet
 						// below is surfaced (computed from `!= null`), never decrypting the blob.
 						immichApiKeyEnc,
+						// 326-01 (APPS-01/02/03 + MEDIA-01): the per-app Configure/policy/limits/dismissal
+						// state so the later UI/scheduler plans read a stable apps.list contract. Each is
+						// the raw persisted store value (undefined when never set); surfaced verbatim below
+						// and mirrored as `undefined` on the native-app branch to keep the union uniform.
+						environmentOverrides,
+						autoUpdatePolicy,
+						ignoredVersion,
+						cpuLimit,
+						memoryLimit,
+						immichCardDismissed,
 					] = await Promise.all([
 						app.readManifest(),
 						app.getSelectedDependencies(),
 						app.getGpuAccess(),
 						app.store.get('oidcEnabled'),
 						app.store.get('immichApiKeyEnc'),
+						app.store.get('environmentOverrides'),
+						app.store.get('autoUpdatePolicy'),
+						app.store.get('ignoredVersion'),
+						app.store.get('cpuLimit'),
+						app.store.get('memoryLimit'),
+						app.store.get('immichCardDismissed'),
 					])
 
 					if (deterministicPassword) {
@@ -186,6 +202,16 @@ export const apps = router({
 						// 322-05 (Pitfall 7): true ONLY for Immich when the admin key is stored.
 						// Store-presence check — never decrypts, never returns the key.
 						immichApiKeySet: app.id === 'immich' && immichApiKeyEnc != null,
+						// 326-01 (APPS-01/02/03 + MEDIA-01): per-app Configure/policy/limits/dismissal state
+						// (see destructure above). installOptions is the raw manifest install options — the
+						// Configure dialog reads installOptions.environmentOverrides for its field spec.
+						installOptions,
+						environmentOverrides,
+						autoUpdatePolicy,
+						ignoredVersion,
+						cpuLimit,
+						memoryLimit,
+						immichCardDismissed,
 					}
 				} catch (error) {
 					ctx.apps.logger.error(`Failed to read manifest for app ${app.id}`, error)
@@ -222,6 +248,16 @@ export const apps = router({
 					oidcNative: false,
 					oidcEnabled: undefined,
 					immichApiKeySet: undefined,
+					// 326-01 (APPS-01/02/03 + MEDIA-01): native builtins carry no per-app store state —
+					// keep the union shape uniform (undefined on all), but surface the manifest
+					// installOptions so the Configure gate stays consistent with the docker branch.
+					installOptions: builtinApp?.installOptions,
+					environmentOverrides: undefined,
+					autoUpdatePolicy: undefined,
+					ignoredVersion: undefined,
+					cpuLimit: undefined,
+					memoryLimit: undefined,
+					immichCardDismissed: undefined,
 				})
 			}
 		}
@@ -544,6 +580,39 @@ export const apps = router({
 			}),
 		)
 		.mutation(async ({ctx, input}) => ctx.apps!.setGpuAccess(input.appId, input.enabled)),
+
+	// 326-01 APPS-01 (D-02/D-21): set post-install env overrides. adminProcedure — this
+	// env-injects + restarts the shared global app (same host-affecting class as
+	// setGpuAccess). The delegator re-runs the manifest allowlist so unknown keys are
+	// rejected before they ever reach the compose/.env (D-02).
+	setEnvironmentOverrides: adminProcedure
+		.input(z.object({appId: z.string(), overrides: z.record(z.string())}))
+		.mutation(async ({ctx, input}) => ctx.apps!.setEnvironmentOverrides(input.appId, input.overrides)),
+
+	// 326-01 APPS-03 (D-07/D-21, T-326-03): set per-app CPU/RAM limits. adminProcedure —
+	// resource contention on the shared host. .positive()/.int().positive() bound the DoS
+	// surface; limits apply via patchComposeFile+restart, never a live-container update.
+	setResourceLimits: adminProcedure
+		.input(z.object({appId: z.string(), cpuLimit: z.number().positive().optional(), memoryLimit: z.number().int().positive().optional()}))
+		.mutation(async ({ctx, input}) => ctx.apps!.setResourceLimits(input.appId, {cpuLimit: input.cpuLimit, memoryLimit: input.memoryLimit})),
+
+	// 326-01 APPS-02 (D-04/D-21): set the per-app auto-update policy. adminProcedure —
+	// governs the update state of the shared global app for all users.
+	setUpdatePolicy: adminProcedure
+		.input(z.object({appId: z.string(), policy: z.enum(['auto', 'manual'])}))
+		.mutation(async ({ctx, input}) => ctx.apps!.setUpdatePolicy(input.appId, input.policy)),
+
+	// 326-01 APPS-02 (D-05/D-21): pin/un-pin an exact ignored version. adminProcedure —
+	// same shared-global-app update-governance class as setUpdatePolicy.
+	setIgnoredVersion: adminProcedure
+		.input(z.object({appId: z.string(), version: z.string().optional()}))
+		.mutation(async ({ctx, input}) => ctx.apps!.setIgnoredVersion(input.appId, input.version)),
+
+	// 326-01 MEDIA-01 (D-19/D-21): dismiss the Immich onboarding QR card. privateProcedure —
+	// a per-UI onboarding-card dismissal with no host/security surface.
+	setImmichCardDismissed: privateProcedure
+		.input(z.object({appId: z.string(), dismissed: z.boolean()}))
+		.mutation(async ({ctx, input}) => ctx.apps!.setImmichCardDismissed(input.appId, input.dismissed)),
 
 	// 316-02 (GPU-02): ids of apps already claiming the GPU, for the exclusivity warning.
 	listAppsWithGpuAccess: privateProcedure.query(async ({ctx}) => ctx.apps!.listAppsWithGpuAccess()),
