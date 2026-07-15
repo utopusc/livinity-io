@@ -1053,7 +1053,7 @@
   "settings.users.quota.placeholder": "GB (leave 0 for unlimited)",
   "settings.users.quota.save": "Save quota",
   "settings.users.quota.unlimited": "Unlimited",
-  "settings.users.quota.used": "{{used}} of {{limit}} used",
+  "settings.users.quota.used": "{{used}} of {{limit}} soft limit",
   "shut-down": "Shut down",
   "shut-down.complete": "Shutdown complete",
   "shut-down.complete-text": "You can now unplug your device from the power.",

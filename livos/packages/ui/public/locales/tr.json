@@ -1027,7 +1027,7 @@
   "settings.users.quota.placeholder": "GB (sınırsız için 0 bırakın)",
   "settings.users.quota.save": "Kotayı kaydet",
   "settings.users.quota.unlimited": "Sınırsız",
-  "settings.users.quota.used": "{{limit}} kotasının {{used}} kadarı kullanıldı",
+  "settings.users.quota.used": "{{limit}} yumuşak sınırının {{used}} kadarı kullanıldı",
   "shut-down": "Kapat",
   "shut-down.complete": "Kapatma tamamlandı",
   "shut-down.complete-text": "Cihazınızı şimdi güçten çekebilirsiniz.",

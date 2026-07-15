@@ -679,6 +679,16 @@ export default class Files {
 		const forceSlowMoveWithProgress = process.env.LIVINITYD_FORCE_SLOW_MOVE_WITH_PROGRESS === 'true'
 		const isMovingAcrossFilesystems = sourceStats.dev !== targetDirectoryStats.dev
 		if (isMovingAcrossFilesystems || forceSlowMoveWithProgress) {
+			// Phase 325 STOR-02 (WR-04) — a cross-filesystem move is a copy+delete that
+			// ADDS bytes to the destination filesystem, so gate it against the user's
+			// soft quota exactly like copy() does. Same-filesystem moves take the atomic
+			// `move()` branch below (net-zero for the user tree → no quota gate). Admins
+			// use the global tree (no per-user quota) so they are exempt.
+			const quotaUser = fileUserContext.getStore()
+			await this.assertWithinQuota(
+				quotaUser && quotaUser.role !== 'admin' ? quotaUser.username : undefined,
+				sourceStats.size,
+			)
 			// If we're moving across filesystems there will be a slow copy and delete so
 			// we'll use our own implementation that reports progress.
 			await this.#copyWithProgress(sourceSystemPath, destinationSystemPath, {move: true})
