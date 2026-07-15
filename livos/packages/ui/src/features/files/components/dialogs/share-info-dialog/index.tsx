@@ -4,6 +4,7 @@ import {useSearchParams} from 'react-router-dom'
 
 import {FadeScroller} from '@/components/fade-scroller'
 import {PlatformInstructions} from '@/features/files/components/dialogs/share-info-dialog/platform-instructions'
+import {WebDAVInstructions} from '@/features/files/components/dialogs/share-info-dialog/platform-instructions/webdav-instructions'
 import {
 	Platform,
 	platforms,
@@ -171,6 +172,10 @@ export default function ShareInfoDialog() {
 							)}
 						</AnimatePresence>
 					)}
+					{/* Phase 329-10 (FILES-05) — WebDAV connect instructions. Always
+					    available: WebDAV serves the user's own home over HTTPS regardless
+					    of the SMB share toggle (per-user auth, 329-05). */}
+					<WebDAVInstructions />
 				</div>
 			)}
 		</div>
