@@ -86,6 +86,10 @@ const DESCRIPTIONS: Record<string, string> = {
 	// the base key. The external message stays generic (the Kimi projection + container
 	// payload remain in-app in ai_alerts only).
 	'ai-resource-pressure': 'A container is under resource pressure',
+	// Phase 326 HW-01 — UPS mains-power alerts (upsWatchHandler). Fixed, app-controlled
+	// strings (no host device data) — the in-app bell renders its own i18n text.
+	'ups-power-loss': 'Running on UPS battery — mains power lost',
+	'ups-power-restored': 'Mains power restored',
 }
 
 // MED-04: `disk-critical` fires at two tiers (jobs.ts diskSeverityFor): warning

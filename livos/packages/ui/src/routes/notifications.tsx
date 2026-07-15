@@ -196,6 +196,10 @@ export function Notifications() {
 		'smart-failing',
 		'smart-unavailable',
 		'smart-permission-denied',
+		// Phase 326 HW-01 — UPS power alerts (ups-watch job): admin-actionable host
+		// power events, gated the same way as the disk/SMART host alerts.
+		'ups-power-loss',
+		'ups-power-restored',
 	]
 	const {isAdmin, isLoading: isLoadingUser} = useCurrentUser()
 	const canSeeAdminNotifications = !isLoadingUser && isAdmin
@@ -345,6 +349,33 @@ export function Notifications() {
 							Open Settings
 						</AlertDialogAction>
 					</>
+				),
+			}
+		}
+
+		// Phase 326-05 (HW-01) — UPS mains power lost (running on battery). Admin-only,
+		// raised by the ups-watch scheduler job. upsmon (not this alert) owns shutdown.
+		if (notification === 'ups-power-loss') {
+			return {
+				title: t('notifications.ups-power-loss.title'),
+				description: t('notifications.ups-power-loss.description'),
+				action: (
+					<Button variant='default' size='dialog' onClick={() => clearNotification(notification)} tabIndex={0}>
+						{t('ok')}
+					</Button>
+				),
+			}
+		}
+
+		// Phase 326-05 (HW-01) — UPS mains power restored (back on utility power).
+		if (notification === 'ups-power-restored') {
+			return {
+				title: t('notifications.ups-power-restored.title'),
+				description: t('notifications.ups-power-restored.description'),
+				action: (
+					<Button variant='default' size='dialog' onClick={() => clearNotification(notification)} tabIndex={0}>
+						{t('ok')}
+					</Button>
 				),
 			}
 		}
