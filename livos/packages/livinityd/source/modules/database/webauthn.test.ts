@@ -52,12 +52,14 @@ function makeFakeRunner(seed?: WebauthnCredentialRow[]): {
 					existing.counter = String(counter)
 					return {rows: [existing], rowCount: 1}
 				}
+				// Mirror pg JSONB round-trip: the DAO writes JSON.stringify(array),
+				// the pg driver returns it parsed back to a JS array on read.
 				const row: WebauthnCredentialRow = {
 					user_id,
 					credential_id,
 					public_key,
 					counter: String(counter),
-					transports: transports ?? null,
+					transports: typeof transports === 'string' ? JSON.parse(transports) : (transports ?? null),
 					nickname: nickname ?? null,
 					created_at: NOW,
 				}

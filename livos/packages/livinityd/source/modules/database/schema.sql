@@ -979,3 +979,31 @@ CREATE TABLE IF NOT EXISTS file_acls (
 -- Hot-path lookup: every grant at a given path (getEffectiveLevel + render-time
 -- Samba `valid users`).
 CREATE INDEX IF NOT EXISTS idx_file_acls_path ON file_acls (virtual_path);
+
+-- =========================================================================
+-- Phase 323 (IDENT-03) — WebAuthn / passkey credentials (D-01/D-04).
+-- One row per enrolled authenticator. credential_id is the globally-unique
+-- lookup key (the login path resolves the owning user from it — hence the
+-- standalone UNIQUE index below). public_key is stored PLAINTEXT/base64 and is
+-- NOT secret — the authenticator holds the private key, so there is NO DEK
+-- (unlike TOTP's totp_secret_enc). counter is the authenticator signature
+-- counter (replay defence, bumped on each auth). transports is the JSONB list
+-- of authenticator transports. Persisted from the @simplewebauthn/server v13
+-- NESTED registrationInfo.credential.{id, publicKey, counter, transports} shape
+-- (NOT the pre-v13 flat fields). ON DELETE CASCADE removes a user's passkeys
+-- when the user is deleted. Additive/expand-only per migrations/index.ts:16-26
+-- (no destructive ALTER/DROP).
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS webauthn_credentials (
+  user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  credential_id TEXT NOT NULL UNIQUE,
+  public_key    TEXT NOT NULL,
+  counter       BIGINT NOT NULL DEFAULT 0,
+  transports    JSONB,
+  nickname      TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, credential_id)
+);
+-- Hot-path lookup: the login ceremony resolves the owning user from the raw
+-- credential_id returned by the browser assertion.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_webauthn_credential_id ON webauthn_credentials (credential_id);
