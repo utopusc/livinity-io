@@ -8,10 +8,19 @@
 //   OFFERED as a candidate and MUST be absent from the eligible set (D-16
 //   mandate: negatives proven by fixtures, never asserted by comment).
 //
-// ★ ZERO LIVE DISK ACCESS: every external call (findmnt, lsblk PKNAME, block-
-//   device enumeration, removable-flag read) is injected via a `RootDiskDeps`
-//   object. Tests feed canned findmnt/lsblk JSON — no execa, no real lsblk/
-//   findmnt is ever executed against the host (marathon standing rule).
+// ★ CR-01 REGRESSION COVERAGE: the resolver walks the WHOLE-DISK ancestor tree
+//   (lsblk -rsno NAME,TYPE), so a stacked root — LVM, LUKS, mdadm, or an NVMe
+//   partition — must exclude the actual PHYSICAL disk(s), never the intermediate
+//   backing partition. The `ancestors` fixtures below model what the real
+//   `lsblk -rsno NAME,TYPE <src>` walk returns for each layout (e.g. an LVM root
+//   yields ['sda'], a mdadm mirror yields ['sda','sdb'] — BOTH excluded). The
+//   previous fixture hardcoded a single-hop PKNAME of 'sda', which MASKED the
+//   real two-hop chain where PKNAME returns the partition 'sda3'.
+//
+// ★ ZERO LIVE DISK ACCESS: every external call (findmnt, lsblk ancestor walk,
+//   block-device enumeration, removable-flag read) is injected via a
+//   `RootDiskDeps` object. Tests feed canned findmnt/lsblk data — no execa, no
+//   real lsblk/findmnt is ever executed against the host (marathon standing rule).
 
 import {describe, expect, test} from 'vitest'
 
@@ -29,10 +38,11 @@ import {
 // Builds a RootDiskDeps whose four functions return canned data instead of
 // shelling out. `mounts` maps a mountpoint → the `findmnt -no SOURCE` result
 // (an ABSENT key means "this mount does not exist" → null, exactly like a real
-// box where /boot or /boot/efi may not be a separate mount). `pkname` maps a
-// source path → the `lsblk -no PKNAME` result (null → forces the digit-strip
-// fallback path). `candidates` are the `type==='disk'` block devices offered.
-// `removable` maps a disk name → its lsblk RM flag (default false = fixed).
+// box where /boot or /boot/efi may not be a separate mount). `ancestors` maps a
+// source path → the `lsblk -rsno NAME,TYPE` TYPE=disk rows (the physical whole
+// disk(s) backing that source; an ABSENT key or [] forces the nvme/mmcblk-aware
+// digit-strip fallback). `candidates` are the `type==='disk'` block devices
+// offered. `removable` maps a disk name → its lsblk RM flag (default false).
 
 interface Candidate {
 	id: string
@@ -43,7 +53,7 @@ interface Candidate {
 
 function makeDeps(config: {
 	mounts: Record<string, string | null>
-	pkname?: Record<string, string | null>
+	ancestors?: Record<string, string[]>
 	candidates: Candidate[]
 	removable?: Record<string, boolean>
 	// If set, findmntSource throws for these mountpoints (simulates execa reject).
@@ -57,8 +67,8 @@ function makeDeps(config: {
 			// Absent key => mount does not exist => null (mirrors findmnt exit 1).
 			return mountpoint in config.mounts ? config.mounts[mountpoint] : null
 		},
-		async lsblkPkname(source: string) {
-			return config.pkname && source in config.pkname ? config.pkname[source] : null
+		async lsblkAncestorDisks(source: string) {
+			return config.ancestors && source in config.ancestors ? config.ancestors[source] : []
 		},
 		async listBlockDevices() {
 			return config.candidates.map((candidate) => ({
@@ -74,13 +84,13 @@ function makeDeps(config: {
 	}
 }
 
-// A canonical single-OS-disk box: `/` sits on sda2 whose parent disk is sda.
+// A canonical single-OS-disk box: `/` sits on sda2 whose whole disk is sda.
 // `/boot` and `/boot/efi` are NOT separate mounts (absent keys) — the common
 // single-disk laptop/Pi/VPS reality.
 const singleOsDisk = (candidates: Candidate[], extra?: Partial<Parameters<typeof makeDeps>[0]>) =>
 	makeDeps({
 		mounts: {'/': '/dev/sda2'},
-		pkname: {'/dev/sda2': 'sda'},
+		ancestors: {'/dev/sda2': ['sda']},
 		candidates,
 		...extra,
 	})
@@ -90,7 +100,7 @@ const singleOsDisk = (candidates: Candidate[], extra?: Partial<Parameters<typeof
 // =========================================================================
 
 describe('resolveOsDisks', () => {
-	test('resolves / via findmnt SOURCE → lsblk PKNAME', async () => {
+	test('resolves / via findmnt SOURCE → lsblk whole-disk walk', async () => {
 		const deps = singleOsDisk([{id: 'sda'}, {id: 'sdb'}])
 		const osDisks = await resolveOsDisks(deps)
 		expect(osDisks.has('sda')).toBe(true)
@@ -100,7 +110,7 @@ describe('resolveOsDisks', () => {
 	test('includes a DISTINCT /boot disk (both / and /boot backing disks resolved)', async () => {
 		const deps = makeDeps({
 			mounts: {'/': '/dev/sda2', '/boot': '/dev/sdb1'},
-			pkname: {'/dev/sda2': 'sda', '/dev/sdb1': 'sdb'},
+			ancestors: {'/dev/sda2': ['sda'], '/dev/sdb1': ['sdb']},
 			candidates: [{id: 'sda'}, {id: 'sdb'}, {id: 'sdc'}],
 		})
 		const osDisks = await resolveOsDisks(deps)
@@ -112,7 +122,7 @@ describe('resolveOsDisks', () => {
 	test('includes an EFI /boot/efi backing disk', async () => {
 		const deps = makeDeps({
 			mounts: {'/': '/dev/nvme0n1p2', '/boot/efi': '/dev/sda1'},
-			pkname: {'/dev/nvme0n1p2': 'nvme0n1', '/dev/sda1': 'sda'},
+			ancestors: {'/dev/nvme0n1p2': ['nvme0n1'], '/dev/sda1': ['sda']},
 			candidates: [{id: 'nvme0n1', transport: 'nvme'}, {id: 'sda'}, {id: 'sdb'}],
 		})
 		const osDisks = await resolveOsDisks(deps)
@@ -121,35 +131,123 @@ describe('resolveOsDisks', () => {
 		expect(osDisks.has('sdb')).toBe(false)
 	})
 
-	test('LVM/mdadm root resolves via PKNAME (the df-split resolver would break here)', async () => {
-		// findmnt SOURCE of an LVM root is /dev/mapper/vg-root — no trailing digit,
-		// so a df `.split('/').pop().replace(/\d+$/,'')` (Trap 15) yields "vg-root"
-		// and NEVER excludes the real disk. PKNAME resolves it to the true parent.
+	// --- CR-01: stacked roots must resolve to the WHOLE DISK, not the partition ---
+
+	test('CR-01 plain partition root: sda3 → sda (whole disk, not the partition)', async () => {
+		// A BIOS-boot plain root on /dev/sda3 with no ESP: the ancestor walk must
+		// yield the whole disk sda, so a candidate "sda" is excluded.
+		const deps = makeDeps({
+			mounts: {'/': '/dev/sda3'},
+			ancestors: {'/dev/sda3': ['sda']},
+			candidates: [{id: 'sda'}, {id: 'sdb'}],
+		})
+		const osDisks = await resolveOsDisks(deps)
+		expect(osDisks.has('sda')).toBe(true)
+		expect(osDisks.has('sda3')).toBe(false) // never the partition name
+	})
+
+	test('CR-01 LVM root (dm-0 → sda3 → sda): excludes the WHOLE disk sda', async () => {
+		// The exact case the old fixture MASKED: real `lsblk -no PKNAME
+		// /dev/mapper/vg0-root` returns the backing partition "sda3", NOT "sda".
+		// The whole-disk walk (lsblk -rsno NAME,TYPE) reports TYPE=disk → sda.
 		const deps = makeDeps({
 			mounts: {'/': '/dev/mapper/vg0-root'},
-			pkname: {'/dev/mapper/vg0-root': 'sda'},
+			ancestors: {'/dev/mapper/vg0-root': ['sda']},
+			candidates: [{id: 'sda'}, {id: 'sdb'}],
+		})
+		const osDisks = await resolveOsDisks(deps)
+		expect(osDisks.has('sda')).toBe(true)
+		expect(osDisks.has('sda3')).toBe(false)
+	})
+
+	test('CR-01 LUKS-on-partition root (cryptroot → sda3 → sda): excludes sda', async () => {
+		const deps = makeDeps({
+			mounts: {'/': '/dev/mapper/cryptroot'},
+			ancestors: {'/dev/mapper/cryptroot': ['sda']},
 			candidates: [{id: 'sda'}, {id: 'sdb'}],
 		})
 		const osDisks = await resolveOsDisks(deps)
 		expect(osDisks.has('sda')).toBe(true)
 	})
 
-	test('digit-strip fallback when PKNAME is empty (/dev/sda2 → sda)', async () => {
+	test('CR-01 mdadm root (md0 → sda3 + sdb3): excludes ALL backing disks', async () => {
+		// A mdadm mirror backs / from TWO partitions on TWO disks — the walk yields
+		// BOTH physical disks and EVERY one must be excluded.
+		const deps = makeDeps({
+			mounts: {'/': '/dev/md0'},
+			ancestors: {'/dev/md0': ['sda', 'sdb']},
+			candidates: [{id: 'sda'}, {id: 'sdb'}, {id: 'sdc'}],
+		})
+		const osDisks = await resolveOsDisks(deps)
+		expect(osDisks.has('sda')).toBe(true)
+		expect(osDisks.has('sdb')).toBe(true)
+		expect(osDisks.has('sdc')).toBe(false)
+	})
+
+	test('CR-01 NVMe stacked root (nvme0n1p2 → nvme0n1): excludes the whole nvme disk', async () => {
+		const deps = makeDeps({
+			mounts: {'/': '/dev/nvme0n1p2'},
+			ancestors: {'/dev/nvme0n1p2': ['nvme0n1']},
+			candidates: [{id: 'nvme0n1', transport: 'nvme'}, {id: 'sdb'}],
+		})
+		const osDisks = await resolveOsDisks(deps)
+		expect(osDisks.has('nvme0n1')).toBe(true)
+		expect(osDisks.has('nvme0n1p2')).toBe(false)
+	})
+
+	// --- IN-02 / CR-01 fallback: nvme/mmcblk-aware digit-strip when lsblk gives no disk ---
+
+	test('fallback (no disk ancestor) sd: /dev/sda2 → sda', async () => {
 		const deps = makeDeps({
 			mounts: {'/': '/dev/sda2'},
-			pkname: {'/dev/sda2': null}, // PKNAME failed → fallback
+			ancestors: {'/dev/sda2': []}, // ancestor walk empty → fallback strip
 			candidates: [{id: 'sda'}, {id: 'sdb'}],
 		})
 		const osDisks = await resolveOsDisks(deps)
 		expect(osDisks.has('sda')).toBe(true)
+	})
+
+	test('IN-02 fallback nvme: /dev/nvme0n1p2 → nvme0n1 (NOT "nvme")', async () => {
+		const deps = makeDeps({
+			mounts: {'/': '/dev/nvme0n1p2'},
+			ancestors: {'/dev/nvme0n1p2': []}, // force fallback
+			candidates: [{id: 'nvme0n1', transport: 'nvme'}, {id: 'sdb'}],
+		})
+		const osDisks = await resolveOsDisks(deps)
+		expect(osDisks.has('nvme0n1')).toBe(true)
+		expect(osDisks.has('nvme')).toBe(false) // the old digit-strip bug
+	})
+
+	test('IN-02 fallback mmcblk: /dev/mmcblk0p1 → mmcblk0 (NOT "mmcblk")', async () => {
+		const deps = makeDeps({
+			mounts: {'/': '/dev/mmcblk0p1'},
+			ancestors: {'/dev/mmcblk0p1': []}, // force fallback
+			candidates: [{id: 'mmcblk0'}, {id: 'sdb'}],
+		})
+		const osDisks = await resolveOsDisks(deps)
+		expect(osDisks.has('mmcblk0')).toBe(true)
+		expect(osDisks.has('mmcblk')).toBe(false)
+	})
+
+	test('fallback refuses a mapper/lvm basename (no disk ancestor → contributes nothing)', async () => {
+		// When even the ancestor walk fails on an LVM source, the basename
+		// "vg0-root" is NOT a strippable partition → contributes NOTHING rather than
+		// a bogus disk name.
+		const deps = makeDeps({
+			mounts: {'/': '/dev/mapper/vg0-root'},
+			ancestors: {}, // walk yields nothing
+			candidates: [{id: 'sda'}, {id: 'sdb'}],
+		})
+		const osDisks = await resolveOsDisks(deps)
+		expect(osDisks.size).toBe(0)
 	})
 
 	test('a mount that does not resolve contributes nothing (no phantom disk)', async () => {
-		// / resolves; /boot is a separate mount whose source cannot be PKNAME-d and
+		// / resolves; /boot is a separate mount whose source cannot be walked and
 		// has no strippable name → it must add NOTHING, never a bogus disk name.
 		const deps = makeDeps({
-			mounts: {'/': '/dev/sda2', '/boot': null},
-			pkname: {'/dev/sda2': 'sda'},
+			mounts: {'/': '/dev/sda2', '/boot': '/dev/mapper/vg0-boot'},
+			ancestors: {'/dev/sda2': ['sda']},
 			candidates: [{id: 'sda'}, {id: 'sdb'}],
 		})
 		const osDisks = await resolveOsDisks(deps)
@@ -172,7 +270,7 @@ describe('resolveOsDisks', () => {
 	test('findmnt throwing for / is caught (contributes nothing, does not crash)', async () => {
 		const deps = makeDeps({
 			mounts: {'/boot': '/dev/sdb1'},
-			pkname: {'/dev/sdb1': 'sdb'},
+			ancestors: {'/dev/sdb1': ['sdb']},
 			candidates: [{id: 'sda'}, {id: 'sdb'}],
 			throwOnFindmnt: ['/'],
 		})
@@ -207,10 +305,57 @@ describe('getEligibleInternalDrives', () => {
 		expect(eligible.some((drive) => drive.id === 'sda')).toBe(false)
 	})
 
+	test('CR-01 NEGATIVE: LVM-root whole disk is EXCLUDED (not just its partition)', async () => {
+		// The core CR-01 fix: root on /dev/mapper/vg0-root whose whole disk is sda —
+		// sda MUST NOT be offered for format even though PKNAME would say "sda3".
+		const deps = makeDeps({
+			mounts: {'/': '/dev/mapper/vg0-root'},
+			ancestors: {'/dev/mapper/vg0-root': ['sda']},
+			candidates: [{id: 'sda', name: 'OS SSD'}, {id: 'sdb'}, {id: 'sdc'}],
+		})
+		const ids = (await getEligibleInternalDrives(deps)).map((d) => d.id)
+		expect(ids).toEqual(['sdb', 'sdc'])
+		expect(ids).not.toContain('sda') // the LVM-backed OS disk is NOT eligible
+	})
+
+	test('CR-01 NEGATIVE: LUKS-root whole disk is EXCLUDED', async () => {
+		const deps = makeDeps({
+			mounts: {'/': '/dev/mapper/cryptroot'},
+			ancestors: {'/dev/mapper/cryptroot': ['sda']},
+			candidates: [{id: 'sda'}, {id: 'sdb'}],
+		})
+		const ids = (await getEligibleInternalDrives(deps)).map((d) => d.id)
+		expect(ids).toEqual(['sdb'])
+		expect(ids).not.toContain('sda')
+	})
+
+	test('CR-01 NEGATIVE: mdadm root excludes BOTH backing disks', async () => {
+		const deps = makeDeps({
+			mounts: {'/': '/dev/md0'},
+			ancestors: {'/dev/md0': ['sda', 'sdb']},
+			candidates: [{id: 'sda'}, {id: 'sdb'}, {id: 'sdc'}],
+		})
+		const ids = (await getEligibleInternalDrives(deps)).map((d) => d.id)
+		expect(ids).toEqual(['sdc'])
+		expect(ids).not.toContain('sda')
+		expect(ids).not.toContain('sdb') // the SECOND mdadm member is also excluded
+	})
+
+	test('CR-01 NEGATIVE: NVMe stacked root excludes the whole nvme disk', async () => {
+		const deps = makeDeps({
+			mounts: {'/': '/dev/nvme0n1p2'},
+			ancestors: {'/dev/nvme0n1p2': ['nvme0n1']},
+			candidates: [{id: 'nvme0n1', transport: 'nvme'}, {id: 'sdb'}],
+		})
+		const ids = (await getEligibleInternalDrives(deps)).map((d) => d.id)
+		expect(ids).toEqual(['sdb'])
+		expect(ids).not.toContain('nvme0n1')
+	})
+
 	test('NEGATIVE: a DISTINCT /boot disk is EXCLUDED (both / and /boot disks gone)', async () => {
 		const deps = makeDeps({
 			mounts: {'/': '/dev/sda2', '/boot': '/dev/sdb1'},
-			pkname: {'/dev/sda2': 'sda', '/dev/sdb1': 'sdb'},
+			ancestors: {'/dev/sda2': ['sda'], '/dev/sdb1': ['sdb']},
 			candidates: [{id: 'sda'}, {id: 'sdb'}, {id: 'sdc'}],
 		})
 		const eligible = await getEligibleInternalDrives(deps)
@@ -223,7 +368,7 @@ describe('getEligibleInternalDrives', () => {
 	test('NEGATIVE: an EFI /boot/efi partition disk is EXCLUDED', async () => {
 		const deps = makeDeps({
 			mounts: {'/': '/dev/nvme0n1p2', '/boot/efi': '/dev/sda1'},
-			pkname: {'/dev/nvme0n1p2': 'nvme0n1', '/dev/sda1': 'sda'},
+			ancestors: {'/dev/nvme0n1p2': ['nvme0n1'], '/dev/sda1': ['sda']},
 			candidates: [{id: 'nvme0n1', transport: 'nvme'}, {id: 'sda'}, {id: 'sdb'}],
 		})
 		const eligible = await getEligibleInternalDrives(deps)
@@ -304,16 +449,38 @@ describe('isOsDisk / assertNotOsDisk', () => {
 		expect(await isOsDisk('sdb', deps)).toBe(false)
 	})
 
+	test('CR-01: isOsDisk(whole LVM disk) === true (partition name never leaks)', async () => {
+		const deps = makeDeps({
+			mounts: {'/': '/dev/mapper/vg0-root'},
+			ancestors: {'/dev/mapper/vg0-root': ['sda']},
+			candidates: [{id: 'sda'}, {id: 'sdb'}],
+		})
+		expect(await isOsDisk('sda', deps)).toBe(true)
+		expect(await isOsDisk('sda3', deps)).toBe(false) // the partition is not a candidate id
+		expect(await isOsDisk('sdb', deps)).toBe(false)
+	})
+
 	test('assertNotOsDisk throws for the OS disk, resolves for a spare', async () => {
 		const deps = singleOsDisk([{id: 'sda'}, {id: 'sdb'}])
 		await expect(assertNotOsDisk('sda', deps)).rejects.toBeInstanceOf(OsDiskResolutionError)
 		await expect(assertNotOsDisk('sdb', deps)).resolves.toBeUndefined()
 	})
 
+	test('CR-01: assertNotOsDisk throws for the whole disk of a mdadm root', async () => {
+		const deps = makeDeps({
+			mounts: {'/': '/dev/md0'},
+			ancestors: {'/dev/md0': ['sda', 'sdb']},
+			candidates: [{id: 'sda'}, {id: 'sdb'}, {id: 'sdc'}],
+		})
+		await expect(assertNotOsDisk('sda', deps)).rejects.toBeInstanceOf(OsDiskResolutionError)
+		await expect(assertNotOsDisk('sdb', deps)).rejects.toBeInstanceOf(OsDiskResolutionError)
+		await expect(assertNotOsDisk('sdc', deps)).resolves.toBeUndefined()
+	})
+
 	test('assertNotOsDisk throws for a distinct /boot disk too', async () => {
 		const deps = makeDeps({
 			mounts: {'/': '/dev/sda2', '/boot': '/dev/sdb1'},
-			pkname: {'/dev/sda2': 'sda', '/dev/sdb1': 'sdb'},
+			ancestors: {'/dev/sda2': ['sda'], '/dev/sdb1': ['sdb']},
 			candidates: [{id: 'sda'}, {id: 'sdb'}, {id: 'sdc'}],
 		})
 		await expect(assertNotOsDisk('sdb', deps)).rejects.toBeInstanceOf(OsDiskResolutionError)
@@ -339,8 +506,8 @@ describe('isOsDisk / assertNotOsDisk', () => {
 			async findmntSource(mountpoint) {
 				return mountpoint === '/' ? rootSource : null
 			},
-			async lsblkPkname(source) {
-				return source === '/dev/sda2' ? 'sda' : source === '/dev/sdb2' ? 'sdb' : null
+			async lsblkAncestorDisks(source) {
+				return source === '/dev/sda2' ? ['sda'] : source === '/dev/sdb2' ? ['sdb'] : []
 			},
 			async listBlockDevices() {
 				return [

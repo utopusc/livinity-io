@@ -119,41 +119,72 @@ _part_suffix() {
 	esac
 }
 
-# Resolve the parent kernel disk name backing a mountpoint (e.g. / -> sda). Ported VERBATIM
-# from livos-power.sh:112-123 (findmnt -no SOURCE <mp> -> lsblk -no PKNAME <src>, basename
-# digit-strip fallback). Empty on any failure (fail-safe: an unresolved mount simply means we
-# cannot prove a match, and the caller keeps the belt-and-braces posture).
+# Resolve the WHOLE PHYSICAL disk name(s) backing a mountpoint (CR-01). Prints one disk name
+# per line (a mdadm array backs / from MULTIPLE disks — ALL are emitted so ALL get refused).
+#   findmnt -no SOURCE <mp>  ->  lsblk -rsno NAME,TYPE <src>  (take every TYPE=disk row)
+# `lsblk -s` walks the INVERSE dependency tree down through any LVM/LUKS/mdadm layer to the
+# physical disk, so a stacked root (/dev/mapper/vg-root, /dev/mapper/cryptroot, /dev/md0,
+# /dev/nvme0n1p2) resolves to its actual disk name(s) (sda, nvme0n1) — NOT the intermediate
+# backing PARTITION (sda3) that `lsblk -no PKNAME` returns (the CR-01 OS-destroy hole).
+# Empty on any failure (fail-safe: an unresolved mount simply means we cannot prove a match,
+# and the caller keeps the belt-and-braces posture).
 _disk_for_mount() {
-	local mp="${1:-}" src pk
+	local mp="${1:-}" src base pk
 	src=$(findmnt -no SOURCE "$mp" 2>/dev/null | head -n1) || return 0
 	[[ -n "$src" ]] || return 0
-	pk=$(lsblk -no PKNAME "$src" 2>/dev/null | head -n1)
-	if [[ -z "$pk" ]]; then
-		# Fallback: strip a trailing partition number from a /dev/sdXN source.
-		pk=$(basename "$src" 2>/dev/null)
-		pk="${pk%%[0-9]*}"
+	# Primary: every TYPE=disk ancestor (raw output, no tree chars) — the physical disk(s).
+	# `|| true` keeps a transient lsblk failure from tripping errexit (fail-safe: fall through
+	# to the basename strip / empty rather than aborting the whole guard).
+	local disks
+	disks=$(lsblk -rsno NAME,TYPE "$src" 2>/dev/null | awk '$NF=="disk"{print $1}' || true)
+	if [[ -n "$disks" ]]; then
+		printf '%s\n' "$disks"
+		return 0
 	fi
-	printf '%s' "$pk"
+	# Fallback (only when lsblk emits no disk ancestor): nvme/mmcblk-aware partition strip on
+	# the /dev/... basename. nvme0n1p2 -> nvme0n1 ; mmcblk0p1 -> mmcblk0 ; sda3 -> sda. A
+	# mapper/lvm/crypt basename yields nothing (never a bogus disk name).
+	base=$(basename "$src" 2>/dev/null)
+	case "$base" in
+		nvme[0-9]*n[0-9]*p[0-9]*) pk="${base%p[0-9]*}" ;;
+		mmcblk[0-9]*p[0-9]*)      pk="${base%p[0-9]*}" ;;
+		sd[a-z]*[0-9]*)           pk="${base%%[0-9]*}" ;;
+		*)                        pk="" ;;
+	esac
+	[[ -n "$pk" ]] && printf '%s\n' "$pk"
+	return 0
+}
+
+# True (return 0) if whole-disk name $1 appears in the newline-separated list $2. Used because
+# _disk_for_mount can emit MULTIPLE disks (a mdadm-backed mount), so a plain string `==` would
+# miss all but the concatenated blob (CR-01).
+_dev_in_list() {
+	local needle="$1" line
+	while IFS= read -r line; do
+		[[ -n "$line" && "$line" == "$needle" ]] && return 0
+	done <<< "$2"
+	return 1
 }
 
 # gate 2 — refuse a device that backs / OR /boot OR /boot/efi. Returns 2 on a match.
 # Ported from livos-power.sh:127-140 (_refuse_system_disk), EXTENDED to also reject the EFI
-# system-partition backing disk when /boot/efi is a distinct mount (Trap 10). Wrapper-side
+# system-partition backing disk when /boot/efi is a distinct mount (Trap 10) and to handle a
+# mount backed by SEVERAL whole disks (mdadm — every one is refused, CR-01). Wrapper-side
 # belt-and-braces; the TS route ALSO filters candidates, but this never trusts that.
 _refuse_system_disk() {
-	local dev="$1" root_disk boot_disk efi_disk
-	root_disk=$(_disk_for_mount /)
-	boot_disk=$(_disk_for_mount /boot)
-	efi_disk=$(_disk_for_mount /boot/efi)
-	if [[ -n "$root_disk" && "$dev" == "$root_disk" ]]; then
+	local dev="$1" root_disks boot_disks efi_disks
+	root_disks=$(_disk_for_mount /)
+	boot_disks=$(_disk_for_mount /boot)
+	efi_disks=$(_disk_for_mount /boot/efi)
+	if _dev_in_list "$dev" "$root_disks"; then
 		echo "[livos-pool] refusing the ROOT disk (/dev/${dev}) — it backs /" >&2
 		return 2
 	fi
-	if [[ -n "$boot_disk" && "$dev" == "$boot_disk" ]]; then
+	if _dev_in_list "$dev" "$boot_disks"; then
 		echo "[livos-pool] refusing the BOOT disk (/dev/${dev}) — it backs /boot" >&2
 		return 2
 	fi
-	if [[ -n "$efi_disk" && "$dev" == "$efi_disk" ]]; then
+	if _dev_in_list "$dev" "$efi_disks"; then
 		echo "[livos-pool] refusing the EFI system-partition disk (/dev/${dev}) — it backs /boot/efi" >&2
 		return 2
 	fi
@@ -363,9 +394,10 @@ case "$ACTION" in
 			# exclude usb transport + removable + the / , /boot , /boot/efi backing disks.
 			[[ "$_tran" == "usb" ]] && continue
 			[[ "$_rm" == "1" ]] && continue
-			[[ -n "$_root_disk" && "$_name" == "$_root_disk" ]] && continue
-			[[ -n "$_boot_disk" && "$_name" == "$_boot_disk" ]] && continue
-			[[ -n "$_efi_disk" && "$_name" == "$_efi_disk" ]] && continue
+			# _disk_for_mount can emit MULTIPLE disks (mdadm) — membership-test each list (CR-01).
+			_dev_in_list "$_name" "$_root_disk" && continue
+			_dev_in_list "$_name" "$_boot_disk" && continue
+			_dev_in_list "$_name" "$_efi_disk" && continue
 			_size=$(lsblk -dno SIZE -b "/dev/${_name}" 2>/dev/null | head -n1 | tr -d '[:space:]')
 			_pkname=$(lsblk -dno PKNAME "/dev/${_name}" 2>/dev/null | head -n1 | tr -d '[:space:]')
 			# Strip JSON-hostile chars from vendor-supplied model/serial before emitting.

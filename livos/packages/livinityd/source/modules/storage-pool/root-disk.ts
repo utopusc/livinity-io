@@ -12,15 +12,27 @@
 //   (`livos-power.sh` / 318-01 `_refuse_system_disk`) re-validates the same
 //   exclusion as belt-and-braces, but this TS list is the primary gate.
 //
-// ★ RESOLVER PORT (not the fragile df resolver): this is a faithful TS port of
-//   `livos-power.sh`'s `_disk_for_mount()` + `_refuse_system_disk()` — the
-//   codebase's ONLY robust root-disk resolver:
-//       findmnt -no SOURCE <mp>   →   lsblk -no PKNAME <src>   (+ digit-strip fallback)
-//   run for `/`, `/boot`, AND `/boot/efi`. We DELIBERATELY do NOT copy
-//   `external-storage.ts` `isExternalDeviceConnectedOnUnsupportedDevice()`'s
-//   df-based source string-split (Trap 15) — that resolver has no PKNAME and
-//   silently mis-resolves LVM/mdadm/EFI roots (e.g. /dev/mapper/vg-root →
-//   "vg-root", excluding nothing).
+// ★ RESOLVER (walk to the WHOLE DISK, CR-01): resolve each OS mountpoint to the
+//   PHYSICAL whole-disk(s) that back it:
+//       findmnt -no SOURCE <mp>   →   lsblk -rsno NAME,TYPE <src>  (take every TYPE=disk row)
+//   run for `/`, `/boot`, AND `/boot/efi`. `lsblk -s` walks the INVERSE dependency
+//   tree (device → … → physical disk), so a stacked root — LVM (/dev/mapper/vg-root),
+//   LUKS (/dev/mapper/cryptroot), mdadm (/dev/md0), or an NVMe partition
+//   (/dev/nvme0n1p2) — resolves down to its actual disk name(s) (`sda`, `nvme0n1`),
+//   NOT the intermediate backing PARTITION (`sda3`). A mdadm array backed by SEVERAL
+//   partitions yields MULTIPLE disks and we exclude ALL of them.
+//
+//   ★ WHY NOT `lsblk -no PKNAME` (the CR-01 bug): PKNAME returns the device's
+//     IMMEDIATE parent — for a stacked root that is the backing PARTITION (`sda3`),
+//     never the whole disk (`sda`). Excluding `sda3` while candidates are whole
+//     disks (`sda`) leaves the OS disk ELIGIBLE FOR FORMAT (OS-destroy). The
+//     TYPE=disk walk closes that hole; a nvme/mmcblk-aware digit-strip remains ONLY
+//     as a last-resort fallback when lsblk emits no disk ancestor.
+//
+//   We DELIBERATELY do NOT copy `external-storage.ts`
+//   `isExternalDeviceConnectedOnUnsupportedDevice()`'s df-based source string-split
+//   (Trap 15) — that resolver silently mis-resolves LVM/mdadm/EFI roots (e.g.
+//   /dev/mapper/vg-root → "vg-root", excluding nothing).
 //
 // ★ FAIL-SAFE (fail CLOSED): if the OS disk cannot be proven (resolution errors
 //   or yields an empty set), we treat the state as "cannot assess" — the
@@ -73,9 +85,13 @@ export interface RootDiskDeps {
 	// `findmnt -no SOURCE <mountpoint>` → the source device path (e.g. /dev/sda2),
 	// or null when the mount does not exist / findmnt fails.
 	findmntSource(mountpoint: string): Promise<string | null>
-	// `lsblk -no PKNAME <source>` → the parent kernel disk name (e.g. sda), or
-	// null when PKNAME is empty (forces the digit-strip fallback).
-	lsblkPkname(source: string): Promise<string | null>
+	// `lsblk -rsno NAME,TYPE <source>` → EVERY whole-disk (TYPE=disk) ancestor of
+	// <source>, walking the inverse dependency tree down through any LVM/LUKS/mdadm
+	// layer to the physical disk(s). Returns e.g. ['sda'] for a partition/LVM/LUKS
+	// root, ['nvme0n1'] for an NVMe root, or ['sda','sdb'] for a mdadm mirror.
+	// Empty [] when nothing resolves (forces the nvme/mmcblk-aware digit-strip
+	// fallback in diskForMount).
+	lsblkAncestorDisks(source: string): Promise<string[]>
 	// Candidate disks (`type==='disk'`), projected from getBlockDevices().
 	listBlockDevices(): Promise<CandidateDevice[]>
 	// `lsblk -d -n -o NAME,RM` → map of disk name → removable (RM===1). getBlockDevices
@@ -107,13 +123,23 @@ const liveDeps: RootDiskDeps = {
 			return null
 		}
 	},
-	async lsblkPkname(source: string) {
+	async lsblkAncestorDisks(source: string) {
 		try {
-			const {stdout} = await $`lsblk -no PKNAME ${source}`
-			const first = stdout.split('\n')[0]?.trim()
-			return first && first.length > 0 ? first : null
+			// -s = inverse dependencies (walk ancestors up to the physical disk), -r =
+			// raw (no tree-drawing chars), -n = no header. Every TYPE=disk row is a
+			// whole physical disk backing <source>; a mdadm array yields several.
+			const {stdout} = await $`lsblk -rsno NAME,TYPE ${source}`
+			const disks: string[] = []
+			for (const line of stdout.split('\n')) {
+				const parts = line.trim().split(/\s+/)
+				if (parts.length >= 2 && parts[parts.length - 1] === 'disk') {
+					const name = parts[0]?.trim()
+					if (name) disks.push(name)
+				}
+			}
+			return disks
 		} catch {
-			return null
+			return []
 		}
 	},
 	async listBlockDevices() {
@@ -146,39 +172,53 @@ const liveDeps: RootDiskDeps = {
 
 // --- resolver primitives (ports of livos-power.sh) -------------------------
 
-// Port of `_disk_for_mount()`: resolve the parent kernel disk backing a mount.
-// findmnt SOURCE → lsblk PKNAME, with a basename digit-strip fallback for a
-// /dev/sdXN source when PKNAME is empty. Returns null (contributes NOTHING) on
-// any failure — never a phantom disk name (fail-safe).
-async function diskForMount(mountpoint: string, deps: RootDiskDeps): Promise<string | null> {
+// Last-resort fallback (CR-01 / IN-02): reduce a partition BASENAME to its whole
+// disk when lsblk emitted no disk ancestor at all. nvme/mmcblk use a `pN` suffix
+// (nvme0n1p2 → nvme0n1, mmcblk0p1 → mmcblk0); plain sd disks use a trailing digit
+// (sda3 → sda). Anything else (mapper/crypt/lvm names, a bare whole disk) yields
+// null — better to contribute NOTHING than a bogus disk name. NOTE: this must
+// NEVER run on a name lsblk already reported as TYPE=disk (it would wrongly strip
+// nvme0n1 → nvme0n); it is reached ONLY when the ancestor walk returned nothing.
+function stripPartitionSuffix(name: string): string | null {
+	const nvmeOrMmc = /^(nvme\d+n\d+|mmcblk\d+)p\d+$/.exec(name)
+	if (nvmeOrMmc) return nvmeOrMmc[1]
+	const sd = /^(sd[a-z]+)\d+$/.exec(name)
+	if (sd) return sd[1]
+	return null
+}
+
+// Resolve the WHOLE physical disk(s) backing a mount (CR-01). findmnt SOURCE →
+// lsblk -rsno NAME,TYPE ancestor walk, taking every TYPE=disk row so a stacked
+// root (LVM/LUKS/mdadm) resolves to the actual disk(s), NOT the backing partition.
+// A mdadm array contributes MULTIPLE disks. Returns [] (contributes NOTHING) on
+// any failure — never a phantom/partition name (fail-safe).
+async function diskForMount(mountpoint: string, deps: RootDiskDeps): Promise<string[]> {
 	let source: string | null
 	try {
 		source = await deps.findmntSource(mountpoint)
 	} catch {
-		return null
+		return []
 	}
-	if (!source) return null
+	if (!source) return []
 
-	let pkname: string | null
+	let ancestors: string[]
 	try {
-		pkname = await deps.lsblkPkname(source)
+		ancestors = await deps.lsblkAncestorDisks(source)
 	} catch {
-		pkname = null
+		ancestors = []
 	}
-	if (pkname) return pkname
+	// Primary path: lsblk walked the stack to the physical whole disk(s) — use
+	// them verbatim (already TYPE=disk; a mdadm mirror yields several, ALL kept).
+	const cleaned = ancestors.map((d) => d.trim()).filter((d) => d.length > 0)
+	if (cleaned.length > 0) return cleaned
 
-	// Fallback: strip a trailing partition number off a /dev/sdXN basename.
-	// Mirrors bash `pk="${pk%%[0-9]*}"` — cut from the FIRST digit onward.
-	// Only meaningful for plain sdX sources; LVM/mapper sources resolve via
-	// PKNAME above (this fallback would not yield a real disk for them, so we
-	// return null rather than a bogus name).
+	// Fallback (only when lsblk gave no disk ancestor — rare): strip a partition
+	// suffix off the /dev/sdXN | nvme0n1pN | mmcblk0pN basename, nvme/mmcblk-aware.
+	// A mapper/lvm/crypt basename yields null → contributes nothing (never a
+	// bogus disk name).
 	const base = source.replace(/^.*\//, '') // basename
-	const stripped = base.replace(/[0-9].*$/, '')
-	// Reject a fallback that did not actually strip a partition digit or that
-	// produced an empty / mapper-style name — better to contribute nothing than
-	// a wrong disk.
-	if (stripped && stripped !== base && /^[a-z]+$/.test(stripped)) return stripped
-	return null
+	const stripped = stripPartitionSuffix(base)
+	return stripped ? [stripped] : []
 }
 
 // Port of the `/` + `/boot` (+ EFI) union in `_refuse_system_disk()`: the SET of
@@ -188,8 +228,7 @@ async function diskForMount(mountpoint: string, deps: RootDiskDeps): Promise<str
 export async function resolveOsDisks(deps: RootDiskDeps = liveDeps): Promise<Set<string>> {
 	const osDisks = new Set<string>()
 	for (const mountpoint of OS_MOUNTPOINTS) {
-		const disk = await diskForMount(mountpoint, deps)
-		if (disk) osDisks.add(disk)
+		for (const disk of await diskForMount(mountpoint, deps)) osDisks.add(disk)
 	}
 	return osDisks
 }
