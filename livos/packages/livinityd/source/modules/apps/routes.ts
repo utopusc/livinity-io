@@ -471,7 +471,10 @@ export const apps = router({
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
-			// Non-admin: uninstall per-user instance
+			// Non-admin: uninstall per-user instance. This is the user's OWN instance
+			// (not the shared/global app) — governed by per-user-instance ownership, NOT
+			// by the readonly-share gate below, so it stays reachable regardless of any
+			// app_access grant level.
 			if (ctx.currentUser?.id && ctx.currentUser.role && ctx.currentUser.role !== 'admin') {
 				const inst = await getUserAppInstance(ctx.currentUser.id, input.appId)
 				if (inst) {
@@ -480,6 +483,16 @@ export const apps = router({
 					await ctx.apps.removeAppSubdomain(`${input.appId}:user:${ctx.currentUser.id}`)
 					return
 				}
+			}
+			// 323-06 (IDENT-04, D-08, T-323-16): uninstalling the GLOBAL/shared app is
+			// management — a non-admin must hold effective-FULL. readonly may still SEE +
+			// LAUNCH the shared app (hasAppAccess stays boolean-permissive) but not
+			// uninstall it. Admins bypass (D-08: full > readonly for owner/admin always);
+			// legacy single-user has no currentUser and is unaffected. Checked BEFORE the
+			// global uninstall side-effect.
+			if (ctx.currentUser?.id && ctx.currentUser.role !== 'admin') {
+				const level = await getEffectiveAppAccess(input.appId, ctx.currentUser.id)
+				if (level !== 'full') throw new TRPCError({code: 'FORBIDDEN', message: 'Read-only access'})
 			}
 			return ctx.apps.uninstall(input.appId)
 		}),
@@ -779,10 +792,12 @@ export const apps = router({
 			if (!grantedBy) throw new Error('Authentication required')
 			// 323-06 (D-08, T-323-17): the caller must hold effective-FULL on the app
 			// to (re)share it — a readonly user cannot escalate by granting. Inserted
-			// BEFORE any grant write. Owner/admin already resolve to 'full' (admin
-			// auto-grant in myApps).
-			const level = await getEffectiveAppAccess(input.appId, grantedBy)
-			if (level !== 'full') throw new TRPCError({code: 'FORBIDDEN', message: 'Read-only access'})
+			// BEFORE any grant write. Admins bypass (D-08: full > readonly for owner/
+			// admin always).
+			if (ctx.currentUser?.role !== 'admin') {
+				const level = await getEffectiveAppAccess(input.appId, grantedBy)
+				if (level !== 'full') throw new TRPCError({code: 'FORBIDDEN', message: 'Read-only access'})
+			}
 			const principalId = input.principalId ?? input.userId
 			if (!principalId) throw new TRPCError({code: 'BAD_REQUEST', message: 'principalId (or userId) is required'})
 			if (input.principalType === 'group') {
@@ -805,8 +820,11 @@ export const apps = router({
 			const actor = ctx.currentUser?.id
 			if (!actor) throw new Error('Authentication required')
 			// 323-06 (D-08): unshare is management — full-only, gated before revoke.
-			const level = await getEffectiveAppAccess(input.appId, actor)
-			if (level !== 'full') throw new TRPCError({code: 'FORBIDDEN', message: 'Read-only access'})
+			// Admins bypass (full > readonly for owner/admin always).
+			if (ctx.currentUser?.role !== 'admin') {
+				const level = await getEffectiveAppAccess(input.appId, actor)
+				if (level !== 'full') throw new TRPCError({code: 'FORBIDDEN', message: 'Read-only access'})
+			}
 			const principalId = input.principalId ?? input.userId
 			if (!principalId) throw new TRPCError({code: 'BAD_REQUEST', message: 'principalId (or userId) is required'})
 			if (input.principalType === 'group') {
