@@ -407,10 +407,16 @@ function StoragePoolBlock() {
 									</div>
 								}
 								trailing={
-									// Format ONLY for NON-pool internal drives (triple-gated), disabled
-									// while a replacement runbook is in flight (T-318-18). Pool members
-									// are never formattable from here.
-									!isMember && isAdmin ? (
+									// Format ONLY for NON-pool internal drives the server actually deems
+									// eligible (triple-gated), disabled while a replacement runbook is in
+									// flight (T-318-18). Pool members are never formattable from here.
+									//
+									// WR-06: gate on `sizeById.has(deviceId)` — sizeById is built from the
+									// server's listEligibleDrives (internal, non-removable, NON-system). A
+									// device absent from that set is the OS/boot disk (or removable), which
+									// the server refuses to format anyway; showing a "Format" button on the
+									// system disk is a dangerous UX affordance (D-10/D-12), so we hide it.
+									!isMember && isAdmin && sizeById.has(drive.deviceId) ? (
 										<Button
 											variant='v36-ghost'
 											size='v36-pill-sm'
