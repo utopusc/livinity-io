@@ -108,7 +108,20 @@ type Trashmeta = {
 // rclone wrapper FUSE-mounts cloud drives (Google Drive / Dropbox / OneDrive). It is
 // deliberately NOT the hardcoded-readonly `/Network`: rclone's `--vfs-cache-mode
 // writes` makes the mount read/write, so `/Cloud` is left out of the isReadonly rule.
-type BaseDirectory = '/Home' | '/Trash' | '/Apps' | '/External' | '/Backups' | '/Network' | '/Cloud'
+//
+// Phase 318 (D-12) — `/Pool` is the WRITABLE pool mountpoint base dir, present ONLY
+// when a storage pool exists (registered/unregistered at runtime by pool.ts via the
+// registerPoolBaseDir/unregisterPoolBaseDir hooks + boot-time init from the
+// storagePool store state). Like `/Cloud` it is left OUT of the isReadonly rule
+// (writable) and covered by the existing `'/*'` isProtected rule. It maps ONLY to the
+// mergerfs union mountpoint /mnt/pool — never a raw /mnt/diskN branch or /mnt/parity1.
+type BaseDirectory = '/Home' | '/Trash' | '/Apps' | '/External' | '/Backups' | '/Network' | '/Cloud' | '/Pool'
+
+// Phase 318 (D-12) — the pool base dir maps DIRECTLY to the D-05 fstab mountpoint
+// /mnt/pool (the mergerfs union), NOT a {dataDir} subdir (the mounted pool IS the
+// directory). NEVER a /mnt/diskN data branch or the /mnt/parity1 parity disk — only
+// the union mountpoint is ever exposed through the Files base-dir surface (T-318-21).
+const POOL_MOUNTPOINT = '/mnt/pool'
 
 type ViewPreferences = {
 	view: 'icons' | 'list'
@@ -159,6 +172,12 @@ export default class Files {
 	// reading redis per call. Directly settable in unit tests.
 	multiUserMode = false
 	#multiUserPoll?: ReturnType<typeof setInterval>
+	// Phase 318 (D-12): true when a storage pool exists and the `/Pool` base dir is
+	// live. Flipped by registerPoolBaseDir/unregisterPoolBaseDir (pool.ts hooks) and
+	// re-evaluated at boot from the storagePool store state. Consulted by
+	// getUserBaseDirectories to conditionally include the shared `/Pool` member entry.
+	// Directly settable in unit tests.
+	poolBaseDirRegistered = false
 	fileOwner = {userId: 1000, groupId: 1000}
 	maxDirectoryListing = 10000
 	// Prevent loads of .DS_Store (macOS) and .directory (KDE Dolphin) results
@@ -230,7 +249,7 @@ export default class Files {
 	// Get base directories for a non-admin user (per-user isolation).
 	getUserBaseDirectories(username: string): Map<string, string> {
 		const userDir = `${this.#livinityd.dataDirectory}/users/${username}`
-		return new Map<BaseDirectory, string>([
+		const dirs = new Map<BaseDirectory, string>([
 			['/Home', `${userDir}/home`],
 			['/Trash', `${userDir}/trash`],
 			['/Apps', `${userDir}/app-data`],
@@ -240,6 +259,48 @@ export default class Files {
 			['/Network', `${this.#livinityd.dataDirectory}/network`],
 			['/Cloud', `${this.#livinityd.dataDirectory}/cloud`],
 		])
+		// Phase 318 (D-12): /Pool is a shared host-level mount (like External/Network/
+		// Cloud) — members see the SAME union mountpoint, present only when a pool
+		// exists. Gated on the same poolBaseDirRegistered flag as the admin map.
+		this.applyPoolBaseDir(dirs)
+		return dirs
+	}
+
+	// Phase 318 (D-12): add the shared `/Pool` → /mnt/pool entry to a base-dir map
+	// when a pool is registered. Extracted so the conditional member-map inclusion is
+	// unit-testable without the private #livinityd handle. Only ever maps the mergerfs
+	// union mountpoint — never a /mnt/diskN branch or /mnt/parity1 (T-318-21).
+	applyPoolBaseDir(dirs: Map<string, string>): void {
+		if (this.poolBaseDirRegistered) dirs.set('/Pool', POOL_MOUNTPOINT)
+	}
+
+	// Phase 318 (D-12): flip the conditional `/Pool` base dir ON — called by pool.ts
+	// after a successful createPool (via the FilesHook seam) and at boot from the
+	// storagePool store state. Mirrors the /Cloud shared-mount precedent: adds the
+	// entry to the admin map + enables the shared member-map entry. No daemon restart
+	// needed. Idempotent.
+	registerPoolBaseDir(): void {
+		this.poolBaseDirRegistered = true
+		this.baseDirectories.set('/Pool', POOL_MOUNTPOINT)
+	}
+
+	// Phase 318 (D-12): flip the conditional `/Pool` base dir OFF — for a pool
+	// teardown (and re-evaluated at boot when the store reports no pool). Removes the
+	// admin-map entry + disables the shared member-map entry. Idempotent — the
+	// graceful no-pool state has NO `/Pool` in any map (no sidebar entry, no
+	// ensure-dir against /mnt/pool). No daemon restart needed.
+	unregisterPoolBaseDir(): void {
+		this.poolBaseDirRegistered = false
+		this.baseDirectories.delete('/Pool')
+	}
+
+	// Phase 318 (D-12): evaluate the persisted storagePool state and (un)register the
+	// `/Pool` base dir accordingly. A pool "exists" when it has ≥1 configured member.
+	// Pure w.r.t. the passed state so it is unit-testable; start() feeds it the store
+	// read (before the ensure-dirs loop, so no /mnt/pool mkdir runs when no pool).
+	evaluatePoolBaseDir(state: {members?: unknown[]} | undefined): void {
+		if (state?.members?.length) this.registerPoolBaseDir()
+		else this.unregisterPoolBaseDir()
 	}
 
 	// Returns the active base directories based on the current request's user context.
@@ -359,6 +420,17 @@ export default class Files {
 
 	async start() {
 		this.logger.log('Starting files')
+
+		// Phase 318 (D-12): evaluate the persisted storagePool state and (un)register
+		// the `/Pool` base dir BEFORE the ensure-dirs loop — so a booted pool is
+		// browseable without a restart, and when NO pool exists `/Pool` stays absent so
+		// the loop below never runs an ensure-dir (mkdir) against /mnt/pool. Fail-soft:
+		// a store read error leaves the safe default (no `/Pool`), like the other
+		// start() submodule .catch guards.
+		await this.#livinityd.store
+			.get('storagePool')
+			.then((state) => this.evaluatePoolBaseDir(state))
+			.catch((error) => this.logger.error('Failed to evaluate storagePool base-dir state', error))
 
 		// Ensure all base directories exist
 		await Promise.all(

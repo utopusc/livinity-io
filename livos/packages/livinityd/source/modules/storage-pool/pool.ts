@@ -135,10 +135,14 @@ export interface RootDiskGuards {
 	assertNotOsDisk(deviceId: string): Promise<void>
 }
 
-// The Files base-dir hook (318-10 implements `registerPoolBaseDir` later). The
-// call is optional-chained + no-op-safe so createPool compiles + passes today.
+// The Files base-dir hook (318-10 implements `registerPoolBaseDir` /
+// `unregisterPoolBaseDir` on the Files class). The register call is
+// optional-chained + no-op-safe. createPool fires registerPoolBaseDir on success;
+// unregisterPoolBaseDir is the teardown seam (v1 has no destroyPool orchestration —
+// manual teardown + restart re-evaluates from the store, Files.evaluatePoolBaseDir).
 export interface FilesHook {
 	registerPoolBaseDir?: () => void
+	unregisterPoolBaseDir?: () => void
 }
 
 export interface PoolDeps {

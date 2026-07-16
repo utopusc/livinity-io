@@ -73,6 +73,14 @@ function makeStub() {
 			Files.prototype.applyPoolBaseDir.call(this, map)
 			return map
 		},
+		// Delegate to the REAL prototype methods so intra-method `this.` calls (e.g.
+		// evaluatePoolBaseDir → registerPoolBaseDir) resolve on this plain-object stub.
+		registerPoolBaseDir() {
+			Files.prototype.registerPoolBaseDir.call(this)
+		},
+		unregisterPoolBaseDir() {
+			Files.prototype.unregisterPoolBaseDir.call(this)
+		},
 	}
 	return stub as unknown as Files
 }
