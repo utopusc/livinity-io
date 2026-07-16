@@ -43,7 +43,7 @@ import {
 	generateAuthenticationOptions,
 	verifyAuthenticationResponse,
 } from '@simplewebauthn/server'
-import {insertCredential, listCredentialsForUser, getCredentialById, updateCounter} from '../database/webauthn.js'
+import {insertCredential, listCredentialsForUser, getCredentialById, updateCounter, deleteCredential} from '../database/webauthn.js'
 import {resolveRpId} from './webauthn-rp.js'
 import {assertVerificationPassed, assertCounterOk} from './webauthn-guards.js'
 
@@ -557,6 +557,37 @@ export default router({
 			})
 			void recordAuthLoginEvent({userId, success: true})
 			return {verified: true}
+		}),
+
+	// listPasskeys — privateProcedure (323-04 manage list). Returns ONLY the
+	// current user's enrolled credentials (credential_id, nickname, created_at) —
+	// never the public_key/counter. Wraps the 323-01 listCredentialsForUser DAO
+	// (built explicitly for "the manage list UI") which is user-scoped, so a user
+	// can only ever see their OWN passkeys (T-323-13). Fails open ([]) on no-DB /
+	// legacy single-user boxes.
+	listPasskeys: privateProcedure.query(async ({ctx}) => {
+		if (!ctx.currentUser) return []
+		const creds = await listCredentialsForUser(ctx.currentUser.id)
+		return creds.map((c) => ({
+			credentialId: c.credential_id,
+			nickname: c.nickname,
+			createdAt: c.created_at,
+		}))
+	}),
+
+	// deletePasskey — privateProcedure (323-04 manage-list revoke). Deletes ONE of
+	// the current user's credentials. deleteCredential is (credential_id, user_id)-
+	// scoped in the 323-01 DAO, so the UI never sends a target userId and a user can
+	// NEVER delete another user's passkey (T-323-13). Idempotent: {removed:false} on
+	// a miss / wrong owner / no-DB.
+	deletePasskey: privateProcedure
+		.input(z.object({credentialId: z.string().min(1)}))
+		.mutation(async ({ctx, input}) => {
+			if (!ctx.currentUser) {
+				throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Passkey unavailable'})
+			}
+			const removed = await deleteCredential(input.credentialId, ctx.currentUser.id)
+			return {removed}
 		}),
 
 	// webauthnLoginOptions — publicProcedure (an UNAUTHENTICATED caller starts the
