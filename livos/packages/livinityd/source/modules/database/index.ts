@@ -767,15 +767,23 @@ export async function allocatePort(
 // ── User App Access (shared app permissions) ──────────────────────
 
 /**
- * Grant a user access to a shared app.
+ * Grant a user access to a shared app. accessType defaults to 'full' so every
+ * existing caller is byte-behaviourally unchanged (T-323-15); passing 'readonly'
+ * SURFACES the dormant user_app_access.access_type column (schema.sql:47). The
+ * ON CONFLICT now DO UPDATEs the access_type so a re-grant can change the level.
  */
-export async function grantAppAccess(userId: string, appId: string, grantedBy: string): Promise<void> {
+export async function grantAppAccess(
+	userId: string,
+	appId: string,
+	grantedBy: string,
+	accessType: 'full' | 'readonly' = 'full',
+): Promise<void> {
 	if (!pool) return
 	await pool.query(
-		`INSERT INTO user_app_access (user_id, app_id, granted_by)
-		 VALUES ($1, $2, $3)
-		 ON CONFLICT (user_id, app_id) DO NOTHING`,
-		[userId, appId, grantedBy],
+		`INSERT INTO user_app_access (user_id, app_id, granted_by, access_type)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (user_id, app_id) DO UPDATE SET access_type = EXCLUDED.access_type`,
+		[userId, appId, grantedBy, accessType],
 	)
 }
 
