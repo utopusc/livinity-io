@@ -476,6 +476,26 @@ type StoreSchema = {
 		perUserAuth: boolean
 		provisionedUsers: string[]
 	}
+	// Phase 324 FILES-03 (324-05) — configured cloud drives (Google Drive / Dropbox /
+	// OneDrive) mounted read/write under /Cloud via the 324-03 rclone wrapper unit.
+	// Dedicated top-level key (NOT nested under `samba`/`files`/any array or scalar —
+	// dot-prop path collisions silently drop the write, same convention as
+	// `samba`/`webdav`/`monitoring`/`security`/`tailscale` above — D-14/D-17). Each
+	// entry holds ONLY: the charset-guarded rclone `remote` name (reaches the wrapper
+	// + the systemd `%I` template — MUST be `[a-z0-9_-]`), the `backend`
+	// (drive|dropbox|onedrive), the `mountPath` (/Cloud/<remote>), the DEK-ENCRYPTED
+	// rclone.conf section blob (`configBlob` — the raw OAuth token lives ONLY inside
+	// this AES-256-GCM blob, encrypted via secrets/dek.ts credential-dek; the plaintext
+	// token is NEVER persisted here and rclone.conf is regenerated on-demand 0600 root,
+	// T-324-14), and the `enabled` toggle. The RCLONE_CONFIG_PASS obscure-password is
+	// DERIVED from the DEK on demand (deriveConfigPassword) — also never stored here.
+	cloudDrives: {
+		remote: string
+		backend: 'drive' | 'dropbox' | 'onedrive'
+		mountPath: string
+		configBlob: string
+		enabled: boolean
+	}[]
 	// Phase 329 NET-04 (329-06) — UI-DISPLAY-ONLY raw TCP/UDP exposure mirror.
 	// Written by system.netExposeOpen / system.netExposeClose AFTER a successful
 	// wrapper regen so the Settings card can render the last-known openings even when

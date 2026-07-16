@@ -108,6 +108,22 @@ export function _setKeyProvidersForTests(overrides: Partial<FsDeps> | null): voi
 	_legacyKey = null
 }
 
+/**
+ * Derive a deterministic, box-local secret string from the credential DEK plus a
+ * stable domain-separation `label`. Used by Phase 324-05 (FILES-03) to derive the
+ * `RCLONE_CONFIG_PASS` obscure-password for the on-demand rclone.conf regen WITHOUT
+ * persisting a second secret: the value is a pure function of the DEK, so it is
+ * reproducible across process restarts, never stored, and never leaves the box.
+ * The `label` prevents cross-purpose reuse of the derived value.
+ */
+export async function deriveConfigPassword(label: string): Promise<string> {
+	const key = await getKey()
+	// Domain-separated over the hex key material + label (string inputs — mirrors the
+	// getLegacyKey() createHash().update(string) shape, avoiding the Buffer-typing
+	// friction the AES helpers below carry).
+	return crypto.createHash('sha256').update(`${key.toString('hex')}:${label}`).digest('hex')
+}
+
 export function encrypt(plaintext: string, key: Buffer): string {
 	const iv = crypto.randomBytes(12)
 	const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)

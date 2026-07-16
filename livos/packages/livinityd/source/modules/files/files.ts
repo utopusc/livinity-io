@@ -39,6 +39,7 @@ import Samba from './samba.js'
 import WebDav from './webdav.js'
 import ExternalStorage from './external-storage.js'
 import NetworkStorage from './network-storage.js'
+import CloudStorage from './cloud-storage.js'
 import Search from './search.js'
 
 import type Livinityd from '../../index.js'
@@ -103,7 +104,11 @@ type Trashmeta = {
 	path: string
 }
 
-type BaseDirectory = '/Home' | '/Trash' | '/Apps' | '/External' | '/Backups' | '/Network'
+// Phase 324-05 FILES-03 (D-12) — `/Cloud` is the WRITABLE base dir under which the
+// rclone wrapper FUSE-mounts cloud drives (Google Drive / Dropbox / OneDrive). It is
+// deliberately NOT the hardcoded-readonly `/Network`: rclone's `--vfs-cache-mode
+// writes` makes the mount read/write, so `/Cloud` is left out of the isReadonly rule.
+type BaseDirectory = '/Home' | '/Trash' | '/Apps' | '/External' | '/Backups' | '/Network' | '/Cloud'
 
 type ViewPreferences = {
 	view: 'icons' | 'list'
@@ -169,6 +174,7 @@ export default class Files {
 	webdav: WebDav
 	externalStorage: ExternalStorage
 	networkStorage: NetworkStorage
+	cloudStorage: CloudStorage
 	search: Search
 
 	constructor(livinityd: Livinityd) {
@@ -183,6 +189,7 @@ export default class Files {
 			['/External', `${livinityd.dataDirectory}/external`],
 			['/Backups', `${livinityd.dataDirectory}/backups`],
 			['/Network', `${livinityd.dataDirectory}/network`],
+			['/Cloud', `${livinityd.dataDirectory}/cloud`],
 		])
 
 		this.watcher = new Watcher(livinityd, {paths: ['/Home', '/Trash', '/Apps']})
@@ -194,6 +201,7 @@ export default class Files {
 		this.webdav = new WebDav(livinityd)
 		this.externalStorage = new ExternalStorage(livinityd)
 		this.networkStorage = new NetworkStorage(livinityd)
+		this.cloudStorage = new CloudStorage(livinityd)
 		this.search = new Search(livinityd)
 
 		// TODO: This should really be in a proper DB, refactor this once we've moved to SQLite
@@ -226,10 +234,11 @@ export default class Files {
 			['/Home', `${userDir}/home`],
 			['/Trash', `${userDir}/trash`],
 			['/Apps', `${userDir}/app-data`],
-			// External and Network are shared (hardware-level)
+			// External, Network and Cloud are shared (hardware-/host-level mounts)
 			['/External', `${this.#livinityd.dataDirectory}/external`],
 			['/Backups', `${userDir}/backups`],
 			['/Network', `${this.#livinityd.dataDirectory}/network`],
+			['/Cloud', `${this.#livinityd.dataDirectory}/cloud`],
 		])
 	}
 
@@ -366,6 +375,10 @@ export default class Files {
 		await this.webdav.start().catch((error) => this.logger.error(`Failed to start webdav`, error))
 		await this.externalStorage.start().catch((error) => this.logger.error(`Failed to start external storage`, error))
 		await this.networkStorage.start().catch((error) => this.logger.error(`Failed to start network storage`, error))
+		// Phase 324-05 FILES-03 — the cloud-drive re-mount watch. Its start()/watch is
+		// fail-soft (a wrapper/rclone error only skips a mount tick), and this .catch is
+		// a second belt: a cloud-drive error must NEVER take down the files module.
+		await this.cloudStorage.start().catch((error) => this.logger.error(`Failed to start cloud storage`, error))
 		await this.recents.start().catch((error) => this.logger.error(`Failed to start recents`, error))
 		await this.favorites.start().catch((error) => this.logger.error(`Failed to start favorites`, error))
 		await this.thumbnails.start().catch((error) => this.logger.error(`Failed to start thumbnails`, error))
@@ -397,6 +410,7 @@ export default class Files {
 		await this.thumbnails.stop().catch((error) => this.logger.error(`Failed to stop thumbnails`, error))
 		await this.externalStorage.stop().catch((error) => this.logger.error(`Failed to stop external storage`, error))
 		await this.networkStorage.stop().catch((error) => this.logger.error(`Failed to stop network storage`, error))
+		await this.cloudStorage.stop().catch((error) => this.logger.error(`Failed to stop cloud storage`, error))
 		await this.samba.stop().catch((error) => this.logger.error(`Failed to stop samba`, error))
 		await this.watcher.stop().catch((error) => this.logger.error(`Failed to stop watcher`, error))
 	}
@@ -1038,6 +1052,10 @@ export default class Files {
 			'/External/*',
 			'/Network/*',
 			'/Network/*/*',
+			// Phase 324-05: the per-remote cloud mount root (/Cloud/<remote>) is a
+			// systemd-managed FUSE mount point — never rename/move/delete it (contents
+			// stay writable). /Cloud itself is already covered by the '/*' rule above.
+			'/Cloud/*',
 			'/Backups',
 			'/Backups/**',
 		])
@@ -1063,6 +1081,10 @@ export default class Files {
 			'/External/**',
 			'/Network',
 			'/Network/**',
+			// Phase 324-05: cloud drives are per-user OAuth-scoped external mounts — the
+			// LAN Samba share export is meaningless for them, same as /Network.
+			'/Cloud',
+			'/Cloud/**',
 			'/Backups',
 			'/Backups/**',
 		])
@@ -1071,7 +1093,11 @@ export default class Files {
 		// External files (not external root or top level mount points)
 		const isExternal = match(virtualPath, ['/External/*/**'])
 		const isNetwork = match(virtualPath, ['/Network/*/*/**'])
-		if (isExternal || isNetwork) {
+		// Phase 324-05: files INSIDE a cloud mount (/Cloud/<remote>/…) — hard-delete
+		// only, never trash-to-internal across the FUSE boundary (same rule as
+		// /External + /Network above).
+		const isCloud = match(virtualPath, ['/Cloud/*/**'])
+		if (isExternal || isNetwork || isCloud) {
 			// Only allow hard delete so we don't copy to internal storage
 			operations.delete('trash')
 			operations.add('delete')
