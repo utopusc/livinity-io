@@ -974,6 +974,22 @@ export const poolSyncHandler: BuiltInJobHandler = async (job, ctx) => {
 		// (1) diff — the mass-deletion count that feeds the D-08 freeze gate.
 		const diff = await snapraidCli.diff()
 
+		// (1a) IN-01 — FAIL CLOSED on an inconclusive diff. `parseDiff` defaults to
+		// `removed:0, exit:null` on any log with no `summary:*` tag (a wrapper non-zero
+		// exit, truncated/garbled output). Committing a sync on an assumed-zero deletion
+		// count would silently bypass the D-08 mass-deletion protection — this IS the
+		// safety gate. A null exit means "we could not read the diff", so we BLOCK the
+		// auto-sync and raise the same frozen notification rather than proceeding.
+		if (diff.exit === null) {
+			await ctx.livinityd.notifications
+				.add('pool-sync-frozen', {severity: 'warning', external: true})
+				.catch(() => {})
+			const output = {frozen: true, inconclusive: true, reason: 'diff produced no parseable summary — sync blocked (fail-closed)'}
+			await recordJobRun({jobId: job.id, jobName: job.name, startedAt, finishedAt: new Date(), status: 'skipped', output: JSON.stringify(output), error: null}).catch(() => {})
+			await pruneJobRuns(job.name).catch(() => {})
+			return {status: 'skipped', output}
+		}
+
 		// (2) freeze gate BEFORE the sync (Trap 11 / T-318-13). protectedFileCount =
 		// the last persisted status summary (W-2); absent → absolute-count leg only.
 		const protectedFileCount = state.lastStatusSummary?.protectedFileCount ?? null

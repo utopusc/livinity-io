@@ -191,6 +191,25 @@ describe('poolSyncHandler — D-08 freeze gate + D-09 alerts', () => {
 		expect(clear).toHaveBeenCalledWith('pool-degraded:sdb')
 	})
 
+	test('IN-01: an inconclusive diff (no parseable summary → exit null) FAILS CLOSED — sync NOT called, frozen raised', async () => {
+		resetSnapraid()
+		// A garbled/truncated diff log: parseDiff found NO summary tag, so it defaults
+		// to removed:0 AND exit:null. removed:0 would sail through the freeze gate — the
+		// fail-open the fix closes. exit===null must BLOCK the sync (we can't trust it).
+		mockDiff.mockResolvedValue({counts: {added: 0, removed: 0, updated: 0, moved: 0}, exit: null})
+		const {livinityd, add} = makeLivinityd(protectedState())
+
+		const result = await poolSyncHandler(fakeJob, {logger: fakeLogger, livinityd})
+
+		// The sync MUST NOT run on an unreadable diff (mass-deletion protection intact).
+		expect(mockSync).not.toHaveBeenCalled()
+		expect(mockStatus).not.toHaveBeenCalled()
+		// The frozen notification is raised so the admin is alerted + can force-override.
+		expect(add).toHaveBeenCalledWith('pool-sync-frozen', {severity: 'warning', external: true})
+		expect(result.status).toBe('skipped')
+		expect((result.output as {inconclusive?: boolean}).inconclusive).toBe(true)
+	})
+
 	test('WR-05: a fresh/unsynced pool with NO per-disk tags raises NO degraded alert (no-signal, not all-missing)', async () => {
 		resetSnapraid()
 		mockDiff.mockResolvedValue({counts: {added: 5, removed: 0, updated: 0, moved: 0}, exit: 'diff'})
