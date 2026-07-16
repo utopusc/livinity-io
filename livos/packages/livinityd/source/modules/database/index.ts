@@ -816,15 +816,24 @@ export async function hasAppAccess(userId: string, appId: string): Promise<boole
 /**
  * List all users who have access to an app (for share UI).
  */
-export async function listAppAccessUsers(appId: string): Promise<Array<{userId: string; username: string; grantedAt: Date}>> {
+export async function listAppAccessUsers(
+	appId: string,
+): Promise<Array<{userId: string; username: string; grantedAt: Date; accessType: 'readonly' | 'full'}>> {
 	if (!pool) return []
 	const {rows} = await pool.query(
-		`SELECT ua.user_id, u.username, ua.granted_at
+		`SELECT ua.user_id, u.username, ua.granted_at, ua.access_type
 		 FROM user_app_access ua JOIN users u ON ua.user_id = u.id
 		 WHERE ua.app_id = $1 ORDER BY ua.granted_at DESC`,
 		[appId],
 	)
-	return rows.map((r: any) => ({userId: r.user_id, username: r.username, grantedAt: r.granted_at}))
+	// access_type surfaces the 323-06 readonly/full level so the 323-07 share
+	// dialog can render + edit a user grant's level (was full-only pre-323).
+	return rows.map((r: any) => ({
+		userId: r.user_id,
+		username: r.username,
+		grantedAt: r.granted_at,
+		accessType: (r.access_type ?? 'full') as 'readonly' | 'full',
+	}))
 }
 
 // ── User Preferences ────────────────────────────────────────────────────
