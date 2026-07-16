@@ -329,6 +329,14 @@ function StoragePoolBlock() {
 	const internalDrives = (drives ?? []).filter((d) => d.transport !== 'usb')
 	// Capacity is available for NON-pool internal drives via listEligibleDrives.
 	const sizeById = new Map((eligibleDrives ?? []).map((d) => [d.id, d.size]))
+	// 331-04 (FIX-04, closes 318-09 D-14): pool MEMBERS may drop out of the
+	// eligible projection, which left their capacity cell blank — their size now
+	// rides on the persisted PoolMember contract (createPool/addDisk capture it).
+	for (const member of pool?.members ?? []) {
+		if (member.size !== undefined && !sizeById.has(member.deviceId)) {
+			sizeById.set(member.deviceId, member.size)
+		}
+	}
 
 	const hasPool = !!pool?.members?.length && !pool.incomplete
 	// The single <PoolWizard/> opens for: an existing pool (status view), an

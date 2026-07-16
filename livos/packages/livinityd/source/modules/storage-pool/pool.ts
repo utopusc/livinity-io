@@ -73,6 +73,11 @@ export type PoolMember = {
 	// Disk serial, when known. root-disk.ts does not project serials in v1, so
 	// this is left unset by createPool/addDisk; a follow-up may enrich from SMART.
 	serial?: string
+	// 331-04 (FIX-04, closes 318-09 D-14): capacity in BYTES, captured from the
+	// eligible-drive projection at createPool/addDisk time. Optional — members
+	// persisted before 331 have no size (the UI renders those cells empty, never
+	// blocks on it) and a failed size lookup never blocks an add.
+	size?: number
 }
 
 export type FreezeThreshold = {files: number; percent: number}
@@ -414,13 +419,16 @@ export async function createPool(
 	const {parityDeviceId, dataDeviceIds} = assignRoles(selectedDeviceIds, sizeById, protectionLevel)
 	const dataMountpoints = dataMountpointsFor(dataDeviceIds)
 
+	// 331-04 (FIX-04): persist each member's capacity from the eligible projection
+	// already in hand (sizeById) so the 318-09 drive list renders it.
 	const members: PoolMember[] = dataDeviceIds.map((id, index) => ({
 		deviceId: id,
 		role: 'data',
 		mountpoint: dataMountpoints[index],
+		size: sizeById.get(id),
 	}))
 	if (parityDeviceId) {
-		members.push({deviceId: parityDeviceId, role: 'parity', mountpoint: PARITY_MOUNT})
+		members.push({deviceId: parityDeviceId, role: 'parity', mountpoint: PARITY_MOUNT, size: sizeById.get(parityDeviceId)})
 	}
 
 	const nextState: StoragePoolState = {
@@ -479,11 +487,24 @@ export async function createPool(
 // (318-06 syncNow / 318-07 nightly) owns that.
 export async function addDisk(deviceId: string, deps: PoolDeps): Promise<{needsSync: boolean}> {
 	const wrapper = deps.wrapper ?? liveWrapper
+	const guards = deps.guards ?? liveGuards
 
 	const state = await deps.store.getPoolState()
 	if (!state?.members?.length) throw new Error('[no-pool-exists]')
 	if (state.runbookStep) throw new Error('[replacement-runbook-in-flight]')
 	if (state.members.some((member) => member.deviceId === deviceId)) throw new Error('[device-is-pool-member]')
+
+	// 331-04 (FIX-04): capture the new member's capacity from the eligible
+	// projection BEFORE any state-changing step. Best-effort — a lookup failure
+	// must never block the add (the member is simply persisted without a size,
+	// same as pre-331 members).
+	let memberSize: number | undefined
+	try {
+		const eligible = await guards.getEligibleInternalDrives()
+		memberSize = eligible.find((drive) => drive.id === deviceId)?.size
+	} catch {
+		memberSize = undefined
+	}
 
 	// Guarded format via the single primitive (DEVICE_ID_RE + inverted membership
 	// + TOCTOU assertNotOsDisk + wrapper format-disk). Runs BEFORE the mount/add.
@@ -506,8 +527,13 @@ export async function addDisk(deviceId: string, deps: PoolDeps): Promise<{needsS
 		await wrapper.run('write-snapraid-conf', [], renderSnapraidConf(newDataMountpoints))
 	}
 
-	// persist the new member.
-	const newMember: PoolMember = {deviceId, role: 'data', mountpoint: target}
+	// persist the new member (331-04: with its capacity when the lookup succeeded).
+	const newMember: PoolMember = {
+		deviceId,
+		role: 'data',
+		mountpoint: target,
+		...(memberSize !== undefined ? {size: memberSize} : {}),
+	}
 	await deps.store.setPoolState({...state, members: [...state.members, newMember], incomplete: false})
 
 	// scoped-sync-needed SEAM — the caller decides when to sync; addDisk never does.

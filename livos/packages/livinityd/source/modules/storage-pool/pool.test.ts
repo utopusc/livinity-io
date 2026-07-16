@@ -345,10 +345,11 @@ describe('createPool — validate → format → configs → mount → persist �
 		// parity = sdc (8_000, largest); data = sdb, sdd in selection order
 		expect(state.parityDeviceId).toBe('sdc')
 		expect(state.protectionLevel).toBe('protected')
+		// 331-04 (FIX-04): each member carries its capacity from the eligible projection.
 		expect(state.members).toEqual([
-			{deviceId: 'sdb', role: 'data', mountpoint: '/mnt/disk2'},
-			{deviceId: 'sdd', role: 'data', mountpoint: '/mnt/disk3'},
-			{deviceId: 'sdc', role: 'parity', mountpoint: '/mnt/parity1'},
+			{deviceId: 'sdb', role: 'data', mountpoint: '/mnt/disk2', size: 2_000},
+			{deviceId: 'sdd', role: 'data', mountpoint: '/mnt/disk3', size: 4_000},
+			{deviceId: 'sdc', role: 'parity', mountpoint: '/mnt/parity1', size: 8_000},
 		])
 
 		const actions = deps.wrapper.calls.map((c) => c.action)
@@ -468,8 +469,8 @@ describe('addDisk — format + add-disk + whole-file re-render + needs-sync SEAM
 		const confCall = deps.wrapper.calls.find((c) => c.action === 'write-snapraid-conf')!
 		expect(confCall.input).toBe(renderSnapraidConf(['/mnt/disk2', '/mnt/disk3']))
 
-		// store updated with the new member
-		expect(store.state?.members).toContainEqual({deviceId: 'sdd', role: 'data', mountpoint: '/mnt/disk3'})
+		// store updated with the new member (331-04: capacity captured from eligible)
+		expect(store.state?.members).toContainEqual({deviceId: 'sdd', role: 'data', mountpoint: '/mnt/disk3', size: 4_000})
 
 		// returns a scoped-sync-needed flag; does NOT invoke sync itself (Trap 11)
 		expect(result.needsSync).toBe(true)
@@ -500,5 +501,29 @@ describe('addDisk — format + add-disk + whole-file re-render + needs-sync SEAM
 	test('refuses to grow when no pool exists', async () => {
 		const deps = makeDeps({store: makeStore(), guards: makeGuards({eligible: [drive('sdd', 4_000)]})})
 		await expect(addDisk('sdd', deps)).rejects.toThrow('[no-pool-exists]')
+	})
+
+	test('331-04: a size-lookup failure never blocks the add — member persists without a size', async () => {
+		// The FIRST getEligibleInternalDrives call (the 331-04 size lookup) throws;
+		// subsequent calls (formatInternalDevice's inverted-membership guard) work.
+		const store = existingProtectedPool()
+		const inner = makeGuards({eligible: [drive('sdd', 4_000)]})
+		let first = true
+		const flaky: typeof inner = {
+			...inner,
+			async getEligibleInternalDrives() {
+				if (first) {
+					first = false
+					throw new Error('lsblk transient failure')
+				}
+				return inner.getEligibleInternalDrives()
+			},
+		}
+		const deps = makeDeps({store, guards: flaky})
+		const result = await addDisk('sdd', deps)
+		expect(result.needsSync).toBe(true)
+		const added = store.state?.members.find((m) => m.deviceId === 'sdd')
+		expect(added).toBeDefined()
+		expect(added?.size).toBeUndefined()
 	})
 })
