@@ -685,6 +685,15 @@ export default router({
 				void recordAuthLoginEvent({userId: cred.user_id, success: false, error: 'passkey_unknown_user'})
 				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Passkey verification failed'})
 			}
+			// WR-01: fail CLOSED on a deactivated account at the point of
+			// authentication (mirrors the password path :185-188) — never mint a
+			// token or record a success event for a disabled user. Audit shape is
+			// identical (success:false, error:'account_disabled'); the message stays
+			// the opaque 'Passkey verification failed' (no user-enumeration oracle).
+			if (!dbUser.isActive) {
+				void recordAuthLoginEvent({userId: dbUser.id, success: false, error: 'account_disabled'})
+				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Passkey verification failed'})
+			}
 			const dbUserId = dbUser.id
 			const dbUserRole = dbUser.role
 
