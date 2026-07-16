@@ -24,6 +24,11 @@ import {insertResourceSample, aggregateRollups, pruneOldRows} from '../monitorin
 import {volumeBackupHandler} from './backup.js'
 import {securityAdvisorScanHandler} from '../security-advisor/scheduler-job.js'
 import {getBuiltinApp} from '../apps/builtin-apps.js'
+import * as snapraidCli from '../storage-pool/snapraid-cli.js'
+import {checkFreezeGate} from '../storage-pool/pool.js'
+import type {PoolStore, StoragePoolState, PoolStatusSummary} from '../storage-pool/pool.js'
+import type {StatusResult} from '../storage-pool/snapraid-log.js'
+import type Livinityd from '../../index.js'
 import type {BuiltInJobHandler, JobType, JobRunStatus} from './types.js'
 
 // =========================================================================
@@ -840,6 +845,228 @@ export const customCommandHandler: BuiltInJobHandler = async (job, ctx) => {
 }
 
 // =========================================================================
+// pool-sync — Phase 318 POOL-03 (D-07/D-08/D-09).
+//
+// Nightly background parity maintenance for the storage pool. Flow:
+//   diff → D-08 freeze gate (checkFreezeGate) → [blocked → pool-sync-frozen,
+//   NO sync] → sync → status → persist storagePool.lastStatusSummary (the W-2
+//   protected-file-count source for the NEXT gate) → per-member degradation
+//   alerts through the notifications bridge ONLY (D-09).
+//
+// SAFETY (T-318-13): the freeze gate runs before EVERY auto-sync (Trap 11). If
+// more than the threshold of files were removed since the last sync, the sync is
+// BLOCKED and pool-sync-frozen is raised — an explicit admin override (318-06)
+// is the ONLY way to commit a mass deletion to parity.
+//
+// Clones the diskCriticalWatchHandler never-throw skeleton (T-318-14): skip-if-
+// no-daemon guard; try/catch that NEVER throws; catch returns {status:'failure'}
+// (Trap 7 — JobRunResult has NO 'error' member). All snapraid-cli + store seams
+// are import-mocked in the unit tests — ZERO live snapraid.
+// =========================================================================
+
+// Weekly scrub coverage: 8% per run → full-array coverage in ≈3 months (13
+// weeks), the snapraid-aio-script community default (318-RESEARCH). Operator can
+// re-tune once ratified against real array performance in 318-HUMAN-UAT.
+export const POOL_SCRUB_PERCENT = 8
+
+// Build the injectable PoolStore adapter over the dedicated top-level
+// `storagePool` StoreSchema key (D-15), mirroring the 318-05 consumer contract.
+function poolStoreFor(livinityd: Livinityd): PoolStore {
+	return {
+		getPoolState: () => livinityd.store.get('storagePool'),
+		setPoolState: async (s) => {
+			await livinityd.store.set('storagePool', s)
+		},
+	}
+}
+
+// The snapraid.conf data label for a `/mnt/diskN` mountpoint (`dN`, matching
+// renderSnapraidConf's `data dN /mnt/diskN`). A member whose label is absent from
+// the latest `snapraid status` disk set is treated as a missing/unreadable branch.
+function dataLabelFor(mountpoint: string): string | null {
+	const match = /\/mnt\/disk(\d+)$/.exec(mountpoint)
+	return match ? `d${match[1]}` : null
+}
+
+// Per-member degradation alerts through the notifications bridge ONLY (D-09).
+// A data member whose branch label is missing from the latest `status` disk set
+// is degraded → raise pool-degraded:<deviceId>; a present branch clears it. Any
+// missing branch also raises the system-wide pool-branch-missing (cleared when
+// every branch is present). Fire-and-forget (.catch) — an alert dispatch failure
+// must never fail the tick (T-318-14). The exact live degradation signal is
+// ratified against a real pulled-disk/SMART-fail in 318-HUMAN-UAT.
+async function evaluatePoolHealth(
+	livinityd: Livinityd,
+	state: StoragePoolState,
+	status: StatusResult,
+): Promise<{degraded: string[]; branchMissing: boolean}> {
+	const seen = new Set(Object.keys(status.diskUsePercent ?? {}))
+	const degraded: string[] = []
+	for (const member of state.members) {
+		if (member.role !== 'data') continue
+		const label = dataLabelFor(member.mountpoint)
+		const id = `pool-degraded:${member.deviceId}`
+		// A member whose branch label snapraid no longer reports is degraded/missing.
+		if (label && !seen.has(label)) {
+			degraded.push(member.deviceId)
+			await livinityd.notifications.add(id, {severity: 'warning', external: true}).catch(() => {})
+		} else {
+			await livinityd.notifications.clear(id).catch(() => {})
+		}
+	}
+	const branchMissing = degraded.length > 0
+	if (branchMissing) {
+		await livinityd.notifications.add('pool-branch-missing', {severity: 'warning', external: true}).catch(() => {})
+	} else {
+		await livinityd.notifications.clear('pool-branch-missing').catch(() => {})
+	}
+	return {degraded, branchMissing}
+}
+
+// Persist storagePool.lastStatusSummary from a fresh `snapraid status` parse —
+// the W-2 protected-file-count source for the NEXT freeze-gate percentage leg.
+// diskUsePercent has no absolute file count, so protectedFileCount is derived as
+// the number of reported data branches (a coarse, count-only proxy that is safe
+// for the absolute-first gate; when 0 the percentage leg is skipped by W-2). The
+// scrub age is carried straight through for the UI badge.
+function statusSummaryFrom(status: StatusResult): PoolStatusSummary {
+	const summary: PoolStatusSummary = {
+		protectedFileCount: Object.keys(status.diskUsePercent ?? {}).length,
+		at: Date.now(),
+	}
+	if (status.scrubOldestDays != null) summary.scrubOldestDays = status.scrubOldestDays
+	return summary
+}
+
+export const poolSyncHandler: BuiltInJobHandler = async (job, ctx) => {
+	// Guard: no daemon ref (isolated unit test / Scheduler built without
+	// livinityd) → skip cleanly, never throw.
+	if (!ctx.livinityd) {
+		ctx.logger.log(`[scheduler/pool-sync] no daemon reference — skipping job ${job.name}`)
+		return {status: 'skipped', error: 'daemon reference unavailable'}
+	}
+	const startedAt = new Date()
+	try {
+		ctx.logger.log(`[scheduler/pool-sync] running job ${job.name}`)
+		const store = poolStoreFor(ctx.livinityd)
+		const state = await store.getPoolState()
+		// No pool configured yet → nothing to sync (skip cleanly, no alert noise).
+		if (!state?.members?.length) {
+			return {status: 'skipped', error: 'no storage pool configured'}
+		}
+		// Combine-only pools have no parity → a sync is a no-op; skip cleanly.
+		if (state.protectionLevel !== 'protected') {
+			return {status: 'skipped', error: 'pool is combine-only (no parity to sync)'}
+		}
+
+		// (1) diff — the mass-deletion count that feeds the D-08 freeze gate.
+		const diff = await snapraidCli.diff()
+
+		// (2) freeze gate BEFORE the sync (Trap 11 / T-318-13). protectedFileCount =
+		// the last persisted status summary (W-2); absent → absolute-count leg only.
+		const protectedFileCount = state.lastStatusSummary?.protectedFileCount ?? null
+		const gate = checkFreezeGate({removed: diff.counts.removed}, protectedFileCount, state.safetyFreezeThreshold)
+		if (gate.blocked) {
+			// BLOCK the sync + raise pool-sync-frozen (an admin override in 318-06 is
+			// the ONLY path that commits the deletion). Fire-and-forget dispatch.
+			await ctx.livinityd.notifications.add('pool-sync-frozen', {severity: 'warning', external: true}).catch(() => {})
+			const output = {frozen: true, removed: diff.counts.removed, reason: gate.reason}
+			await recordJobRun({jobId: job.id, jobName: job.name, startedAt, finishedAt: new Date(), status: 'success', output: JSON.stringify(output), error: null}).catch(() => {})
+			await pruneJobRuns(job.name).catch(() => {})
+			return {status: 'success', output}
+		}
+		// Not frozen → clear any stale freeze alert (recovery).
+		await ctx.livinityd.notifications.clear('pool-sync-frozen').catch(() => {})
+
+		// (3) sync — bring parity current.
+		const sync = await snapraidCli.sync()
+
+		// (4) status → persist lastStatusSummary (the W-2 source for the NEXT gate).
+		const status = await snapraidCli.status()
+		const lastStatusSummary = statusSummaryFrom(status)
+		await store.setPoolState({
+			...state,
+			lastSync: {at: Date.now(), added: diff.counts.added, removed: diff.counts.removed, updated: diff.counts.updated},
+			lastStatusSummary,
+		})
+
+		// (5) degradation alerts through the notifications bridge ONLY (D-09).
+		const health = await evaluatePoolHealth(ctx.livinityd, state, status)
+
+		const output = {added: diff.counts.added, removed: diff.counts.removed, updated: diff.counts.updated, syncExit: sync.exit, degraded: health.degraded, branchMissing: health.branchMissing}
+		await recordJobRun({jobId: job.id, jobName: job.name, startedAt, finishedAt: new Date(), status: 'success', output: JSON.stringify(output), error: null}).catch(() => {})
+		await pruneJobRuns(job.name).catch(() => {})
+		return {status: 'success', output}
+	} catch (err) {
+		// NOTE: 'failure', NOT 'error' — JobRunResult.status has no 'error' member.
+		const error = err instanceof Error ? err.message : String(err)
+		await recordJobRun({jobId: job.id, jobName: job.name, startedAt, finishedAt: new Date(), status: 'failure', output: null, error}).catch(() => {})
+		await pruneJobRuns(job.name).catch(() => {})
+		return {status: 'failure', error}
+	}
+}
+
+// =========================================================================
+// pool-scrub — Phase 318 POOL-03 (D-07/D-09).
+//
+// Weekly parity verification: `snapraid scrub -p <percent>` reads back a rolling
+// slice of already-synced data and compares it to parity, catching silent bit-rot
+// before a real disk failure needs it. Records the run in job_runs, refreshes
+// storagePool.lastStatusSummary, and raises/clears the same D-09 degradation
+// alerts as pool-sync. Same never-throw skeleton (Trap 7). Scrub does NOT run the
+// freeze gate — it never deletes or re-writes parity, it only verifies.
+// =========================================================================
+export const poolScrubHandler: BuiltInJobHandler = async (job, ctx) => {
+	if (!ctx.livinityd) {
+		ctx.logger.log(`[scheduler/pool-scrub] no daemon reference — skipping job ${job.name}`)
+		return {status: 'skipped', error: 'daemon reference unavailable'}
+	}
+	const startedAt = new Date()
+	try {
+		ctx.logger.log(`[scheduler/pool-scrub] running job ${job.name}`)
+		const store = poolStoreFor(ctx.livinityd)
+		const state = await store.getPoolState()
+		if (!state?.members?.length) {
+			return {status: 'skipped', error: 'no storage pool configured'}
+		}
+		// Combine-only pools have no parity → nothing to scrub; skip cleanly.
+		if (state.protectionLevel !== 'protected') {
+			return {status: 'skipped', error: 'pool is combine-only (no parity to scrub)'}
+		}
+
+		// (1) scrub a rolling percentage slice (config-tunable; default 8% ≈ 3-month coverage).
+		const cfg = (job.config ?? {}) as {percent?: unknown}
+		const percent =
+			typeof cfg.percent === 'number' && Number.isInteger(cfg.percent) && cfg.percent >= 0 && cfg.percent <= 100
+				? cfg.percent
+				: POOL_SCRUB_PERCENT
+		const scrub = await snapraidCli.scrub({percent})
+
+		// (2) status → refresh lastStatusSummary (scrub age badge + W-2 count).
+		const status = await snapraidCli.status()
+		await store.setPoolState({
+			...state,
+			lastScrub: {at: Date.now()},
+			lastStatusSummary: statusSummaryFrom(status),
+		})
+
+		// (3) degradation alerts through the notifications bridge ONLY (D-09).
+		const health = await evaluatePoolHealth(ctx.livinityd, state, status)
+
+		const output = {percent, scrubExit: scrub.exit, errorData: scrub.errorData, degraded: health.degraded, branchMissing: health.branchMissing}
+		await recordJobRun({jobId: job.id, jobName: job.name, startedAt, finishedAt: new Date(), status: 'success', output: JSON.stringify(output), error: null}).catch(() => {})
+		await pruneJobRuns(job.name).catch(() => {})
+		return {status: 'success', output}
+	} catch (err) {
+		// NOTE: 'failure', NOT 'error' — JobRunResult.status has no 'error' member.
+		const error = err instanceof Error ? err.message : String(err)
+		await recordJobRun({jobId: job.id, jobName: job.name, startedAt, finishedAt: new Date(), status: 'failure', output: null, error}).catch(() => {})
+		await pruneJobRuns(job.name).catch(() => {})
+		return {status: 'failure', error}
+	}
+}
+
+// =========================================================================
 // Registry: jobType -> handler mapping.
 // volume-backup wired by Plan 20-02 (alpine-tar streaming to S3/SFTP/local).
 // ai-resource-watch wired by Plan 23-02 (Phase 23 AID-02 proactive alerts).
@@ -861,6 +1088,8 @@ export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'ups-watch': upsWatchHandler,
 	'user-quota-scan': userQuotaScanHandler,
 	'custom-command': customCommandHandler, // Phase 329 APPS-04 (user-created only — never auto-seeded)
+	'pool-sync': poolSyncHandler, // Phase 318 POOL-03 — nightly diff→freeze-gate→sync
+	'pool-scrub': poolScrubHandler, // Phase 318 POOL-03 — weekly scrub -p parity verification
 }
 
 // =========================================================================
@@ -926,4 +1155,16 @@ export const DEFAULT_JOB_DEFINITIONS: Array<{
 	// Between-ticks enforcement is APPROXIMATE — D-05 residual gap (documented in-handler):
 	// the hard block is best-effort against the last-scan cache; kernel quotas DEFERRED.
 	{name: 'user-quota-scan', schedule: '*/30 * * * *', type: 'user-quota-scan', enabled: true},
+	// Phase 318 POOL-03 — nightly pool parity sync at 02:00. enabled=true (D-07): a
+	// no-op when no pool exists (skips cleanly), no LLM spend, and unsynced parity
+	// after a day of writes must be brought current even with no Settings tab open.
+	// The D-08 freeze gate runs BEFORE every sync, so a mass deletion is blocked +
+	// alerted rather than silently committed to parity (same enabled-safe rationale
+	// as disk-critical-watch — the safety-critical work must fire unattended).
+	{name: 'pool-sync', schedule: '0 2 * * *', type: 'pool-sync', enabled: true},
+	// Phase 318 POOL-03 — weekly parity scrub Sunday 03:00 (one hour after the
+	// nightly sync so they never overlap). enabled=true (D-07): a no-op on a
+	// combine-only / absent pool, cheap rolling 8% slice (≈3-month full coverage),
+	// and silent bit-rot must be caught before a real disk failure needs parity.
+	{name: 'pool-scrub', schedule: '0 3 * * 0', type: 'pool-scrub', enabled: true},
 ]

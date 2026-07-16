@@ -20,6 +20,8 @@ export type JobType =
 	| 'ups-watch' // Phase 326 HW-01 — ≥1-min UPS status poll → power-loss/restore external alert
 	| 'user-quota-scan' // Phase 325 STOR-02 — app-layer per-user du accounting → quota-exceeded bell
 	| 'custom-command' // Phase 329 APPS-04 — user-defined non-root execa(shell:false) command w/ history + failure alert
+	| 'pool-sync' // Phase 318 (POOL-03) — nightly snapraid diff → D-08 freeze-gate → sync → status/alert
+	| 'pool-scrub' // Phase 318 (POOL-03) — weekly snapraid scrub -p (parity verification) → status/alert
 
 export type JobRunStatus = 'success' | 'failure' | 'skipped' | 'running'
 
