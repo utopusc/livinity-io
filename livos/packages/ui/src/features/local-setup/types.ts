@@ -41,11 +41,15 @@ export interface WizardState {
 		hostIp: string
 		subdomain: string
 		zoneId: string
+		// Phase 331-01 (FIX-01): the BYO own-CF-zone flow (325-03) requires the
+		// operator's chosen portal domain — collected in PortalConfigStep and sent
+		// to local.provisionPortal alongside zoneId.
+		portalDomain: string
 	}
 }
 
 export const initialWizardState: WizardState = {
 	step: 'mode-pick',
 	mode: null,
-	portal: {cloudflareApiToken: '', hostIp: '', subdomain: '', zoneId: ''},
+	portal: {cloudflareApiToken: '', hostIp: '', subdomain: '', zoneId: '', portalDomain: ''},
 }

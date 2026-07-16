@@ -9,6 +9,7 @@ import {useEffect, useState} from 'react'
 import {IconArrowLeft, IconCheck, IconLoader2} from '@tabler/icons-react'
 
 import {trpcReact} from '@/trpc/trpc'
+import {t} from '@/utils/i18n'
 
 import {PortalDnsSetup} from './PortalDnsSetup'
 import {ModePickStep} from './ModePickStep'
@@ -106,6 +107,8 @@ export function LocalSetupWizard() {
 				<PortalDnsSetup
 					cfToken={state.portal.cloudflareApiToken}
 					hostIp={state.portal.hostIp}
+					zoneId={state.portal.zoneId}
+					portalDomain={state.portal.portalDomain}
 					onProvisioned={(subdomain, zoneId) => {
 						setState((s) => ({
 							...s,
@@ -134,7 +137,11 @@ export function LocalSetupWizard() {
 	)
 }
 
-// ── Portal config step (inline — collects CF token + host IP) ──
+// ── Portal config step (inline — collects CF token + host IP + BYO zone) ──
+// Phase 331-01 (FIX-01): the 325-03 BYO own-CF-zone backend requires zoneId +
+// portalDomain too (provisionPortalSchema, local-dns/routes.ts) — collect all
+// four here so a real provision call passes zod. Labels reuse the ready-made
+// `portal.byo.*` i18n group (EN/TR parity shipped in 325-03, previously unused).
 function PortalConfigStep({
 	state,
 	setState,
@@ -176,6 +183,35 @@ function PortalConfigStep({
 					}
 				/>
 			</label>
+			<label className='block'>
+				{t('portal.byo.zoneId.label')}
+				<input
+					className='mt-1 block w-full rounded border bg-bg-secondary px-3 py-2'
+					value={state.portal.zoneId}
+					onChange={(e) =>
+						setState((s) => ({
+							...s,
+							portal: {...s.portal, zoneId: e.target.value},
+						}))
+					}
+				/>
+				<span className='mt-1 block text-sm text-text-secondary'>{t('portal.byo.zoneId.help')}</span>
+			</label>
+			<label className='block'>
+				{t('portal.byo.domain.label')}
+				<input
+					className='mt-1 block w-full rounded border bg-bg-secondary px-3 py-2'
+					value={state.portal.portalDomain}
+					onChange={(e) =>
+						setState((s) => ({
+							...s,
+							portal: {...s.portal, portalDomain: e.target.value},
+						}))
+					}
+					placeholder='livos.example.com'
+				/>
+				<span className='mt-1 block text-sm text-text-secondary'>{t('portal.byo.domain.help')}</span>
+			</label>
 			<div className='rounded bg-accent-blue/10 p-3 text-sm text-accent-blue'>
 				<strong>Portal mode:</strong> public DNS A-record points at your LAN IP. Works on every device including
 				iPhone/iPad/Mac. ALL traffic stays LAN-direct — no Server5 relay.
@@ -186,7 +222,12 @@ function PortalConfigStep({
 				</button>
 				<button
 					onClick={onNext}
-					disabled={!state.portal.cloudflareApiToken || !state.portal.hostIp}
+					disabled={
+						!state.portal.cloudflareApiToken ||
+						!state.portal.hostIp ||
+						!state.portal.zoneId ||
+						!state.portal.portalDomain
+					}
 					className='rounded bg-accent px-4 py-2 text-white disabled:opacity-50'
 				>
 					Next: provision subdomain

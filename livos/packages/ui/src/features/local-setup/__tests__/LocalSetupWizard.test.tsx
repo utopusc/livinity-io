@@ -62,3 +62,25 @@ describe('PortalDnsSetup — Cloudflare flow surface (AC-104-15 UX, Phase 143-02
 		expect(portalDnsSrc).toMatch(/trpcReact\.local\.provisionPortal\.useMutation/)
 	})
 })
+
+describe('PortalDnsSetup — 4-field BYO provision payload (Phase 331-01, FIX-01)', () => {
+	// provisionPortalSchema (local-dns/routes.ts) requires hostIp +
+	// cloudflareApiToken + zoneId + portalDomain, all min(1). The audit found the
+	// UI sent only the first two, so EVERY real provision call failed zod.
+	it('mutate payload carries all four provisionPortalSchema fields', () => {
+		expect(portalDnsSrc).toMatch(
+			/mutateAsync\(\{hostIp, cloudflareApiToken: cfToken, zoneId, portalDomain\}\)/,
+		)
+	})
+	it('component receives zoneId + portalDomain props and gates the submit on them', () => {
+		expect(portalDnsSrc).toMatch(/zoneId: string/)
+		expect(portalDnsSrc).toMatch(/portalDomain: string/)
+		expect(portalDnsSrc).toMatch(/disabled=\{busy \|\| !cfToken \|\| !zoneId \|\| !portalDomain\}/)
+	})
+	it('wizard collects zoneId + portalDomain in PortalConfigStep and passes them down', () => {
+		expect(wizardSrc).toMatch(/t\('portal\.byo\.zoneId\.label'\)/)
+		expect(wizardSrc).toMatch(/t\('portal\.byo\.domain\.label'\)/)
+		expect(wizardSrc).toMatch(/zoneId=\{state\.portal\.zoneId\}/)
+		expect(wizardSrc).toMatch(/portalDomain=\{state\.portal\.portalDomain\}/)
+	})
+})
