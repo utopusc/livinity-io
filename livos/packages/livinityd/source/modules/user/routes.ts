@@ -36,6 +36,11 @@ import {
 import {createSession, revokeSessionsForUser, listSessions as listUserSessions, revokeSession as revokeUserSession} from '../database/sessions.js'
 import {recordAuthLoginEvent} from '../security-audit/events.js'
 import {getRequire2fa, setRequire2fa} from '../security/policy.js'
+// Phase 323-02 (IDENT-03) — additive passkey / WebAuthn ceremony routes.
+import {generateRegistrationOptions, verifyRegistrationResponse} from '@simplewebauthn/server'
+import {insertCredential, listCredentialsForUser} from '../database/webauthn.js'
+import {resolveRpId} from './webauthn-rp.js'
+import {assertVerificationPassed} from './webauthn-guards.js'
 
 const ONE_SECOND = 1000
 const ONE_MINUTE = 60 * ONE_SECOND
@@ -44,6 +49,33 @@ const ONE_DAY = 24 * ONE_HOUR
 const ONE_WEEK = 7 * ONE_DAY
 
 const DEFAULT_WALLPAPER = 'aurora'
+
+// Phase 323-02 (IDENT-03) — WebAuthn ceremony helpers.
+//
+// The RP-ID / expectedOrigin / expectedRPID are ALL server-derived from the
+// box's OWN configured mainDomain (Redis `livos:domain:config`, the same source
+// buildCaddyConfig uses: `config.active ? config.domain : null`) — NEVER a
+// client-supplied host header. A bare-LAN-IP box (mainDomain null) has no RP-ID
+// and no secure context, so `resolveRpId` returns null and the ceremony is
+// unavailable (fails closed). Single-use challenges live in Redis under this
+// prefix, SETEX 60s, deleted BEFORE verify so a failed verify cannot retry.
+const WEBAUTHN_CHALLENGE_PREFIX = 'webauthn:chal:'
+const WEBAUTHN_CHALLENGE_TTL_SECONDS = 60
+const WEBAUTHN_RP_NAME = 'Livinity'
+
+// Read the box's active mainDomain (host-only) — null when unconfigured / on a
+// bare-LAN-IP box. Mirrors the logout cookie-domain read + domain/routes.ts
+// buildCaddyConfig. Fails closed to null on any parse / Redis error.
+async function readMainDomain(redis: {get: (key: string) => Promise<string | null>}): Promise<string | null> {
+	try {
+		const raw = await redis.get('livos:domain:config')
+		if (!raw) return null
+		const dc = JSON.parse(raw) as {domain?: string; active?: boolean}
+		return dc.active && dc.domain ? dc.domain : null
+	} catch {
+		return null
+	}
+}
 
 // Phase 257-04 WS-A (LIVOS-023): the old `sessionCookieDomain()` helper widened
 // the LIVINITY_SESSION cookie to the registrable parent (`.livinity.io`) so it
@@ -397,6 +429,130 @@ export default router({
 		if (ctx.currentUser) return isUserTotpEnabled(ctx.currentUser.id)
 		return ctx.user.is2faEnabled()
 	}),
+
+	// ─── Phase 323-02 (IDENT-03) — Passkey / WebAuthn ceremony routes ───────────
+	//
+	// ADDITIVE-NEVER-REPLACING (D-03): these four procedures are a NEW alternative
+	// first factor. The password+TOTP `login` branches (above) stay fully intact
+	// and reachable — a user who enrolled a passkey then lost the device STILL logs
+	// in via password+TOTP. is-authenticated.ts / the apex gate / requireRole are
+	// untouched because `loginWithPasskey` reuses the EXACT session-mint tail.
+
+	// webauthnAvailable — CHECKER FIX 2: is WebAuthn usable on THIS box? True only
+	// when resolveRpId(mainDomain) !== null (false on a bare-LAN-IP box). The
+	// enroll/login UI (323-03/04) consumes this to HIDE the passkey button rather
+	// than surface a dead one (D-02 "surfaced in UI"). Wired to the REAL
+	// resolveRpId(mainDomain) server call — never a hardcoded true.
+	webauthnAvailable: publicProcedure.query(async ({ctx}) => {
+		const mainDomain = await readMainDomain(ctx.livinityd!.ai.redis)
+		return {available: resolveRpId(mainDomain) !== null}
+	}),
+
+	// webauthnRegisterOptions — privateProcedure (D-03: enroll ONLY while already
+	// authenticated). Generates registration options against the SERVER-derived
+	// RP-ID and SETEXes the single-use challenge keyed on the current user.
+	webauthnRegisterOptions: privateProcedure.query(async ({ctx}) => {
+		if (!ctx.currentUser) {
+			throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Passkey unavailable'})
+		}
+		const redis = ctx.livinityd!.ai.redis
+		const mainDomain = await readMainDomain(redis)
+		const rpID = resolveRpId(mainDomain)
+		if (!rpID) {
+			// LAN-IP box: no RP-ID, no secure context — ceremony unavailable.
+			throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Passkey unavailable on this box'})
+		}
+
+		const existing = await listCredentialsForUser(ctx.currentUser.id)
+		const options = await generateRegistrationOptions({
+			rpName: WEBAUTHN_RP_NAME,
+			rpID,
+			userName: ctx.currentUser.username,
+			userID: new TextEncoder().encode(ctx.currentUser.id),
+			attestationType: 'none',
+			authenticatorSelection: {residentKey: 'preferred', userVerification: 'preferred'},
+			// Exclude already-enrolled credentials so the same authenticator is not
+			// double-registered. transports omitted (optional hint only).
+			excludeCredentials: existing.map((c) => ({id: c.credential_id})),
+		})
+
+		// SETEX single-use challenge. Redis WRITE fails OPEN (a Redis outage must
+		// not brick enroll) — but the later verify still fails CLOSED on a missing
+		// challenge. Never log the raw challenge.
+		try {
+			await redis.set(
+				`${WEBAUTHN_CHALLENGE_PREFIX}${ctx.currentUser.id}`,
+				options.challenge,
+				'EX',
+				WEBAUTHN_CHALLENGE_TTL_SECONDS,
+			)
+		} catch (error) {
+			ctx.logger!.error('[webauthn] register challenge store failed — failing open', error)
+		}
+
+		return options
+	}),
+
+	// webauthnRegisterVerify — privateProcedure. Reads + DELETES the challenge
+	// BEFORE verify (single-use, no stale-challenge retry), runs
+	// verifyRegistrationResponse (exception -> UNAUTHORIZED), then the
+	// fail-closed assertVerificationPassed guard, then persists the v13 NESTED
+	// registrationInfo.credential.* . Audit fires on success AND failure (SEC-01).
+	webauthnRegisterVerify: privateProcedure
+		.input(z.object({response: z.any()}))
+		.mutation(async ({ctx, input}) => {
+			if (!ctx.currentUser) {
+				throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Passkey unavailable'})
+			}
+			const userId = ctx.currentUser.id
+			const redis = ctx.livinityd!.ai.redis
+			const mainDomain = await readMainDomain(redis)
+			const rpID = resolveRpId(mainDomain)
+			if (!rpID) {
+				throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Passkey unavailable on this box'})
+			}
+
+			const key = `${WEBAUTHN_CHALLENGE_PREFIX}${userId}`
+			let verification
+			try {
+				// Single-use: read + DELETE the challenge BEFORE verify — a failed or
+				// replayed verify finds no challenge and cannot retry a stale one.
+				const stored = await redis.get(key)
+				await redis.del(key)
+				if (!stored) throw new TRPCError({code: 'UNAUTHORIZED', message: 'Passkey verification failed'})
+				verification = await verifyRegistrationResponse({
+					response: input.response,
+					expectedChallenge: stored,
+					expectedOrigin: `https://${rpID}`,
+					expectedRPID: rpID,
+				})
+			} catch (error) {
+				void recordAuthLoginEvent({userId, success: false, error: 'passkey_register_failed'})
+				if (error instanceof TRPCError) throw error
+				// NEVER fail open (CVE-2026-11883): any verify exception -> UNAUTHORIZED.
+				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Passkey verification failed'})
+			}
+
+			// Fail closed on verified!==true (belt-and-braces with the try/catch above).
+			assertVerificationPassed(verification)
+			const info = verification.registrationInfo
+			if (!info) {
+				void recordAuthLoginEvent({userId, success: false, error: 'passkey_register_failed'})
+				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Passkey verification failed'})
+			}
+
+			// Persist from the v13 NESTED registrationInfo.credential.* shape. The
+			// public_key is a Uint8Array -> stored base64url (non-secret). Never log
+			// the raw credential/response body.
+			await insertCredential(userId, {
+				credentialId: info.credential.id,
+				publicKey: Buffer.from(info.credential.publicKey).toString('base64url'),
+				counter: info.credential.counter,
+				transports: info.credential.transports ?? null,
+			})
+			void recordAuthLoginEvent({userId, success: true})
+			return {verified: true}
+		}),
 
 	// Disables 2FA
 	disable2fa: privateProcedure
