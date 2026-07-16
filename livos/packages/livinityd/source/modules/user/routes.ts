@@ -37,10 +37,15 @@ import {createSession, revokeSessionsForUser, listSessions as listUserSessions, 
 import {recordAuthLoginEvent} from '../security-audit/events.js'
 import {getRequire2fa, setRequire2fa} from '../security/policy.js'
 // Phase 323-02 (IDENT-03) — additive passkey / WebAuthn ceremony routes.
-import {generateRegistrationOptions, verifyRegistrationResponse} from '@simplewebauthn/server'
-import {insertCredential, listCredentialsForUser} from '../database/webauthn.js'
+import {
+	generateRegistrationOptions,
+	verifyRegistrationResponse,
+	generateAuthenticationOptions,
+	verifyAuthenticationResponse,
+} from '@simplewebauthn/server'
+import {insertCredential, listCredentialsForUser, getCredentialById, updateCounter} from '../database/webauthn.js'
 import {resolveRpId} from './webauthn-rp.js'
-import {assertVerificationPassed} from './webauthn-guards.js'
+import {assertVerificationPassed, assertCounterOk} from './webauthn-guards.js'
 
 const ONE_SECOND = 1000
 const ONE_MINUTE = 60 * ONE_SECOND
@@ -552,6 +557,149 @@ export default router({
 			})
 			void recordAuthLoginEvent({userId, success: true})
 			return {verified: true}
+		}),
+
+	// webauthnLoginOptions — publicProcedure (an UNAUTHENTICATED caller starts the
+	// login ceremony). Discoverable-credential flow: no username required. The
+	// single-use challenge is keyed on a server-issued nonce (challengeId) that is
+	// returned to the client and echoed back on verify.
+	webauthnLoginOptions: publicProcedure.query(async ({ctx}) => {
+		const redis = ctx.livinityd!.ai.redis
+		const mainDomain = await readMainDomain(redis)
+		const rpID = resolveRpId(mainDomain)
+		if (!rpID) {
+			throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Passkey unavailable on this box'})
+		}
+
+		const options = await generateAuthenticationOptions({rpID, userVerification: 'preferred'})
+		const challengeId = crypto.randomUUID()
+		// SETEX single-use challenge (fails OPEN on a Redis write error; the verify
+		// still fails CLOSED on a missing challenge). Never log the raw challenge.
+		try {
+			await redis.set(
+				`${WEBAUTHN_CHALLENGE_PREFIX}${challengeId}`,
+				options.challenge,
+				'EX',
+				WEBAUTHN_CHALLENGE_TTL_SECONDS,
+			)
+		} catch (error) {
+			ctx.logger!.error('[webauthn] login challenge store failed — failing open', error)
+		}
+
+		return {options, challengeId}
+	}),
+
+	// loginWithPasskey — publicProcedure. Resolves the account ONLY via
+	// getCredentialById(response.id) -> findUserById (an unknown credential fails
+	// CLOSED, no fallthrough), verifies the assertion (never fail open), guards the
+	// counter against clones, bumps it, then FALLS INTO the existing session-mint
+	// tail VERBATIM (signProxyToken -> signUserToken -> createSession ->
+	// LIVINITY_SESSION host-only cookie -> recordAuthLoginEvent). The password+TOTP
+	// login branches are untouched — this is a NEW alternative first factor (D-03).
+	loginWithPasskey: publicProcedure
+		.input(z.object({challengeId: z.string(), response: z.any()}))
+		.mutation(async ({ctx, input}) => {
+			const NIL_UUID = '00000000-0000-0000-0000-000000000000'
+			const redis = ctx.livinityd!.ai.redis
+			const mainDomain = await readMainDomain(redis)
+			const rpID = resolveRpId(mainDomain)
+			if (!rpID) {
+				throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Passkey unavailable on this box'})
+			}
+
+			// Resolve which user this credential belongs to. Unknown credential_id
+			// (cross-box / never enrolled) -> null -> UNAUTHORIZED (fail closed).
+			const credentialId = String((input.response as {id?: unknown})?.id ?? '')
+			const cred = await getCredentialById(credentialId)
+			if (!cred) {
+				void recordAuthLoginEvent({userId: NIL_UUID, success: false, error: 'passkey_unknown_credential'})
+				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Passkey verification failed'})
+			}
+
+			const key = `${WEBAUTHN_CHALLENGE_PREFIX}${input.challengeId}`
+			let verification
+			try {
+				// Single-use: read + DELETE the challenge BEFORE verify (no stale retry).
+				const stored = await redis.get(key)
+				await redis.del(key)
+				if (!stored) throw new TRPCError({code: 'UNAUTHORIZED', message: 'Passkey verification failed'})
+				verification = await verifyAuthenticationResponse({
+					response: input.response,
+					expectedChallenge: stored,
+					expectedOrigin: `https://${rpID}`,
+					expectedRPID: rpID,
+					credential: {
+						id: cred.credential_id,
+						publicKey: Buffer.from(cred.public_key, 'base64url'),
+						counter: Number(cred.counter),
+					},
+				})
+			} catch (error) {
+				void recordAuthLoginEvent({userId: cred.user_id, success: false, error: 'passkey_verify_failed'})
+				if (error instanceof TRPCError) throw error
+				// NEVER fail open (CVE-2026-11883): any verify exception -> UNAUTHORIZED.
+				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Passkey verification failed'})
+			}
+
+			// Fail closed on verified!==true; reject a cloned-authenticator counter
+			// regression BEFORE the mint tail runs.
+			assertVerificationPassed(verification)
+			const newCounter = verification.authenticationInfo.newCounter
+			assertCounterOk(Number(cred.counter), newCounter)
+			await updateCounter(cred.credential_id, newCounter)
+
+			// Resolve the account row; a dangling credential (user deleted) fails closed.
+			const dbUser = await findUserById(cred.user_id)
+			if (!dbUser) {
+				void recordAuthLoginEvent({userId: cred.user_id, success: false, error: 'passkey_unknown_user'})
+				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Passkey verification failed'})
+			}
+			const dbUserId = dbUser.id
+			const dbUserRole = dbUser.role
+
+			// ─── session-mint tail (reused VERBATIM from `login`, :215-267) ──────────
+			// Set proxy token cookie
+			const proxyToken = await ctx.server!.signProxyToken()
+			const expires = new Date(Date.now() + ONE_WEEK)
+			ctx.response!.cookie('LIVINITY_PROXY_TOKEN', proxyToken, {
+				httpOnly: true,
+				expires,
+				sameSite: 'lax',
+			})
+
+			// Generate the API token
+			const apiToken = dbUserId && dbUserRole
+				? await ctx.server!.signUserToken(dbUserId, dbUserRole)
+				: await ctx.server!.signToken()
+
+			// Record a revocable session row keyed off the token's jti (LIVOS-005).
+			const pool = getPool()
+			if (dbUserId && pool) {
+				try {
+					const verified = await ctx.server!.verifyToken(apiToken)
+					if (verified?.jti) {
+						await createSession({
+							userId: dbUserId,
+							jti: verified.jti,
+							expiresAt: new Date(Date.now() + ONE_WEEK),
+						})
+					}
+				} catch (error) {
+					// Non-fatal: a failed session record must not block login.
+					ctx.logger!.error('Failed to record session for revocation tracking', error)
+				}
+			}
+
+			// LIVINITY_SESSION is HOST-ONLY (LIVOS-023) — no domain attribute.
+			ctx.response!.cookie('LIVINITY_SESSION', apiToken, {
+				httpOnly: true,
+				secure: true,
+				sameSite: 'lax',
+				maxAge: 30 * ONE_DAY,
+			})
+
+			void recordAuthLoginEvent({userId: dbUserId, success: true})
+			return apiToken
 		}),
 
 	// Disables 2FA
