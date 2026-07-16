@@ -16,6 +16,14 @@ import groups from '../../user/groups-routes.js'
 import {appStore, apps as appsBase} from '../../apps/routes.js'
 import widget from '../../widgets/routes.js'
 import files from '../../files/routes.js'
+// Phase 318 (POOL-02/03/04, D-15) — `storagePool.*` adminProcedure namespace.
+// Fresh top-level sibling of `files`/`scheduler`/`monitoring` (NOT nested under
+// `files` — pooling is its own domain, 318-CODEBASE §7). Read-only enumeration
+// (listEligibleDrives/poolStatus) on the public-when-no-user gate; every
+// destructive mutation adminProcedure-gated with DEVICE_ID_RE-zod device inputs,
+// delegating to 318-05 pool.ts + 318-04 snapraid-cli. Static-import mount (no
+// deps — like files/scheduler/monitoring).
+import storagePool from '../../storage-pool/routes.js'
 import notifications from '../../notifications/routes.js'
 import eventBus from '../../event-bus/routes.js'
 import backups from '../../backups/routes.js'
@@ -338,6 +346,8 @@ export function createAppRouter(opts: {
 		apps,
 		widget,
 		files,
+		// Phase 318 — storagePool.* pool lifecycle namespace (POOL-02/03/04).
+		storagePool,
 		notifications,
 		eventBus,
 		backups,
