@@ -539,8 +539,32 @@ case "$ACTION" in
 	snapraid)
 		# Run snapraid with the caller-supplied verbs/flags (each charset-validated) always
 		# with --conf /etc/snapraid.conf + --log ">&1" (D-04 structured-tag parsing contract).
+		#
+		# WR-04 HARDENING: the wrapper injects BOTH --conf and --log itself and a caller may
+		# NOT override either. snapraid honours the LAST --conf on the line, so a permitted
+		# `snapraid --conf /tmp/evil.conf fix` would let a grant-holder point snapraid at an
+		# attacker-controlled config and get root-level file writes via `fix` into arbitrary
+		# `data` paths. We therefore (a) require the first token to be a known verb, and
+		# (b) refuse ANY long option (--conf/--log/--filter/…), any `--` sentinel, and any
+		# path-like token. livinityd's snapraid-cli only ever forwards a verb + short verb
+		# flags (-p <n> / -d <label>), never a long option or a path, so this is a no-op for
+		# the legitimate caller and a hard stop for a buggy/compromised one.
+		case "${1:-}" in
+			diff|sync|scrub|status|check|fix) ;;
+			*) echo "[livos-pool] snapraid: first arg must be a known verb (diff|sync|scrub|status|check|fix), got: '${1:-}'" >&2; exit 2 ;;
+		esac
 		for _a in "$@"; do
 			_valid_snapraid_arg "$_a" || { echo "[livos-pool] invalid snapraid arg: '$_a'" >&2; exit 2; }
+			# Refuse every long option (starts with `--`) and the bare `--` sentinel — this
+			# blocks --conf / --log / --filter and anything else that could redirect the run.
+			case "$_a" in
+				--*) echo "[livos-pool] snapraid: refusing long option / sentinel '$_a' (config + log paths are fixed)" >&2; exit 2 ;;
+			esac
+			# Refuse any path-like token (contains a slash) — snapraid labels are dN, never
+			# paths; a slash-bearing arg is only ever an attempt to reach an arbitrary file.
+			case "$_a" in
+				*/*) echo "[livos-pool] snapraid: refusing path-like argument '$_a'" >&2; exit 2 ;;
+			esac
 		done
 		exec snapraid --conf "$SNAPRAID_CONF" --log ">&1" "$@"
 		;;
