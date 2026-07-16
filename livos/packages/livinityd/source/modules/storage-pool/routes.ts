@@ -129,6 +129,25 @@ async function setRunbookStep(livinityd: Livinityd, step: string | undefined): P
 	return next
 }
 
+// WR-03: the D-11 replacement runbook is a LINEAR chain — format → mount → fix →
+// check → sync. Each step asserts its persisted predecessor server-side BEFORE it
+// runs, so a direct tRPC client or a resumed/racing wizard cannot skip a step or,
+// worst of all, run `sync` right after a FAILED check (which would overwrite still-
+// good parity with unrecoverable data, destroying the pool's recoverability). The
+// UI already enforces the order; this makes the guarantee real on the server too.
+// Returns the current state so the caller can reuse it (no double read).
+async function assertRunbookStep(livinityd: Livinityd, allowed: readonly string[]): Promise<StoragePoolState> {
+	const store = poolStore(livinityd)
+	const state = await store.getPoolState()
+	if (!state?.members?.length) throw new Error('[no-pool-exists]')
+	if (!allowed.includes(state.runbookStep ?? '')) {
+		throw new Error(
+			`[replace-step-out-of-order] expected one of [${allowed.join(', ')}], got '${state.runbookStep ?? 'none'}'`,
+		)
+	}
+	return state
+}
+
 export default router({
 	// ── READ ENUMERATION (publicProcedureWhenNoUserExists — browseable pre-first-
 	//    user, exactly like files.externalDevices; NO mutation here) ────────────
@@ -256,6 +275,8 @@ export default router({
 	replaceMount: adminProcedure
 		.input(z.object({deviceId: deviceIdSchema, mountpoint: dataMountpointSchema}))
 		.mutation(async ({ctx, input}) => {
+			// WR-03: only after the replacement disk was formatted.
+			await assertRunbookStep(ctx.livinityd!, ['replace:formatted'])
 			await runPoolWrapper('mount-data-disk', ['--dev', input.deviceId, '--target', input.mountpoint])
 			await setRunbookStep(ctx.livinityd!, 'replace:mounted')
 			return {ok: true as const, mountpoint: input.mountpoint, runbookStep: 'replace:mounted'}
@@ -266,6 +287,9 @@ export default router({
 	replaceFix: adminProcedure
 		.input(z.object({disk: diskLabelSchema}))
 		.mutation(async ({ctx, input}) => {
+			// WR-03: only after the replacement disk was mounted at its slot. Refuses a
+			// `fix` on a healthy pool that never went through format/mount.
+			await assertRunbookStep(ctx.livinityd!, ['replace:mounted'])
 			const result = await fix({disk: input.disk})
 			await setRunbookStep(ctx.livinityd!, 'replace:fixed')
 			return {result, runbookStep: 'replace:fixed'}
@@ -273,20 +297,28 @@ export default router({
 
 	// Step 5 (HARD-STOP) — disk-scoped verification (`check -d <label>`). Returns
 	// the result and NEVER auto-chains into a sync; an `unrecoverable` outcome is
-	// the caller's stop signal (D-11 / Pitfall 3).
+	// the caller's stop signal (D-11 / Pitfall 3). WR-03: the verdict is PERSISTED
+	// into runbookStep (`:ok` vs `:blocked`) so replaceSync can refuse a sync that
+	// follows a failed check server-side, not only in the UI.
 	replaceCheck: adminProcedure
 		.input(z.object({disk: diskLabelSchema}))
 		.mutation(async ({ctx, input}) => {
+			// Allow after a fix, or a re-run of a prior check (resume re-derives the verdict fresh).
+			await assertRunbookStep(ctx.livinityd!, ['replace:fixed', 'replace:checked:ok', 'replace:checked:blocked'])
 			const result = await check({disk: input.disk})
 			const hardStop = result.errorUnrecoverable > 0 || result.exit === 'unrecoverable'
-			await setRunbookStep(ctx.livinityd!, 'replace:checked')
-			return {result, hardStop, runbookStep: 'replace:checked'}
+			const step = hardStop ? 'replace:checked:blocked' : 'replace:checked:ok'
+			await setRunbookStep(ctx.livinityd!, step)
+			return {result, hardStop, runbookStep: step}
 		}),
 
 	// Step 6 — bring parity current after a verified rebuild (still gate-respecting).
+	// WR-03: refuses unless the IMMEDIATELY-prior step is a PASSING check
+	// (`replace:checked:ok`); a `:blocked` (unrecoverable) or any earlier step throws
+	// [replace-step-out-of-order], so `sync` can never overwrite good parity with
+	// unrecoverable data.
 	replaceSync: adminProcedure.mutation(async ({ctx}) => {
-		const state = await poolStore(ctx.livinityd!).getPoolState()
-		if (!state?.members?.length) throw new Error('[no-pool-exists]')
+		const state = await assertRunbookStep(ctx.livinityd!, ['replace:checked:ok'])
 		const d = await diff()
 		const gate = checkFreezeGate(
 			{removed: d.counts.removed},

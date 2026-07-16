@@ -156,6 +156,43 @@ describe('DEVICE_ID_RE zod rejects a malformed deviceId before the resolver (V5 
 	})
 })
 
+describe('WR-03: replacement runbook enforces the linear step order server-side', () => {
+	// A minimal protected pool seeded at a given runbookStep. All assertions below
+	// reject INSIDE the resolver (assertRunbookStep) BEFORE any diff/fix/sync execa
+	// runs — so they stay fully offline (no sudo / snapraid).
+	const poolAt = (runbookStep?: string) => ({
+		members: [{deviceId: 'sdb', role: 'data', mountpoint: '/mnt/disk2'}],
+		protectionLevel: 'protected',
+		safetyFreezeThreshold: {files: 500, percent: 20},
+		runbookStep,
+	})
+
+	test('replaceSync refuses when the prior step is not a PASSING check', async () => {
+		const caller = makeCaller({storeInitial: poolAt('replace:fixed')})
+		await expect(caller.replaceSync()).rejects.toThrow(/out-of-order/)
+	})
+
+	test('replaceSync refuses after a BLOCKED (unrecoverable) check — never syncs over good parity', async () => {
+		const caller = makeCaller({storeInitial: poolAt('replace:checked:blocked')})
+		await expect(caller.replaceSync()).rejects.toThrow(/out-of-order/)
+	})
+
+	test('replaceFix refuses on a healthy pool that never went through format/mount', async () => {
+		const caller = makeCaller({storeInitial: poolAt(undefined)})
+		await expect(caller.replaceFix({disk: 'd2'})).rejects.toThrow(/out-of-order/)
+	})
+
+	test('replaceMount refuses unless the replacement disk was just formatted', async () => {
+		const caller = makeCaller({storeInitial: poolAt('replace:mounted')})
+		await expect(caller.replaceMount({deviceId: 'sdb', mountpoint: '/mnt/disk2'})).rejects.toThrow(/out-of-order/)
+	})
+
+	test('replaceCheck refuses unless a fix (or a prior check) preceded it', async () => {
+		const caller = makeCaller({storeInitial: poolAt('replace:formatted')})
+		await expect(caller.replaceCheck({disk: 'd2'})).rejects.toThrow(/out-of-order/)
+	})
+})
+
 describe('poolStatus read query (isWsl2 hard-hide flag, D-14)', () => {
 	test('with no pool: returns {pool:null, isWsl2:boolean, snapraid:null} — no destructive op', async () => {
 		const caller = makeCaller({storeInitial: undefined})

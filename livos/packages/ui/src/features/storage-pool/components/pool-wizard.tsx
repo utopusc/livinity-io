@@ -214,7 +214,12 @@ function phaseFromStep(step: string | null): RunbookPhase {
 			return 'fix'
 		case 'replace:fixed':
 			return 'check'
+		// WR-03: the check verdict is persisted (`:ok` / `:blocked`). On resume we
+		// ALWAYS re-run the check so the HARD-STOP decision is derived fresh, never
+		// trusted from stale memory — so every checked variant resumes at 'check'.
 		case 'replace:checked':
+		case 'replace:checked:ok':
+		case 'replace:checked:blocked':
 			return 'check'
 		case 'replace:synced':
 			return 'done'
