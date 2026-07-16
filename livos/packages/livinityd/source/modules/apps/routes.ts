@@ -15,6 +15,18 @@ import {
 	getUserAppInstance,
 	getPool,
 } from '../database/index.js'
+// Phase 323-06 (IDENT-04, D-07/D-08) — group app sharing + readonly enforcement.
+// The 323-05 app-access DAO is the effective-access source-of-truth: user grants
+// stay on user_app_access (grantAppAccess/revokeAppAccess above), group grants land
+// on app_access; getEffectiveAppAccess UNIONs both (most-permissive) for the
+// full-only management gate.
+import {
+	getEffectiveAppAccess,
+	grantAppAccessToGroup,
+	revokeAppAccessFromGroup,
+	listAppAccessPrincipals,
+} from './app-access.js'
+import {listGroups} from '../database/groups.js'
 // Phase 157 — v37 install dispatcher service (section-aware install path
 // for webapp/native/ai/plugin). The dispatcher is wired at livinityd boot
 // via `initV37InstallService()`; these procedures resolve it via getter.
@@ -745,27 +757,63 @@ export const apps = router({
 			return {success: true, enabled: input}
 		}),
 
-	// Share an app with a user (grant access)
+	// Share an app with a user OR group (grant access).
+	//
+	// 323-06 (IDENT-04, D-07): `principalType` selects the grant table —
+	// 'user' → user_app_access (grantAppAccess), 'group' → app_access
+	// (grantAppAccessToGroup). `accessType` surfaces the dormant readonly level
+	// (default 'full'). `principalId` supersedes the legacy `userId` field; the
+	// old `{appId, userId}`-only callers keep working via the `.default('user')`
+	// on principalType + the `userId` fallback below (back-compat, T-323-15).
 	shareApp: privateProcedure
 		.input(z.object({
 			appId: z.string(),
-			userId: z.string(),
+			// Legacy field kept for back-compat with existing {appId,userId} callers.
+			userId: z.string().optional(),
+			principalId: z.string().optional(),
+			principalType: z.enum(['user', 'group']).default('user'),
+			accessType: z.enum(['readonly', 'full']).default('full'),
 		}))
 		.mutation(async ({ctx, input}) => {
 			const grantedBy = ctx.currentUser?.id
 			if (!grantedBy) throw new Error('Authentication required')
-			await grantAppAccess(input.userId, input.appId, grantedBy)
+			// 323-06 (D-08, T-323-17): the caller must hold effective-FULL on the app
+			// to (re)share it — a readonly user cannot escalate by granting. Inserted
+			// BEFORE any grant write. Owner/admin already resolve to 'full' (admin
+			// auto-grant in myApps).
+			const level = await getEffectiveAppAccess(input.appId, grantedBy)
+			if (level !== 'full') throw new TRPCError({code: 'FORBIDDEN', message: 'Read-only access'})
+			const principalId = input.principalId ?? input.userId
+			if (!principalId) throw new TRPCError({code: 'BAD_REQUEST', message: 'principalId (or userId) is required'})
+			if (input.principalType === 'group') {
+				await grantAppAccessToGroup(input.appId, principalId, grantedBy, input.accessType)
+			} else {
+				await grantAppAccess(principalId, input.appId, grantedBy, input.accessType)
+			}
 			return {success: true}
 		}),
 
-	// Revoke a user's access to an app
+	// Revoke a user's OR group's access to an app (symmetric to shareApp).
 	unshareApp: privateProcedure
 		.input(z.object({
 			appId: z.string(),
-			userId: z.string(),
+			userId: z.string().optional(),
+			principalId: z.string().optional(),
+			principalType: z.enum(['user', 'group']).default('user'),
 		}))
 		.mutation(async ({ctx, input}) => {
-			await revokeAppAccess(input.userId, input.appId)
+			const actor = ctx.currentUser?.id
+			if (!actor) throw new Error('Authentication required')
+			// 323-06 (D-08): unshare is management — full-only, gated before revoke.
+			const level = await getEffectiveAppAccess(input.appId, actor)
+			if (level !== 'full') throw new TRPCError({code: 'FORBIDDEN', message: 'Read-only access'})
+			const principalId = input.principalId ?? input.userId
+			if (!principalId) throw new TRPCError({code: 'BAD_REQUEST', message: 'principalId (or userId) is required'})
+			if (input.principalType === 'group') {
+				await revokeAppAccessFromGroup(input.appId, principalId)
+			} else {
+				await revokeAppAccess(principalId, input.appId)
+			}
 			return {success: true}
 		}),
 
@@ -866,10 +914,35 @@ export const apps = router({
 		.input(z.object({appId: z.string()}))
 		.query(async ({ctx, input}) => listAppAccessUsers(input.appId)),
 
+	// 323-06 (IDENT-04, D-07/D-09): current principal grants for the share dialog,
+	// including their access level. `users` are the DIRECT user_app_access grants
+	// (sourced via sharedUsers — user_app_access is unchanged); `groups` are the
+	// app_access group grants (principal_type 'group') with their access_type so
+	// the dialog can render + edit the readonly/full level per group grant.
+	sharedPrincipals: privateProcedure
+		.input(z.object({appId: z.string()}))
+		.query(async ({input}) => {
+			const [users, principals] = await Promise.all([
+				listAppAccessUsers(input.appId),
+				listAppAccessPrincipals(input.appId),
+			])
+			const groups = principals
+				.filter((p) => p.principal_type === 'group')
+				.map((p) => ({groupId: p.principal_id, accessType: p.access_type, grantedAt: p.granted_at}))
+			return {users, groups}
+		}),
+
 	// List all users (for share dialog user picker)
 	allUsers: privateProcedure.query(async () => {
 		const users = await listUsers()
 		return users.map((u) => ({id: u.id, username: u.username, displayName: u.displayName, role: u.role, avatarColor: u.avatarColor}))
+	}),
+
+	// 323-06 (IDENT-04, D-09): all groups for the share dialog group picker
+	// (sibling to allUsers, via the 322-01 groups DAO listGroups).
+	allGroups: privateProcedure.query(async () => {
+		const groups = await listGroups()
+		return groups.map((g) => ({id: g.id, name: g.name, description: g.description}))
 	}),
 
 	// Install an app for a specific user (admin only)
