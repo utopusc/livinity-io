@@ -1,9 +1,11 @@
+import {startAuthentication} from '@simplewebauthn/browser'
 import {AnimatePresence, motion} from 'motion/react'
 import {useState} from 'react'
 import {flushSync} from 'react-dom'
-import {TbArrowLeft, TbArrowRight, TbLoader2} from 'react-icons/tb'
+import {TbArrowLeft, TbArrowRight, TbFingerprint, TbLoader2} from 'react-icons/tb'
 
 import {PinInput} from '@/components/ui/pin-input'
+import {toast} from '@/components/ui/toast'
 import {useAuth} from '@/modules/auth/use-auth'
 import {PasswordInput} from '@/shadcn-components/ui/input'
 import {trpcReact} from '@/trpc/trpc'
@@ -62,10 +64,53 @@ export default function MultiUserLogin() {
 	const [step, setStep] = useState<Step>('select-user')
 	const [orbState, setOrbState] = useState<'idle' | 'pulse' | 'breathe'>('breathe')
 
+	const [passkeyPending, setPasskeyPending] = useState(false)
+
 	const {loginWithJwt} = useAuth()
+	const utils = trpcReact.useUtils()
 	const usersQ = trpcReact.user.listUsers.useQuery()
 	const users = usersQ.data ?? []
 	const isMultiUser = users.length > 1
+
+	// webauthnAvailable (323-02): true only when the box has an RP-ID (a real
+	// domain). On a bare-LAN-IP box it's false, so the passkey button is HIDDEN
+	// rather than surfaced as a dead path (D-02). Defaults to false until the
+	// query resolves so the button never flashes on an unsupported box.
+	const webauthnAvailableQ = trpcReact.user.webauthnAvailable.useQuery()
+	const webauthnAvailable = webauthnAvailableQ.data?.available ?? false
+
+	// loginWithPasskey (323-02) reuses the EXACT session-mint tail as the password
+	// login, so its success handler is the SAME `loginWithJwt` that `loginMut`
+	// uses — the passkey path is a strictly additive first factor (D-03).
+	const loginWithPasskeyMut = trpcReact.user.loginWithPasskey.useMutation({
+		onSuccess: loginWithJwt,
+	})
+
+	// Additive passkey ceremony: fetch discoverable-credential options from the
+	// server, run the browser assertion, then verify server-side. A cancelled or
+	// failed ceremony must NEVER lock the user out — it stays on the login screen
+	// with the password + TOTP steps fully reachable (D-03, T-323-12).
+	const handlePasskeyLogin = async () => {
+		if (!webauthnAvailable) return
+		setPasskeyPending(true)
+		setOrbState('pulse')
+		try {
+			const {options, challengeId} = await utils.user.webauthnLoginOptions.fetch()
+			const assertion = await startAuthentication({optionsJSON: options})
+			// onSuccess (loginWithJwt) navigates away on success.
+			await loginWithPasskeyMut.mutateAsync({challengeId, response: assertion})
+		} catch (error) {
+			// NotAllowedError / AbortError = the user backed out of the browser
+			// prompt — that's not a failure, stay quiet. Anything else surfaces a
+			// toast but still leaves password + TOTP available.
+			const name = (error as {name?: string})?.name
+			if (name !== 'NotAllowedError' && name !== 'AbortError') {
+				toast.error(t('auth-passkey.login.failed'))
+			}
+			setPasskeyPending(false)
+			setOrbState('breathe')
+		}
+	}
 
 	const loginMut = trpcReact.user.login.useMutation({
 		onSuccess: loginWithJwt,
@@ -149,6 +194,9 @@ export default function MultiUserLogin() {
 							onSubmit={handleSubmitPassword}
 							error={loginMut.error?.message}
 							isPending={loginMut.isPending}
+							webauthnAvailable={webauthnAvailable}
+							onPasskey={handlePasskeyLogin}
+							passkeyPending={passkeyPending}
 						/>
 					)}
 				</AnimatePresence>
@@ -161,7 +209,14 @@ export default function MultiUserLogin() {
 		<LoginShell>
 			<AnimatePresence mode='wait'>
 				{step === 'select-user' && (
-					<UserSelectStep key='select' users={users} onSelect={handleSelectUser} />
+					<UserSelectStep
+						key='select'
+						users={users}
+						onSelect={handleSelectUser}
+						webauthnAvailable={webauthnAvailable}
+						onPasskey={handlePasskeyLogin}
+						passkeyPending={passkeyPending}
+					/>
 				)}
 				{step === 'password' && selectedUser && (
 					<PasswordStep
@@ -174,6 +229,9 @@ export default function MultiUserLogin() {
 						onBack={handleBack}
 						error={loginMut.error?.message}
 						isPending={loginMut.isPending}
+						webauthnAvailable={webauthnAvailable}
+						onPasskey={handlePasskeyLogin}
+						passkeyPending={passkeyPending}
 					/>
 				)}
 				{step === '2fa' && (
@@ -216,6 +274,32 @@ function BrandMark() {
 	return <LivinityMark size='xl' />
 }
 
+/**
+ * Additive "Sign in with a passkey" button (D-03). Rendered only when the box
+ * exposes a usable RP-ID (`webauthnAvailable`) — on a bare-LAN-IP box it is
+ * absent entirely so users never meet a dead passkey path (T-323-12). It sits
+ * ALONGSIDE the password/TOTP steps, never replacing them.
+ */
+function PasskeyButton({onClick, pending}: {onClick: () => void; pending: boolean}) {
+	return (
+		<button
+			type='button'
+			onClick={onClick}
+			disabled={pending}
+			className='flex h-11 w-full items-center justify-center gap-2 rounded-[14px] border border-[color:var(--fg)]/12 bg-transparent px-6 text-[14px] font-medium tracking-[-0.005em] text-[color:var(--fg-mute)] transition-all duration-200 hover:border-[color:var(--fg)]/25 hover:text-[color:var(--fg)] active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--fg)]/20 disabled:pointer-events-none disabled:opacity-40'
+		>
+			{pending ? (
+				<TbLoader2 className='h-4 w-4 animate-spin' />
+			) : (
+				<>
+					<TbFingerprint className='h-4 w-4' strokeWidth={2} />
+					{t('auth-passkey.login.button')}
+				</>
+			)}
+		</button>
+	)
+}
+
 function FormEyebrow({children}: {children: React.ReactNode}) {
 	return (
 		<div className='font-mono text-[11px] uppercase tracking-[0.18em] text-[color:var(--fg-mute)] flex items-center gap-2'>
@@ -227,7 +311,19 @@ function FormEyebrow({children}: {children: React.ReactNode}) {
 
 // ── User Select ──────────────────────────────────────────────
 
-function UserSelectStep({users, onSelect}: {users: LoginUser[]; onSelect: (u: LoginUser) => void}) {
+function UserSelectStep({
+	users,
+	onSelect,
+	webauthnAvailable,
+	onPasskey,
+	passkeyPending,
+}: {
+	users: LoginUser[]
+	onSelect: (u: LoginUser) => void
+	webauthnAvailable: boolean
+	onPasskey: () => void
+	passkeyPending: boolean
+}) {
 	const orbSize = users.length <= 2 ? 80 : 64
 
 	return (
@@ -267,6 +363,13 @@ function UserSelectStep({users, onSelect}: {users: LoginUser[]; onSelect: (u: Lo
 					</motion.button>
 				))}
 			</div>
+
+			{/* Additive passkey entry — hidden on LAN-IP boxes (webauthnAvailable). */}
+			{webauthnAvailable && (
+				<div className='w-full pt-1'>
+					<PasskeyButton onClick={onPasskey} pending={passkeyPending} />
+				</div>
+			)}
 		</motion.div>
 	)
 }
@@ -282,6 +385,9 @@ function PasswordStep({
 	onBack,
 	error,
 	isPending,
+	webauthnAvailable,
+	onPasskey,
+	passkeyPending,
 }: {
 	user?: LoginUser
 	orbState: 'idle' | 'pulse' | 'breathe'
@@ -291,6 +397,9 @@ function PasswordStep({
 	onBack?: () => void
 	error?: string
 	isPending: boolean
+	webauthnAvailable: boolean
+	onPasskey: () => void
+	passkeyPending: boolean
 }) {
 	const firstName = user?.display_name?.split(/\s+/)[0]
 	return (
@@ -355,6 +464,21 @@ function PasswordStep({
 					)}
 				</button>
 			</form>
+
+			{/* Additive passkey entry alongside password + TOTP (never replacing
+			    them); hidden on LAN-IP boxes (webauthnAvailable). */}
+			{webauthnAvailable && (
+				<div className='flex w-full flex-col gap-3'>
+					<div className='flex items-center gap-3'>
+						<span className='h-px flex-1 bg-[color:var(--fg)]/10' />
+						<span className='font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--fg-faint)]'>
+							{t('auth-passkey.login.divider')}
+						</span>
+						<span className='h-px flex-1 bg-[color:var(--fg)]/10' />
+					</div>
+					<PasskeyButton onClick={onPasskey} pending={passkeyPending} />
+				</div>
+			)}
 		</motion.div>
 	)
 }
