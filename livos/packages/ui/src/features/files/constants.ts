@@ -37,6 +37,10 @@ export const NETWORK_STORAGE_PATH = '/Network' as const
 // FILES-03 (324-05/324-09) — the writable `/Cloud` base directory that hosts the
 // rclone FUSE mounts (`/Cloud/<remote>`) surfaced by the Cloud Drives sidebar.
 export const CLOUD_STORAGE_PATH = '/Cloud' as const
+// POOL-02 (318-10, D-12) — the writable `/Pool` base directory that surfaces the
+// mergerfs storage pool (union mountpoint /mnt/pool). Present only when a pool
+// exists; the sidebar entry render-gates off a successful `files.list({path})`.
+export const POOL_PATH = '/Pool' as const
 export const BACKUPS_PATH = '/Backups' as const
 
 // NOTE: Search and Recents are not real directories on disk. They are

@@ -11,6 +11,7 @@ import {SidebarExternalStorage} from '@/features/files/components/sidebar/sideba
 import {SidebarFavorites} from '@/features/files/components/sidebar/sidebar-favorites'
 import {SidebarHome} from '@/features/files/components/sidebar/sidebar-home'
 import {SidebarNetworkStorage} from '@/features/files/components/sidebar/sidebar-network-storage'
+import {SidebarPool} from '@/features/files/components/sidebar/sidebar-pool'
 import {SidebarRecents} from '@/features/files/components/sidebar/sidebar-recents'
 import {SidebarShares} from '@/features/files/components/sidebar/sidebar-shares'
 import {SidebarStorage} from '@/features/files/components/sidebar/sidebar-storage'
@@ -116,6 +117,11 @@ export function Sidebar({className}: {className?: string}) {
 				{/* Storage */}
 				<SidebarDivider />
 				<SidebarSection label='Storage'>
+					{/* POOL-02 (318-10, D-12) — the /Pool nav item self-render-gates off a
+					    successful files.list({path:'/Pool'}); renders null (nothing) when no
+					    pool exists, so it lives inside the always-present Storage section
+					    without leaving an orphan divider/header. */}
+					<SidebarPool />
 					<SidebarStorage />
 				</SidebarSection>
 
