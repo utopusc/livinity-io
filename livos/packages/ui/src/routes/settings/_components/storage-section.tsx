@@ -8,6 +8,8 @@ import AddNetworkShareDialog from '@/features/files/components/dialogs/add-netwo
 import {useExternalStorage} from '@/features/files/hooks/use-external-storage'
 import {useNetworkStorage} from '@/features/files/hooks/use-network-storage'
 import {useSmartDrives} from '@/features/files/hooks/use-smart-drives'
+import {PoolWizard} from '@/features/storage-pool/components/pool-wizard'
+import {useStoragePool} from '@/features/storage-pool/hooks/use-storage-pool'
 import {useCurrentUser} from '@/hooks/use-current-user'
 import {useSystemDiskForUi} from '@/hooks/use-disk'
 import {
@@ -61,6 +63,8 @@ export function StorageDrivesSection() {
 			<OverallDiskUsageCard disk={disk} />
 
 			<DriveHealthBlock />
+
+			<StoragePoolBlock />
 
 			<UsbDrivesBlock />
 
@@ -272,6 +276,206 @@ function DriveHealthBlock() {
 				</FieldCard>
 			)}
 		</section>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BLOCK A0.5 — Storage pool + internal drives — Phase 318 POOL-03 / POOL-04
+//
+// D-14: internal drives listed with SMART health (313) + capacity + a
+// pool-membership badge; a triple-gated format action ONLY for NON-pool internal
+// drives (via storagePool.formatInternalDevice). A single <PoolWizard/> doubles
+// as the setup wizard / status view / replacement-runbook re-entry mode (318-08).
+//
+// The ENTIRE block is HARD-HIDDEN under WSL2 (donor power-management-section.tsx:
+// 106-115) — a Windows-managed WSL2 VM has no real internal-disk topology.
+//
+// D-12 anti-pattern guard: this block NEVER surfaces raw per-disk mount paths —
+// only the pool + the physical drive (model + health + capacity).
+// ─────────────────────────────────────────────────────────────────────────────
+
+function StoragePoolBlock() {
+	const {pool, isWsl2, runbookStep, eligibleDrives, formatInternalDevice, isFormattingInternal} = useStoragePool()
+	const {drives} = useSmartDrives()
+	const {isAdmin} = useCurrentUser()
+
+	const [formatTarget, setFormatTarget] = useState<{id: string; name: string} | null>(null)
+	const [showWizard, setShowWizard] = useState(false)
+
+	// ── WSL2 HARD-HIDE (D-14) — the whole pooling + internal-drive block is hidden;
+	// there is no meaningful internal-disk topology under a Windows-managed VM.
+	if (isWsl2) {
+		return (
+			<section className='flex flex-col gap-3'>
+				<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--fg-faint)]'>
+					{t('storage.pool.disks.title')}
+				</span>
+				<FieldCard>
+					<FieldRow
+						label={t('storage.pool.disks.title')}
+						value={<span className='text-[color:var(--fg-faint)]'>{t('storage.pool.disks.wsl2-note')}</span>}
+					/>
+				</FieldCard>
+			</section>
+		)
+	}
+
+	const memberIds = new Set((pool?.members ?? []).map((m) => m.deviceId))
+	// A device with an in-flight runbook is blocked from any competing format —
+	// the server (318-05) enforces it; the UI mirrors it (T-318-18).
+	const runbookInFlight = !!runbookStep
+	// Internal drives only — the SMART enumeration is the source of truth for
+	// internal-disk health/topology; USB drives live in their own block.
+	const internalDrives = (drives ?? []).filter((d) => d.transport !== 'usb')
+	// Capacity is available for NON-pool internal drives via listEligibleDrives.
+	const sizeById = new Map((eligibleDrives ?? []).map((d) => [d.id, d.size]))
+
+	const hasPool = !!pool?.members?.length && !pool.incomplete
+	// The single <PoolWizard/> opens for: an existing pool (status view), an
+	// in-flight replacement runbook (resume), or when the operator starts setup.
+	const wizardOpen = showWizard || hasPool || runbookInFlight
+
+	return (
+		<section className='flex flex-col gap-3'>
+			<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--fg-faint)]'>
+				{t('storage.pool.disks.title')}
+			</span>
+
+			{/* Pool setup / status / replacement-runbook — one <PoolWizard/> (318-08). */}
+			{wizardOpen ? (
+				<FieldCard>
+					<div className='p-1'>
+						<PoolWizard onDone={() => setShowWizard(false)} />
+					</div>
+				</FieldCard>
+			) : (
+				<FieldCard>
+					<FieldRow
+						label={t('storage.pool.disks.protect.title')}
+						value={<span className='text-[color:var(--fg-faint)]'>{t('storage.pool.disks.protect.description')}</span>}
+						trailing={
+							<Button variant='v36-ghost' size='v36-pill-sm' onClick={() => setShowWizard(true)}>
+								{t('storage.pool.disks.protect.action')}
+							</Button>
+						}
+					/>
+				</FieldCard>
+			)}
+
+			{/* Internal drives — health + capacity + pool-membership badge. */}
+			{internalDrives.length === 0 ? (
+				<FieldCard>
+					<FieldRow
+						label={t('storage.pool.disks.drives-title')}
+						value={<span className='text-[color:var(--fg-faint)]'>{t('storage.pool.disks.none')}</span>}
+					/>
+				</FieldCard>
+			) : (
+				<FieldCard>
+					{internalDrives.map((drive) => {
+						const badge = driveHealthBadge(drive)
+						const isMember = memberIds.has(drive.deviceId)
+						const size = sizeById.get(drive.deviceId)
+						return (
+							<FieldRow
+								key={drive.deviceId}
+								label={
+									<div className='flex flex-col gap-1'>
+										<span className='inline-flex items-center gap-2'>
+											<span className={cn('inline-block size-2 shrink-0 rounded-full', badge.dotClass)} />
+											<span className={cn('text-[13px] font-medium', badge.textClass)}>{badge.label}</span>
+										</span>
+										<span className='truncate text-[12px] text-[color:var(--fg-faint)]' title={drive.model}>
+											{drive.model || t('storage.pool.disks.drive-fallback')}
+										</span>
+									</div>
+								}
+								value={
+									<div className='flex flex-col gap-0.5'>
+										{size ? (
+											<span className='text-[13px] text-[color:var(--fg-mute)]'>{maybePrettyBytes(size)}</span>
+										) : null}
+										{isMember ? (
+											<span className='inline-flex w-fit items-center rounded-[3px] border border-line px-1.5 py-0.5 text-[11px] leading-none text-[color:var(--fg-mute)]'>
+												{t('storage.pool.disks.member-badge')}
+											</span>
+										) : (
+											<span className='text-[12px] text-[color:var(--fg-faint)]'>
+												{t('storage.pool.disks.not-in-pool')}
+											</span>
+										)}
+									</div>
+								}
+								trailing={
+									// Format ONLY for NON-pool internal drives (triple-gated), disabled
+									// while a replacement runbook is in flight (T-318-18). Pool members
+									// are never formattable from here.
+									!isMember && isAdmin ? (
+										<Button
+											variant='v36-ghost'
+											size='v36-pill-sm'
+											disabled={runbookInFlight || isFormattingInternal}
+											title={runbookInFlight ? t('storage.pool.disks.runbook-note') : undefined}
+											onClick={() => setFormatTarget({id: drive.deviceId, name: drive.model || t('storage.pool.disks.drive-fallback')})}
+										>
+											{t('storage.pool.disks.format')}
+										</Button>
+									) : undefined
+								}
+							/>
+						)
+					})}
+				</FieldCard>
+			)}
+
+			{runbookInFlight && (
+				<p className='text-[12px] leading-[1.5] text-[color:var(--fg-faint)]'>{t('storage.pool.disks.runbook-note')}</p>
+			)}
+
+			{/* Format confirm — WIPES a non-pool internal drive (triple-gated server-side). */}
+			<FormatInternalDialog
+				target={formatTarget}
+				isFormatting={isFormattingInternal}
+				onCancel={() => setFormatTarget(null)}
+				onConfirm={async () => {
+					if (!formatTarget) return
+					try {
+						await formatInternalDevice({deviceId: formatTarget.id})
+					} finally {
+						setFormatTarget(null)
+					}
+				}}
+			/>
+		</section>
+	)
+}
+
+function FormatInternalDialog({
+	target,
+	isFormatting,
+	onCancel,
+	onConfirm,
+}: {
+	target: {id: string; name: string} | null
+	isFormatting: boolean
+	onCancel: () => void
+	onConfirm: () => void
+}) {
+	return (
+		<AlertDialog open={!!target} onOpenChange={(open) => !open && onCancel()}>
+			<AlertDialogContent>
+				<AlertDialogHeader>
+					<AlertDialogTitle>{t('storage.pool.disks.format-confirm.title', {name: target?.name ?? ''})}</AlertDialogTitle>
+					<AlertDialogDescription>{t('storage.pool.disks.format-confirm.description')}</AlertDialogDescription>
+				</AlertDialogHeader>
+				<AlertDialogFooter>
+					<AlertDialogAction variant='destructive' disabled={isFormatting} onClick={onConfirm}>
+						{isFormatting ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.pool.disks.format-confirm.submit')}
+					</AlertDialogAction>
+					<AlertDialogCancel>{t('storage.pool.disks.format-confirm.cancel')}</AlertDialogCancel>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
 	)
 }
 

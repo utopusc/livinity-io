@@ -66,10 +66,53 @@ export function useStoragePool() {
 		onSettled: invalidate,
 	})
 
+	const {mutateAsync: forceSyncOverride, isPending: isForcingSync} =
+		trpcReact.storagePool.forceSyncOverride.useMutation({onError, onSettled: invalidate})
+
+	// POOL-04 (318-09): guarded single-disk format for NON-pool internal drives.
+	// The server (318-05/318-06) triple-gates this AND hard-refuses any device with
+	// an in-flight replacement runbook — the UI mirrors that guard (T-318-18).
+	const {mutateAsync: formatInternalDevice, isPending: isFormattingInternal} =
+		trpcReact.storagePool.formatInternalDevice.useMutation({onError, onSettled: invalidate})
+
+	// ── Replacement runbook (D-11 / POOL-03) — driven ONE step at a time by the
+	// wizard's re-entry mode; each mutation persists `storagePool.runbookStep` so a
+	// reload resumes. `replaceCheck` returns `hardStop` — the "do NOT proceed to
+	// sync" signal (Trap 12); the UI NEVER auto-chains fix → sync.
+	const {mutateAsync: replaceDetect, isPending: isDetecting} = trpcReact.storagePool.replaceDetect.useMutation({
+		onError,
+		onSettled: invalidate,
+	})
+	const {mutateAsync: replaceFormat, isPending: isReplaceFormatting} = trpcReact.storagePool.replaceFormat.useMutation(
+		{onError, onSettled: invalidate},
+	)
+	const {mutateAsync: replaceMount, isPending: isReplaceMounting} = trpcReact.storagePool.replaceMount.useMutation({
+		onError,
+		onSettled: invalidate,
+	})
+	const {mutateAsync: replaceFix, isPending: isReplaceFixing} = trpcReact.storagePool.replaceFix.useMutation({
+		onError,
+		onSettled: invalidate,
+	})
+	const {mutateAsync: replaceCheck, isPending: isReplaceChecking} = trpcReact.storagePool.replaceCheck.useMutation({
+		onError,
+		onSettled: invalidate,
+	})
+	const {mutateAsync: replaceSync, isPending: isReplaceSyncing} = trpcReact.storagePool.replaceSync.useMutation({
+		onError,
+		onSettled: invalidate,
+	})
+	const {mutateAsync: replaceClear, isPending: isReplaceClearing} = trpcReact.storagePool.replaceClear.useMutation({
+		onError,
+		onSettled: invalidate,
+	})
+
 	return {
 		status,
 		pool: status?.pool ?? null,
 		isWsl2: status?.isWsl2 ?? false,
+		// Set while a D-11 replacement runbook is mid-flight (blocks competing formats).
+		runbookStep: status?.pool?.runbookStep ?? null,
 		eligibleDrives,
 		isLoadingStatus,
 		isLoadingEligible,
@@ -79,5 +122,24 @@ export function useStoragePool() {
 		isAddingDisk,
 		syncNow,
 		isSyncing,
+		forceSyncOverride,
+		isForcingSync,
+		formatInternalDevice,
+		isFormattingInternal,
+		// Replacement runbook steps + their in-flight flags.
+		replaceDetect,
+		isDetecting,
+		replaceFormat,
+		isReplaceFormatting,
+		replaceMount,
+		isReplaceMounting,
+		replaceFix,
+		isReplaceFixing,
+		replaceCheck,
+		isReplaceChecking,
+		replaceSync,
+		isReplaceSyncing,
+		replaceClear,
+		isReplaceClearing,
 	}
 }
