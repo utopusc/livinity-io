@@ -302,6 +302,11 @@ import {getPool} from './modules/database/index.js'
 import {commitOsPartition, setupPiCpuGovernor, restoreWiFi, waitForSystemTime} from './modules/system/system.js'
 import {overrideDevelopmentHostname} from './modules/development.js'
 
+// Phase 318 (POOL-02/POOL-04, D-15) — the persisted storage-pool state shape for
+// the dedicated top-level `storagePool` StoreSchema key below. Type-only import
+// (erased at runtime — no module cycle with the storage-pool module).
+import type {StoragePoolState} from './modules/storage-pool/pool.js'
+
 type StoreSchema = {
 	version: string
 	apps: string[]
@@ -543,6 +548,17 @@ type StoreSchema = {
 		// Backups-v2 P0 — last time we nagged about having zero destinations.
 		noDestinationNagTime?: number
 	}
+	// Phase 318 POOL-02/POOL-04 (318-05, D-15) — multi-drive storage-pool config +
+	// safety state. Dedicated top-level key (NOT nested under `backups`/`storage`/
+	// `files`/any array or scalar — dot-prop path collisions silently drop the
+	// write, same convention as `monitoring`/`security`/`alerts`/`samba` above;
+	// Trap 6). Holds member device-ids/serials + roles/mountpoints, protectionLevel,
+	// parityDeviceId, the operator-tunable D-08 safetyFreezeThreshold, the in-flight
+	// D-11 runbookStep, last sync/scrub summaries, AND `lastStatusSummary` — the
+	// last persisted `snapraid status` summary that is the W-2 protectedFileCount
+	// source for the mass-deletion freeze gate (written by 318-07's handlers). Config
+	// lives here, not in a PG table (D-15 — no new migration this phase).
+	storagePool: StoragePoolState
 }
 
 export type LivinitydOptions = {
