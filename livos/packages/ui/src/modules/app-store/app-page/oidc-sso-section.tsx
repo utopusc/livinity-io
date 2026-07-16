@@ -24,6 +24,14 @@ interface OidcSsoSectionProps {
 	 * boolean only flips the paste field into its "key saved" state. Write-only.
 	 */
 	immichApiKeySet?: boolean
+	/**
+	 * 331-02 (FIX-02) — the last SSO provisioning outcome persisted server-side
+	 * (`oidcLastProvision` via apps.list). When it exists and is neither ok nor
+	 * deferred, the section shows an honest "activation could not be confirmed"
+	 * warning instead of silently trusting the toggle (322-06 audit gap).
+	 * `reason` is secret-redacted server-side before it is ever stored.
+	 */
+	lastProvision?: {ok: boolean; deferred?: boolean; reason?: string; at: number}
 }
 
 /**
@@ -45,7 +53,7 @@ interface OidcSsoSectionProps {
  *
  * All copy flows through `t('oidc-sso.*')` against public/locales/{en,tr}.json.
  */
-export function OidcSsoSection({appId, appName, initialEnabled, immichApiKeySet}: OidcSsoSectionProps) {
+export function OidcSsoSection({appId, appName, initialEnabled, immichApiKeySet, lastProvision}: OidcSsoSectionProps) {
 	const utils = trpcReact.useUtils()
 	const [enabled, setEnabled] = useState(initialEnabled)
 	// Local-only paste buffer for the Immich key. Cleared on a successful save —
@@ -149,6 +157,21 @@ export function OidcSsoSection({appId, appName, initialEnabled, immichApiKeySet}
 				<p role='alert' className='text-caption text-red-400'>
 					{setOidcMut.error?.message ?? t('oidc-sso.error')}
 				</p>
+			) : null}
+
+			{/* 331-02 (FIX-02) — honest activation state: the last server-side
+			    provisioning attempt failed (not deferred), so SSO may look enabled
+			    while the app never activated it. Never a silent trust. */}
+			{enabled && lastProvision && !lastProvision.ok && !lastProvision.deferred ? (
+				<div className='rounded-radius-sm border border-border-default bg-surface-base p-4'>
+					<div className='flex items-start gap-3'>
+						<TbInfoCircle className='mt-0.5 h-5 w-5 text-yellow-400' />
+						<p role='alert' className='text-caption text-text-secondary'>
+							{t('oidc-sso.provision-unconfirmed', {app: appName})}
+							{lastProvision.reason ? ` (${lastProvision.reason})` : ''}
+						</p>
+					</div>
+				</div>
 			) : null}
 
 			{/* Immich first-run onboarding notice (Pitfall 7 order) + WRITE-ONLY

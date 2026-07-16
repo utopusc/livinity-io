@@ -198,6 +198,7 @@ function AppSettingsDialogForApp({
 								appName={app.name}
 								initialEnabled={oidcInitiallyEnabled}
 								immichApiKeySet={app.immichApiKeySet ?? false}
+								lastProvision={app.oidcLastProvision ?? undefined}
 							/>
 						</div>
 					)}

@@ -227,6 +227,18 @@ export const AppSettingsSchema = z.object({
 	immichCardDismissed: z.boolean().optional(),
 	// 329-11 MEDIA-02 (D-23): Jellyfin setup onboarding card dismissal flag (UI-only).
 	jellyfinCardDismissed: z.boolean().optional(),
+	// 331-02 FIX-02: the LAST SSO provisioning outcome, persisted so the UI can
+	// surface an honest "activation could not be confirmed" state instead of the
+	// fire-and-forget log-only result (322-06 audit gap). `reason` is ALREADY
+	// secret-redacted by oidc/provisioning.ts before it ever reaches this store.
+	oidcLastProvision: z
+		.object({
+			ok: z.boolean(),
+			deferred: z.boolean().optional(),
+			reason: z.string().optional(),
+			at: z.number(),
+		})
+		.optional(),
 })
 
 export type AppSettings = z.infer<typeof AppSettingsSchema>

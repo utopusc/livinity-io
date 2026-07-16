@@ -1128,7 +1128,9 @@ export default class App {
 			await pollContainerHealth(containerName, {timeoutMs: 120_000, logger: this.logger})
 		} catch (error) {
 			this.logger.error(`[oidc] ${this.id} not healthy — deferring SSO provisioning`, error)
-			return {ok: false, reason: 'container-not-healthy'}
+			const unhealthy: ProvisionResult = {ok: false, reason: 'container-not-healthy'}
+			await this.#persistOidcProvisionResult(unhealthy)
+			return unhealthy
 		}
 		let immichPort: number | undefined
 		let immichAdminApiKey: string | undefined
@@ -1156,7 +1158,28 @@ export default class App {
 		} else {
 			this.logger.log(`[oidc] ${this.id} SSO provisioning succeeded`)
 		}
+		// 331-02 (FIX-02): persist the outcome so the UI can show an honest state —
+		// the fire-and-forget caller discards this return value, so the store is the
+		// only surface the operator can actually see.
+		await this.#persistOidcProvisionResult(result)
 		return result
+	}
+
+	// 331-02 (FIX-02): best-effort persist of the last SSO provisioning outcome
+	// (`oidcLastProvision` per-app store flag, exposed via apps.list). A store write
+	// failure must NEVER break the provisioning path (same isolation posture as
+	// provisionOidcForApp itself). `reason` arrives already secret-redacted.
+	async #persistOidcProvisionResult(result: ProvisionResult): Promise<void> {
+		try {
+			await this.store.set('oidcLastProvision', {
+				ok: result.ok,
+				...(result.deferred !== undefined ? {deferred: result.deferred} : {}),
+				...(result.reason !== undefined ? {reason: result.reason} : {}),
+				at: Date.now(),
+			})
+		} catch (error) {
+			this.logger.error(`[oidc] failed to persist provisioning outcome for '${this.id}'`, error)
+		}
 	}
 
 	// 322-05 (IDENT-02, Pitfall 7 closure): persist Immich's admin API key

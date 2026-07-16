@@ -82,21 +82,27 @@ describe('oidc/provisioning — provisionOidcForApp', () => {
 		expect(fetchSpy).not.toHaveBeenCalled()
 	})
 
-	test('(c) immich with a key PUTs the oauth body to the LITERAL 127.0.0.1 loopback host', async () => {
-		const fetchSpy = vi.fn().mockResolvedValue({ok: true} as Response)
-		const r = await provisionOidcForApp(
-			{id: 'immich'},
-			{
-				mainDomain: 'example.com',
-				clientSecret: SECRET,
-				containerName: 'immich_server_1',
-				immichPort: 2283,
-				immichAdminApiKey: 'imm_key_123',
-				deps: {fetchImpl: fetchSpy as unknown as typeof globalThis.fetch},
-			},
-		)
+	// 331-02 (FIX-02): shared opts for the immich-with-key cases below.
+	const immichOpts = (fetchSpy: unknown): ProvisionOidcOpts => ({
+		mainDomain: 'example.com',
+		clientSecret: SECRET,
+		containerName: 'immich_server_1',
+		immichPort: 2283,
+		immichAdminApiKey: 'imm_key_123',
+		deps: {fetchImpl: fetchSpy as typeof globalThis.fetch},
+	})
+
+	test('(c) immich with a key PUTs the oauth body to the LITERAL 127.0.0.1 loopback host, then CONFIRMS via read-back', async () => {
+		const fetchSpy = vi
+			.fn()
+			.mockResolvedValueOnce({ok: true} as Response) // PUT
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({oauth: {enabled: true, clientId: 'livos-immich'}}),
+			} as unknown as Response) // 331-02 confirm GET
+		const r = await provisionOidcForApp({id: 'immich'}, immichOpts(fetchSpy))
 		expect(r).toEqual({ok: true})
-		expect(fetchSpy).toHaveBeenCalledTimes(1)
+		expect(fetchSpy).toHaveBeenCalledTimes(2)
 		const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
 		expect(url).toBe('http://127.0.0.1:2283/api/system-config')
 		expect(url.startsWith('http://127.0.0.1:')).toBe(true) // SSRF scope: no request-derived host
@@ -109,22 +115,54 @@ describe('oidc/provisioning — provisionOidcForApp', () => {
 		expect(body.oauth.issuerUrl).toBe('https://example.com/oidc')
 		expect(body.oauth.scope).toBe('openid email profile groups')
 		expect(body.oauth.roleClaim).toBe('groups')
+		// The confirm read-back stays on the SAME loopback literal (T-322-14 scope).
+		const [confirmUrl, confirmInit] = fetchSpy.mock.calls[1] as [string, RequestInit]
+		expect(confirmUrl).toBe('http://127.0.0.1:2283/api/system-config')
+		expect(confirmInit.method).toBe('GET')
+		expect((confirmInit.headers as Record<string, string>)['x-api-key']).toBe('imm_key_123')
 	})
 
-	test('(c) immich REST non-2xx propagates as {ok:false}', async () => {
-		const fetchSpy = vi.fn().mockResolvedValue({ok: false} as Response)
-		const r = await provisionOidcForApp(
-			{id: 'immich'},
-			{
-				mainDomain: 'example.com',
-				clientSecret: SECRET,
-				containerName: 'immich_server_1',
-				immichPort: 2283,
-				immichAdminApiKey: 'imm_key_123',
-				deps: {fetchImpl: fetchSpy as unknown as typeof globalThis.fetch},
-			},
-		)
-		expect(r).toEqual({ok: false})
+	test('(c) 331-02 immich REST non-2xx carries an honest http reason (was a bare {ok:false})', async () => {
+		const fetchSpy = vi.fn().mockResolvedValue({ok: false, status: 502} as Response)
+		const r = await provisionOidcForApp({id: 'immich'}, immichOpts(fetchSpy))
+		expect(r).toEqual({ok: false, reason: 'immich-system-config-http-502'})
+		expect(fetchSpy).toHaveBeenCalledTimes(1) // no read-back after a failed PUT
+	})
+
+	test('(c) 331-02 immich 2xx PUT + read-back SHAPE MISMATCH → unconfirmed (never silently trusted)', async () => {
+		const fetchSpy = vi
+			.fn()
+			.mockResolvedValueOnce({ok: true} as Response)
+			.mockResolvedValueOnce({
+				ok: true,
+				// oauth.enabled false / wrong clientId — the PUT did not take effect.
+				json: async () => ({oauth: {enabled: false, clientId: 'livos-immich'}}),
+			} as unknown as Response)
+		const r = await provisionOidcForApp({id: 'immich'}, immichOpts(fetchSpy))
+		expect(r).toEqual({ok: false, reason: 'immich-sso-unconfirmed'})
+	})
+
+	test('(c) 331-02 immich 2xx PUT + read-back GET non-2xx → unconfirmed', async () => {
+		const fetchSpy = vi
+			.fn()
+			.mockResolvedValueOnce({ok: true} as Response)
+			.mockResolvedValueOnce({ok: false, status: 401} as Response)
+		const r = await provisionOidcForApp({id: 'immich'}, immichOpts(fetchSpy))
+		expect(r).toEqual({ok: false, reason: 'immich-sso-unconfirmed'})
+	})
+
+	test('(c) 331-02 immich 2xx PUT + read-back json() throw → unconfirmed (no throw escapes)', async () => {
+		const fetchSpy = vi
+			.fn()
+			.mockResolvedValueOnce({ok: true} as Response)
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => {
+					throw new Error('bad json')
+				},
+			} as unknown as Response)
+		const r = await provisionOidcForApp({id: 'immich'}, immichOpts(fetchSpy))
+		expect(r).toEqual({ok: false, reason: 'immich-sso-unconfirmed'})
 	})
 
 	test('(d) a thrown exec is caught → {ok:false} with the message; no throw escapes', async () => {

@@ -1010,6 +1010,7 @@
   "oidc-sso.immich-key-set": "An API key is saved.",
   "oidc-sso.immich-onboarding": "Immich needs a one-time setup for SSO: complete Immich's first-run setup, create an API key in Immich (Account Settings → API Keys), paste it below, then enable SSO.",
   "oidc-sso.no-domain": "Configure a domain first to enable SSO.",
+  "oidc-sso.provision-unconfirmed": "SSO activation could not be confirmed for {{app}} — the last provisioning attempt did not verify. Sign-in with LivOS may not work yet; toggle SSO off and on to retry.",
   "oidc-sso.title": "Single Sign-On",
   "ok": "OK",
   "onboarding.account-created.by-clicking-button-you-agree": "By clicking 'Next', you agree to the <linked>LivOS Terms of Service</linked>",

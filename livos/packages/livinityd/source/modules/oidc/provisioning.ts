@@ -112,7 +112,37 @@ export async function provisionOidcForApp(app: {id: string}, opts: ProvisionOidc
 						},
 					}),
 				})
-				return {ok: res.ok}
+				// 331-02 (FIX-02): a non-2xx PUT must carry a REASON (it previously
+				// collapsed to a bare {ok:false} — the one fail-invisible branch).
+				if (!res.ok) {
+					return {ok: false, reason: `immich-system-config-http-${res.status}`}
+				}
+				// 331-02 (FIX-02): the PUT body shape was trusted-from-plan and never
+				// live-verified (322-06 caveat). Confirm activation with a read-back:
+				// GET the same loopback endpoint and require oauth.enabled === true with
+				// OUR clientId. Any GET failure / parse error / shape mismatch returns an
+				// honest "unconfirmed" instead of silently trusting the 2xx. The read-back
+				// stays inside the T-322-14 SSRF scope (same literal 127.0.0.1 host) and
+				// never logs the API key or client secret.
+				try {
+					const confirm = await fetchImpl(`http://127.0.0.1:${opts.immichPort}/api/system-config`, {
+						method: 'GET',
+						headers: {'x-api-key': opts.immichAdminApiKey},
+					})
+					if (!confirm.ok) {
+						return {ok: false, reason: 'immich-sso-unconfirmed'}
+					}
+					const config = (await confirm.json()) as {oauth?: {enabled?: unknown; clientId?: unknown}}
+					if (config?.oauth?.enabled === true && config?.oauth?.clientId === clientId) {
+						return {ok: true}
+					}
+					return {ok: false, reason: 'immich-sso-unconfirmed'}
+				} catch {
+					// A read-back transport/parse error is NOT proof of failure, but it is
+					// not confirmation either — report unconfirmed (fail-visible, T-322-20
+					// isolation: never throw out of provisioning).
+					return {ok: false, reason: 'immich-sso-unconfirmed'}
+				}
 			}
 
 			default:

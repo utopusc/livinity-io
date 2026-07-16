@@ -154,6 +154,7 @@ export const apps = router({
 						memoryLimit,
 						immichCardDismissed,
 						jellyfinCardDismissed,
+						oidcLastProvision,
 					] = await Promise.all([
 						app.readManifest(),
 						app.getSelectedDependencies(),
@@ -167,6 +168,9 @@ export const apps = router({
 						app.store.get('memoryLimit'),
 						app.store.get('immichCardDismissed'),
 						app.store.get('jellyfinCardDismissed'),
+						// 331-02 (FIX-02): last SSO provisioning outcome — reason is already
+						// secret-redacted server-side before persist.
+						app.store.get('oidcLastProvision'),
 					])
 
 					if (deterministicPassword) {
@@ -241,6 +245,9 @@ export const apps = router({
 						memoryLimit,
 						immichCardDismissed,
 						jellyfinCardDismissed,
+						// 331-02 (FIX-02): honest SSO-activation state for the 322-07 section —
+						// {ok, deferred?, reason?, at} | undefined (never carries secrets).
+						oidcLastProvision,
 					}
 				} catch (error) {
 					ctx.apps.logger.error(`Failed to read manifest for app ${app.id}`, error)
@@ -288,6 +295,8 @@ export const apps = router({
 					memoryLimit: undefined,
 					immichCardDismissed: undefined,
 					jellyfinCardDismissed: undefined,
+					// 331-02 (FIX-02): union-shape uniformity — native builtins never provision SSO.
+					oidcLastProvision: undefined,
 				})
 			}
 		}

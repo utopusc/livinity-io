@@ -984,6 +984,7 @@
   "oidc-sso.immich-key-set": "Bir API anahtarı kayıtlı.",
   "oidc-sso.immich-onboarding": "Immich, SSO için tek seferlik bir kurulum gerektirir: Immich'in ilk kurulumunu tamamlayın, Immich'te bir API anahtarı oluşturun (Hesap Ayarları → API Anahtarları), aşağıya yapıştırın, ardından SSO'yu etkinleştirin.",
   "oidc-sso.no-domain": "SSO'yu etkinleştirmek için önce bir alan adı yapılandırın.",
+  "oidc-sso.provision-unconfirmed": "{{app}} için SSO etkinleştirmesi doğrulanamadı — son sağlama denemesi teyit edilemedi. LivOS ile giriş henüz çalışmayabilir; tekrar denemek için SSO'yu kapatıp açın.",
   "oidc-sso.title": "Tek Oturum Açma (SSO)",
   "ok": "Tamam",
   "onboarding.account-created.by-clicking-button-you-agree": "'İleri' butonuna tıklayarak <linked>LivOS Hizmet Şartları</linked>'nı kabul ediyorsunuz",
