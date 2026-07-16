@@ -1,6 +1,6 @@
 import {zodResolver} from '@hookform/resolvers/zod'
 import {Loader2} from 'lucide-react'
-import {useState} from 'react'
+import {useState, type ReactNode} from 'react'
 import {FormProvider, useForm, type Resolver} from 'react-hook-form'
 import {z} from 'zod'
 
@@ -86,11 +86,15 @@ function PoolStatusView({
 	isSyncing,
 	syncNow,
 	onDone,
+	onReplace,
 }: {
 	pool: PoolState
 	isSyncing: boolean
 	syncNow: StoragePoolHook['syncNow']
 	onDone?: () => void
+	// Enters the guided replacement runbook (protected pools only — a combine-only
+	// pool has no safety copy to rebuild a replaced drive from).
+	onReplace?: () => void
 }) {
 	const isProtected = pool?.protectionLevel === 'protected'
 	return (
@@ -103,15 +107,22 @@ function PoolStatusView({
 			</div>
 
 			{isProtected && (
-				<Button
-					variant='default'
-					size='dialog'
-					disabled={isSyncing}
-					onClick={() => syncNow()}
-					className='min-w-0 self-start'
-				>
-					{isSyncing ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.pool.done.sync-now')}
-				</Button>
+				<div className='flex flex-wrap items-center gap-2'>
+					<Button
+						variant='default'
+						size='dialog'
+						disabled={isSyncing}
+						onClick={() => syncNow()}
+						className='min-w-0'
+					>
+						{isSyncing ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.pool.done.sync-now')}
+					</Button>
+					{onReplace ? (
+						<Button variant='default' size='dialog' onClick={onReplace} className='min-w-0'>
+							{t('storage.pool.replace.intro')}
+						</Button>
+					) : null}
+				</div>
 			)}
 
 			<p className='text-[12px] text-[color:var(--fg-faint)]'>{t('storage.pool.done.not-a-backup')}</p>
@@ -126,15 +137,499 @@ function PoolStatusView({
 }
 
 // ---------------------------------------------------------------------------
+// Replacement runbook (D-11 / POOL-03) — a wizard RE-ENTRY mode keyed off the
+// persisted `storagePool.runbookStep`. It walks the operator through swapping a
+// degraded drive: identify the failed disk → physically swap → format + mount
+// the new disk at the same slot → rebuild its files from the safety copy →
+// CHECK the rebuild (a HARD STOP when problems are found) → bring the safety copy
+// up to date → clear the alert.
+//
+// ★ Trap 12 / D-11: the CHECK step reads `summary:error_unrecoverable` (surfaced
+// as `result.errorUnrecoverable` + the server's `hardStop` flag). When it is > 0
+// the runbook HARD-STOPS with plain-language copy and NEVER offers the sync step —
+// a fix is never auto-chained into a sync over unrecoverable corruption.
+// ---------------------------------------------------------------------------
+
+type RunbookPhase = 'detect' | 'swap' | 'format' | 'mount' | 'fix' | 'check' | 'hardstop' | 'sync' | 'done'
+type PoolMemberUi = NonNullable<PoolState>['members'][number]
+type CandidateDrive = {id: string; model: string; size: number}
+
+// Map the persisted runbook step → the phase to resume at on a page reload. The
+// destructive steps already done are skipped; a resumed CHECK is re-run so the
+// HARD-STOP decision is always derived fresh (never trusted from stale memory).
+function phaseFromStep(step: string | null): RunbookPhase {
+	switch (step) {
+		case 'replace:formatted':
+			return 'mount'
+		case 'replace:mounted':
+			return 'fix'
+		case 'replace:fixed':
+			return 'check'
+		case 'replace:checked':
+			return 'check'
+		case 'replace:synced':
+			return 'done'
+		default:
+			return 'detect'
+	}
+}
+
+// Derive the safety-engine disk label (dN) from a member's slot WITHOUT ever
+// surfacing the raw mount path in the UI (D-12).
+function diskLabelFor(mountpoint?: string): string {
+	const m = mountpoint ? /disk(\d+)\s*$/.exec(mountpoint) : null
+	return m ? `d${m[1]}` : ''
+}
+
+function RunbookRow({title, description}: {title: string; description?: string}) {
+	return (
+		<div className='flex flex-col gap-1'>
+			<h2 className='text-[18px] font-medium text-[color:var(--fg)]'>{title}</h2>
+			{description ? <span className='text-[13px] text-[color:var(--fg-mute)]'>{description}</span> : null}
+		</div>
+	)
+}
+
+function RunbookView({hook, onExit}: {hook: StoragePoolHook; onExit: () => void}) {
+	const {
+		pool,
+		runbookStep,
+		replaceDetect,
+		isDetecting,
+		replaceFormat,
+		isReplaceFormatting,
+		replaceMount,
+		isReplaceMounting,
+		replaceFix,
+		isReplaceFixing,
+		replaceCheck,
+		isReplaceChecking,
+		replaceSync,
+		isReplaceSyncing,
+		replaceClear,
+		isReplaceClearing,
+	} = hook
+	const {drives} = useSmartDrives()
+
+	// Seed the phase from the persisted step (resume) once, on first mount. The
+	// parent only mounts RunbookView when runbookStep is already set (resume) or
+	// the operator explicitly started a replacement (runbookStep null → 'detect').
+	const [phase, setPhase] = useState<RunbookPhase>(() => phaseFromStep(runbookStep))
+	const [failedMember, setFailedMember] = useState<PoolMemberUi | undefined>(undefined)
+	const [candidates, setCandidates] = useState<CandidateDrive[]>([])
+	const [replacementId, setReplacementId] = useState<string | undefined>(undefined)
+	const [unrecoverable, setUnrecoverable] = useState<number>(0)
+
+	const dataMembers = (pool?.members ?? []).filter((m) => m.role === 'data')
+	const label = diskLabelFor(failedMember?.mountpoint)
+
+	const smartFor = (deviceId?: string) => (drives ?? []).find((s) => s.deviceId === deviceId)
+
+	// On resume (runbookStep set) but with no in-memory failed member, the operator
+	// must re-identify which drive they are replacing before a device-scoped step —
+	// this re-derives the slot without repeating any completed destructive step.
+	const needsReidentify =
+		!failedMember && (phase === 'mount' || phase === 'fix' || phase === 'check')
+
+	const reidentify = (
+		<div className='flex flex-col gap-3'>
+			<RunbookRow
+				title={t('storage.pool.replace.reidentify.title')}
+				description={t('storage.pool.replace.reidentify.description')}
+			/>
+			<div className='flex flex-col gap-2'>
+				{dataMembers.map((m) => {
+					const badge = driveHealthBadge(smartFor(m.deviceId)?.healthStatus)
+					return (
+						<button
+							type='button'
+							key={m.deviceId}
+							onClick={() => setFailedMember(m)}
+							className='flex items-center justify-between rounded-[10px] border border-[color:var(--border)] p-3 text-left hover:bg-[color:var(--bg-2)]'
+						>
+							<span className='text-[14px] text-[color:var(--fg)]'>{smartFor(m.deviceId)?.model || m.deviceId}</span>
+							<span className='flex items-center gap-1.5 text-[12px] text-[color:var(--fg-mute)]'>
+								<span className={cn('size-2 rounded-full', badge.dotClass)} />
+								{badge.label}
+							</span>
+						</button>
+					)
+				})}
+			</div>
+		</div>
+	)
+
+	const footer = (children: ReactNode) => <div className='mt-2 flex items-center gap-2'>{children}</div>
+
+	const cancelBtn = (
+		<Button size='dialog' onClick={onExit} className='min-w-0'>
+			{t('storage.pool.replace.cancel')}
+		</Button>
+	)
+
+	let body: ReactNode = null
+
+	if (needsReidentify) {
+		body = (
+			<>
+				<p className='text-[12px] text-[color:var(--fg-faint)]'>{t('storage.pool.replace.resume-note')}</p>
+				{reidentify}
+				{footer(cancelBtn)}
+			</>
+		)
+	} else if (phase === 'detect') {
+		body = (
+			<>
+				<RunbookRow
+					title={t('storage.pool.replace.detect.title')}
+					description={t('storage.pool.replace.detect.description')}
+				/>
+				{dataMembers.length === 0 ? (
+					<p className='text-[13px] text-[color:var(--fg-faint)]'>{t('storage.pool.replace.detect.none')}</p>
+				) : (
+					<div className='flex flex-col gap-2'>
+						{dataMembers.map((m) => {
+							const badge = driveHealthBadge(smartFor(m.deviceId)?.healthStatus)
+							return (
+								<button
+									type='button'
+									key={m.deviceId}
+									disabled={isDetecting}
+									onClick={async () => {
+										try {
+											const res = await replaceDetect({failedDeviceId: m.deviceId})
+											setFailedMember(res.failedMember as PoolMemberUi)
+											setCandidates(res.candidates as CandidateDrive[])
+											setPhase('swap')
+										} catch {
+											/* hook surfaces the error toast */
+										}
+									}}
+									className='flex items-center justify-between rounded-[10px] border border-[color:var(--border)] p-3 text-left hover:bg-[color:var(--bg-2)] disabled:opacity-50'
+								>
+									<span className='text-[14px] text-[color:var(--fg)]'>{smartFor(m.deviceId)?.model || m.deviceId}</span>
+									<span className='flex items-center gap-1.5 text-[12px] text-[color:var(--fg-mute)]'>
+										<span className={cn('size-2 rounded-full', badge.dotClass)} />
+										{badge.label}
+									</span>
+								</button>
+							)
+						})}
+					</div>
+				)}
+				{footer(cancelBtn)}
+			</>
+		)
+	} else if (phase === 'swap') {
+		const failedSmart = smartFor(failedMember?.deviceId)
+		body = (
+			<>
+				<RunbookRow
+					title={t('storage.pool.replace.swap.title')}
+					description={t('storage.pool.replace.swap.description')}
+				/>
+				<div className='flex flex-col gap-3'>
+					<div className='flex flex-col gap-1 rounded-[10px] border border-[color:var(--border)] p-3'>
+						<span className='text-[12px] uppercase tracking-[0.12em] text-[color:var(--fg-faint)]'>
+							{t('storage.pool.replace.swap.failed-label')}
+						</span>
+						<span className='text-[14px] text-[color:var(--fg)]'>
+							{failedSmart?.model || failedMember?.deviceId}
+						</span>
+						{failedMember?.serial ? (
+							<span className='text-[12px] text-[color:var(--fg-faint)]'>
+								{t('storage.pool.replace.serial', {serial: failedMember.serial})}
+							</span>
+						) : null}
+					</div>
+
+					<span className='text-[13px] text-[color:var(--fg)]'>{t('storage.pool.replace.swap.pick-replacement')}</span>
+					{candidates.length === 0 ? (
+						<p className='text-[13px] text-[color:var(--fg-faint)]'>{t('storage.pool.replace.swap.no-candidates')}</p>
+					) : (
+						<div className='flex flex-col gap-2'>
+							{candidates.map((c) => {
+								const selected = replacementId === c.id
+								return (
+									<button
+										type='button'
+										key={c.id}
+										onClick={() => setReplacementId(c.id)}
+										className={cn(
+											'flex items-center justify-between rounded-[10px] border p-3 text-left transition-colors',
+											selected
+												? 'border-[color:var(--fg)] bg-[color:var(--bg-2)]'
+												: 'border-[color:var(--border)] hover:bg-[color:var(--bg-2)]',
+										)}
+									>
+										<span className='text-[14px] text-[color:var(--fg)]'>{c.model}</span>
+										<span className='text-[12px] text-[color:var(--fg-faint)]'>{maybePrettyBytes(c.size)}</span>
+									</button>
+								)
+							})}
+						</div>
+					)}
+				</div>
+				{footer(
+					<>
+						{cancelBtn}
+						<Button
+							variant='primary'
+							size='dialog'
+							disabled={!replacementId}
+							onClick={() => setPhase('format')}
+							className='min-w-0'
+						>
+							{t('continue')}
+						</Button>
+					</>,
+				)}
+			</>
+		)
+	} else if (phase === 'format') {
+		body = (
+			<>
+				<RunbookRow
+					title={t('storage.pool.replace.format.title')}
+					description={t('storage.pool.replace.format.description')}
+				/>
+				{footer(
+					<>
+						<Button size='dialog' onClick={() => setPhase('swap')} className='min-w-0'>
+							{t('back')}
+						</Button>
+						<Button
+							variant='destructive'
+							size='dialog'
+							disabled={!replacementId || isReplaceFormatting}
+							onClick={async () => {
+								if (!replacementId) return
+								try {
+									await replaceFormat({deviceId: replacementId})
+									setPhase('mount')
+								} catch {
+									/* stay on this step; hook toasts the error */
+								}
+							}}
+							className='min-w-0'
+						>
+							{isReplaceFormatting ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.pool.replace.format.submit')}
+						</Button>
+					</>,
+				)}
+			</>
+		)
+	} else if (phase === 'mount') {
+		body = (
+			<>
+				<RunbookRow
+					title={t('storage.pool.replace.mount.title')}
+					description={t('storage.pool.replace.mount.description')}
+				/>
+				{footer(
+					<>
+						{cancelBtn}
+						<Button
+							variant='primary'
+							size='dialog'
+							disabled={!replacementId || !failedMember?.mountpoint || isReplaceMounting}
+							onClick={async () => {
+								if (!replacementId || !failedMember?.mountpoint) return
+								try {
+									await replaceMount({deviceId: replacementId, mountpoint: failedMember.mountpoint})
+									setPhase('fix')
+								} catch {
+									/* stay; hook toasts the error */
+								}
+							}}
+							className='min-w-0'
+						>
+							{isReplaceMounting ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.pool.replace.mount.submit')}
+						</Button>
+					</>,
+				)}
+			</>
+		)
+	} else if (phase === 'fix') {
+		body = (
+			<>
+				<RunbookRow title={t('storage.pool.replace.fix.title')} description={t('storage.pool.replace.fix.description')} />
+				{isReplaceFixing ? (
+					<div className='flex items-center gap-2 py-6 text-[13px] text-[color:var(--fg-faint)]'>
+						<Loader2 className='size-4 animate-spin' />
+						<span>{t('storage.pool.replace.fix.working')}</span>
+					</div>
+				) : null}
+				{footer(
+					<>
+						{cancelBtn}
+						<Button
+							variant='primary'
+							size='dialog'
+							disabled={!label || isReplaceFixing}
+							onClick={async () => {
+								if (!label) return
+								try {
+									await replaceFix({disk: label})
+									setPhase('check')
+								} catch {
+									/* stay; hook toasts the error */
+								}
+							}}
+							className='min-w-0'
+						>
+							{isReplaceFixing ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.pool.replace.fix.submit')}
+						</Button>
+					</>,
+				)}
+			</>
+		)
+	} else if (phase === 'check') {
+		body = (
+			<>
+				<RunbookRow
+					title={t('storage.pool.replace.check.title')}
+					description={t('storage.pool.replace.check.description')}
+				/>
+				{isReplaceChecking ? (
+					<div className='flex items-center gap-2 py-6 text-[13px] text-[color:var(--fg-faint)]'>
+						<Loader2 className='size-4 animate-spin' />
+						<span>{t('storage.pool.replace.check.working')}</span>
+					</div>
+				) : null}
+				{footer(
+					<>
+						{cancelBtn}
+						<Button
+							variant='primary'
+							size='dialog'
+							disabled={!label || isReplaceChecking}
+							onClick={async () => {
+								if (!label) return
+								try {
+									// HARD STOP (Trap 12): replaceCheck surfaces `summary:error_unrecoverable`
+									// as result.errorUnrecoverable + the server's `hardStop` flag. We NEVER
+									// auto-chain into sync — an unrecoverable result routes to the hard-stop
+									// screen with NO path forward to sync.
+									const res = await replaceCheck({disk: label})
+									const errorUnrecoverable = res.result.errorUnrecoverable
+									if (res.hardStop || errorUnrecoverable > 0) {
+										setUnrecoverable(errorUnrecoverable)
+										setPhase('hardstop')
+									} else {
+										setPhase('sync')
+									}
+								} catch {
+									/* stay; hook toasts the error */
+								}
+							}}
+							className='min-w-0'
+						>
+							{isReplaceChecking ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.pool.replace.check.submit')}
+						</Button>
+					</>,
+				)}
+			</>
+		)
+	} else if (phase === 'hardstop') {
+		// The unrecoverable path: plain-language stop, NO continue-to-sync button.
+		body = (
+			<>
+				<div className='flex flex-col gap-2 rounded-[12px] border border-[color:var(--red,#dc2626)] p-4'>
+					<h2 className='text-[18px] font-medium text-[color:var(--red,#dc2626)]'>
+						{t('storage.pool.replace.hardstop.title')}
+					</h2>
+					<p className='text-[13px] text-[color:var(--fg-mute)]'>{t('storage.pool.replace.hardstop.description')}</p>
+					{unrecoverable > 0 ? (
+						<p className='text-[12px] text-[color:var(--fg-faint)]'>
+							{t('storage.pool.replace.hardstop.count', {count: unrecoverable})}
+						</p>
+					) : null}
+				</div>
+				{footer(
+					<Button size='dialog' onClick={onExit} className='min-w-0'>
+						{t('storage.pool.replace.hardstop.close')}
+					</Button>,
+				)}
+			</>
+		)
+	} else if (phase === 'sync') {
+		body = (
+			<>
+				<RunbookRow
+					title={t('storage.pool.replace.sync.title')}
+					description={t('storage.pool.replace.sync.description')}
+				/>
+				{isReplaceSyncing ? (
+					<div className='flex items-center gap-2 py-6 text-[13px] text-[color:var(--fg-faint)]'>
+						<Loader2 className='size-4 animate-spin' />
+						<span>{t('storage.pool.replace.sync.working')}</span>
+					</div>
+				) : null}
+				{footer(
+					<Button
+						variant='primary'
+						size='dialog'
+						disabled={isReplaceSyncing}
+						onClick={async () => {
+							try {
+								await replaceSync()
+								setPhase('done')
+							} catch {
+								/* stay; hook toasts the error */
+							}
+						}}
+						className='min-w-0'
+					>
+						{isReplaceSyncing ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.pool.replace.sync.submit')}
+					</Button>,
+				)}
+			</>
+		)
+	} else if (phase === 'done') {
+		body = (
+			<>
+				<RunbookRow
+					title={t('storage.pool.replace.done.title')}
+					description={t('storage.pool.replace.done.description')}
+				/>
+				{footer(
+					<Button
+						variant='primary'
+						size='dialog'
+						disabled={isReplaceClearing}
+						onClick={async () => {
+							try {
+								await replaceClear()
+							} finally {
+								onExit()
+							}
+						}}
+						className='min-w-0'
+					>
+						{isReplaceClearing ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.pool.replace.done.finish')}
+					</Button>,
+				)}
+			</>
+		)
+	}
+
+	return <div className='flex h-full flex-col gap-5'>{body}</div>
+}
+
+// ---------------------------------------------------------------------------
 // MAIN COMPONENT
 // ---------------------------------------------------------------------------
 
 export function PoolWizard({onDone}: {onDone?: () => void}) {
-	const {pool, isWsl2, eligibleDrives, isLoadingEligible, createPool, isCreatingPool, syncNow, isSyncing} =
-		useStoragePool()
+	const hook = useStoragePool()
+	const {pool, isWsl2, runbookStep, eligibleDrives, isLoadingEligible, createPool, isCreatingPool, syncNow, isSyncing} =
+		hook
 	const {drives} = useSmartDrives()
 
 	const [step, setStep] = useState<Step>(Step.Pick)
+	// The operator explicitly entered the replacement runbook from the status view.
+	const [runbookActive, setRunbookActive] = useState(false)
 
 	const form = useForm<PoolWizardValues>({
 		resolver: zodResolver(wizardStepSchema as any) as Resolver<PoolWizardValues>,
@@ -156,10 +651,26 @@ export function PoolWizard({onDone}: {onDone?: () => void}) {
 		return <p className='text-[13px] text-[color:var(--fg-faint)]'>{t('storage.pool.unavailable-wsl')}</p>
 	}
 
+	// A replacement runbook takes precedence: an in-flight persisted step (resume
+	// after a reload) OR an operator-initiated replacement re-enters the runbook
+	// mode. While it is in flight the server blocks competing formats (T-318-18).
+	if (runbookStep || runbookActive) {
+		return <RunbookView hook={hook} onExit={() => setRunbookActive(false)} />
+	}
+
 	// An already-combined pool → show the always-on status view (last synced +
-	// manual sync + the honest "not a backup" note), not the build wizard.
+	// manual sync + the honest "not a backup" note), not the build wizard. Protected
+	// pools also expose "Replace a drive" (enters the guided replacement runbook).
 	if (pool?.members?.length && !pool.incomplete && step !== Step.Done) {
-		return <PoolStatusView pool={pool} isSyncing={isSyncing} syncNow={syncNow} onDone={onDone} />
+		return (
+			<PoolStatusView
+				pool={pool}
+				isSyncing={isSyncing}
+				syncNow={syncNow}
+				onDone={onDone}
+				onReplace={pool.protectionLevel === 'protected' ? () => setRunbookActive(true) : undefined}
+			/>
+		)
 	}
 
 	// `eligibleDrives` is the server-filtered `storagePool.listEligibleDrives`
