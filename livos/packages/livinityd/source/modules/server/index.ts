@@ -169,6 +169,20 @@ const APEX_PUBLIC_PREFIXES = [
 	'/api/files/share/',
 ]
 
+// Phase 324-01 (CR-01, FILES-01) — public SPA LANDING routes reachable pre-auth.
+// Unlike APEX_PUBLIC_PREFIXES (which pass for ANY method), these are GET-only: they
+// serve ONLY the static SPA shell for an anonymous deep-link navigation, and the page
+// then calls its OWN already-public, token-gated backend (/api/files/share/ above for
+// a share; the invite tRPC for an invite). The opaque token in the path IS the sole
+// credential and the shell carries no authenticated data before it verifies that
+// token — so a logged-out recipient MUST reach the shell rather than be 302'd to
+// /login (which made the headline share feature unreachable on a domain-active box).
+// Scoped EXACTLY to these two landing paths — do NOT broaden to any authenticated
+// route.
+//   /files/share/:token — public file-share landing (public-share-page.tsx)
+//   /invite/:token      — pre-existing invite-accept landing (same allowlist gap)
+const APEX_PUBLIC_GET_PREFIXES = ['/files/share/', '/invite/']
+
 // Pre-auth static assets (login wallpaper, hashed bundle chunks, fonts the
 // regexless prefixes above don't cover). GET-only — see apexSessionGate.
 const APEX_STATIC_ASSET_RE = /\.(js|css|map|svg|png|jpg|ico|woff2?|webmanifest)$/
@@ -802,6 +816,14 @@ class Server {
 				}
 				// Hashed bundle chunks / wallpapers / fonts — GET-only.
 				if (request.method === 'GET' && APEX_STATIC_ASSET_RE.test(path)) return next()
+				// GET-only public SPA landing shells for anonymous deep links
+				// (share / invite). Token-in-path is the credential; the shell
+				// itself serves no authenticated data. See APEX_PUBLIC_GET_PREFIXES.
+				if (request.method === 'GET') {
+					for (const prefix of APEX_PUBLIC_GET_PREFIXES) {
+						if (path.startsWith(prefix)) return next()
+					}
+				}
 
 				// Token resolution mirrors /auth/verify: Bearer header first,
 				// then the LIVINITY_SESSION cookie.
