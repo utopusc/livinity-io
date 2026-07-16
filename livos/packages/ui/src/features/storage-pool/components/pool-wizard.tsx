@@ -85,18 +85,39 @@ function PoolStatusView({
 	pool,
 	isSyncing,
 	syncNow,
+	forceSyncOverride,
+	isForcingSync,
 	onDone,
 	onReplace,
 }: {
 	pool: PoolState
 	isSyncing: boolean
 	syncNow: StoragePoolHook['syncNow']
+	// The freeze-gate override (D-08 / WR-02): a one-shot forced sync that commits
+	// the mass deletion after the operator confirms it was intentional.
+	forceSyncOverride: StoragePoolHook['forceSyncOverride']
+	isForcingSync: boolean
 	onDone?: () => void
 	// Enters the guided replacement runbook (protected pools only — a combine-only
 	// pool has no safety copy to rebuild a replaced drive from).
 	onReplace?: () => void
 }) {
 	const isProtected = pool?.protectionLevel === 'protected'
+	// When the D-08 freeze gate blocks a sync, the server returns {blocked, reason}
+	// instead of throwing. WR-02: we capture that here so the card can surface the
+	// reason + an explicit override, rather than silently appearing to succeed.
+	const [blocked, setBlocked] = useState<{reason?: string} | null>(null)
+
+	const handleSyncNow = async () => {
+		const res = await syncNow()
+		setBlocked(res?.blocked ? {reason: res.reason} : null)
+	}
+
+	const handleOverride = async () => {
+		await forceSyncOverride({confirm: true})
+		setBlocked(null)
+	}
+
 	return (
 		<div className='flex flex-col gap-4'>
 			<div className='flex flex-col gap-1 rounded-[12px] border border-[color:var(--border)] p-4'>
@@ -111,8 +132,8 @@ function PoolStatusView({
 					<Button
 						variant='default'
 						size='dialog'
-						disabled={isSyncing}
-						onClick={() => syncNow()}
+						disabled={isSyncing || isForcingSync}
+						onClick={handleSyncNow}
 						className='min-w-0'
 					>
 						{isSyncing ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.pool.done.sync-now')}
@@ -124,6 +145,34 @@ function PoolStatusView({
 					) : null}
 				</div>
 			)}
+
+			{/* WR-02: the freeze gate blocked the sync — show WHY + the explicit
+			    "these deletions are intentional" override (the ONLY path that commits
+			    the mass deletion to parity). Without this the card looked like it
+			    succeeded and there was no way forward. */}
+			{isProtected && blocked ? (
+				<div className='flex flex-col gap-2 rounded-[12px] border border-[color:var(--red,#dc2626)] p-4'>
+					<span className='text-[13px] font-medium text-[color:var(--fg)]'>
+						{t('storage.pool.done.sync-blocked.title')}
+					</span>
+					{blocked.reason ? (
+						<span className='text-[12px] leading-[1.5] text-[color:var(--fg-faint)]'>{blocked.reason}</span>
+					) : null}
+					<Button
+						variant='destructive'
+						size='dialog'
+						disabled={isForcingSync}
+						onClick={handleOverride}
+						className='min-w-0 self-start'
+					>
+						{isForcingSync ? (
+							<Loader2 className='h-4 w-4 animate-spin' />
+						) : (
+							t('storage.pool.done.sync-blocked.confirm')
+						)}
+					</Button>
+				</div>
+			) : null}
 
 			<p className='text-[12px] text-[color:var(--fg-faint)]'>{t('storage.pool.done.not-a-backup')}</p>
 
@@ -623,8 +672,19 @@ function RunbookView({hook, onExit}: {hook: StoragePoolHook; onExit: () => void}
 
 export function PoolWizard({onDone}: {onDone?: () => void}) {
 	const hook = useStoragePool()
-	const {pool, isWsl2, runbookStep, eligibleDrives, isLoadingEligible, createPool, isCreatingPool, syncNow, isSyncing} =
-		hook
+	const {
+		pool,
+		isWsl2,
+		runbookStep,
+		eligibleDrives,
+		isLoadingEligible,
+		createPool,
+		isCreatingPool,
+		syncNow,
+		isSyncing,
+		forceSyncOverride,
+		isForcingSync,
+	} = hook
 	const {drives} = useSmartDrives()
 
 	const [step, setStep] = useState<Step>(Step.Pick)
@@ -667,6 +727,8 @@ export function PoolWizard({onDone}: {onDone?: () => void}) {
 				pool={pool}
 				isSyncing={isSyncing}
 				syncNow={syncNow}
+				forceSyncOverride={forceSyncOverride}
+				isForcingSync={isForcingSync}
 				onDone={onDone}
 				onReplace={pool.protectionLevel === 'protected' ? () => setRunbookActive(true) : undefined}
 			/>
@@ -895,7 +957,14 @@ export function PoolWizard({onDone}: {onDone?: () => void}) {
 
 					{/* ── Step 5: done — last synced + Sync now + not-a-backup note ── */}
 					{step === Step.Done && (
-						<PoolStatusView pool={pool} isSyncing={isSyncing} syncNow={syncNow} onDone={onDone} />
+						<PoolStatusView
+							pool={pool}
+							isSyncing={isSyncing}
+							syncNow={syncNow}
+							forceSyncOverride={forceSyncOverride}
+							isForcingSync={isForcingSync}
+							onDone={onDone}
+						/>
 					)}
 				</div>
 

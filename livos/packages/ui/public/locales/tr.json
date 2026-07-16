@@ -1378,6 +1378,8 @@
   "storage.pool.done.not-a-backup": "Bu, bir sürücünün arızalanmasına karşı korur — ancak bir yedek değildir. Önemli her şeyin ayrı bir yedeğini alın.",
   "storage.pool.done.protection.combine": "Yalnızca birleştir",
   "storage.pool.done.protection.protected": "Korumalı",
+  "storage.pool.done.sync-blocked.confirm": "Bu silmeler kasıtlı — devam et",
+  "storage.pool.done.sync-blocked.title": "Koruma güncellemeleri duraklatıldı",
   "storage.pool.done.sync-now": "Şimdi eşitle",
   "storage.pool.done.title": "Sürücüleriniz birleştirildi",
   "storage.pool.pick.description": "Tek bir büyük alanda birleştirmek istediğiniz sürücüleri seçin.",

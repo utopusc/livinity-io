@@ -1404,6 +1404,8 @@
   "storage.pool.done.not-a-backup": "This protects against a drive failing — it is not a backup. Keep a separate backup of anything important.",
   "storage.pool.done.protection.combine": "Combine only",
   "storage.pool.done.protection.protected": "Protected",
+  "storage.pool.done.sync-blocked.confirm": "These deletions are intentional — continue",
+  "storage.pool.done.sync-blocked.title": "Protection updates paused",
   "storage.pool.done.sync-now": "Sync now",
   "storage.pool.done.title": "Your drives are combined",
   "storage.pool.pick.description": "Choose the drives you want to combine into one big space.",
