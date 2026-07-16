@@ -901,6 +901,18 @@ async function evaluatePoolHealth(
 	status: StatusResult,
 ): Promise<{degraded: string[]; branchMissing: boolean}> {
 	const seen = new Set(Object.keys(status.diskUsePercent ?? {}))
+	// WR-05: no per-disk usage tags = NO SIGNAL, not "every branch missing". A
+	// fresh/never-synced protected pool (and an `unsynced` status read) reports no
+	// `summary:disk_use_percent:*` tags, and a transient/garbled status parse also
+	// returns an empty map (parseStatus never throws). Flagging every data member
+	// degraded in those cases produced a false all-disks-degraded alert storm on a
+	// healthy new pool. Only evaluate degradation against a genuinely-synced status
+	// that actually reports at least one branch's usage; otherwise emit no signal.
+	// (A REAL single-branch-missing degradation still reports the surviving branches'
+	// tags, so `seen` is non-empty and the normal per-member check below runs.)
+	if (seen.size === 0 || status.exit === 'unsynced') {
+		return {degraded: [], branchMissing: false}
+	}
 	const degraded: string[] = []
 	for (const member of state.members) {
 		if (member.role !== 'data') continue

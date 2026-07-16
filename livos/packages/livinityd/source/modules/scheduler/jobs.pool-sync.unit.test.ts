@@ -191,6 +191,29 @@ describe('poolSyncHandler — D-08 freeze gate + D-09 alerts', () => {
 		expect(clear).toHaveBeenCalledWith('pool-degraded:sdb')
 	})
 
+	test('WR-05: a fresh/unsynced pool with NO per-disk tags raises NO degraded alert (no-signal, not all-missing)', async () => {
+		resetSnapraid()
+		mockDiff.mockResolvedValue({counts: {added: 5, removed: 0, updated: 0, moved: 0}, exit: 'diff'})
+		mockSync.mockResolvedValue({errorIo: 0, errorData: 0, errorSoft: 0, exit: 'ok'})
+		// A fresh/never-synced protected pool: `snapraid status` reports NO
+		// disk_use_percent tags at all (empty map) and an `unsynced` exit.
+		mockStatus.mockResolvedValue({scrubOldestDays: null, diskUsePercent: {}, exit: 'unsynced'})
+		const {livinityd, add} = makeLivinityd(protectedState())
+
+		const result = await poolSyncHandler(fakeJob, {logger: fakeLogger, livinityd})
+
+		expect(result.status).toBe('success')
+		expect(mockSync).toHaveBeenCalledTimes(1)
+		// The prior bug flagged EVERY data member degraded on a healthy new pool. With
+		// no per-disk signal, NO degradation alert (per-member or system-wide) is raised.
+		expect(add).not.toHaveBeenCalledWith('pool-degraded:sdb', expect.anything())
+		expect(add).not.toHaveBeenCalledWith('pool-degraded:sdc', expect.anything())
+		expect(add).not.toHaveBeenCalledWith('pool-branch-missing', expect.anything())
+		const output = result.output as {degraded: string[]; branchMissing: boolean}
+		expect(output.degraded).toEqual([])
+		expect(output.branchMissing).toBe(false)
+	})
+
 	test('NEVER-THROW: an internal throw (diff rejects) → {status:failure}, never re-thrown', async () => {
 		resetSnapraid()
 		mockDiff.mockRejectedValue(new Error('snapraid unreachable'))
