@@ -120,4 +120,18 @@ describe('renderShareBlock()', () => {
 		expect(block).toContain('valid users = livinity')
 		expect(block).toContain('force user = root')
 	})
+
+	// 324-review WR-02: a per-user share with zero applicable grants must NOT render
+	// an empty `valid users =` (Samba would treat that as "allow any authenticated
+	// account"). The block is skipped entirely so the share is unreachable, never
+	// open-to-all.
+	test('per-user block with no grants is skipped (fail-closed, not open-to-all)', () => {
+		const block = renderShareBlock('Shared (Livinity)', '/data/shared', {
+			validUsers: [],
+			writeList: [],
+		})
+		expect(block).toBe('')
+		// Defensively assert no empty valid-users directive leaks into smb.conf.
+		expect(block).not.toMatch(/valid users\s*=\s*$/m)
+	})
 })

@@ -139,6 +139,12 @@ export function renderShareBlock(
 	perUser: {validUsers: string[]; writeList: string[]} | null,
 ): string {
 	if (perUser === null) return legacyShareConfig(name, path)
+	// 324-review WR-02 — FAIL CLOSED on a per-user share with NO applicable grants.
+	// Samba treats an empty `valid users =` as its default (any authenticated account
+	// may log in), so rendering an ungranted share would fall OPEN to every provisioned
+	// livos-* account. Skip the block entirely instead — an ungranted per-user share is
+	// simply not exported, so it is unreachable rather than open-to-all.
+	if (perUser.validUsers.length === 0) return ''
 	return perUserShareConfig(name, path, perUser.validUsers, perUser.writeList)
 }
 
