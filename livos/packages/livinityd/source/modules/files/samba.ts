@@ -108,10 +108,17 @@ const perUserShareConfig = (name: string, path: string, validUsers: string[], wr
 # Share specific config (PER-USER model — blanket force-user-root dropped)
 [${name}]
 path = ${path}
-writeable = yes
+
+# The share is READ-ONLY by default and write access is ELEVATED per-account via
+# \`write list\` (324-review WR-01). \`writeable = yes\` would make the WHOLE share
+# read-write for every valid user and reduce \`write list\` to a no-op, so a
+# read-level ACL grant would silently allow SMB writes — the canonical Samba pattern
+# for per-user read/write separation is \`read only = yes\` + \`write list\`.
+read only = yes
 
 # valid users / write list = the literal synthetic accounts resolved from the
-# file_acls grants at render time (write-level grants also land on write list).
+# file_acls grants at render time. A read-level grant lands ONLY on \`valid users\`
+# (browse/read); a write-level grant ALSO lands on \`write list\` (read + write).
 valid users = ${validUsers.join(' ')}
 write list = ${writeList.join(' ')}
 

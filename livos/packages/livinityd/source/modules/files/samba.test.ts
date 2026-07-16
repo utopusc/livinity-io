@@ -95,6 +95,26 @@ describe('renderShareBlock()', () => {
 		expect(block).not.toContain('force user = root')
 	})
 
+	// 324-review WR-01: the per-user share must be READ-ONLY by default so a
+	// read-level ACL principal (on valid users but NOT write list) genuinely cannot
+	// write over SMB. `writeable = yes` / `read only = no` would make write list a
+	// no-op and turn every read grant into a write grant.
+	test('per-user block is read-only by default so read-grantees cannot write over SMB', () => {
+		const block = renderShareBlock('Shared (Livinity)', '/data/shared', {
+			validUsers: ['livos-alice', 'livos-bob'],
+			writeList: ['livos-bob'],
+		})
+		expect(block).toContain('read only = yes')
+		// A globally-writable share (writeable = yes / read only = no) would reduce
+		// write list to a no-op — assert neither DIRECTIVE line is present (anchored
+		// so the explanatory comments mentioning these tokens don't false-match).
+		expect(block).not.toMatch(/^\s*writeable\s*=\s*yes/m)
+		expect(block).not.toMatch(/^\s*read only\s*=\s*no/m)
+		// alice has only a read grant → present on valid users, absent from write list.
+		expect(block).toContain('valid users = livos-alice livos-bob')
+		expect(block).not.toContain('write list = livos-alice')
+	})
+
 	test('legacy block (perUser=null) keeps the single shared account + force user = root', () => {
 		const block = renderShareBlock('Shared (Livinity)', '/data/shared', null)
 		expect(block).toContain('valid users = livinity')
