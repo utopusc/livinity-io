@@ -41,6 +41,7 @@ import {
 	TbLogin,
 	TbUsers,
 	TbUsersGroup,
+	TbFolderShare,
 	TbBrain,
 	TbStethoscope,
 	TbBrandChrome,
@@ -135,6 +136,12 @@ const UsersSectionLazy = React.lazy(() =>
 const GroupsSectionLazy = React.lazy(() =>
 	import('@/routes/settings/groups').then((m) => ({default: m.GroupsSection})),
 )
+// Phase 324-08 (FILES-02, D-08/D-09/D-10) — Settings > File access admin destination:
+// per-folder user/group ACL grant editor + per-user Samba secondary-password surface.
+// ADDITIVE in the admin tree ONLY — never touches the Files app's own UI tree.
+const FileAclsSectionLazy = React.lazy(() =>
+	import('@/routes/settings/file-acls').then((m) => ({default: m.FileAclsSection})),
+)
 // AI-chat-specific settings (memory / ai-config / liv-agent / autonomous-agents /
 // ai-chat-settings) removed with the AI Chat teardown.
 // Phase 102-07 — Chrome Master Login (D-102-MASTER-LOGIN-UI).
@@ -172,6 +179,8 @@ type SettingsSection =
 	| 'account'
 	| 'users'
 	| 'groups'
+	// Phase 324-08 (FILES-02) — admin per-folder ACL grants + per-user Samba passwords.
+	| 'file-acls'
 	| 'wallpaper'
 	| '2fa'
 	| 'chrome-master'
@@ -230,6 +239,7 @@ const MENU_ITEMS: MenuItem[] = [
 	// ── SYSTEM ────────────────────────────────────────────────────────
 	{id: 'users',            group: 'system', icon: TbUsers,           label: 'Users',             description: 'Manage users & invites',                  adminOnly: true},
 	{id: 'groups',           group: 'system', icon: TbUsersGroup,      label: 'Groups',            description: 'Manage groups & membership',              adminOnly: true},
+	{id: 'file-acls',        group: 'system', icon: TbFolderShare,     label: 'File access',       description: 'Per-folder grants & Samba passwords',     adminOnly: true},
 	{id: 'chrome-master',    group: 'system', icon: TbBrandChrome,     label: 'Chrome Profile',    description: 'Master Chrome login for WebApps',         adminOnly: true},
 	{id: 'power',            group: 'system', icon: TbPower,           label: 'Power',             description: 'Restart or shut down this device',        adminOnly: true},
 	{id: 'date-time',        group: 'system', icon: TbClock,           label: 'Date & Time',       description: 'Time zone & language',                    adminOnly: true},
@@ -634,6 +644,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><UsersSectionLazy /></Suspense>
 		case 'groups':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><GroupsSectionLazy /></Suspense>
+		case 'file-acls':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><FileAclsSectionLazy /></Suspense>
 		case 'wallpaper':
 			return <WallpaperSection />
 		case '2fa':
