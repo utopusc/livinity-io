@@ -434,6 +434,34 @@ export function Notifications() {
 				}
 			}
 
+			// Phase 331-03 (FIX-03) — the installed Jellyfin catalog template carries an
+			// explicit non-GPU permissions list, so the MEDIA-02 GPU preconfig was
+			// respected-but-skipped. Informational (the never-silent arm); deep-links to
+			// the app page where the operator can toggle GPU access manually.
+			if (notification === 'jellyfin-catalog-gpu-preconfig-skipped') {
+				return {
+					title: t('notifications.jellyfin-catalog-gpu-preconfig-skipped.title'),
+					description: t('notifications.jellyfin-catalog-gpu-preconfig-skipped.description'),
+					action: (
+						<>
+							<Button variant='default' size='dialog' onClick={() => clearNotification(notification)} tabIndex={-1}>
+								{t('ok')}
+							</Button>
+							<AlertDialogAction
+								variant='primary'
+								onClick={() => {
+									clearNotification(notification)
+									navigate('/app-store/jellyfin')
+								}}
+								tabIndex={0}
+							>
+								{t('notifications.jellyfin-catalog-gpu-preconfig-skipped.open-app')}
+							</AlertDialogAction>
+						</>
+					),
+				}
+			}
+
 			// Phase 313-04 (SMART-04) — smartctl reads were denied (the privileged
 			// sudoers grant is missing on this box). Bare, system-level id. Admin-only.
 			if (notification === 'smart-permission-denied') {
