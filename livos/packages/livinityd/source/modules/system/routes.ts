@@ -31,6 +31,13 @@ import bcrypt from 'bcryptjs'
 import {createShare, listSharesForUser, revokeShare, type FileShareRow} from '../files/share-tokens.js'
 import {fileUserContext, type FileUserInfo} from '../files/files.js'
 import {grantAcl, revokeAcl, listAclsForPath} from '../files/file-acls.js'
+import {encrypt, getKey} from '../secrets/dek.js'
+import {
+	CLOUD_BACKENDS,
+	cloudMountPath,
+	renderRcloneConfigSection,
+	buildAuthorizeInstructions,
+} from '../files/cloud-storage.js'
 
 type SystemStatus = 'running' | 'updating' | 'shutting-down' | 'restarting' | 'migrating' | 'resetting' | 'restoring'
 let systemStatus: SystemStatus = 'running'
@@ -411,6 +418,102 @@ async function runSambaUser(
 			settle({ok: false, reason: err.message || 'sudo spawn failed'})
 		})
 
+		child.on('close', (code) => {
+			if (code === 0) {
+				settle({ok: true, stdout})
+				return
+			}
+			settle({
+				ok: false,
+				reason: stderr.trim().slice(0, 500) || `wrapper exited with code ${code ?? 'unknown'}`,
+			})
+		})
+	})
+}
+
+// ── Phase 324 (FILES-03, 324-05) — cloud-drive (rclone) plumbing ─────────────
+// Managed through the root-owned closed-enum wrapper (scripts/install/livos-rclone.sh
+// → /usr/local/lib/livos/livos-rclone.sh, built in 324-03) via the scoped
+// /etc/sudoers.d/livos-rclone NOPASSWD grant. A clone of the runWebdav/runSambaUser
+// shape (closed-enum action, stdout-capturing, never-throw discriminated union)
+// EXTENDED for two secret-safe channels:
+//   • `opts.stdin` — the rclone.conf token blob for `config-write` is written to the
+//     child's STDIN (never argv — mirrors runSambaUser's password-on-stdin idiom);
+//   • `opts.configPass` — the RCLONE_CONFIG_PASS obscure-password (derived from the
+//     credential DEK) is passed via the child's ENVIRONMENT and forwarded through
+//     sudo with --preserve-env=RCLONE_CONFIG_PASS — NEVER as a CLI argument, so it is
+//     invisible to `ps`/journalctl (T-324-15). The var NAME appears in argv; the
+//     secret VALUE never does.
+// The wrapper enum is {install|authorize-start|config-write|mount|unmount|status|
+// remove}; the action + charset-guarded remote/backend positionals are validated at
+// the route boundary below (defense-in-depth on top of the wrapper's own enum +
+// guards, T-324-16). livinityd itself never runs apt/rclone/systemctl or writes
+// /etc/rclone directly. runRclone never throws, so an undeployed wrapper degrades to
+// {ok:false} instead of 500-ing the Cloud Drives card.
+const RCLONE_WRAPPER = '/usr/local/lib/livos/livos-rclone.sh'
+// The sudo flag that forwards ONLY the RCLONE_CONFIG_PASS var NAME (its value stays
+// in the child env, never in argv). Held as a const so the literal never sits next
+// to the argv array (ps/journalctl-secret discipline; also keeps the secret out of
+// any positional-args grep).
+const RCLONE_PRESERVE_ENV = '--preserve-env=RCLONE_CONFIG_PASS'
+
+export async function runRclone(
+	action: 'install' | 'authorize-start' | 'config-write' | 'mount' | 'unmount' | 'status' | 'remove',
+	args: string[] = [],
+	opts: {stdin?: string; configPass?: string} = {},
+): Promise<{ok: true; stdout: string} | {ok: false; reason: string}> {
+	return new Promise((resolve) => {
+		// `install` runs apt-get install of the pinned rclone .deb; give it 5-min headroom.
+		const timeoutMs = 300_000
+		let settled = false
+		let stdout = ''
+		let stderr = ''
+		const settle = (result: {ok: true; stdout: string} | {ok: false; reason: string}): void => {
+			if (settled) return
+			settled = true
+			clearTimeout(timer)
+			resolve(result)
+		}
+
+		const wantsStdin = opts.stdin != null
+		// The RCLONE_CONFIG_PASS secret VALUE rides the child env; only its NAME (via the
+		// preserve-env flag) is ever in argv.
+		const env = {...process.env}
+		if (opts.configPass != null) env.RCLONE_CONFIG_PASS = opts.configPass
+		const sudoArgs = opts.configPass != null ? ['-n', RCLONE_PRESERVE_ENV] : ['-n']
+		const child = spawn('sudo', [...sudoArgs, RCLONE_WRAPPER, action, ...args], {
+			stdio: [wantsStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+			windowsHide: true,
+			env,
+		})
+
+		const timer = setTimeout(() => {
+			try {
+				child.kill('SIGTERM')
+			} catch {
+				/* best-effort */
+			}
+			settle({ok: false, reason: `timeout after ${timeoutMs}ms`})
+		}, timeoutMs)
+
+		// Write the token blob ONE-shot then close stdin. The wrapper reads it into a
+		// private var; the value never reaches argv (not ps-visible).
+		if (wantsStdin && child.stdin) {
+			child.stdin.on('error', () => {
+				/* EPIPE if the child died first — the close/error handler settles */
+			})
+			child.stdin.end(opts.stdin)
+		}
+
+		child.stdout?.on('data', (chunk: Buffer) => {
+			stdout += chunk.toString('utf8')
+		})
+		child.stderr?.on('data', (chunk: Buffer) => {
+			stderr += chunk.toString('utf8')
+		})
+		child.on('error', (err: Error) => {
+			settle({ok: false, reason: err.message || 'sudo spawn failed'})
+		})
 		child.on('close', (code) => {
 			if (code === 0) {
 				settle({ok: true, stdout})
@@ -2119,4 +2222,72 @@ export default router({
 			const result = await runSambaUser('remove-user', input.username)
 			return {removed: result.ok, reason: result.ok ? undefined : result.reason}
 		}),
+	// ── Phase 324 (FILES-03, 324-05) — cloud drives (rclone) from the UI ────────
+	// FLAT route names (matches the webdav*/samba* convention above). All
+	// adminProcedure: mounting a cloud drive is a host-level operation (sudo wrapper +
+	// systemd unit). The remote/backend are z-constrained BEFORE they reach the wrapper
+	// (defense-in-depth on top of the wrapper's own charset/allowlist guards, T-324-16);
+	// runRclone never throws, so an undeployed wrapper degrades to {ok:false}. The raw
+	// OAuth token is DEK-ENCRYPTED here (secrets/dek.ts) before it is persisted to the
+	// cloudDrives store — the plaintext token is NEVER stored in the clear (T-324-14).
+	// The Cloud Drives sidebar + add-drive dialog land in 324-09.
+	//
+	// zRemote = the charset-guarded rclone remote name (reaches a privileged argv + the
+	// systemd %I template); zBackend = the wrapper's built-in-shared-client backend set.
+	cloudDriveList: adminProcedure.query(async ({ctx}) => ctx.livinityd!.files.cloudStorage.getDriveInfo()),
+	cloudDriveStatus: adminProcedure.query(async () => runRclone('status')),
+	// Wizard STEP 1 (D-13 two-machine copy-paste fallback, shipped as v1): surface the
+	// operator-facing instructions + the wrapper's authorize-start output. Uses rclone's
+	// built-in SHARED client_id (zero per-provider OAuth-app setup).
+	cloudDriveAuthorizeStart: adminProcedure
+		.input(z.object({backend: z.enum(CLOUD_BACKENDS as unknown as [string, ...string[]])}))
+		.mutation(async ({input}) => {
+			const res = await runRclone('authorize-start', [input.backend])
+			return {
+				ok: res.ok,
+				instructions: buildAuthorizeInstructions(input.backend as (typeof CLOUD_BACKENDS)[number]),
+				output: res.ok ? res.stdout : undefined,
+				reason: res.ok ? undefined : res.reason,
+			}
+		}),
+	// Wizard STEP 2 ("finish"): the operator pastes the token blob from the browser
+	// machine. Build the rclone.conf section, DEK-ENCRYPT it (raw token never persisted
+	// in the clear), persist to the cloudDrives store, then mount via the wrapper unit.
+	cloudDriveAdd: adminProcedure
+		.input(
+			z.object({
+				remote: z.string().min(1).max(64).regex(/^[a-z0-9_-]+$/),
+				backend: z.enum(CLOUD_BACKENDS as unknown as [string, ...string[]]),
+				token: z.string().min(1),
+				// Own-OAuth-app escape hatch (if the shared client_id is throttled).
+				clientId: z.string().max(512).optional(),
+				clientSecret: z.string().max(512).optional(),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			const section = renderRcloneConfigSection({
+				remote: input.remote,
+				backend: input.backend as (typeof CLOUD_BACKENDS)[number],
+				token: input.token,
+				clientId: input.clientId,
+				clientSecret: input.clientSecret,
+			})
+			// DEK-encrypt the rclone.conf section (contains the raw OAuth token) at rest.
+			const configBlob = encrypt(section, await getKey())
+			return ctx.livinityd!.files.cloudStorage.addEncryptedDrive({
+				remote: input.remote,
+				backend: input.backend as (typeof CLOUD_BACKENDS)[number],
+				mountPath: cloudMountPath(input.remote),
+				configBlob,
+			})
+		}),
+	cloudDriveRemove: adminProcedure
+		.input(z.object({remote: z.string().min(1).max(64).regex(/^[a-z0-9_-]+$/)}))
+		.mutation(async ({ctx, input}) => ({removed: await ctx.livinityd!.files.cloudStorage.removeDrive(input.remote)})),
+	cloudDriveMount: adminProcedure
+		.input(z.object({remote: z.string().min(1).max(64).regex(/^[a-z0-9_-]+$/)}))
+		.mutation(async ({ctx, input}) => ctx.livinityd!.files.cloudStorage.mountByRemote(input.remote)),
+	cloudDriveUnmount: adminProcedure
+		.input(z.object({remote: z.string().min(1).max(64).regex(/^[a-z0-9_-]+$/)}))
+		.mutation(async ({ctx, input}) => ctx.livinityd!.files.cloudStorage.unmountByRemote(input.remote)),
 })

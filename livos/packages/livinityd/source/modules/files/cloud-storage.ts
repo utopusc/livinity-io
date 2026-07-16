@@ -1,8 +1,10 @@
-import {spawn} from 'child_process'
 import {setTimeout as sleep} from 'node:timers/promises'
 
 import fse from 'fs-extra'
 import {$} from 'execa'
+
+import {decrypt, getKey, getLegacyKey, deriveConfigPassword} from '../secrets/dek.js'
+import {runRclone} from '../system/routes.js'
 
 import type Livinityd from '../../index.js'
 
@@ -96,9 +98,34 @@ export function renderRcloneConfigSection(input: {
 	return lines.join('\n') + '\n'
 }
 
-// The 324-03 root wrapper (installed by deploy 2a-rclone / update.sh 7.10m). Only
-// the closed-enum action + charset-guarded positionals ever reach it.
-const RCLONE_WRAPPER = '/usr/local/lib/livos/livos-rclone.sh'
+/**
+ * The guided TWO-MACHINE copy-paste `rclone authorize` wizard text (D-13's
+ * guaranteed v1 fallback — the parseable-URL browser-proxy is a 324-HUMAN-UAT
+ * box-follow-up). Because a headless box cannot open a browser, the operator runs
+ * `rclone authorize "<backend>"` on ANY machine that HAS a browser + rclone, signs
+ * in there, then copy-pastes the resulting token blob back into the add-drive
+ * dialog (→ cloudDriveAdd → the wrapper's config-write). Uses rclone's built-in
+ * SHARED client_id, so there is zero per-provider OAuth-app setup.
+ */
+export function buildAuthorizeInstructions(backend: CloudBackend): string {
+	if (!CLOUD_BACKENDS.includes(backend)) throw new Error('[invalid-backend]')
+	return [
+		`To connect this ${backend} drive, authorize it from a computer that has a web browser:`,
+		'',
+		`  1. On that computer, install rclone (https://rclone.org/downloads/) and run:`,
+		`         rclone authorize "${backend}"`,
+		`  2. A browser window opens — sign in and approve access.`,
+		`  3. rclone prints a token blob. Copy it and paste it back here to finish.`,
+		'',
+		'No browser is needed on the server itself; the pasted token is stored encrypted.',
+	].join('\n')
+}
+
+// The label under which RCLONE_CONFIG_PASS is derived from the credential DEK
+// (deriveConfigPassword) — a stable, box-local, never-persisted obscure-password.
+// The privileged wrapper path itself lives in system/routes.ts's runRclone (the
+// shared route helper this manager calls for config-write/mount/unmount).
+const RCLONE_CONFIG_PASS_LABEL = 'rclone-config'
 
 type CloudDrive = {
 	remote: string
@@ -208,7 +235,23 @@ export default class CloudStorage {
 		}
 	}
 
-	// Attempt to mount a drive via the rclone wrapper's systemd unit.
+	// Decrypt a stored rclone.conf section blob (DEK, with the LIVOS-052b legacy-key
+	// fallback — a JWT-secret rotation never bricks a persisted drive).
+	async #decryptConfig(configBlob: string): Promise<string> {
+		const key = await getKey()
+		try {
+			return decrypt(configBlob, key)
+		} catch (err) {
+			const legacy = await getLegacyKey()
+			if (!legacy) throw err
+			return decrypt(configBlob, legacy) // throws if legacy also fails (genuine tamper)
+		}
+	}
+
+	// Attempt to mount a drive via the rclone wrapper's systemd unit. Regenerates
+	// rclone.conf on-demand from the DEK-decrypted section (samba.ts applyShares
+	// idiom): the plaintext token travels on STDIN (never argv) and RCLONE_CONFIG_PASS
+	// travels via ENV (never argv) — both derived from the credential DEK.
 	async #mountDrive(drive: CloudDrive): Promise<void> {
 		// Re-validate at the mount sink (covers drives persisted before a guard fix,
 		// same discipline as network-storage's #mountShare) — the remote reaches a
@@ -219,8 +262,16 @@ export default class CloudStorage {
 		const systemMountPath = this.#livinityd.files.virtualToSystemPathUnsafe(drive.mountPath)
 		await fse.ensureDir(systemMountPath)
 
-		const result = await this.#invokeRclone('mount', [drive.remote, systemMountPath])
-		if (!result.ok) throw new Error(`[cloud-mount-failed] ${result.reason}`)
+		const section = await this.#decryptConfig(drive.configBlob)
+		const configPass = await deriveConfigPassword(RCLONE_CONFIG_PASS_LABEL)
+
+		// Regenerate /etc/rclone/rclone.conf for this remote (token blob on STDIN).
+		const wrote = await runRclone('config-write', [drive.remote], {stdin: section, configPass})
+		if (!wrote.ok) throw new Error(`[cloud-config-write-failed] ${wrote.reason}`)
+
+		const mounted = await runRclone('mount', [drive.remote, systemMountPath], {configPass})
+		if (!mounted.ok) throw new Error(`[cloud-mount-failed] ${mounted.reason}`)
+
 		this.mountedDrives.add(drive.mountPath)
 		this.logger.log(`Successfully mounted cloud drive: ${drive.remote} → ${drive.mountPath}`)
 	}
@@ -230,7 +281,7 @@ export default class CloudStorage {
 		this.logger.log(`Unmounting cloud drive: ${drive.mountPath}`)
 		try {
 			assertValidRemoteName(drive.remote)
-			await this.#invokeRclone('unmount', [drive.remote])
+			await runRclone('unmount', [drive.remote])
 			const systemMountPath = this.#livinityd.files.virtualToSystemPathUnsafe(drive.mountPath)
 			await fse.rmdir(systemMountPath).catch(() => {})
 			this.mountedDrives.delete(drive.mountPath)
@@ -248,6 +299,58 @@ export default class CloudStorage {
 		return drive
 	}
 
+	// Persist an already-DEK-encrypted drive (the cloudDriveAdd wizard "finish" step
+	// builds + encrypts the rclone.conf section in the route layer), then mount it.
+	// Fail-soft: a persisted-but-unmounted drive is retried by the 60s watch loop.
+	async addEncryptedDrive(input: {
+		remote: string
+		backend: CloudBackend
+		mountPath: string
+		configBlob: string
+	}): Promise<{added: boolean; mounted: boolean; reason?: string}> {
+		assertValidRemoteName(input.remote)
+		const drive: CloudDrive = {
+			remote: input.remote,
+			backend: input.backend,
+			mountPath: input.mountPath,
+			configBlob: input.configBlob,
+			enabled: true,
+		}
+		await this.#livinityd.store.getWriteLock(async ({set}) => {
+			const drives = await this.getDrives()
+			const next = drives.filter((d) => d.remote !== drive.remote)
+			next.push(drive)
+			await set('cloudDrives', next)
+		})
+		try {
+			await this.#mountDrive(drive)
+			return {added: true, mounted: true}
+		} catch (error) {
+			this.logger.error(`Cloud drive ${drive.remote} persisted but initial mount failed`, error)
+			return {added: true, mounted: false, reason: String(error)}
+		}
+	}
+
+	// Mount a configured drive by remote name (route: cloudDriveMount).
+	async mountByRemote(remote: string): Promise<{ok: boolean; reason?: string}> {
+		assertValidRemoteName(remote)
+		const drive = await this.getDrive(remote)
+		try {
+			await this.#mountDrive(drive)
+			return {ok: true}
+		} catch (error) {
+			return {ok: false, reason: String(error)}
+		}
+	}
+
+	// Unmount a configured drive by remote name (route: cloudDriveUnmount).
+	async unmountByRemote(remote: string): Promise<{ok: boolean}> {
+		assertValidRemoteName(remote)
+		const drive = await this.getDrive(remote)
+		await this.#unmountDrive(drive)
+		return {ok: true}
+	}
+
 	// Remove a drive: unmount, then drop it from the store.
 	async removeDrive(remote: string): Promise<boolean> {
 		assertValidRemoteName(remote)
@@ -261,51 +364,5 @@ export default class CloudStorage {
 			)
 		})
 		return true
-	}
-
-	// ── privileged wrapper invocation (never-throw, secret-safe) ────────────────
-	// Task 1 self-contained mount/unmount path; Task 2 (324-05) wires config-write +
-	// the DEK-decrypted rclone.conf regen + RCLONE_CONFIG_PASS-via-ENV in front of the
-	// mount call. Kept private so the class owns its own privileged surface (the
-	// network-storage inline-$ idiom). Secrets are NEVER placed in `args`.
-	async #invokeRclone(
-		action: 'mount' | 'unmount' | 'status',
-		args: string[] = [],
-	): Promise<{ok: true; stdout: string} | {ok: false; reason: string}> {
-		return new Promise((resolve) => {
-			const timeoutMs = 300_000
-			let settled = false
-			let stdout = ''
-			let stderr = ''
-			const settle = (result: {ok: true; stdout: string} | {ok: false; reason: string}): void => {
-				if (settled) return
-				settled = true
-				clearTimeout(timer)
-				resolve(result)
-			}
-			const child = spawn('sudo', ['-n', RCLONE_WRAPPER, action, ...args], {
-				stdio: ['ignore', 'pipe', 'pipe'],
-				windowsHide: true,
-			})
-			const timer = setTimeout(() => {
-				try {
-					child.kill('SIGTERM')
-				} catch {
-					/* best-effort */
-				}
-				settle({ok: false, reason: `timeout after ${timeoutMs}ms`})
-			}, timeoutMs)
-			child.stdout?.on('data', (chunk: Buffer) => {
-				stdout += chunk.toString('utf8')
-			})
-			child.stderr?.on('data', (chunk: Buffer) => {
-				stderr += chunk.toString('utf8')
-			})
-			child.on('error', (err: Error) => settle({ok: false, reason: err.message || 'sudo spawn failed'}))
-			child.on('close', (code) => {
-				if (code === 0) return settle({ok: true, stdout})
-				settle({ok: false, reason: stderr.trim().slice(0, 500) || `wrapper exited with code ${code ?? 'unknown'}`})
-			})
-		})
 	}
 }

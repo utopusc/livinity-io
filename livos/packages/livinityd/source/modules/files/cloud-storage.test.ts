@@ -6,6 +6,7 @@ import {
 	assertValidRemoteName,
 	cloudMountPath,
 	renderRcloneConfigSection,
+	buildAuthorizeInstructions,
 } from './cloud-storage.js'
 
 // Phase 324-05 (FILES-03, D-12/D-13/D-14) — OFFLINE unit coverage for the PURE
@@ -102,6 +103,22 @@ describe('renderRcloneConfigSection() — on-demand rclone.conf regen (samba app
 		expect(() =>
 			renderRcloneConfigSection({remote: 'a/b', backend: 'drive', token: '{}'}),
 		).toThrow('[invalid-remote-name]')
+	})
+})
+
+describe('buildAuthorizeInstructions() — the D-13 two-machine copy-paste wizard', () => {
+	test('surfaces the guaranteed two-machine `rclone authorize` fallback for a backend', () => {
+		const text = buildAuthorizeInstructions('drive')
+		expect(text).toContain('rclone authorize')
+		expect(text).toContain('drive')
+		// The whole point of D-13: a machine WITH a browser runs authorize, the token
+		// is pasted back — so the instructions must mention a browser + copy/paste.
+		expect(text.toLowerCase()).toContain('browser')
+		expect(text.toLowerCase()).toContain('paste')
+	})
+
+	test('rejects a backend outside the wrapper allowlist', () => {
+		expect(() => buildAuthorizeInstructions('ftp' as any)).toThrow('[invalid-backend]')
 	})
 })
 
