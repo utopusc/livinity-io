@@ -3760,6 +3760,96 @@ else
     info "sudoers.d/livos-samba-user source not found — skipping (per-user Samba unavailable)"
 fi
 
+# ── Step 7.10n: Phase 318 (POOL-02/POOL-04) — storage-pooling provisioning (mergerfs/snapraid + sudoers.d/livos-pool + wrapper) ──
+# The livos-pool NOPASSWD grant + the root-owned pooling wrapper (pinned mergerfs/snapraid
+# install + disk format/wipe/mount + snapraid verbs, with an in-script THREE-gate device-
+# safety guard: device-shape regex + _refuse_system_disk (/ AND /boot AND /boot/efi) +
+# _refuse_non_internal (usb/removable) on EVERY destructive action) must reach ALREADY-
+# DEPLOYED boxes on Update, not just fresh installs — the kopia-missing-from-deploy backups
+# bug is the standing cautionary tale (Trap 13 / D-02). Mirrors Step 7.10m (livos-rclone)
+# VERBATIM (content-diff + visudo validate-or-remove), retargeted to livos-pool, and ALSO
+# carries the mergerfs/snapraid engine install (delegated to the wrapper's `install` action).
+# Fully fail-tolerant: a missing source or a visudo rejection never aborts the Update.
+step "Phase 318 (POOL-02/POOL-04): storage-pooling provisioning (mergerfs/snapraid + sudoers.d/livos-pool + install wrapper)"
+
+_set_desktop_identity   # Phase 277.1 — self-derive the desktop user (no literal bruce)
+
+# --- (a0) livos-pool.sh wrapper — install BEFORE the grant ---
+# The livos-pool grant (a) is on this ONE root-owned binary; the wrapper validates a fixed
+# action enum {install|list-eligible|create-pool|add-disk|format-disk|mount|mount-data-disk|
+# unmount|write-snapraid-conf|snapraid|replace-*} and builds every apt/curl/mkfs/mount argv +
+# re-validates every target device (3 gates) itself.
+_POOL_WRAP_SRC="$LIVOS_DIR/scripts/install/livos-pool.sh"
+if [[ ! -f "$_POOL_WRAP_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _POOL_WRAP_SRC="$TEMP_DIR/scripts/install/livos-pool.sh"
+fi
+_POOL_WRAP_DST="/usr/local/lib/livos/livos-pool.sh"
+if [[ -f "$_POOL_WRAP_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_POOL_WRAP_DST" ]] || ! cmp -s "$_POOL_WRAP_SRC" "$_POOL_WRAP_DST"; then
+        if install -m 0755 -o root -g root "$_POOL_WRAP_SRC" "$_POOL_WRAP_DST"; then
+            ok "livos-pool.sh installed at $_POOL_WRAP_DST"
+        else
+            warn "Failed to install livos-pool.sh (non-fatal — storage pooling unavailable until fixed)"
+        fi
+    else
+        info "livos-pool.sh already current"
+    fi
+else
+    info "livos-pool.sh source not found — skipping (storage pooling unavailable)"
+fi
+
+# --- (a1) mergerfs + snapraid engine — pinned install via the wrapper's `install` action ---
+# Day-2 boxes need the engine too (Trap 13). Delegate to the SAME wrapper install path the
+# fresh deploy + guided Settings install use (one maintenance surface). We are root here, so
+# the wrapper runs directly (no sudo); the `if` context keeps a non-zero exit non-fatal.
+if command -v mergerfs >/dev/null 2>&1 && command -v snapraid >/dev/null 2>&1; then
+    info "mergerfs + snapraid already installed"
+elif [[ -x "$_POOL_WRAP_DST" ]]; then
+    info "Installing mergerfs 2.42.0 + snapraid 14.8 (storage-pooling engine)"
+    if bash "$_POOL_WRAP_DST" install; then
+        ok "storage-pooling engine installed"
+    else
+        warn "mergerfs/snapraid install FAILED — pooling stays unavailable until the guided Settings install succeeds"
+    fi
+else
+    info "livos-pool.sh not installed — skipping storage-pooling engine (pooling unavailable)"
+fi
+
+# --- (a) sudoers.d/livos-pool — install + template the subject to the desktop user ---
+# Grants the single Cmnd_Alias LIVINITYD_POOL = /usr/local/lib/livos/livos-pool.sh (no glob).
+_POOL_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-pool"
+if [[ ! -f "$_POOL_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _POOL_SUDOERS_SRC="$TEMP_DIR/scripts/install/sudoers.d/livos-pool"
+fi
+_POOL_SUDOERS_DST="/etc/sudoers.d/livos-pool"
+if [[ -f "$_POOL_SUDOERS_SRC" ]]; then
+    _POOL_SUDOERS_TMP=$(mktemp)
+    if [[ "$_DESKTOP_USER" != "bruce" ]]; then
+        sed -E "s/^bruce([[:space:]]+ALL=)/${_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DESKTOP_USER})/g" \
+            "$_POOL_SUDOERS_SRC" > "$_POOL_SUDOERS_TMP"
+    else
+        cp -f "$_POOL_SUDOERS_SRC" "$_POOL_SUDOERS_TMP"
+    fi
+    if [[ ! -f "$_POOL_SUDOERS_DST" ]] || ! cmp -s "$_POOL_SUDOERS_TMP" "$_POOL_SUDOERS_DST"; then
+        install -m 0440 -o root -g root "$_POOL_SUDOERS_TMP" "$_POOL_SUDOERS_DST"
+        # SAFETY-CRITICAL: a malformed sudoers file can break sudo system-wide.
+        # Validate the INSTALLED file; if visudo rejects it, REMOVE it (storage pooling
+        # stays denied — the prior state — rather than risk broken sudo).
+        if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_POOL_SUDOERS_DST" >/dev/null 2>&1; then
+            warn "visudo rejected $_POOL_SUDOERS_DST — removing (storage pooling stays denied until fixed)"
+            rm -f "$_POOL_SUDOERS_DST"
+        else
+            ok "sudoers.d/livos-pool installed (subject: ${_DESKTOP_USER})"
+        fi
+    else
+        info "sudoers.d/livos-pool already current (subject: ${_DESKTOP_USER})"
+    fi
+    rm -f "$_POOL_SUDOERS_TMP"
+else
+    info "sudoers.d/livos-pool source not found — skipping (storage pooling unavailable)"
+fi
+
 # ── Step 7.11: Phase 306 — desktop-user password helper (wrapper + sudoers + bootstrap) ──
 # The "Regenerate" button on the Desktop password row in Settings → Account calls
 # livinityd's system.regenerateDesktopPassword, which runs
