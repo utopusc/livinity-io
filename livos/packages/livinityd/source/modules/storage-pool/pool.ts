@@ -79,7 +79,12 @@ export type FreezeThreshold = {files: number; percent: number}
 
 // The last persisted `snapraid status` summary — the W-2 source for the freeze
 // gate's percentage leg. Written by 318-07's sync/scrub handlers after each run.
-export type PoolStatusSummary = {protectedFileCount: number; scrubOldestDays?: number; at: number}
+// protectedFileCount is OPTIONAL (WR-01): it is populated ONLY from a real
+// protected-file total. It must NEVER be derived from the data-branch count — that
+// tiny denominator (typically 2) made the freeze-gate percentage leg trip on a
+// single deletion. Absent → the percentage leg is skipped (absolute-count leg still
+// protects) until a genuine file-count source exists.
+export type PoolStatusSummary = {protectedFileCount?: number; scrubOldestDays?: number; at: number}
 
 export type StoragePoolState = {
 	members: PoolMember[]

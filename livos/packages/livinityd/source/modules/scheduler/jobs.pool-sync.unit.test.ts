@@ -131,11 +131,17 @@ describe('poolSyncHandler — D-08 freeze gate + D-09 alerts', () => {
 
 		expect(result.status).toBe('success')
 		expect(mockSync).toHaveBeenCalledTimes(1)
-		// W-2: lastStatusSummary persisted for the NEXT freeze-gate percentage leg.
+		// W-2 + WR-01: lastStatusSummary persists the scrub age, but protectedFileCount
+		// is NOT derived from the branch count (that tiny denominator froze the sync on
+		// any deletion). It must be absent so the percentage leg stays skipped.
 		expect(set).toHaveBeenCalledWith(
 			'storagePool',
-			expect.objectContaining({lastStatusSummary: expect.objectContaining({protectedFileCount: 2, scrubOldestDays: 5})}),
+			expect.objectContaining({lastStatusSummary: expect.objectContaining({scrubOldestDays: 5})}),
 		)
+		const persisted = set.mock.calls.find(([key]) => key === 'storagePool')?.[1] as {
+			lastStatusSummary?: {protectedFileCount?: number}
+		}
+		expect(persisted?.lastStatusSummary?.protectedFileCount).toBeUndefined()
 		// Recovery: freeze + both per-member degradation alerts + branch-missing all cleared.
 		expect(clear).toHaveBeenCalledWith('pool-sync-frozen')
 		expect(clear).toHaveBeenCalledWith('pool-degraded:sdb')
@@ -143,6 +149,29 @@ describe('poolSyncHandler — D-08 freeze gate + D-09 alerts', () => {
 		expect(clear).toHaveBeenCalledWith('pool-branch-missing')
 		// A clean pool raises NO degradation alert.
 		expect(add).not.toHaveBeenCalledWith('pool-branch-missing', expect.anything())
+	})
+
+	test('WR-01: removed=1 on a synced 2-disk pool does NOT freeze (branch count is not a file count)', async () => {
+		// Regression for WR-01: a prior sync persisted lastStatusSummary WITHOUT a
+		// protectedFileCount (WR-01 no longer derives it from the 2 branches). A single
+		// deletion must NOT trip the percentage leg — the sync runs normally.
+		resetSnapraid()
+		mockDiff.mockResolvedValue({counts: {added: 0, removed: 1, updated: 0, moved: 0}, exit: 'diff'})
+		mockSync.mockResolvedValue({errorIo: 0, errorData: 0, errorSoft: 0, exit: 'ok'})
+		mockStatus.mockResolvedValue({scrubOldestDays: 4, diskUsePercent: {d2: 10, d3: 20}, exit: 'ok'})
+		// A synced 2-disk protected pool whose last summary has NO protectedFileCount.
+		const {livinityd, add} = makeLivinityd({
+			...protectedState(),
+			lastStatusSummary: {at: 1, scrubOldestDays: 4}, // no protectedFileCount (WR-01)
+		})
+
+		const result = await poolSyncHandler(fakeJob, {logger: fakeLogger, livinityd})
+
+		expect(result.status).toBe('success')
+		// The sync RAN — not frozen — despite a deletion on a 2-branch pool.
+		expect(mockSync).toHaveBeenCalledTimes(1)
+		expect((result.output as {frozen?: boolean}).frozen).toBeUndefined()
+		expect(add).not.toHaveBeenCalledWith('pool-sync-frozen', expect.anything())
 	})
 
 	test('DEGRADED MEMBER: a branch missing from status → pool-degraded:<id> + pool-branch-missing raised', async () => {

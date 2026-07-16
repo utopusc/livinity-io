@@ -923,17 +923,17 @@ async function evaluatePoolHealth(
 	return {degraded, branchMissing}
 }
 
-// Persist storagePool.lastStatusSummary from a fresh `snapraid status` parse —
-// the W-2 protected-file-count source for the NEXT freeze-gate percentage leg.
-// diskUsePercent has no absolute file count, so protectedFileCount is derived as
-// the number of reported data branches (a coarse, count-only proxy that is safe
-// for the absolute-first gate; when 0 the percentage leg is skipped by W-2). The
-// scrub age is carried straight through for the UI badge.
+// Persist storagePool.lastStatusSummary from a fresh `snapraid status` parse.
+// WR-01: `snapraid status`'s diskUsePercent carries NO absolute file count, so we
+// DELIBERATELY leave protectedFileCount UNDEFINED here — deriving it from the
+// data-branch count (typically 2) made the freeze-gate percentage leg trip on a
+// single deletion (removed/2 > 20% ⇒ any removed ≥ 1 froze the sync). With it
+// absent, checkFreezeGate skips the percentage leg and relies on the absolute-count
+// leg only, until a genuine protected-file total is parsed (e.g. a `Files:` line
+// from status, or a persisted diff running total). The scrub age is carried
+// straight through for the UI badge.
 function statusSummaryFrom(status: StatusResult): PoolStatusSummary {
-	const summary: PoolStatusSummary = {
-		protectedFileCount: Object.keys(status.diskUsePercent ?? {}).length,
-		at: Date.now(),
-	}
+	const summary: PoolStatusSummary = {at: Date.now()}
 	if (status.scrubOldestDays != null) summary.scrubOldestDays = status.scrubOldestDays
 	return summary
 }
