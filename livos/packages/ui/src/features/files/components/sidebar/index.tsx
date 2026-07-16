@@ -6,6 +6,7 @@ import {AnimatePresence, motion} from 'framer-motion'
 
 import {SidebarRewind} from '@/features/files/components/rewind'
 import {SidebarApps} from '@/features/files/components/sidebar/sidebar-apps'
+import {SidebarCloudStorage} from '@/features/files/components/sidebar/sidebar-cloud-storage'
 import {SidebarExternalStorage} from '@/features/files/components/sidebar/sidebar-external-storage'
 import {SidebarFavorites} from '@/features/files/components/sidebar/sidebar-favorites'
 import {SidebarHome} from '@/features/files/components/sidebar/sidebar-home'
@@ -38,6 +39,7 @@ export function Sidebar({className}: {className?: string}) {
 	const showNetwork = !hidden.network
 	const showExternal =
 		isExternalStorageSupported && !hidden.external && !isLoadingExternalStorage && !!disks && disks.length > 0
+	const showCloud = !hidden.cloud
 	const showTrash = !hidden.trash
 	const showRewind = !hidden.rewind
 
@@ -100,6 +102,16 @@ export function Sidebar({className}: {className?: string}) {
 						</motion.div>
 					)}
 				</AnimatePresence>
+
+				{/* Cloud Drives (FILES-03) — always shows the /Cloud root + "Add Cloud Drive" */}
+				{showCloud && (
+					<>
+						<SidebarDivider />
+						<SidebarSection label={t('files-clouddrive.sidebar-label')}>
+							<SidebarCloudStorage />
+						</SidebarSection>
+					</>
+				)}
 
 				{/* Storage */}
 				<SidebarDivider />

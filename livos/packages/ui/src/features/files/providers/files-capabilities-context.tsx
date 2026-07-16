@@ -25,6 +25,7 @@ export type FilesCapabilities = {
 	hiddenSidebarItems?: {
 		network?: boolean
 		external?: boolean
+		cloud?: boolean
 		trash?: boolean
 		rewind?: boolean
 	}

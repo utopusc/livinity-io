@@ -21,6 +21,8 @@ export type FilesDialogKey =
 	// FILES-01 (324-07) — public share-link mint dialog. DISTINCT from the Samba
 	// `files-share-info` key: this opens the NEW `public-share-dialog/`.
 	| 'files-public-share'
+	// FILES-03 (324-09) — guided add-cloud-drive authorize wizard (rclone remotes).
+	| 'files-clouddrive'
 export type DialogKey = GlobalDialogKey | AppStoreDialogKey | SettingsDialogKey | FilesDialogKey
 
 /**

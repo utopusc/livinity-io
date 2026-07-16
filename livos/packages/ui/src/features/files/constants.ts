@@ -34,6 +34,9 @@ export const TRASH_PATH = '/Trash' as const
 export const APPS_PATH = '/Apps' as const
 export const EXTERNAL_STORAGE_PATH = '/External' as const
 export const NETWORK_STORAGE_PATH = '/Network' as const
+// FILES-03 (324-05/324-09) — the writable `/Cloud` base directory that hosts the
+// rclone FUSE mounts (`/Cloud/<remote>`) surfaced by the Cloud Drives sidebar.
+export const CLOUD_STORAGE_PATH = '/Cloud' as const
 export const BACKUPS_PATH = '/Backups' as const
 
 // NOTE: Search and Recents are not real directories on disk. They are

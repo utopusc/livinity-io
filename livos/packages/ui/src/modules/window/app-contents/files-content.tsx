@@ -37,6 +37,8 @@ const FormatDriveDialog = lazy(() => import('@/features/files/components/dialogs
 const EncryptedFolderDialog = lazy(() => import('@/features/files/components/dialogs/encrypted-folder-dialog'))
 // FILES-01 (324-07) — NEW public share-link mint dialog (distinct from ShareInfoDialog).
 const PublicShareDialog = lazy(() => import('@/features/files/components/dialogs/public-share-dialog'))
+// FILES-03 (324-09) — NEW guided add-cloud-drive authorize wizard.
+const AddCloudDriveDialog = lazy(() => import('@/features/files/components/dialogs/add-cloud-drive-dialog'))
 
 type FilesWindowContentProps = {
 	initialRoute: string
@@ -244,6 +246,9 @@ function FilesWindowRouter({
 					</Suspense>
 					<Suspense>
 						<PublicShareDialog />
+					</Suspense>
+					<Suspense>
+						<AddCloudDriveDialog />
 					</Suspense>
 				</RewindOverlayProvider>
 			</FilesDndWrapper>
