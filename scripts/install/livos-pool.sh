@@ -537,36 +537,48 @@ case "$ACTION" in
 		;;
 
 	snapraid)
-		# Run snapraid with the caller-supplied verbs/flags (each charset-validated) always
+		# Run snapraid with the caller-supplied verb + a STRICT allowlist of verb-flags, always
 		# with --conf /etc/snapraid.conf + --log ">&1" (D-04 structured-tag parsing contract).
 		#
-		# WR-04 HARDENING: the wrapper injects BOTH --conf and --log itself and a caller may
-		# NOT override either. snapraid honours the LAST --conf on the line, so a permitted
-		# `snapraid --conf /tmp/evil.conf fix` would let a grant-holder point snapraid at an
-		# attacker-controlled config and get root-level file writes via `fix` into arbitrary
-		# `data` paths. We therefore (a) require the first token to be a known verb, and
-		# (b) refuse ANY long option (--conf/--log/--filter/…), any `--` sentinel, and any
-		# path-like token. livinityd's snapraid-cli only ever forwards a verb + short verb
-		# flags (-p <n> / -d <label>), never a long option or a path, so this is a no-op for
-		# the legitimate caller and a hard stop for a buggy/compromised one.
+		# WR-04 + NEW-01 HARDENING: the wrapper injects BOTH --conf and --log itself and a
+		# caller may NOT override either, nor reach ANY other file. snapraid honours the LAST
+		# --conf/-c on the line, so a permitted `snapraid -c evil.conf fix` (or the long
+		# `--conf`) would let a grant-holder point snapraid at an attacker-controlled config and
+		# get root-level writes via `fix` into arbitrary `data` paths. Rejecting only `--*`
+		# long options (WR-04) left the equivalent SHORT aliases open — `-c`=--conf, `-l`=--log,
+		# plus `-C`/`-F`/… — since a single-dash CWD-relative filename passes an `--*`-only /
+		# `*/*`-only filter (NEW-01). We therefore ALLOWLIST instead of blocklist: (a) the first
+		# token MUST be a known verb, and (b) the ONLY tokens permitted after it are
+		# `-d <label>` (disk scope) and `-p <percent|new>` (scrub scope), each with a
+		# charset-validated value; ANY other token — short OR long option, path, sentinel — is
+		# refused. livinityd's snapraid-cli only ever forwards `<verb>`, `-d <label>`, or
+		# `-p <int>`, so this is a no-op for the legitimate caller and a hard stop for a
+		# buggy/compromised one.
 		case "${1:-}" in
 			diff|sync|scrub|status|check|fix) ;;
 			*) echo "[livos-pool] snapraid: first arg must be a known verb (diff|sync|scrub|status|check|fix), got: '${1:-}'" >&2; exit 2 ;;
 		esac
-		for _a in "$@"; do
-			_valid_snapraid_arg "$_a" || { echo "[livos-pool] invalid snapraid arg: '$_a'" >&2; exit 2; }
-			# Refuse every long option (starts with `--`) and the bare `--` sentinel — this
-			# blocks --conf / --log / --filter and anything else that could redirect the run.
-			case "$_a" in
-				--*) echo "[livos-pool] snapraid: refusing long option / sentinel '$_a' (config + log paths are fixed)" >&2; exit 2 ;;
-			esac
-			# Refuse any path-like token (contains a slash) — snapraid labels are dN, never
-			# paths; a slash-bearing arg is only ever an attempt to reach an arbitrary file.
-			case "$_a" in
-				*/*) echo "[livos-pool] snapraid: refusing path-like argument '$_a'" >&2; exit 2 ;;
+		# Build the forwarded argv from the verb + only allowlisted flag pairs. The array always
+		# holds at least the verb, so its expansion is never empty (safe under `set -u`).
+		_sr_argv=("$1"); shift
+		while [[ $# -gt 0 ]]; do
+			case "$1" in
+				-d)
+					[[ -n "${2:-}" ]] || { echo "[livos-pool] snapraid: -d needs a <label> value" >&2; exit 2; }
+					_valid_disk_name "$2" || { echo "[livos-pool] snapraid: invalid -d disk label '$2'" >&2; exit 2; }
+					_sr_argv+=("-d" "$2"); shift 2 ;;
+				-p)
+					[[ -n "${2:-}" ]] || { echo "[livos-pool] snapraid: -p needs a <percent|new> value" >&2; exit 2; }
+					[[ "$2" =~ ^([0-9]+|new)$ ]] || { echo "[livos-pool] snapraid: invalid -p scrub value '$2' (expected an integer percent or 'new')" >&2; exit 2; }
+					_sr_argv+=("-p" "$2"); shift 2 ;;
+				*)
+					# Everything else — including the short config/log aliases -c/-C/-l/-F, any
+					# other short or long option, path, or `--` sentinel — is refused. Config +
+					# log paths are fixed and injected below; nothing else may be reached.
+					echo "[livos-pool] snapraid: refusing argument '$1' (only '-d <label>' and '-p <percent|new>' are permitted after the verb; config + log paths are fixed)" >&2; exit 2 ;;
 			esac
 		done
-		exec snapraid --conf "$SNAPRAID_CONF" --log ">&1" "$@"
+		exec snapraid --conf "$SNAPRAID_CONF" --log ">&1" "${_sr_argv[@]}"
 		;;
 
 	replace-fix)
