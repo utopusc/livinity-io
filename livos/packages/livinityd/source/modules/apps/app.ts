@@ -21,10 +21,12 @@ import {reconcileAppVolumeOwnership} from './reconcile-volume-ownership.js'
 import {pollContainerHealth} from './health-poll.js'
 import {
 	resolveJellyfinHwAccel,
+	resolveJellyfinPermissions,
 	seedEncodingXml,
 	ensureNvidiaVideoCap,
 	precreateMediaFolders,
 } from './jellyfin-preconfig.js'
+import {getBuiltinApp} from './builtin-apps.js'
 import {deriveOidcClientSecret as deriveOidcSecret} from '../oidc/clients.js'
 import {provisionOidcForApp, type ProvisionResult} from '../oidc/provisioning.js'
 import {getKey, encrypt, decrypt} from '../secrets/dek.js'
@@ -164,7 +166,35 @@ export default class App {
 		// `resolveWantsGpu` helper is the single source of truth (IN-04 reuses it
 		// in listAppsWithGpuAccess). The NVIDIA probes never throw (degrade to false).
 		const gpuAccessOverride = await this.store.get('gpuAccess')
-		const wantsGpu = resolveWantsGpu(gpuAccessOverride, manifest.permissions)
+		// 331-03 (FIX-03): catalog-precedence guard. shouldPreferCatalog('jellyfin')
+		// is true, so a platform-DB catalog template can shadow the builtin manifest —
+		// a catalog manifest with NO `permissions` field silently strips the builtin's
+		// GPU permission and makes the whole MEDIA-02 preconfig inert (329-11 caveat #5).
+		// resolveJellyfinPermissions falls back to the builtin permission when the
+		// field was dropped, and flags an EXPLICIT catalog non-GPU choice so it is
+		// surfaced (notification below), never silent. Every other app is untouched.
+		let gpuPermissions = manifest.permissions
+		if (this.id === 'jellyfin') {
+			const resolution = resolveJellyfinPermissions(manifest.permissions, getBuiltinApp('jellyfin')?.permissions)
+			gpuPermissions = resolution.permissions
+			if (resolution.shadowFallback) {
+				this.logger.log(
+					'[jellyfin-preconfig] installed manifest carries no permissions field (catalog template in effect) — using the builtin GPU permission so preconfig is not silently inert (331-03)',
+				)
+			}
+			if (resolution.explicitSkip) {
+				this.logger.log(
+					'[warn] [jellyfin-preconfig] catalog template in effect with an explicit non-GPU permissions list — GPU preconfig skipped (331-03)',
+				)
+				// Fail-soft: a notification-store hiccup must never abort a compose patch.
+				await this.#livinityd.notifications
+					.add('jellyfin-catalog-gpu-preconfig-skipped', {severity: 'warning'})
+					.catch(() => {})
+			} else {
+				await this.#livinityd.notifications.clear('jellyfin-catalog-gpu-preconfig-skipped').catch(() => {})
+			}
+		}
+		const wantsGpu = resolveWantsGpu(gpuAccessOverride, gpuPermissions)
 		const nvidiaToolkitInstalled = wantsGpu ? await isNvidiaToolkitConfigured() : false
 
 		// 330 CR-01 (GPU-03/GPU-05): a SINGLE WSL2-aware composite probe drives BOTH

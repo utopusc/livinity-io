@@ -33,6 +33,50 @@ import {$} from 'execa'
 // Jellyfin's EncodingOptions.cs): vaapi | qsv | nvenc | amf | none.
 export type JellyfinHwAccel = 'nvenc' | 'vaapi' | 'qsv' | 'amf'
 
+// 331-03 (FIX-03) — the catalog-precedence guard. `shouldPreferCatalog('jellyfin')`
+// is true, so a platform-DB catalog template can shadow the builtin manifest at
+// install; a catalog manifest that carries NO `permissions` field silently strips
+// the builtin's `permissions:['GPU']`, making resolveWantsGpu false and the whole
+// MEDIA-02 preconfig inert (329-11 SUMMARY caveat #5). Resolution:
+//  - manifest HAS a GPU token → passthrough (nothing shadowed).
+//  - manifest has NO `permissions` field at all → the catalog dropped the metadata;
+//    fall back to the builtin's permissions (`shadowFallback`) so GPU preconfig
+//    still seeds — the "still seeds the GPU fields" arm of FIX-03.
+//  - manifest HAS a `permissions` list but WITHOUT any GPU token → an explicit
+//    catalog choice; RESPECT it but flag `explicitSkip` so the caller surfaces a
+//    "catalog template in effect; GPU preconfig skipped" notice — never silent.
+const GPU_PERMISSION_TOKENS = ['GPU', 'GPU-NVIDIA'] as const
+
+export type JellyfinPermissionResolution = {
+	permissions: string[] | undefined
+	shadowFallback: boolean
+	explicitSkip: boolean
+}
+
+export function resolveJellyfinPermissions(
+	manifestPermissions: string[] | undefined,
+	builtinPermissions: string[] | undefined,
+): JellyfinPermissionResolution {
+	const hasGpuToken = (perms: string[] | undefined) =>
+		GPU_PERMISSION_TOKENS.some((token) => perms?.includes(token) ?? false)
+	if (hasGpuToken(manifestPermissions)) {
+		return {permissions: manifestPermissions, shadowFallback: false, explicitSkip: false}
+	}
+	if (manifestPermissions === undefined) {
+		return {
+			permissions: builtinPermissions,
+			shadowFallback: hasGpuToken(builtinPermissions),
+			explicitSkip: false,
+		}
+	}
+	// Explicit permissions list without a GPU token — respect the catalog author.
+	return {
+		permissions: manifestPermissions,
+		shadowFallback: false,
+		explicitSkip: hasGpuToken(builtinPermissions),
+	}
+}
+
 interface Logger {
 	log: (message: string) => void
 }
