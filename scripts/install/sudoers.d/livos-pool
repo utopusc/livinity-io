@@ -1,0 +1,11 @@
+# Phase 318 (POOL-02 / POOL-04) — sudoers grant for the storage-pooling wrapper.
+# Security model: grant on ONE explicit binary path, NO glob, NO arg wildcard.
+# The wrapper validates its action enum
+# {install|list-eligible|create-pool|add-disk|format-disk|mount|mount-data-disk|unmount|write-snapraid-conf|snapraid|replace-fix|replace-check|replace-sync},
+# builds the pinned+sha256-verified mergerfs/snapraid downloads itself, owns every
+# mkfs/wipefs/parted/mount argv, and re-validates every target device INSIDE the script
+# against three gates (device-shape + OS-disk refusal + USB/removable refusal) — so no
+# caller-supplied string can format the OS disk or a removable device (318-CONTEXT D-17).
+# Deploy: deploy-livinityd.sh block 2a/2b-storage-pool; day-2: update.sh Step 7.10n.
+Cmnd_Alias LIVINITYD_POOL = /usr/local/lib/livos/livos-pool.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_POOL

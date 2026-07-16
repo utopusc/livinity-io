@@ -224,6 +224,32 @@ _dld_install_system_packages() {
     fi
     mkdir -p /kopia/config /kopia/cache
 
+    # ── Phase 318 (POOL-02/POOL-04): mergerfs + snapraid storage-pooling engine ──
+    # The storage-pool module shells out (via the livos-pool.sh wrapper) to `mergerfs`
+    # (FUSE union pool) + `snapraid` (async parity). Both are absent from stock Ubuntu, so
+    # the deploy must install them — pinned native ubuntu-noble/jammy .debs + sha256 verify,
+    # mirroring the kopia block above (arch+codename case, warn-not-fail, idempotent). arm64
+    # snapraid has NO prebuilt asset → build from the pinned source tarball (deps from the
+    # unconditional build-essential above). We delegate to the SAME wrapper `install` action
+    # that the guided path uses (one maintenance surface — the two can never diverge). We are
+    # already root here, so the wrapper runs directly (no sudo); the `if` context keeps a
+    # non-zero wrapper exit non-fatal. Missing this on deploy is the kopia-missing-from-deploy
+    # backups bug (Trap 13) — BOTH deploy AND update.sh (Step 7.10n) carry it.
+    _poolwrap_stage="${_DLD_STAGE_DIR}/scripts/install/livos-pool.sh"
+    [[ -f "$_poolwrap_stage" ]] || _poolwrap_stage="${_DLD_LIVOS_DIR}/scripts/install/livos-pool.sh"
+    if command -v mergerfs >/dev/null 2>&1 && command -v snapraid >/dev/null 2>&1; then
+        ok "mergerfs + snapraid already installed"
+    elif [[ -f "$_poolwrap_stage" ]]; then
+        info "Installing mergerfs ${MERGERFS_POOL_VER:-2.42.0} + snapraid 14.8 (storage-pooling engine)"
+        if bash "$_poolwrap_stage" install; then
+            ok "storage-pooling engine installed: $(mergerfs --version 2>/dev/null | head -1 || echo mergerfs) / $(snapraid --version 2>/dev/null | head -1 || echo snapraid)"
+        else
+            warn "mergerfs/snapraid install FAILED — pooling stays unavailable until the guided Settings install succeeds"
+        fi
+    else
+        warn "livos-pool.sh source not found — skipping storage-pooling engine (pooling unavailable)"
+    fi
+
     # ── Phase 256-01 (WS-A): egress allowlist proxy for the bwrap'd agent ──────
     # tinyproxy default-deny + hostname allowlist. The agent's bwrap child gets
     # HTTPS_PROXY=http://127.0.0.1:13128 (set in sandbox.ts buildScrubbedEnv) so
@@ -3611,6 +3637,60 @@ _dld_template_app_units() {
         rm -f "$_sambau_tmp"
     else
         info "sudoers.d/livos-samba-user source not found — skipping (per-user Samba unavailable)"
+    fi
+
+    # 2a-storage-pool. Phase 318 (POOL-02/POOL-04) — root-owned storage-pooling wrapper
+    # (pinned mergerfs/snapraid install + disk format/wipe/mount + snapraid verbs, with an
+    # in-script THREE-gate device-safety guard: device-shape regex + _refuse_system_disk
+    # (/ AND /boot AND /boot/efi) + _refuse_non_internal (usb/removable) on EVERY destructive
+    # action). The livos-pool sudoers grant (2b-storage-pool below) is on THIS binary only;
+    # the wrapper validates a fixed action enum and builds every mkfs/wipefs/mount argv itself,
+    # so no caller string can format the OS disk. Install it BEFORE the grant. Idempotent
+    # (content-diffed), byte-for-byte parallel to the livos-samba-user wrapper block above.
+    local _poolwrap_src="${_DLD_STAGE_DIR}/scripts/install/livos-pool.sh"
+    [[ -f "$_poolwrap_src" ]] || _poolwrap_src="${_DLD_LIVOS_DIR}/scripts/install/livos-pool.sh"
+    local _poolwrap_dst="/usr/local/lib/livos/livos-pool.sh"
+    if [[ -f "$_poolwrap_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_poolwrap_dst" ]] || ! cmp -s "$_poolwrap_src" "$_poolwrap_dst"; then
+            if install -m 0755 -o root -g root "$_poolwrap_src" /usr/local/lib/livos/livos-pool.sh; then
+                ok "livos-pool.sh installed at $_poolwrap_dst"
+            else
+                warn "Failed to install livos-pool.sh (non-fatal; storage pooling unavailable until fixed)"
+            fi
+        fi
+    else
+        info "livos-pool.sh source not found — skipping (storage pooling unavailable)"
+    fi
+
+    # 2b-storage-pool. Phase 318 (POOL-02/POOL-04) — sudoers.d/livos-pool (pool wrapper grant)
+    # — install + template. Byte-for-byte parallel to the livos-samba-user block above,
+    # retargeted at livos-pool. Runs on EVERY deploy (idempotent, content-diffed).
+    # Wrapper install (0755) BEFORE grant install (0440).
+    local _pool_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-pool"
+    [[ -f "$_pool_src" ]] || _pool_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-pool"
+    local _pool_dst="/etc/sudoers.d/livos-pool"
+    if [[ -f "$_pool_src" ]]; then
+        local _pool_tmp
+        _pool_tmp=$(mktemp)
+        if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                "$_pool_src" > "$_pool_tmp"
+        else
+            cp -f "$_pool_src" "$_pool_tmp"
+        fi
+        if [[ ! -f "$_pool_dst" ]] || ! cmp -s "$_pool_tmp" "$_pool_dst"; then
+            install -m 0440 -o root -g root "$_pool_tmp" "$_pool_dst"
+            if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_pool_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_pool_dst — removing (storage pooling stays denied until fixed)"
+                rm -f "$_pool_dst"
+            else
+                ok "sudoers.d/livos-pool installed (user-spec: ${_DLD_DESKTOP_USER})"
+            fi
+        fi
+        rm -f "$_pool_tmp"
+    else
+        info "sudoers.d/livos-pool source not found — skipping (storage pooling unavailable)"
     fi
 
     # 2c-gpu. Phase 316 (GPU-01) — NVIDIA container-toolkit, GATED behind an
