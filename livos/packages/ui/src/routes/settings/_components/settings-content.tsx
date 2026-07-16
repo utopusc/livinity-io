@@ -155,6 +155,8 @@ const StorageDrivesSectionLazy = React.lazy(() => import('./storage-section').th
 const SecuritySessionsSectionLazy = React.lazy(() => import('./security-sessions-section').then((m) => ({default: m.SecuritySessionsSection})))
 // Phase 302 R3 — Settings → Domains (subdomain list + per-user DNS counter).
 const DomainsSectionLazy = React.lazy(() => import('./domains-section').then((m) => ({default: m.DomainsSection})))
+// Phase 323-04 (IDENT-03) — passkey enroll + manage section (2fa-enable clone, no QR).
+const PasskeysSectionLazy = React.lazy(() => import('@/routes/settings/passkeys').then((m) => ({default: m.PasskeysSection})))
 // Phase 310-04 (ALERT-01) — Settings → Alert Channels (admin-only external alert config).
 const AlertChannelsSectionLazy = React.lazy(() => import('./alert-channels-section').then((m) => ({default: m.AlertChannelsSection})))
 // Phase 320 (MON-01/MON-02) — Settings → Monitoring (resource history + editable thresholds).
@@ -183,6 +185,8 @@ type SettingsSection =
 	| 'file-acls'
 	| 'wallpaper'
 	| '2fa'
+	// Phase 323-04 (IDENT-03) — passkey / WebAuthn enroll + manage (additive to 2FA).
+	| 'passkeys'
 	| 'chrome-master'
 	| 'power'
 	| 'date-time'
@@ -234,6 +238,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'wallpaper',        group: 'personal', icon: TbPhoto,         label: 'Theme',             description: 'Wallpaper & accent color'},
 	{id: 'language',         group: 'personal', icon: TbLanguage,      label: 'Language',          description: 'Interface language'},
 	{id: '2fa',              group: 'personal', icon: TbShield,        label: '2FA',               description: 'Two-factor authentication'},
+	{id: 'passkeys',         group: 'personal', icon: TbKey,           label: 'Passkeys',          description: 'Sign in with Face/Touch ID or a security key'},
 	// ── WORKSPACE ─────────────────────────────────────────────────────
 	{id: 'mcp-servers',      group: 'workspace', icon: TbPlugConnected, label: 'MCP Servers',      description: 'Manage Model Context Protocol servers',   adminOnly: true},
 	// ── SYSTEM ────────────────────────────────────────────────────────
@@ -650,6 +655,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <WallpaperSection />
 		case '2fa':
 			return <TwoFaSection />
+		case 'passkeys':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><PasskeysSectionLazy /></Suspense>
 		case 'chrome-master':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><ChromeMasterLazy /></Suspense>
 		case 'power':

@@ -3,6 +3,7 @@ import {
 	TbArrowBigRightLines,
 	TbCircleArrowUp,
 	TbHistory,
+	TbKey,
 	TbLanguage,
 	TbPhoto,
 	TbServer,
@@ -130,6 +131,13 @@ export function SettingsContentMobile() {
 					title={t('2fa')}
 					description={t('2fa-description')}
 					onClick={() => navigate('2fa')}
+				/>
+				{/* Phase 323-04 (IDENT-03) — passkey enroll + manage (additive to 2FA). */}
+				<ListRowMobile
+					icon={TbKey}
+					title={t('auth-passkey.enroll.settings-title')}
+					description={t('auth-passkey.enroll.settings-description')}
+					onClick={() => navigate('passkeys')}
 				/>
 				{/* RE-ENABLED 2026-07-03 — the Backups feature now works (Kopia +
 				    restore wizard + DB/Liv-memory capture + scope selector). */}
