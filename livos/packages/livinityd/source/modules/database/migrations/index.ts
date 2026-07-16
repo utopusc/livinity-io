@@ -81,6 +81,14 @@ export const V47_P323_WEBAUTHN_MIGRATIONS: ReadonlyArray<string> = [
 	'2026-07-16-p323-webauthn-credentials.sql',
 ] as const
 
+// Phase 323-05 (IDENT-04) — app_access group/user app-sharing grant table.
+// Registered here (drift #7 / 325 omission lesson) — additive-only per the
+// expand invariant. Appended AFTER the 323-01 webauthn entry; all prior entries
+// (incl. V47_P323_WEBAUTHN_MIGRATIONS) are untouched.
+export const V47_P323_APP_ACCESS_MIGRATIONS: ReadonlyArray<string> = [
+	'2026-07-16-p323-app-access.sql',
+] as const
+
 export const ALL_MIGRATIONS: ReadonlyArray<string> = [
 	...V32_AGENTS_MIGRATIONS,
 	...V36_P131_PINNED_WINDOWS_MIGRATIONS,
@@ -90,4 +98,5 @@ export const ALL_MIGRATIONS: ReadonlyArray<string> = [
 	...V47_P324_FILE_SHARES_MIGRATIONS,
 	...V47_P324_FILE_ACLS_MIGRATIONS,
 	...V47_P323_WEBAUTHN_MIGRATIONS,
+	...V47_P323_APP_ACCESS_MIGRATIONS,
 ] as const
