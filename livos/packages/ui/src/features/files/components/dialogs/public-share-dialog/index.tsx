@@ -141,10 +141,8 @@ export default function PublicShareDialog() {
 						</div>
 					</div>
 					<div className='flex flex-col gap-2'>
-						<Label htmlFor='pubshare-password' className='text-13 text-text-secondary'>
-							{t('files-public-share.password-label')}
-						</Label>
-						<PasswordInput id='pubshare-password' value={password} onValueChange={setPassword} disabled={busy} />
+						<Label className='text-13 text-text-secondary'>{t('files-public-share.password-label')}</Label>
+						<PasswordInput value={password} onValueChange={setPassword} />
 						<span className='text-12 text-text-tertiary'>{t('files-public-share.password-hint')}</span>
 					</div>
 					<div className='flex flex-col gap-2'>

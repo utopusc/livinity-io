@@ -47,6 +47,10 @@ const OnboardingRestore = React.lazy(() => import('./routes/onboarding/restore')
 const FactoryReset = React.lazy(() => import('./routes/factory-reset'))
 const FactoryResetRecoveryHelp = React.lazy(() => import('./routes/help/factory-reset-recovery'))
 const InviteAcceptPage = React.lazy(() => import('./routes/invite'))
+// FILES-01 (324-07) — unauthenticated public share landing/download page. Token
+// in the URL IS the auth (D-02/D-04); mounted OUTSIDE EnsureLoggedIn (no session
+// cookie assumed), next to the invite/:token public token route.
+const PublicSharePage = React.lazy(() => import('./features/files/public-share-page'))
 // Phase 66 / Plan 05 — Liv Design System v1 playground.
 // Single visual reference for every primitive shipped by Plans 66-01..66-04.
 // Hidden from main nav (D-21); reachable only via direct URL.
@@ -218,6 +222,13 @@ export const router = createBrowserRouter([
 			{
 				path: 'invite/:token',
 				element: <InviteAcceptPage />,
+			},
+			{
+				// FILES-01 (324-07) — public share link. No auth gate: the opaque
+				// token is the only credential; the page handles password unlock +
+				// the generic not-available state itself.
+				path: 'files/share/:token',
+				element: <PublicSharePage />,
 			},
 		],
 	},
