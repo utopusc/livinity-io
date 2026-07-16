@@ -289,6 +289,18 @@ export default class Files {
 	// through virtualToSystemPath (escapes-base containment) elsewhere — a grant
 	// can never reach outside the data root.
 	//
+	// ⚠️ v1 SCOPE (324-review IN-02) — NOT YET WIRED INTO THE WEB AUTHORIZATION PATH.
+	// `getAllowedOperations()` / `virtualToSystemPath()` do NOT consult this method,
+	// so file_acls grants take effect over SAMBA ONLY (per-user smb.conf render), not
+	// the in-browser Files app. This is deliberate and fails SAFE: because
+	// getActiveBaseDirectories() exposes only the caller's OWN per-user tree, any
+	// out-of-tree virtual path is rejected as `[invalid-base]` before an op runs, so a
+	// grant could never ADD web access even if this were wired. Real web-side
+	// cross-user enforcement is a FOLLOW-UP: it needs a cross-user path namespace +
+	// a resolver that can express another user's tree in getActiveBaseDirectories
+	// (touching the hot virtualToSystemPath path) + Files-app navigation UI — out of
+	// v1 scope. Do NOT assume web ACL enforcement is live from this method's presence.
+	//
 	//   - A path whose base segment is one of the caller's OWN base dirs (/Home,
 	//     /Trash, …) stays ownership-governed: source 'ownership', operations null,
 	//     and the ACL DAO is NOT consulted.
