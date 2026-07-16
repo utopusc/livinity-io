@@ -64,7 +64,13 @@ const DEFAULT_WALLPAPER = 'aurora'
 // and no secure context, so `resolveRpId` returns null and the ceremony is
 // unavailable (fails closed). Single-use challenges live in Redis under this
 // prefix, SETEX 60s, deleted BEFORE verify so a failed verify cannot retry.
-const WEBAUTHN_CHALLENGE_PREFIX = 'webauthn:chal:'
+// WR-02: registration and login challenges MUST live in disjoint namespaces so a
+// client-controlled login `challengeId` can never address (and DELETE) another
+// user's in-flight registration slot (targeted enrollment DoS). The `reg:` vs
+// `login:` fixed segments make the two key-spaces provably non-overlapping —
+// a userId under reg can never equal a challengeId under login.
+const WEBAUTHN_REG_CHALLENGE_PREFIX = 'webauthn:chal:reg:'
+const WEBAUTHN_LOGIN_CHALLENGE_PREFIX = 'webauthn:chal:login:'
 const WEBAUTHN_CHALLENGE_TTL_SECONDS = 60
 const WEBAUTHN_RP_NAME = 'Livinity'
 
@@ -486,7 +492,7 @@ export default router({
 		// challenge. Never log the raw challenge.
 		try {
 			await redis.set(
-				`${WEBAUTHN_CHALLENGE_PREFIX}${ctx.currentUser.id}`,
+				`${WEBAUTHN_REG_CHALLENGE_PREFIX}${ctx.currentUser.id}`,
 				options.challenge,
 				'EX',
 				WEBAUTHN_CHALLENGE_TTL_SECONDS,
@@ -517,7 +523,7 @@ export default router({
 				throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Passkey unavailable on this box'})
 			}
 
-			const key = `${WEBAUTHN_CHALLENGE_PREFIX}${userId}`
+			const key = `${WEBAUTHN_REG_CHALLENGE_PREFIX}${userId}`
 			let verification
 			try {
 				// Single-use: read + DELETE the challenge BEFORE verify — a failed or
@@ -608,7 +614,7 @@ export default router({
 		// still fails CLOSED on a missing challenge). Never log the raw challenge.
 		try {
 			await redis.set(
-				`${WEBAUTHN_CHALLENGE_PREFIX}${challengeId}`,
+				`${WEBAUTHN_LOGIN_CHALLENGE_PREFIX}${challengeId}`,
 				options.challenge,
 				'EX',
 				WEBAUTHN_CHALLENGE_TTL_SECONDS,
@@ -628,7 +634,10 @@ export default router({
 	// LIVINITY_SESSION host-only cookie -> recordAuthLoginEvent). The password+TOTP
 	// login branches are untouched — this is a NEW alternative first factor (D-03).
 	loginWithPasskey: publicProcedure
-		.input(z.object({challengeId: z.string(), response: z.any()}))
+		// WR-02: challengeId is always a server-minted crypto.randomUUID()
+		// (webauthnLoginOptions) — pin the shape so a malformed value is rejected by
+		// validation before it can reach the Redis lookup.
+		.input(z.object({challengeId: z.string().uuid(), response: z.any()}))
 		.mutation(async ({ctx, input}) => {
 			const NIL_UUID = '00000000-0000-0000-0000-000000000000'
 			const redis = ctx.livinityd!.ai.redis
@@ -647,7 +656,7 @@ export default router({
 				throw new TRPCError({code: 'UNAUTHORIZED', message: 'Passkey verification failed'})
 			}
 
-			const key = `${WEBAUTHN_CHALLENGE_PREFIX}${input.challengeId}`
+			const key = `${WEBAUTHN_LOGIN_CHALLENGE_PREFIX}${input.challengeId}`
 			let verification
 			try {
 				// Single-use: read + DELETE the challenge BEFORE verify (no stale retry).
