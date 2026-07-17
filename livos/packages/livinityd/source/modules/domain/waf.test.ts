@@ -34,6 +34,13 @@ describe('isValidBanIp — strict IP/CIDR (injection kill)', () => {
 			expect(isValidBanIp(ip)).toBe(false)
 		}
 	})
+	it('332-REVIEW WARN-1: rejects charset-valid-but-semantically-invalid IPv6 (net.isIP parse)', () => {
+		// These pass a hex+colon regex but net.isIP rejects them — persisting one
+		// would freeze every future Caddy regen (frozen-Caddyfile incident class).
+		for (const ip of ['fffff::1', 'f:f', ':::', '1:2:3', '12345::', '2001:db8::/129', 'gg::1', '2001:db8::1/', '1.2.3.4/']) {
+			expect(isValidBanIp(ip)).toBe(false)
+		}
+	})
 	it('rejects any Caddyfile-breaking payload', () => {
 		for (const ip of [
 			'1.2.3.4 }',

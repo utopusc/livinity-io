@@ -2360,8 +2360,14 @@ export default class Apps {
 		if (problems.length > 0) {
 			throw new Error(`[waf-invalid] ${problems.join('; ')}`)
 		}
+		// 332-REVIEW WARN-1 (defense in depth): capture the PRIOR value so a config
+		// that somehow still fails `caddy validate` (a future emit bug, an entry that
+		// slips the validator) can be ROLLED BACK — it must never persist and freeze
+		// every future Caddy regen. The write + regen-verify + rollback are one unit.
+		let priorEntry: AppWafConfig | undefined
 		await this.#livinityd.store.getWriteLock(async ({get, set}) => {
 			const state = (await get('appSecurity')) ?? {apps: {}}
+			priorEntry = state.apps?.[appId]
 			const apps = {...(state.apps ?? {})}
 			// Normalize: drop empty arrays / false so an all-cleared config removes
 			// the entry entirely (keeps the store tidy + getAppWafConfig undefined).
@@ -2376,8 +2382,29 @@ export default class Apps {
 			}
 			await set('appSecurity', {...state, apps})
 		})
-		// Regenerate the Caddyfile from live state so the new protection is live.
-		await this.rebuildCaddyFromState({rethrow: false})
+		// Regenerate the Caddyfile from live state — RETHROW so a validate failure
+		// surfaces here (writeCaddyfile leaves the LIVE config untouched on a bad
+		// generate, so the proxy is never taken down; we just need to know it failed).
+		try {
+			await this.rebuildCaddyFromState({rethrow: true})
+		} catch (error) {
+			// Roll the store back to the prior entry so the poison does not persist and
+			// freeze every subsequent regen (the Phase-232 frozen-Caddyfile class), then
+			// re-assert the previous good config and surface the failure to the admin.
+			await this.#livinityd.store.getWriteLock(async ({get, set}) => {
+				const state = (await get('appSecurity')) ?? {apps: {}}
+				const apps = {...(state.apps ?? {})}
+				if (priorEntry === undefined) delete apps[appId]
+				else apps[appId] = priorEntry
+				await set('appSecurity', {...state, apps})
+			})
+			await this.rebuildCaddyFromState({rethrow: false})
+			throw new Error(
+				`[waf-config-rejected] the generated Caddy config was rejected — protection change reverted (${
+					error instanceof Error ? error.message : String(error)
+				})`,
+			)
+		}
 		// WAF-01 abuse-jail lifecycle (fail-soft): install the fail2ban jail when
 		// ANY app now opts into abuse-ban, remove it when none do. Never blocks the
 		// setter — a box without the wrapper/fail2ban just keeps the stock-Caddy

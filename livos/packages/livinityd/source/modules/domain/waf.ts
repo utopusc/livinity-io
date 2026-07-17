@@ -29,6 +29,8 @@
 // spaces) that get regex-escaped at emit. Anything invalid is REJECTED at the
 // route layer and — defense in depth — silently SKIPPED at emit.
 
+import net from 'node:net'
+
 // ── Types (the dedicated top-level `appSecurity` StoreSchema key, D-332-6) ───
 // `type` (not interface) so the implicit index signature keeps the key
 // assignable to FileStore's Serializable constraint (storagePool recipe).
@@ -58,13 +60,6 @@ export type AppSecurityState = {
 
 // ── Validation (strict, injection-killing) ───────────────────────────────────
 
-// IPv4 or IPv4/CIDR — octet-strict (mirrors local-dns IPV4_RE) + /0-32.
-const IPV4_CIDR_RE =
-	/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}(\/([0-9]|[12][0-9]|3[0-2]))?$/
-// IPv6 (+ optional /0-128) — conservative: hex+colons only. The charset alone
-// makes injection impossible; full syntactic validity is enforced by the
-// `caddy validate` stage (a bad entry fails closed, live config untouched).
-const IPV6_CIDR_RE = /^[0-9A-Fa-f:]{2,39}(\/([0-9]|[1-9][0-9]|1[01][0-9]|12[0-8]))?$/
 // UA block entries: literal tokens, NO whitespace/quotes/braces/backslashes —
 // the emitted regex is a single unquoted Caddyfile token.
 const UA_TOKEN_RE = /^[A-Za-z0-9._/-]{1,64}$/
@@ -74,8 +69,30 @@ const APP_ID_RE = /^[a-z0-9][a-z0-9-]{0,62}$/
 export const WAF_MAX_BAN_IPS = 100
 export const WAF_MAX_BAN_UAS = 50
 
+/**
+ * A ban entry is a real IP or CIDR — validated with node's `net.isIP` (Go-grade
+ * parser), NOT a charset regex. 332-REVIEW WARN-1: a charset-valid-but-semantically
+ * -invalid IPv6 like `fffff::1` or `:::` would pass a hex+colon regex, poison the
+ * store, and then make `caddy validate` reject the WHOLE config on every regen
+ * (frozen-Caddyfile incident class). net.isIP rejects those. The charset of a real
+ * IP/CIDR (hex, digits, dots, colons, one slash) contains NO Caddyfile-breaking
+ * character, so injection stays impossible AND semantic validity is now guaranteed
+ * BEFORE anything reaches the generated config.
+ */
 export function isValidBanIp(entry: string): boolean {
-	return (IPV4_CIDR_RE.test(entry) || (entry.includes(':') && IPV6_CIDR_RE.test(entry))) && entry.length <= 64
+	if (entry.length === 0 || entry.length > 64) return false
+	const slash = entry.indexOf('/')
+	if (slash < 0) return net.isIP(entry) !== 0
+	// Exactly one slash, address on the left, numeric prefix on the right.
+	if (entry.indexOf('/', slash + 1) >= 0) return false
+	const addr = entry.slice(0, slash)
+	const prefixStr = entry.slice(slash + 1)
+	if (!/^[0-9]{1,3}$/.test(prefixStr)) return false
+	const prefix = Number(prefixStr)
+	const family = net.isIP(addr)
+	if (family === 4) return prefix <= 32
+	if (family === 6) return prefix <= 128
+	return false
 }
 
 export function isValidUaToken(entry: string): boolean {

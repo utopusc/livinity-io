@@ -44,7 +44,10 @@ export async function installAbuseJail(
 	const run = deps?.run ?? defaultRun
 	const maxretry = boundInt(tuning.maxretry, 20, 1, 10000)
 	const findtime = boundInt(tuning.findtime, 60, 1, 86400)
-	const bantime = boundInt(tuning.bantime, 3600, 1, 31_536_000)
+	// 332-REVIEW INFO-2: cap at 7 digits (9999999s ≈ 115 days) to match the
+	// wrapper's `^[0-9]{1,7}$` _valid_int — an 8-digit value would be rejected
+	// root-side and silently fail-soft the jail install.
+	const bantime = boundInt(tuning.bantime, 3600, 1, 9_999_999)
 	try {
 		const res = await run([
 			'install-jail',

@@ -28,6 +28,15 @@ describe('installAbuseJail — argv + int bounding + fail-soft', () => {
 		expect(args).toEqual(['install-jail', '--maxretry', '1', '--findtime', '86400', '--bantime', '3600'])
 	})
 
+	it('332-REVIEW INFO-2: bantime is capped to 7 digits so it never exceeds the wrapper _valid_int', async () => {
+		const run = vi.fn().mockResolvedValue({exitCode: 0})
+		await installAbuseJail({bantime: 99_999_999}, {run})
+		const args = run.mock.calls[0][0] as string[]
+		const bantime = args[args.indexOf('--bantime') + 1]
+		expect(bantime).toBe('9999999')
+		expect(bantime.length).toBeLessThanOrEqual(7)
+	})
+
 	it('defaults every field when tuning is empty', async () => {
 		const run = vi.fn().mockResolvedValue({exitCode: 0})
 		await installAbuseJail({}, {run})
