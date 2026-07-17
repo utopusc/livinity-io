@@ -53,6 +53,7 @@ import {
 	TbDeviceSdCard,
 	TbShieldLock,
 	TbShieldCheck,
+	TbActivityHeartbeat,
 	TbMessages,
 	TbWorld,
 	TbNetwork,
@@ -163,6 +164,8 @@ const AlertChannelsSectionLazy = React.lazy(() => import('./alert-channels-secti
 const MonitoringSectionLazy = React.lazy(() => import('./monitoring-section').then((m) => ({default: m.MonitoringSection})))
 // Phase 328-05 (SEC-02) — Settings → Security Advisor (Trivy image CVE counts + weak-config findings + remediation).
 const SecurityAdvisorSectionLazy = React.lazy(() => import('./security-advisor-section').then((m) => ({default: m.SecurityAdvisorSection})))
+// Phase 333-03 (DIAG-01/02) — Settings → Connectivity (scheduled DNS/port/cert/tunnel/mail self-diagnosis).
+const ConnectivitySectionLazy = React.lazy(() => import('./connectivity-section').then((m) => ({default: m.ConnectivitySection})))
 // Phase 246-05 — Settings → System section (hosts the v44 "Active terminals"
 // admin panel). The panel self-gates via useTerminalPanelEnabled, so when the
 // v43 feature flag is OFF the section renders nothing — the surface vanishes
@@ -214,6 +217,8 @@ type SettingsSection =
 	| 'monitoring'
 	// Phase 328-05 (SEC-02) — security advisor (Trivy image CVEs + weak-config scan results).
 	| 'security-advisor'
+	// Phase 333-03 (DIAG-01/02) — connectivity self-diagnosis (DNS/port/cert/tunnel/mail).
+	| 'connectivity'
 	// v29.4 Phase 47 Plan 05 — AI Diagnostics admin section.
 	| 'diagnostics'
 
@@ -264,6 +269,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'alert-channels', group: 'system', icon: TbBell, label: 'Alert Channels', description: 'Telegram, Discord, Slack, webhook & ntfy alerts', adminOnly: true},
 	{id: 'monitoring', group: 'system', icon: TbChartLine, label: 'Monitoring', description: 'Resource history & alert thresholds', adminOnly: true},
 	{id: 'security-advisor', group: 'system', icon: TbShieldCheck, label: 'Security Advisor', description: 'Scan results & remediation guidance', adminOnly: true},
+	{id: 'connectivity', group: 'system', icon: TbActivityHeartbeat, label: 'Connectivity', description: 'DNS, ports, certificate & tunnel self-check', adminOnly: true},
 	{id: 'software-update',  group: 'system', icon: TbDownload,        label: 'Software Update',   description: 'Apply updates & view deploy history',     adminOnly: true},
 	// ── FOOTER ────────────────────────────────────────────────────────
 	{id: 'troubleshoot',     group: 'system', icon: TbTool,            label: 'Troubleshoot',      description: 'Logs & diagnostics',                      adminOnly: true, footer: true},
@@ -700,6 +706,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><MonitoringSectionLazy /></Suspense>
 		case 'security-advisor':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><SecurityAdvisorSectionLazy /></Suspense>
+		case 'connectivity':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><ConnectivitySectionLazy /></Suspense>
 		case 'diagnostics':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><DiagnosticsSectionLazy /></Suspense>
 		default:
