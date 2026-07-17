@@ -6,6 +6,10 @@ import {trpcReact} from '@/trpc/trpc'
  */
 export function useCurrentUser() {
 	const userQ = trpcReact.user.get.useQuery()
+	// Phase 335 (ROLE-01) — the caller's delegated admin scopes (server-side
+	// enforced; this list only drives UI affordances, never authority). []
+	// for admins too: admin power derives from role, not scopes.
+	const scopesQ = trpcReact.adminScopes.my.useQuery(undefined, {staleTime: 60_000})
 
 	const user = userQ.data
 	const role = user?.role
@@ -13,6 +17,7 @@ export function useCurrentUser() {
 	const isAdmin = !role || role === 'admin'
 	const isMember = role === 'member' || isAdmin
 	const isGuest = role === 'guest'
+	const scopes = scopesQ.data ?? []
 
 	return {
 		user,
@@ -23,5 +28,7 @@ export function useCurrentUser() {
 		role: role ?? 'admin',
 		userId: user?.id,
 		username: user?.username,
+		scopes,
+		hasScope: (scope: string) => isAdmin || scopes.includes(scope as never),
 	}
 }

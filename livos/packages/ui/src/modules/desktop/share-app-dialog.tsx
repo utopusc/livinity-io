@@ -67,7 +67,7 @@ export function ShareAppDialog({
 	const {appsKeyed} = useAllAvailableApps()
 	const app = appsKeyed?.[appId]
 	const appName = app?.name || appId
-	const {userId: currentUserId} = useCurrentUser()
+	const {userId: currentUserId, isAdmin} = useCurrentUser()
 
 	// 323-06 route pair: allUsers/allGroups populate the pickers; sharedPrincipals
 	// returns the CURRENT grants (users AND groups) with their access level.
@@ -76,9 +76,26 @@ export function ShareAppDialog({
 	const sharedPrincipalsQ = trpcReact.apps.sharedPrincipals.useQuery({appId})
 	const shareMutation = trpcReact.apps.shareApp.useMutation()
 	const unshareMutation = trpcReact.apps.unshareApp.useMutation()
+	// Phase 335 (ROLE-02, D-335-6/7) — per-app OPERATOR grants. adminProcedure
+	// server-side, so the section only renders for admins (an operator/full
+	// grantee sharing the app never sees a dead toggle).
+	const operatorsQ = trpcReact.apps.listAppOperators.useQuery({appId}, {enabled: open && isAdmin})
+	const setOperatorMut = trpcReact.apps.setAppOperator.useMutation()
 	const utils = trpcReact.useUtils()
 
 	const [pendingId, setPendingId] = useState<string | null>(null)
+	const [pendingOperatorId, setPendingOperatorId] = useState<string | null>(null)
+
+	const isOperator = (userId: string) => (operatorsQ.data ?? []).some((o) => o.userId === userId)
+	const toggleOperator = async (userId: string) => {
+		setPendingOperatorId(userId)
+		try {
+			await setOperatorMut.mutateAsync({appId, userId, operator: !isOperator(userId)})
+			await utils.apps.listAppOperators.invalidate({appId})
+		} finally {
+			setPendingOperatorId(null)
+		}
+	}
 
 	const allUsers = allUsersQ.data || []
 	const allGroups = allGroupsQ.data || []
@@ -165,6 +182,25 @@ export function ShareAppDialog({
 										disabled={pendingId === user.id}
 										onChange={(l) => setLevel(user.id, 'user', l)}
 									/>
+
+									{/* Phase 335 — operator toggle (admin-only; app-scoped ops:
+									    logs/restart/start/stop/update, never uninstall). */}
+									{isAdmin ? (
+										<button
+											onClick={() => void toggleOperator(user.id)}
+											disabled={pendingOperatorId === user.id}
+											title={t('app-share-group.operator-description')}
+											className={cn(
+												'shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors',
+												isOperator(user.id)
+													? 'bg-brand/30 text-white'
+													: 'bg-white/5 text-white/40 hover:text-white/70',
+												pendingOperatorId === user.id && 'cursor-not-allowed opacity-50',
+											)}
+										>
+											{t('app-share-group.operator')}
+										</button>
+									) : null}
 								</div>
 							)
 						})}

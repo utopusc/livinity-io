@@ -21,6 +21,7 @@ import {Button} from '@/shadcn-components/ui/button'
 import {
 	Dialog,
 	DialogContent,
+	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogPortal,
@@ -161,6 +162,8 @@ function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: bool
 	const utils = trpcReact.useUtils()
 
 	const [showQuotaDialog, setShowQuotaDialog] = useState(false)
+	// Phase 335 (ROLE-01) — delegated-scope editor dialog.
+	const [showScopesDialog, setShowScopesDialog] = useState(false)
 
 	// Phase 325 STOR-02 — a null/<=0 quota is unlimited (no ceiling); otherwise show
 	// "used of limit" with a warning tint once past the soft ratio.
@@ -267,6 +270,23 @@ function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: bool
 					<TbDatabase className='h-4 w-4' />
 					{!isMobile && <span className='ml-1.5'>{t('settings.users.quota.edit')}</span>}
 				</Button>
+
+				{/* Phase 335 (ROLE-01) — delegated-scope editor (read-only-admin /
+				    share-admin). Admin-only server-side; hidden for admin targets
+				    (they hold every scope by role). */}
+				{user.role !== 'admin' && (
+					<Button
+						variant='default'
+						size='sm'
+						className={cn(isMobile ? 'h-11 shrink-0 px-2.5' : 'shrink-0')}
+						onClick={() => setShowScopesDialog(true)}
+						title={t('settings.users.scopes.edit')}
+						aria-label={t('settings.users.scopes.edit')}
+					>
+						<TbShieldCheck className='h-4 w-4' />
+						{!isMobile && <span className='ml-1.5'>{t('settings.users.scopes.edit')}</span>}
+					</Button>
+				)}
 
 				{/* Desktop-only: role select + actions inline */}
 				{!isMobile && (
@@ -398,6 +418,7 @@ function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: bool
 			)}
 
 			<QuotaDialog open={showQuotaDialog} onOpenChange={setShowQuotaDialog} user={user} />
+			<UserScopesDialog open={showScopesDialog} onOpenChange={setShowScopesDialog} user={user} />
 		</div>
 	)
 }
@@ -406,6 +427,83 @@ function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: bool
 // a numeric GB input, Save calls setUserQuota (0 = unlimited, matching the backend's
 // quota <= 0 == no-ceiling rule) then invalidates the users list. Enforcement is
 // soft/approximate (refreshed by the user-quota-scan job) — see 325-01 D-05.
+// Phase 335 (ROLE-01, D-335-6) — delegated-scope editor. Toggles the two v1
+// scopes via adminScopes.grant/revoke (adminProcedure server-side — this UI is
+// only reachable by admins through the Users section). Revocation takes effect
+// on the holder's next request (grants are PG-read per call).
+const DELEGATED_SCOPES = ['read-only-admin', 'share-admin'] as const
+
+function UserScopesDialog({
+	open,
+	onOpenChange,
+	user,
+}: {
+	open: boolean
+	onOpenChange: (open: boolean) => void
+	user: UserRow
+}) {
+	const utils = trpcReact.useUtils()
+	const listQ = trpcReact.adminScopes.list.useQuery(undefined, {enabled: open})
+	const onDone = {
+		onSuccess: () => utils.adminScopes.list.invalidate(),
+		onError: (error: {message: string}) => toast.error(error.message),
+	}
+	const grantMut = trpcReact.adminScopes.grant.useMutation(onDone)
+	const revokeMut = trpcReact.adminScopes.revoke.useMutation(onDone)
+	const held = new Set((listQ.data ?? []).filter((r) => r.userId === user.id).map((r) => r.scope))
+	const busy = grantMut.isPending || revokeMut.isPending
+
+	const toggle = (scope: (typeof DELEGATED_SCOPES)[number]) => {
+		if (held.has(scope)) revokeMut.mutate({userId: user.id, scope})
+		else grantMut.mutate({userId: user.id, scope})
+	}
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>{t('settings.users.scopes.title', {name: user.display_name})}</DialogTitle>
+					<DialogDescription>{t('settings.users.scopes.description')}</DialogDescription>
+				</DialogHeader>
+				<div className='flex flex-col gap-2 py-2'>
+					{DELEGATED_SCOPES.map((scope) => {
+						const active = held.has(scope)
+						return (
+							<button
+								key={scope}
+								onClick={() => toggle(scope)}
+								disabled={busy || listQ.isLoading}
+								className={cn(
+									'flex items-start gap-3 rounded-radius-md border p-3 text-left transition-colors',
+									active ? 'border-brand bg-brand/10' : 'border-border-default hover:bg-surface-1',
+									(busy || listQ.isLoading) && 'cursor-not-allowed opacity-60',
+								)}
+							>
+								<div className='min-w-0 flex-1'>
+									<div className='text-body-sm font-medium text-text-primary'>
+										{t(`settings.users.scopes.${scope}`)}
+									</div>
+									<div className='text-caption text-text-tertiary'>
+										{t(`settings.users.scopes.${scope}-description`)}
+									</div>
+								</div>
+								<span
+									className={cn(
+										'shrink-0 rounded-full px-2 py-0.5 text-caption',
+										active ? 'bg-brand/20 text-brand' : 'bg-surface-1 text-text-tertiary',
+									)}
+								>
+									{active ? t('settings.users.scopes.granted') : t('settings.users.scopes.not-granted')}
+								</span>
+							</button>
+						)
+					})}
+				</div>
+			</DialogContent>
+		</Dialog>
+	)
+}
+
 function QuotaDialog({
 	open,
 	onOpenChange,
