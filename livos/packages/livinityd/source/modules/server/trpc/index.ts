@@ -54,6 +54,8 @@ import devicesAdmin from '../../devices/admin-routes.js'
 import fail2ban from '../../fail2ban-admin/routes.js'
 // Phase 328 SEC-02 — securityAdvisor.{getAdvisorReport,runAdvisorScanNow}
 import securityAdvisor from '../../security-advisor/routes.js'
+// Phase 333 DIAG-01/02 — connectivity.{getReport,runCheckNow,setIgnore,setMailEnabled}
+import connectivity from '../../connectivity/routes.js'
 // v29.4 Phase 47 Plan 05 — AI Diagnostics. Per G-07 namespacing Option B:
 // `capabilitiesRouter` mounts as a fresh top-level `capabilities` namespace,
 // while `appsHealthRouter` merges into the existing `apps` namespace so
@@ -373,6 +375,8 @@ export function createAppRouter(opts: {
 		fail2ban,
 		// Phase 328 SEC-02 — securityAdvisor.{getAdvisorReport,runAdvisorScanNow}
 		securityAdvisor,
+		// Phase 333 DIAG-01/02 — connectivity.{getReport,runCheckNow,setIgnore,setMailEnabled}
+		connectivity,
 		// v29.4 Phase 47 Plan 05 — AI Diagnostics admin namespace (FR-TOOL-01/02 + FR-MODEL-01).
 		capabilities: diagnosticsRoutes.capabilitiesRouter,
 		// v30.0 Phase 59 Plan 04 — apiKeys namespace (FR-BROKER-B1-04).

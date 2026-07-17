@@ -23,6 +23,7 @@ import {getDiskIO, getNetworkStats} from '../monitoring/monitoring.js'
 import {insertResourceSample, aggregateRollups, pruneOldRows} from '../monitoring/history.js'
 import {volumeBackupHandler} from './backup.js'
 import {securityAdvisorScanHandler} from '../security-advisor/scheduler-job.js'
+import {connectivitySelfCheckHandler} from '../connectivity/scheduler-job.js'
 import {getBuiltinApp} from '../apps/builtin-apps.js'
 import * as snapraidCli from '../storage-pool/snapraid-cli.js'
 import {checkFreezeGate} from '../storage-pool/pool.js'
@@ -1118,6 +1119,7 @@ export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'custom-command': customCommandHandler, // Phase 329 APPS-04 (user-created only — never auto-seeded)
 	'pool-sync': poolSyncHandler, // Phase 318 POOL-03 — nightly diff→freeze-gate→sync
 	'pool-scrub': poolScrubHandler, // Phase 318 POOL-03 — weekly scrub -p parity verification
+	'connectivity-self-check': connectivitySelfCheckHandler, // Phase 333 DIAG-01/02 — hourly connectivity self-diagnosis
 }
 
 // =========================================================================
@@ -1195,4 +1197,10 @@ export const DEFAULT_JOB_DEFINITIONS: Array<{
 	// combine-only / absent pool, cheap rolling 8% slice (≈3-month full coverage),
 	// and silent bit-rot must be caught before a real disk failure needs parity.
 	{name: 'pool-scrub', schedule: '0 3 * * 0', type: 'pool-scrub', enabled: true},
+	// Phase 333 DIAG-01/02 — hourly connectivity self-diagnosis. enabled=true: the
+	// probes are cheap (a few DNS/TCP/TLS reads, no LLM spend), read-only, and a
+	// SILENTLY-broken box (DNS drift / expired cert / dead tunnel) is exactly the
+	// failure class this targets — it must fire unattended. Alerts only on a
+	// pass/warn→fail REGRESSION (coalesced), so a steady box never re-pages.
+	{name: 'connectivity-self-check', schedule: '0 * * * *', type: 'connectivity-self-check', enabled: true},
 ]
