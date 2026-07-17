@@ -169,3 +169,74 @@ export async function getEffectiveLevel(
 	const levels = (rows as Array<{level: AclLevel}>).map((r) => r.level)
 	return evaluateAclLevel(levels)
 }
+
+/**
+ * Phase 336 (ACLUI-01) — every DISTINCT virtual_path a user can actually reach
+ * (direct grant OR via a group), with its most-permissive effective level, for
+ * the web `/Shared` root listing. Excludes paths whose ONLY applicable rule is
+ * `none` (a sole-override deny surfaces nothing). Returns [] on no-DB (fail-safe
+ * → the `/Shared` root is simply empty). Ordered by path for a stable listing.
+ *
+ * NOTE: this is the SET of granted paths (the roots the user may enter); the
+ * per-op level for a DEEPER path inside a granted folder is resolved separately
+ * by the enforcement layer's nearest-ancestor walk (nearestAncestorAclLevel).
+ */
+export async function listGrantedPathsForUser(
+	userId: string,
+	runner?: QueryRunner | null,
+): Promise<Array<{virtualPath: string; level: AclLevel}>> {
+	const db = resolveRunner(runner)
+	if (!db) return []
+	const {rows} = await db.query(
+		`SELECT virtual_path, level
+		 FROM file_acls
+		 WHERE (principal_type = 'user' AND principal_id = $1)
+		    OR (principal_type = 'group' AND principal_id IN (
+		         SELECT group_id FROM group_members WHERE user_id = $1
+		       ))`,
+		[userId],
+	)
+	// Collapse multiple principal rules per path via the same most-permissive
+	// union used at read time, then drop sole-`none` (and the impossible null).
+	const byPath = new Map<string, AclLevel[]>()
+	for (const r of rows as Array<{virtual_path: string; level: AclLevel}>) {
+		const list = byPath.get(r.virtual_path) ?? []
+		list.push(r.level)
+		byPath.set(r.virtual_path, list)
+	}
+	const out: Array<{virtualPath: string; level: AclLevel}> = []
+	for (const [virtualPath, levels] of byPath) {
+		const level = evaluateAclLevel(levels)
+		if (level === 'read' || level === 'write') out.push({virtualPath, level})
+	}
+	out.sort((a, b) => a.virtualPath.localeCompare(b.virtualPath))
+	return out
+}
+
+/**
+ * Phase 336 (ACLUI-01) — nearest-ancestor effective level for the web
+ * enforcement layer. The DAO stores/serves grants EXACT-path (non-inheriting,
+ * Samba-consistent), but a web folder share must reach its children — so the
+ * enforcement layer walks the requested path and each ancestor, NEAREST first,
+ * and the FIRST path with an applicable rule GOVERNS (most-specific wins: an
+ * explicit `none` on a child overrides an inherited `write` from the parent).
+ * Returns null when no ancestor has any rule (→ fail-safe deny at the caller).
+ *
+ * Pure w.r.t. the injected `getLevel` so it is unit-testable offline. `innerPath`
+ * is the grant-namespace path (the `/Shared` prefix already stripped), POSIX
+ * absolute, already normalized by the caller.
+ */
+export async function nearestAncestorAclLevel(
+	innerPath: string,
+	getLevel: (path: string) => Promise<AclLevel | null>,
+): Promise<AclLevel | null> {
+	const segments = innerPath.split('/').filter(Boolean)
+	// Walk from the deepest path up to the first segment (a single base segment
+	// like `/Home` is a valid grant target; the empty root is not).
+	for (let i = segments.length; i >= 1; i--) {
+		const candidate = '/' + segments.slice(0, i).join('/')
+		const level = await getLevel(candidate)
+		if (level !== null) return level // nearest applicable rule governs
+	}
+	return null
+}

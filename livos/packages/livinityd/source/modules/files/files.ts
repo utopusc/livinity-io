@@ -28,7 +28,12 @@ import {copyWithProgress} from '../utilities/copy-with-progress.js'
 
 import {getDiskUsageByPath} from '../system/system.js'
 import {getUserQuotaBytes, findUserByUsername} from '../database/index.js'
-import {getEffectiveLevel as aclGetEffectiveLevel, type AclLevel} from './file-acls.js'
+import {
+	getEffectiveLevel as aclGetEffectiveLevel,
+	listGrantedPathsForUser,
+	nearestAncestorAclLevel,
+	type AclLevel,
+} from './file-acls.js'
 
 import Watcher from './watcher.js'
 import Recents from './recents.js'
@@ -73,6 +78,14 @@ function aclLevelToOperations(level: AclLevel | null): FileOperation[] {
 	if (level === 'read') return [...ACL_READ_OPERATIONS]
 	return [] // 'none' | null → deny
 }
+
+// Phase 336 (ACLUI-01) — the synthetic web nav root under which a user reaches
+// the cross-user paths granted to them (file_acls). NOT a real base directory
+// (that would bypass ACL gating): every `/Shared/*` path is intercepted in
+// virtualToSystemPath + list + getAllowedOperations and resolved through the
+// ACL layer against the GLOBAL grant namespace. Own-tree paths never start with
+// this prefix, so they skip every ACL branch — zero regression (D-336-1/5).
+const SHARED_ROOT = '/Shared'
 
 // The result of the cross-user ACL resolution layer. `source: 'ownership'` means
 // the path is inside the caller's own per-user tree and is governed by the
@@ -629,6 +642,10 @@ export default class Files {
 		// Special handling for the root directory since it doesn't map to a system parth
 		if (virtualPath === '/') return this.#listRoot()
 
+		// Phase 336 — the web /Shared cross-user namespace (root = the user's
+		// granted paths; a child = the ACL-gated contents of a granted folder).
+		if (this.#isSharedPath(virtualPath)) return this.#listShared(virtualPath)
+
 		// Get the system path and directory details
 		const systemPath = await this.virtualToSystemPath(virtualPath)
 		const directoryDetails = await this.status(systemPath).catch((error) => {
@@ -1088,6 +1105,13 @@ export default class Files {
 
 	// Get allowed operations for a given path
 	async getAllowedOperations(virtualPath: string): Promise<FileOperation[]> {
+		// Phase 336 — a /Shared cross-user path's operations are DERIVED from the
+		// nearest-ancestor ACL level (read → copy-out only; write → + mutation),
+		// never the own-tree structural rules. Fail-safe []: no grant → no ops.
+		if (this.#isSharedPath(virtualPath)) {
+			return aclLevelToOperations(await this.#sharedLevel(this.#sharedInnerPath(virtualPath)))
+		}
+
 		// Get file status
 		let isFile = false
 		let isDirectory = false
@@ -1272,10 +1296,185 @@ export default class Files {
 		return systemPath
 	}
 
+	// ─── Phase 336 (ACLUI-01) — web /Shared cross-user ACL enforcement ──────────
+	// A `/Shared/*` path is resolved through the ACL layer: a nearest-ancestor
+	// grant (≥read) gates access, and the inner path resolves against the GLOBAL
+	// base-dir namespace (the grants live there, Samba-consistent) with the SAME
+	// realpath escapes-base containment. Own-tree paths never match #isSharedPath
+	// so they skip all of this — the containment seam for the caller's own tree is
+	// byte-unchanged (D-336-5, SC2).
+
+	// True IFF this is a web /Shared nav path (exact root or a child). Normalizes
+	// first so `/Shared/../Home` cannot masquerade as a shared path.
+	#isSharedPath(virtualPath: string): boolean {
+		const norm = normalizePath(virtualPath)
+		return norm === SHARED_ROOT || norm.startsWith(`${SHARED_ROOT}/`)
+	}
+
+	// Strip the /Shared prefix → the grant-namespace inner path ('' for the root).
+	#sharedInnerPath(virtualPath: string): string {
+		const norm = normalizePath(virtualPath)
+		if (norm === SHARED_ROOT) return ''
+		return norm.slice(SHARED_ROOT.length) // e.g. /Shared/Home/foo → /Home/foo
+	}
+
+	// Nearest-ancestor effective ACL level for a /Shared inner path for the CURRENT
+	// user. FAIL-SAFE null on no identity / unresolved userId / DB error.
+	async #sharedLevel(
+		innerPath: string,
+		userInfo: FileUserInfo | undefined = fileUserContext.getStore(),
+	): Promise<AclLevel | null> {
+		if (!userInfo || !innerPath) return null
+		let userId: string | null
+		try {
+			userId = (await findUserByUsername(userInfo.username))?.id ?? null
+		} catch {
+			return null
+		}
+		if (!userId) return null
+		const uid = userId
+		try {
+			return await nearestAncestorAclLevel(innerPath, (p) => aclGetEffectiveLevel(p, uid))
+		} catch {
+			return null
+		}
+	}
+
+	// Resolve a grant-namespace inner path against the GLOBAL base dirs, with the
+	// realpath escapes-base containment. NO ACL check here (callers gate first).
+	async #toGlobalSystemPath(innerPath: string): Promise<string> {
+		const normalized = normalizePath(innerPath)
+		if (!nodePath.posix.isAbsolute(normalized)) throw new Error('[path-not-absolute]')
+		const segments = normalized.split('/').filter(Boolean)
+		const basePath = this.baseDirectories.get(`/${segments[0]}`)
+		if (!basePath) throw new Error(`[invalid-base] No valid base directory found for path: ${innerPath}`)
+		segments[0] = basePath
+		const systemPath = segments.join('/')
+		const deepestExistingPath = await getDeepestExistingPath(systemPath)
+		const deepestExistingRealPath = String(await fse.realpath(deepestExistingPath))
+		const realPath = systemPath.replace(deepestExistingPath, deepestExistingRealPath)
+		if (!realPath.startsWith(basePath)) throw new Error(`[escapes-base] '${innerPath}' escapes '${basePath}'`)
+		return systemPath
+	}
+
+	// Full /Shared resolution: nearest-ancestor ≥read gate, then global-tree
+	// resolution. Throws [acl-denied] on the root, no grant, none, or no identity.
+	async #resolveSharedSystemPath(virtualPath: string): Promise<string> {
+		const inner = this.#sharedInnerPath(virtualPath)
+		if (inner === '' || inner === '/') throw new Error('[acl-denied] /Shared root has no system path')
+		const level = await this.#sharedLevel(inner)
+		if (level !== 'read' && level !== 'write') throw new Error(`[acl-denied] no grant for '${virtualPath}'`)
+		return this.#toGlobalSystemPath(inner)
+	}
+
+	// Write-gate: a MUTATION on a /Shared path requires a nearest-ancestor WRITE
+	// grant. No-op for own-tree paths (own-tree writes governed by the existing
+	// ownership rules — zero regression). Called at the top of every mutating
+	// Files method + the upload/save-text API routes (defense-in-depth alongside
+	// the getAllowedOperations 'writable' gate).
+	async assertSharedWritable(virtualPath: string): Promise<void> {
+		if (!this.#isSharedPath(virtualPath)) return
+		const level = await this.#sharedLevel(this.#sharedInnerPath(virtualPath))
+		if (level !== 'write') throw new Error(`[acl-denied] read-only shared path '${virtualPath}'`)
+	}
+
+	// Build a File entry for a /Shared item — a self-contained status() that tags
+	// the entry with its /Shared virtual path + the ACL-derived operation set
+	// (NOT the own-tree structural rules). Never calls systemToVirtualPath (which
+	// is own-tree-scoped and would mis-map a global system path).
+	async #sharedFileEntry(systemPath: string, virtualPath: string, operations: FileOperation[]): Promise<File> {
+		const stats = await fse.lstat(systemPath)
+		const name = nodePath.basename(virtualPath)
+		let type: string
+		if (stats.isDirectory()) type = 'directory'
+		else if (stats.isSymbolicLink()) type = 'symbolic-link'
+		else type = mime.lookup(name) || 'application/octet-stream'
+		const thumbnail = await this.thumbnails.getExistingThumbnail(systemPath).catch(() => undefined)
+		return {
+			name,
+			path: virtualPath,
+			type,
+			size: type === 'directory' ? 0 : stats.size,
+			modified: stats.mtime.getTime(),
+			operations,
+			thumbnail,
+		}
+	}
+
+	// The /Shared root listing: one entry per DISTINCT granted path (SC3 — only
+	// the exact grants, never their ungranted siblings). FAIL-SAFE empty on no
+	// identity / no DB.
+	async #listSharedRoot(userInfo: FileUserInfo | undefined): Promise<DirectoryListing> {
+		const empty: DirectoryListing = {
+			name: 'Shared',
+			path: SHARED_ROOT,
+			type: 'directory',
+			size: 0,
+			modified: 0,
+			operations: [],
+			files: [],
+		}
+		if (!userInfo) return empty
+		let userId: string | null
+		try {
+			userId = (await findUserByUsername(userInfo.username))?.id ?? null
+		} catch {
+			return empty
+		}
+		if (!userId) return empty
+		const granted = await listGrantedPathsForUser(userId).catch(() => [])
+		const files: File[] = []
+		for (const g of granted) {
+			const sharedVirtual = `${SHARED_ROOT}${g.virtualPath}` // /Shared/Home/foo
+			try {
+				const systemPath = await this.#toGlobalSystemPath(g.virtualPath)
+				files.push(await this.#sharedFileEntry(systemPath, sharedVirtual, aclLevelToOperations(g.level)))
+			} catch {
+				// A grant whose target no longer exists / can't resolve is skipped.
+			}
+		}
+		return {...empty, files}
+	}
+
+	// List a /Shared path: the synthetic root, or a directory inside a granted
+	// folder (children tagged with /Shared paths + the folder's effective-level
+	// ops). Throws [acl-denied] when the caller lacks a live grant.
+	async #listShared(virtualPath: string): Promise<DirectoryListing> {
+		const userInfo = fileUserContext.getStore()
+		if (this.#sharedInnerPath(virtualPath) === '') return this.#listSharedRoot(userInfo)
+
+		const inner = this.#sharedInnerPath(virtualPath)
+		const level = await this.#sharedLevel(inner, userInfo)
+		if (level !== 'read' && level !== 'write') throw new Error(`[acl-denied] no grant for '${virtualPath}'`)
+		const systemPath = await this.#toGlobalSystemPath(inner)
+		const operations = aclLevelToOperations(level)
+		const base = normalizePath(virtualPath).replace(/\/$/, '')
+
+		const files: File[] = []
+		let truncatedAt: number | undefined
+		let count = 0
+		for await (const childSystemPath of getDirectoryStream(systemPath)) {
+			const name = nodePath.basename(childSystemPath)
+			if (this.isHidden(name)) continue
+			const entry = await this.#sharedFileEntry(childSystemPath, `${base}/${name}`, operations).catch(() => undefined)
+			if (entry) files.push(entry)
+			if (++count >= this.maxDirectoryListing) {
+				truncatedAt = this.maxDirectoryListing
+				break
+			}
+		}
+		const self = await this.#sharedFileEntry(systemPath, base, operations)
+		return {...self, files, truncatedAt}
+	}
+
 	// Converts a virtual path to a system path.
 	// Ensures that the path is safe and does not escape the expected base directory.
 	// If the full path doesn't exist it validates symlinks up to the deepest existing path.
 	async virtualToSystemPath(virtualPath: string) {
+		// Phase 336 — a web /Shared cross-user path resolves through the ACL layer.
+		// Own-tree paths (never starting with /Shared) fall through unchanged.
+		if (this.#isSharedPath(virtualPath)) return this.#resolveSharedSystemPath(virtualPath)
+
 		// Split the path into segments and lookup the system path for the base directory
 		// Uses per-user directories for non-admin users via AsyncLocalStorage context.
 		const segments = virtualPath.split('/').filter(Boolean)

@@ -273,6 +273,18 @@ export default function api({publicApi, privateApi, livinityd}: ApiOptions) {
 				return response.status(400).json({error: 'invalid collision parameter'})
 			}
 
+			// Phase 336 (ACLUI-01) — /upload writes DIRECTLY (unlike save-text, it
+			// does NOT go through saveTextFile's getAllowedOperations 'writable'
+			// gate), so a read-only /Shared cross-user path would otherwise be
+			// writable here. Require a WRITE grant on a /Shared target before any
+			// write; a no-op for own-tree paths (governed by their own rules).
+			try {
+				await livinityd.files.assertSharedWritable(request.query.path)
+			} catch {
+				response.setHeader('Connection', 'close')
+				return response.status(403).json({error: '[operation-not-allowed]'})
+			}
+
 			// Check path is valid
 			let systemPath = await livinityd.files.virtualToSystemPath(request.query.path).catch((error) => {
 				response.setHeader('Connection', 'close')
