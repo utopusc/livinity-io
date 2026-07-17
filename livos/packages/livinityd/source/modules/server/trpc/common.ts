@@ -16,6 +16,14 @@ export const httpOnlyPaths = [
 	'user.logout',
 	// public user list for login screen (no auth needed, use HTTP to avoid WS auth requirement)
 	'user.listUsers',
+	// Phase 334 STEPUP-01 — all four step-up verify paths set (or precede
+	// setting) the LIVINITY_STEPUP grant cookie, which only exists on an HTTP
+	// response. passkeyOptions is included so the SETEX challenge + the verify
+	// ride the same transport.
+	'stepUp.verifyPassword',
+	'stepUp.verifyTotp',
+	'stepUp.passkeyOptions',
+	'stepUp.passkeyVerify',
 	// public invite acceptance (no auth needed)
 	'user.acceptInvite',
 	// system.status doesn't use cookies/headers, but the UI polls it across restarts to detect when livinityd is back online; we force HTTP to avoid WS reconnect handshake

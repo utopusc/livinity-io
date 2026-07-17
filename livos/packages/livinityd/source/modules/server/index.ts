@@ -331,6 +331,16 @@ class Server {
 		return jwt.verifyShareGrant(token, await this.getJwtSecret())
 	}
 
+	/** Phase 334 (STEPUP-01, D-334-1) — mint a 5-min sudo-mode step-up grant bound to one userId. */
+	async signStepUpGrant(userId: string) {
+		return jwt.signStepUpGrant(await this.getJwtSecret(), userId)
+	}
+
+	/** Phase 334 (STEPUP-01, D-334-1) — verify a step-up grant (audience-bound, throws on failure). */
+	async verifyStepUpGrant(token: string) {
+		return jwt.verifyStepUpGrant(token, await this.getJwtSecret())
+	}
+
 	/**
 	 * Phase 259 — the operator's active main domain (`bruce.livinity.io`) or null
 	 * when no domain is configured. The SSO bounce uses it to (a) validate that a

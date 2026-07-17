@@ -190,6 +190,35 @@ export async function recordAuthLoginEvent(
 	)
 }
 
+/**
+ * Phase 334 (STEPUP-01) — append one step-up re-auth row for a fresh-factor
+ * verification success OR failure. Same auth-login sentinel (the event IS an
+ * authentication event) but tool_name 'stepup' so viewers can distinguish it
+ * from first-factor logins. Like login: NO input is ever captured — the
+ * password / TOTP code / assertion body must NEVER be passed here.
+ */
+export async function recordStepUpEvent(
+	event: AuthLoginAuditEvent & {method: 'password' | 'totp' | 'passkey'},
+	logger: MinimalLogger = console,
+): Promise<void> {
+	await writeAuditRow(
+		AUTH_LOGIN_SENTINEL,
+		'stepup',
+		event.userId,
+		null,
+		{
+			action: 'stepup',
+			method: event.method,
+			userId: event.userId,
+			success: event.success,
+			error: event.error,
+		},
+		event.success,
+		event.error,
+		logger,
+	)
+}
+
 // Re-export the sentinel literals so Plan 04's viewer can reference the same
 // constants (it may also inline them).
 export {ADMIN_ACTION_SENTINEL, AUTH_LOGIN_SENTINEL}

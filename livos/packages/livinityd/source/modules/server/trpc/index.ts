@@ -56,6 +56,11 @@ import fail2ban from '../../fail2ban-admin/routes.js'
 import securityAdvisor from '../../security-advisor/routes.js'
 // Phase 333 DIAG-01/02 — connectivity.{getReport,runCheckNow,setIgnore,setMailEnabled}
 import connectivity from '../../connectivity/routes.js'
+// Phase 334 STEPUP-01 — stepUp.{verifyPassword,verifyTotp,passkeyOptions,
+// passkeyVerify}. Fresh re-auth mints the 5-min LIVINITY_STEPUP grant cookie
+// consumed by requireStepUpGrant on sensitive routes. All four paths are in
+// httpOnlyPaths (cookie can only be set on an HTTP response).
+import stepUp from '../../stepup/routes.js'
 // v29.4 Phase 47 Plan 05 — AI Diagnostics. Per G-07 namespacing Option B:
 // `capabilitiesRouter` mounts as a fresh top-level `capabilities` namespace,
 // while `appsHealthRouter` merges into the existing `apps` namespace so
@@ -377,6 +382,8 @@ export function createAppRouter(opts: {
 		securityAdvisor,
 		// Phase 333 DIAG-01/02 — connectivity.{getReport,runCheckNow,setIgnore,setMailEnabled}
 		connectivity,
+		// Phase 334 STEPUP-01 — sudo-mode step-up verify namespace (D-334-3).
+		stepUp,
 		// v29.4 Phase 47 Plan 05 — AI Diagnostics admin namespace (FR-TOOL-01/02 + FR-MODEL-01).
 		capabilities: diagnosticsRoutes.capabilitiesRouter,
 		// v30.0 Phase 59 Plan 04 — apiKeys namespace (FR-BROKER-B1-04).
