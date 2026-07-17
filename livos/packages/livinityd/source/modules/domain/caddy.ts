@@ -8,6 +8,10 @@ import {ensureFirewallPorts} from './firewall.js'
 // `import type` erases at compile time, so caddy.ts gains NO runtime dependency on
 // the apps module; it only carries the field shape through SubdomainConfig.
 import type {PublicAccessConfig} from '../apps/public-access.js'
+// Phase 332 (WAF-01/02) — per-app stock-Caddy protection emit. Runtime import is
+// intentional (renderWafPrefix runs at generate time); waf.ts is a pure module
+// with zero I/O so no cycle risk.
+import {renderWafPrefix, type AppWafConfig} from './waf.js'
 
 const execAsync = promisify(exec)
 
@@ -213,6 +217,14 @@ export interface SubdomainConfig {
 	 * 258-01 adds the field ONLY — the emit carve-out that reads it is 258-02.
 	 */
 	publicAccess?: PublicAccessConfig
+	/**
+	 * Phase 332 (WAF-01/02) — per-app stock-Caddy protection config (IP/CIDR ban,
+	 * UA block, abuse-log opt-in for the fail2ban jail). Absent = ZERO emit — the
+	 * vhost stays byte-identical to pre-332 output (SC3). Populated from the
+	 * `appSecurity` store key by the regen builders (332-02); validated at the
+	 * route layer AND re-filtered at emit (waf.ts, D-332-5 injection kill).
+	 */
+	waf?: AppWafConfig
 	/**
 	 * Phase 287 — verify-live readiness. true once the per-app host
 	 * `{app}-{user}.livinity.io` is confirmed to RESOLVE (record exists).
@@ -899,6 +911,13 @@ ${WS_TRANSPORT_BODY}
 			host = `${sub.subdomain}.${config.mainDomain}`
 		}
 		const fullDomain = `${prefix}${host}`
+		// Phase 332 (WAF-01/02): the per-app protection prefix — denial handles
+		// (IP/CIDR + UA, emitted FIRST so they win first-match against every other
+		// handle) + the opt-in abuse access-log. '' when the app never opted in →
+		// every emit below stays BYTE-IDENTICAL to pre-332 output (SC3/SC5 goldens).
+		// NEVER emitted for the apex/dashboard block or native apps — only inside
+		// this per-app subdomain loop.
+		const wafPrefix = renderWafPrefix(sub.appId, sub.waf)
 		if (multiUser) {
 			// Phase 258 WS-B (258-02) NOTE-1 — SINGLE-USER-EMIT ASSUMPTION (the one way
 			// the 258 spine is silently bypassed): the public-access carve-out (public
@@ -919,7 +938,7 @@ ${WS_TRANSPORT_BODY}
 				)
 			}
 			blocks.push(`${fullDomain} {
-${LIV_AI_APP_HANDLE}
+${wafPrefix}${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
 ${LIV_AGENTS_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
@@ -1013,7 +1032,7 @@ ${WS_TRANSPORT_BODY}
 				// entirely; emit a SINGLE header-stripped reverse_proxy. No forward_auth,
 				// NO daemon bearer (the bearer must never ride a public route).
 				blocks.push(`${fullDomain} {
-\thandle {
+${wafPrefix}\thandle {
 ${PUBLIC_HEADER_STRIP}
 \t\treverse_proxy 127.0.0.1:${sub.port} {
 ${FRAME_EMBED_STRIP}
@@ -1039,7 +1058,7 @@ ${WS_TRANSPORT_BODY}
 \t}`)
 				}
 				blocks.push(`${fullDomain} {
-${ssoAuthHandle}
+${wafPrefix}${ssoAuthHandle}
 ${publicBlocks.join('\n')}
 \thandle {
 ${gatedHandleBody.replace(/^\t/gm, '\t\t')}
@@ -1051,7 +1070,7 @@ ${gatedHandleBody.replace(/^\t/gm, '\t\t')}
 				// `handle {}` so /__livos_auth (emitted first) wins on first-match; every
 				// other path still falls through to the unchanged forward_auth gate.
 				blocks.push(`${fullDomain} {
-${ssoAuthHandle}
+${wafPrefix}${ssoAuthHandle}
 \thandle {
 ${gatedHandleBody.replace(/^\t/gm, '\t\t')}
 \t}
