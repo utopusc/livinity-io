@@ -81,6 +81,7 @@ export function buildRgArgs(query: string, root: string): string[] {
 		'--threads',
 		String(CONTENT_SEARCH_CAPS.threads),
 		'--no-follow', // explicit even though it is rg's default (auditable symlink control)
+		'--no-ignore', // user data is not a git repo: never let stray .gitignore/.ignore files hide readable content (parity with the Node fallback; dotfiles still skipped)
 		'-e',
 		query,
 		'--',

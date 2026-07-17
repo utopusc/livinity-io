@@ -240,6 +240,7 @@ describe('rg argv (injection-safety) — pure builders', () => {
 			'--threads',
 			'2',
 			'--no-follow',
+			'--no-ignore',
 			'-e',
 			'hello',
 			'--',
