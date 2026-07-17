@@ -1,0 +1,10 @@
+# Phase 332 (WAF-01) — sudoers grant for the app-layer WAF fail2ban abuse-jail wrapper.
+# Security model: grant on ONE explicit binary path, NO glob, NO arg wildcard.
+# The wrapper validates its action enum
+# {ensure-log-dir|install-jail|remove-jail|status|reload}, owns every fail2ban filter/jail
+# body (fixed heredocs), and the ONLY caller inputs are three integers (maxretry/findtime/
+# bantime) re-validated ^[0-9]{1,7}$ root-side — so no caller string can reach a generated
+# config or ban an arbitrary target (332-CONTEXT D-332-7).
+# Deploy: deploy-livinityd.sh; day-2: update.sh Step 7.10w.
+Cmnd_Alias LIVINITYD_WAF = /usr/local/lib/livos/livos-waf.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_WAF

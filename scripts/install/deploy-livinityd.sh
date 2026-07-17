@@ -3693,6 +3693,50 @@ _dld_template_app_units() {
         info "sudoers.d/livos-pool source not found — skipping (storage pooling unavailable)"
     fi
 
+    # 2b-waf. Phase 332 (WAF-01) — app-layer WAF fail2ban abuse-jail wrapper + sudoers.d/livos-waf.
+    # Byte-for-byte parallel to the 2a/2b-storage-pool blocks above, retargeted at livos-waf.
+    # Wrapper (0755) BEFORE grant (0440); content-diffed idempotent; visudo validate-or-remove.
+    local _wafwrap_src="${_DLD_STAGE_DIR}/scripts/install/livos-waf.sh"
+    [[ -f "$_wafwrap_src" ]] || _wafwrap_src="${_DLD_LIVOS_DIR}/scripts/install/livos-waf.sh"
+    local _wafwrap_dst="/usr/local/lib/livos/livos-waf.sh"
+    if [[ -f "$_wafwrap_src" ]]; then
+        mkdir -p /usr/local/lib/livos
+        if [[ ! -f "$_wafwrap_dst" ]] || ! cmp -s "$_wafwrap_src" "$_wafwrap_dst"; then
+            if install -m 0755 -o root -g root "$_wafwrap_src" /usr/local/lib/livos/livos-waf.sh; then
+                ok "livos-waf.sh installed at $_wafwrap_dst"
+            else
+                warn "Failed to install livos-waf.sh (non-fatal; WAF abuse-jail unavailable until fixed)"
+            fi
+        fi
+    else
+        info "livos-waf.sh source not found — skipping (WAF abuse-jail unavailable)"
+    fi
+    local _waf_src="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livos-waf"
+    [[ -f "$_waf_src" ]] || _waf_src="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livos-waf"
+    local _waf_dst="/etc/sudoers.d/livos-waf"
+    if [[ -f "$_waf_src" ]]; then
+        local _waf_tmp
+        _waf_tmp=$(mktemp)
+        if [[ "$_DLD_DESKTOP_USER" != "bruce" ]]; then
+            sed -E "s/^bruce([[:space:]]+ALL=)/${_DLD_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DLD_DESKTOP_USER})/g" \
+                "$_waf_src" > "$_waf_tmp"
+        else
+            cp -f "$_waf_src" "$_waf_tmp"
+        fi
+        if [[ ! -f "$_waf_dst" ]] || ! cmp -s "$_waf_tmp" "$_waf_dst"; then
+            install -m 0440 -o root -g root "$_waf_tmp" "$_waf_dst"
+            if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_waf_dst" >/dev/null 2>&1; then
+                warn "visudo rejected $_waf_dst — removing (WAF abuse-jail stays denied until fixed)"
+                rm -f "$_waf_dst"
+            else
+                ok "sudoers.d/livos-waf installed (user-spec: ${_DLD_DESKTOP_USER})"
+            fi
+        fi
+        rm -f "$_waf_tmp"
+    else
+        info "sudoers.d/livos-waf source not found — skipping (WAF abuse-jail unavailable)"
+    fi
+
     # 2c-gpu. Phase 316 (GPU-01) — NVIDIA container-toolkit, GATED behind an
     # `lspci` NVIDIA-GPU probe so NON-NVIDIA boxes (the overwhelming majority) see
     # ZERO install change. On an NVIDIA box we shell out to the SAME root-owned

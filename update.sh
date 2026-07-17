@@ -3850,6 +3850,70 @@ else
     info "sudoers.d/livos-pool source not found — skipping (storage pooling unavailable)"
 fi
 
+# ── Step 7.10w: Phase 332 (WAF-01) — app-layer WAF fail2ban abuse-jail (wrapper + sudoers.d/livos-waf) ──
+# The livos-waf NOPASSWD grant + the root-owned WAF wrapper (fail2ban filter/jail install +
+# Caddy access-log dir + reload, closed-enum {ensure-log-dir|install-jail|remove-jail|status|
+# reload}, caller inputs limited to three re-validated integers). Deployed EXACTLY like the
+# Phase 318 livos-pool block above (content-diff wrapper install + sudoers subject-template +
+# visudo validate-or-remove). Fully fail-tolerant: a missing source or a visudo rejection
+# never aborts the Update; a box without this stays on the stock-Caddy matcher WAF leg only.
+step "Phase 332 (WAF-01): app-layer WAF abuse-jail (livos-waf.sh + sudoers.d/livos-waf)"
+
+_set_desktop_identity   # Phase 277.1 — self-derive the desktop user (no literal bruce)
+
+# --- (a0) livos-waf.sh wrapper — install BEFORE the grant ---
+_WAF_WRAP_SRC="$LIVOS_DIR/scripts/install/livos-waf.sh"
+if [[ ! -f "$_WAF_WRAP_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _WAF_WRAP_SRC="$TEMP_DIR/scripts/install/livos-waf.sh"
+fi
+_WAF_WRAP_DST="/usr/local/lib/livos/livos-waf.sh"
+if [[ -f "$_WAF_WRAP_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_WAF_WRAP_DST" ]] || ! cmp -s "$_WAF_WRAP_SRC" "$_WAF_WRAP_DST"; then
+        if install -m 0755 -o root -g root "$_WAF_WRAP_SRC" "$_WAF_WRAP_DST"; then
+            ok "livos-waf.sh installed at $_WAF_WRAP_DST"
+        else
+            warn "Failed to install livos-waf.sh (non-fatal — WAF abuse-jail unavailable until fixed)"
+        fi
+    else
+        info "livos-waf.sh already current"
+    fi
+else
+    info "livos-waf.sh source not found — skipping (WAF abuse-jail unavailable)"
+fi
+
+# --- (a) sudoers.d/livos-waf — install + template the subject to the desktop user ---
+_WAF_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-waf"
+if [[ ! -f "$_WAF_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _WAF_SUDOERS_SRC="$TEMP_DIR/scripts/install/sudoers.d/livos-waf"
+fi
+_WAF_SUDOERS_DST="/etc/sudoers.d/livos-waf"
+if [[ -f "$_WAF_SUDOERS_SRC" ]]; then
+    _WAF_SUDOERS_TMP=$(mktemp)
+    if [[ "$_DESKTOP_USER" != "bruce" ]]; then
+        sed -E "s/^bruce([[:space:]]+ALL=)/${_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DESKTOP_USER})/g" \
+            "$_WAF_SUDOERS_SRC" > "$_WAF_SUDOERS_TMP"
+    else
+        cp -f "$_WAF_SUDOERS_SRC" "$_WAF_SUDOERS_TMP"
+    fi
+    if [[ ! -f "$_WAF_SUDOERS_DST" ]] || ! cmp -s "$_WAF_SUDOERS_TMP" "$_WAF_SUDOERS_DST"; then
+        install -m 0440 -o root -g root "$_WAF_SUDOERS_TMP" "$_WAF_SUDOERS_DST"
+        # SAFETY-CRITICAL: a malformed sudoers file can break sudo system-wide. Validate the
+        # INSTALLED file; if visudo rejects it, REMOVE it (WAF abuse-jail stays denied).
+        if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_WAF_SUDOERS_DST" >/dev/null 2>&1; then
+            warn "visudo rejected $_WAF_SUDOERS_DST — removing (WAF abuse-jail stays denied until fixed)"
+            rm -f "$_WAF_SUDOERS_DST"
+        else
+            ok "sudoers.d/livos-waf installed (subject: ${_DESKTOP_USER})"
+        fi
+    else
+        info "sudoers.d/livos-waf already current (subject: ${_DESKTOP_USER})"
+    fi
+    rm -f "$_WAF_SUDOERS_TMP"
+else
+    info "sudoers.d/livos-waf source not found — skipping (WAF abuse-jail unavailable)"
+fi
+
 # ── Step 7.11: Phase 306 — desktop-user password helper (wrapper + sudoers + bootstrap) ──
 # The "Regenerate" button on the Desktop password row in Settings → Account calls
 # livinityd's system.regenerateDesktopPassword, which runs

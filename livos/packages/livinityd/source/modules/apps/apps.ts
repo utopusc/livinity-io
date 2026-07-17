@@ -51,6 +51,8 @@ import {applyCaddyConfig, generateFullCaddyfile, writeCaddyfile, reloadCaddy, MA
 // Phase 332 (WAF-01/02) — per-app protection config type + validation for the
 // setAppProtection route + Caddy regen threading.
 import {validateWafConfig, type AppWafConfig} from '../domain/waf.js'
+// Phase 332 (WAF-01): the fail-soft fail2ban abuse-jail sink.
+import {installAbuseJail, removeAbuseJail} from '../domain/waf-jail.js'
 import {buildCaddyConfigFromState, type CaddyStateInstance, type CaddyStateSubdomain} from '../domain/caddy-state.js'
 import {getTunnelStatus} from '../domain/tunnel.js'
 import {verifyDns} from '../domain/dns-check.js'
@@ -2376,6 +2378,21 @@ export default class Apps {
 		})
 		// Regenerate the Caddyfile from live state so the new protection is live.
 		await this.rebuildCaddyFromState({rethrow: false})
+		// WAF-01 abuse-jail lifecycle (fail-soft): install the fail2ban jail when
+		// ANY app now opts into abuse-ban, remove it when none do. Never blocks the
+		// setter — a box without the wrapper/fail2ban just keeps the stock-Caddy
+		// matcher leg (332-01). Best-effort; errors are swallowed inside the sink.
+		try {
+			const state = await this.#livinityd.store.get('appSecurity')
+			const anyAbuseBan = Object.values(state?.apps ?? {}).some((c) => c?.abuseBan)
+			if (anyAbuseBan) {
+				await installAbuseJail(state?.jail ?? {}, {run: undefined, logger: this.logger})
+			} else {
+				await removeAbuseJail({run: undefined, logger: this.logger})
+			}
+		} catch (error) {
+			this.logger.error('[waf] abuse-jail reconcile failed (non-fatal)', error)
+		}
 	}
 
 	// ─── Phase 258 WS-C (258-03) — public-access persistence + re-assert ─────
