@@ -11,10 +11,11 @@
 # template): the privileged surface here is creating a ROOT-OWNED directory with
 # mode 1770 and group `livinity` inside an arbitrary share path — root-only work
 # (livinityd runs as the unprivileged desktop user and must not own the bin: the
-# top-level `.Recycle.Bin` has to be root:livinity 1770 so every `livos-*` account
-# can CREATE its own `%U` subdir but never traverse a sibling's — without this
-# pre-provisioning, the first SMB deleter's 0700 auto-created dir fail-closed-blocks
-# every other user's recycle, RESEARCH §3.1). A raw NOPASSWD grant on mkdir/chown/
+# top-level `.Recycle.Bin` has to be root:livinity 1770: root ownership stops the
+# first SMB deleter from re-moding/removing the shared bin (Samba auto-creates it
+# owned by that deleter otherwise), and the sticky bit stops any user deleting or
+# renaming a SIBLING's `%U` subdir; group-rwx still lets every `livos-*` account
+# create its own subdir, RESEARCH §3.1). A raw NOPASSWD grant on mkdir/chown/
 # chmod would let any process that can call `sudo` re-own or re-mode ARBITRARY
 # paths. Instead the sudoers grant is on THIS ONE binary path (no glob, no argument
 # wildcard), the wrapper accepts ONLY a fixed action enum {ensure-dir|status}, and
@@ -104,6 +105,16 @@ case "$ACTION" in
 		_validate_path "$TARGET"
 		BIN_DIR="${_CANON}/${RECYCLE_DIRNAME}"
 		mkdir -p -- "$BIN_DIR"
+		# Never chown/chmod through a pre-planted symlink, and re-verify AFTER mkdir
+		# that the bin's physical path is still the validated one (an ancestor swapped
+		# to a symlink between validation and here would redirect the root chown to an
+		# arbitrary target — the exact abuse this wrapper exists to prevent).
+		[[ ! -L "$BIN_DIR" ]] \
+			|| { echo "[livos-recycle-bin] ${RECYCLE_DIRNAME} is a symlink, refusing: '${BIN_DIR}'" >&2; exit 2; }
+		_BIN_REAL="$(realpath -- "$BIN_DIR")" \
+			|| { echo "[livos-recycle-bin] cannot resolve created bin: '${BIN_DIR}'" >&2; exit 2; }
+		[[ "$_BIN_REAL" == "$BIN_DIR" ]] \
+			|| { echo "[livos-recycle-bin] bin resolves outside the validated path, refusing: '${_BIN_REAL}'" >&2; exit 2; }
 		chown "root:${RECYCLE_GROUP}" -- "$BIN_DIR" 2>/dev/null || chown root:root -- "$BIN_DIR"
 		chmod "$RECYCLE_MODE" -- "$BIN_DIR"
 		echo "ensured"

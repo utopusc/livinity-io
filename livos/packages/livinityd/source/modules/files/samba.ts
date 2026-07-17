@@ -446,13 +446,17 @@ export default class Samba {
 	// Phase 338 (RECYCLE-01, D-338-1 / W2) — best-effort top-level `.Recycle.Bin`
 	// provisioning at share-provision time. The privileged wrapper ships in 338-02;
 	// this call is FAIL-SOFT: a box without the wrapper deployed still renders config
-	// and starts smbd (degraded — Samba auto-creates the bin as the first deleter's
-	// 0700 dir, fail-closed for siblings but never a leak). Stats FIRST so an existing
-	// bin adds ZERO privileged-shell latency to unrelated share mutations.
+	// and starts smbd (degraded — Samba auto-creates the bin owned by the first
+	// deleter, whose ownership lets them re-mode the shared bin and, without the
+	// sticky bit, delete siblings' subdirs; never a read leak). Stats FIRST so a
+	// CONFORMANT bin (real dir, root-owned, mode 1770) adds ZERO privileged-shell
+	// latency to unrelated share mutations — but a missing OR non-conformant bin
+	// (e.g. Samba-auto-created before the wrapper ran) is healed via the wrapper.
 	async #ensureRecycleBin(systemPath: string) {
 		const binPath = nodePath.join(systemPath, RECYCLE_BIN_DIRNAME)
-		const exists = await fse.pathExists(binPath).catch(() => false)
-		if (exists) return
+		const st = await fse.lstat(binPath).catch(() => null)
+		const conformant = st !== null && st.isDirectory() && !st.isSymbolicLink() && st.uid === 0 && (st.mode & 0o7777) === 0o1770
+		if (conformant) return
 		await $`sudo -n /usr/local/lib/livos/livos-recycle-bin.sh ensure-dir ${systemPath}`.catch(() => {})
 	}
 
