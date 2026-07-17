@@ -53,6 +53,15 @@ export default class Archive {
 	// TODO: There's probably a race condition where creating the same archive twice at the same time
 	// will cause the second to overwrite the first. Think of a better way to handle this.
 	async createZipFile(virtualPaths: string[]) {
+		// Phase 336 (ACLUI-01, review C1) — the zip is WRITTEN into dirname(paths[0]).
+		// archive is the one mutating op that does NOT go through
+		// getAllowedOperations, so a read-only /Shared grant could otherwise plant a
+		// file in another user's tree. Gate the destination directory on a WRITE
+		// grant; a no-op for own-tree paths (their writes are governed as before).
+		if (virtualPaths[0]) {
+			await this.#livinityd.files.assertSharedWritable(nodePath.dirname(virtualPaths[0]))
+		}
+
 		// Convert virtual paths to system paths
 		const systemPaths = await Promise.all(
 			virtualPaths.map((virtualPath) => this.#livinityd.files.virtualToSystemPath(virtualPath)),

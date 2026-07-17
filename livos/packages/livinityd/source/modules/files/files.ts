@@ -1038,6 +1038,10 @@ export default class Files {
 		let targetSystemPath: string
 		try {
 			const trashMeta = (await fse.readJson(trashMetaSystemPath)) as Trashmeta
+			// Phase 336 (review W1) — restoring back INTO a /Shared target is a WRITE;
+			// require a live write grant (a downgraded read grant must not restore).
+			// No-op for own-tree restore targets.
+			await this.assertSharedWritable(trashMeta.path)
 			targetSystemPath = await this.virtualToSystemPath(trashMeta.path)
 			// Calculate full path if we're recovering a child file or directory
 			if (isChild) targetSystemPath = nodePath.join(targetSystemPath, pathSegments.slice(2).join('/'))
@@ -1353,7 +1357,12 @@ export default class Files {
 		const deepestExistingPath = await getDeepestExistingPath(systemPath)
 		const deepestExistingRealPath = String(await fse.realpath(deepestExistingPath))
 		const realPath = systemPath.replace(deepestExistingPath, deepestExistingRealPath)
-		if (!realPath.startsWith(basePath)) throw new Error(`[escapes-base] '${innerPath}' escapes '${basePath}'`)
+		// Review INFO — exact-or-child-prefix (not a bare startsWith) so a sibling
+		// base whose path is a string-prefix (e.g. /data/home vs /data/home-x)
+		// can never be escaped into. Hardened here since this resolver is new.
+		if (realPath !== basePath && !realPath.startsWith(`${basePath}/`)) {
+			throw new Error(`[escapes-base] '${innerPath}' escapes '${basePath}'`)
+		}
 		return systemPath
 	}
 
@@ -1444,10 +1453,22 @@ export default class Files {
 		if (this.#sharedInnerPath(virtualPath) === '') return this.#listSharedRoot(userInfo)
 
 		const inner = this.#sharedInnerPath(virtualPath)
-		const level = await this.#sharedLevel(inner, userInfo)
+		// Resolve the acting userId ONCE (avoid a per-child findUserByUsername).
+		let userId: string | null = null
+		if (userInfo) {
+			try {
+				userId = (await findUserByUsername(userInfo.username))?.id ?? null
+			} catch {
+				userId = null
+			}
+		}
+		if (!userId) throw new Error(`[acl-denied] no grant for '${virtualPath}'`)
+		const uid = userId
+
+		const level = await nearestAncestorAclLevel(inner, (p) => aclGetEffectiveLevel(p, uid)).catch(() => null)
 		if (level !== 'read' && level !== 'write') throw new Error(`[acl-denied] no grant for '${virtualPath}'`)
 		const systemPath = await this.#toGlobalSystemPath(inner)
-		const operations = aclLevelToOperations(level)
+		const folderOperations = aclLevelToOperations(level)
 		const base = normalizePath(virtualPath).replace(/\/$/, '')
 
 		const files: File[] = []
@@ -1456,6 +1477,14 @@ export default class Files {
 		for await (const childSystemPath of getDirectoryStream(systemPath)) {
 			const name = nodePath.basename(childSystemPath)
 			if (this.isHidden(name)) continue
+			// Review W2 — a child MAY carry its OWN explicit grant. Check the child's
+			// EXACT level (one indexed query): an explicit `none` HIDES it (honor the
+			// deny-override intent — no name disclosure); an explicit read/write tags
+			// the child with its OWN ops; no own grant → inherit the folder's ops.
+			const childInner = `${inner.replace(/\/$/, '')}/${name}`
+			const exact = await aclGetEffectiveLevel(childInner, uid).catch(() => null)
+			if (exact === 'none') continue // explicitly denied → do not surface
+			const operations = exact ? aclLevelToOperations(exact) : folderOperations
 			const entry = await this.#sharedFileEntry(childSystemPath, `${base}/${name}`, operations).catch(() => undefined)
 			if (entry) files.push(entry)
 			if (++count >= this.maxDirectoryListing) {
@@ -1463,7 +1492,7 @@ export default class Files {
 				break
 			}
 		}
-		const self = await this.#sharedFileEntry(systemPath, base, operations)
+		const self = await this.#sharedFileEntry(systemPath, base, folderOperations)
 		return {...self, files, truncatedAt}
 	}
 
