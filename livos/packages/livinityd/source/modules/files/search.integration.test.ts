@@ -155,4 +155,21 @@ describe('files.search() — mode:content', () => {
 		const results = await livinityd.client.files.search.query({query: 'qqnameonlytokenqq', mode: 'content'})
 		expect(results.some((f) => f.name === 'qqnameonlytokenqq.txt')).toBe(false)
 	})
+
+	// Phase 337-02 — /Shared enumeration fails safe to empty with NO live grant seeded
+	// (same fail-safe discipline as files.shared.integration.test.ts): the caller has no
+	// grants, so #searchSharedContent contributes nothing and never throws — results are
+	// exactly the own-/Home content hits. The GRANTED cross-user happy path (seeing another
+	// user's file content) needs a live multi-user Postgres fixture → 337-HUMAN-UAT.
+	test('mode:content with NO grants → only own /Home hits (/Shared fails safe to empty)', async () => {
+		const testDir = `${livinityd.instance.dataDirectory}/home/content-shared-failsafe`
+		await fse.mkdir(testDir, {recursive: true})
+		await fse.writeFile(`${testDir}/own.txt`, 'the token ppsharedfailsafetokenpp is in my own home\n')
+
+		const results = await livinityd.client.files.search.query({query: 'ppsharedfailsafetokenpp', mode: 'content'})
+		// The own-/Home hit is present…
+		expect(results.some((f) => f.path === '/Home/content-shared-failsafe/own.txt')).toBe(true)
+		// …and NOTHING is tagged under /Shared (no grant ⇒ no cross-user contribution).
+		expect(results.some((f) => f.path.startsWith('/Shared/'))).toBe(false)
+	})
 })

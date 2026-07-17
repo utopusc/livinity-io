@@ -84,6 +84,18 @@ function aclLevelToOperations(level: AclLevel | null): FileOperation[] {
 	return [] // 'none' | null → deny
 }
 
+// Phase 337-02 (FTS-01) — the per-hit ACL post-filter DECISION, extracted pure so it
+// is unit-testable offline without a daemon (content-search-shared.test.ts). Keep a
+// shared /Shared content hit IFF its nearest-ancestor effective level is read|write —
+// an explicit `none` on the file OR on any ancestor between the grant and the file
+// (D-337-3) resolves to `none` here → hit dropped → its content never surfaces.
+// #searchSharedContent applies this EXACT gate inline (it also needs the level for the
+// entry's operations), so this function and the production path share one primitive.
+export async function sharedHitAllowed(innerPath: string, getLevel: (path: string) => Promise<AclLevel | null>): Promise<boolean> {
+	const level = await nearestAncestorAclLevel(innerPath, getLevel)
+	return level === 'read' || level === 'write'
+}
+
 // Phase 336 (ACLUI-01) — the synthetic web nav root under which a user reaches
 // the cross-user paths granted to them (file_acls). NOT a real base directory
 // (that would bypass ACL gating): every `/Shared/*` path is intercepted in
@@ -648,8 +660,85 @@ export default class Files {
 				const file = await this.status(hit.systemPath).catch(() => undefined)
 				if (file) results.push({...file, contentMatches: hit.contentMatches, matchCount: hit.matchCount})
 			}
-			return results
+
+			// Phase 337-02 — then scan the caller's granted /Shared roots within the SAME
+			// slot + shared result budget (roots share one cap ⇒ one bounded operation).
+			if (results.length >= cap) return results.slice(0, cap)
+			const sharedResults = await this.#searchSharedContent(q, cap - results.length, signal)
+			return [...results, ...sharedResults].slice(0, cap)
 		})
+	}
+
+	// Phase 337-02 (FTS-01) — content search across the caller's granted /Shared roots.
+	// Mirrors #listSharedRoot's resolution (listGrantedPathsForUser → #toGlobalSystemPath)
+	// and #listShared's per-child override (an explicit `none` hides). Never calls
+	// systemToVirtualPath (own-tree-scoped — would mis-map a global system path); tags
+	// each hit with its /Shared virtual path. NO parallel path-safety / ACL code — every
+	// root resolves via #toGlobalSystemPath (escapes-base) and every hit re-checks
+	// nearest-ancestor via the same 336 primitives. W1: userId resolved ONCE and the
+	// per-path ACL level lookups are memoized so hits sharing ancestors avoid N+1 DB reads.
+	async #searchSharedContent(query: string, remaining: number, signal: AbortSignal): Promise<SearchResultFile[]> {
+		if (remaining <= 0) return []
+		const userInfo = fileUserContext.getStore()
+		if (!userInfo) return [] // fail-safe: no identity → nothing shared
+		let userId: string | null
+		try {
+			userId = (await findUserByUsername(userInfo.username))?.id ?? null
+		} catch {
+			return []
+		}
+		if (!userId) return []
+		const uid = userId
+
+		// Memoized exact-path effective-level lookup, shared across every hit in this
+		// call: a hit's nearest-ancestor walk reuses ancestor verdicts already resolved
+		// by earlier hits in the same subtree (W1 — no per-hit findUserByUsername, no
+		// re-querying the shared ancestors). Fail-safe null on any DB error.
+		const levelCache = new Map<string, AclLevel | null>()
+		const getLevel = async (p: string): Promise<AclLevel | null> => {
+			const cached = levelCache.get(p)
+			if (cached !== undefined) return cached
+			const level = await aclGetEffectiveLevel(p, uid).catch(() => null)
+			levelCache.set(p, level)
+			return level
+		}
+
+		const granted = await listGrantedPathsForUser(uid).catch(() => []) // ≥read, sole-none excluded
+		const out: SearchResultFile[] = []
+
+		for (const g of granted) {
+			if (out.length >= remaining || signal.aborted) break
+			let rootSystemPath: string
+			try {
+				rootSystemPath = await this.#toGlobalSystemPath(g.virtualPath) // global namespace + escapes-base
+			} catch {
+				continue // grant target gone / unresolvable → skip
+			}
+
+			const hits = await this.contentSearch.scanRoot(rootSystemPath, query, {signal, remaining: remaining - out.length})
+
+			for (const hit of hits) {
+				if (out.length >= remaining) break
+				// Map the SYSTEM hit path back to its grant-namespace INNER path, then the
+				// /Shared virtual path. rootSystemPath === #toGlobalSystemPath(g.virtualPath),
+				// so innerPath = g.virtualPath + hit.systemPath.slice(rootSystemPath.length).
+				const suffix = hit.systemPath.slice(rootSystemPath.length) // '' or '/sub/file.txt'
+				const innerPath = normalizePath(`${g.virtualPath}${suffix}`)
+				const sharedVirtual = `${SHARED_ROOT}${innerPath}` // /Shared/Home/foo/file.txt
+
+				// PER-HIT ACL POST-FILTER (D-337-3). Nearest-ancestor governs; an explicit
+				// `none` on this file or an ancestor between the grant and the file HIDES it.
+				// This is exactly the sharedHitAllowed() gate (read|write kept) — inlined so
+				// the resolved level also drives the entry's ACL-derived operation set.
+				const level = await nearestAncestorAclLevel(innerPath, getLevel).catch(() => null)
+				if (level !== 'read' && level !== 'write') continue // dropped → no content leaks
+
+				// Build the File via the 336 self-contained entry (NOT status()/systemToVirtualPath).
+				const entry = await this.#sharedFileEntry(hit.systemPath, sharedVirtual, aclLevelToOperations(level)).catch(() => undefined)
+				if (entry) out.push({...entry, contentMatches: hit.contentMatches, matchCount: hit.matchCount})
+			}
+		}
+		return out
 	}
 
 	// Checks if a filename is hidden

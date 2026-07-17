@@ -2955,6 +2955,17 @@ elif [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
         || warn "pciutils install failed (non-fatal — bare-metal AMD/Intel GPU vendor detect degrades to 'none' until fixed)"
 fi
 
+# --- (d) Phase 337 (FTS-01): ripgrep — day-2 presence-ensure so ALREADY-DEPLOYED
+# boxes get `rg` for bounded file-CONTENT search (files/content-search.ts). Same
+# idempotent apt idiom as (b)/(c). Non-fatal — content search degrades to the
+# pure-Node bounded fallback (identical caps + result shape) until `rg` is present. ---
+if command -v rg >/dev/null 2>&1; then
+    info "update.sh: rg already present — skipping ripgrep install"
+elif [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ripgrep 2>&1 | tail -3 \
+        || warn "ripgrep install failed (non-fatal — file-content search uses the pure-Node fallback until fixed)"
+fi
+
 # ── Step 7.10c: Phase 316 (GPU-01) — NVIDIA install provisioning (sudoers.d/livos-gpu + wrapper) ──
 # The livos-gpu NOPASSWD grant + the root-owned install wrapper must reach
 # ALREADY-DEPLOYED boxes on Update, not just fresh installs. Mirrors Step 7.10b
