@@ -1,0 +1,10 @@
+# Phase 338 (RECYCLE-01) — sudoers grant for the `.Recycle.Bin` provisioning wrapper.
+# Security model: grant on ONE explicit binary path, NO glob, NO arg wildcard.
+# The wrapper validates its action enum {ensure-dir|status}, and the single
+# caller-supplied path is charset-validated, `..`-component-rejected, canonicalized
+# (realpath -m) and allowlist-prefix-checked (/opt/livos/data/, /mnt/pool) root-side
+# BEFORE any mkdir/chown/chmod runs — so no caller string can re-own or re-mode an
+# arbitrary path (W1/W4, T-324-11).
+# Deploy: update.sh Step 7.10x (content-diff + subject-template + visudo validate-or-remove).
+Cmnd_Alias LIVINITYD_RECYCLE = /usr/local/lib/livos/livos-recycle-bin.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_RECYCLE

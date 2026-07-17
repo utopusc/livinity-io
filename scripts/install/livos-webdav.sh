@@ -27,15 +27,21 @@
 # BEFORE `apt-get install`; a mismatch aborts (exit 2) and nothing is installed.
 # The URL/filename/digest are all wrapper constants — never caller-supplied.
 #
-# BINDINGS (D-06/T-329-13): `configure` writes a wrapper-owned config that enables
-# ONLY the `webdavd` service bound to 127.0.0.1 over plain HTTP (enable_https:false)
-# — TLS + the public domain stay with the stock Caddy reverse_proxy, so nothing is
-# reachable off-loopback directly. The SFTP + FTP bindings are explicitly DISABLED
-# (port 0) and the httpd admin/REST binding is disabled too. Auth is delegated to
-# livinityd via `external_auth_hook` → the loopback endpoint (329-05) that validates
-# against the existing PG bcrypt user table (D-07) — SFTPGo never stores a second
-# copy of any password hash; per-user home dirs are auto-derived under the LivOS
-# data root (users_base_dir + the %username% template).
+# BINDINGS (D-06/T-329-13 + Phase 338 PROTO-01/D-338-2): `configure` writes a
+# wrapper-owned config that enables the `webdavd` service bound to 127.0.0.1 over
+# plain HTTP (enable_https:false) — TLS + the public domain stay with the stock
+# Caddy reverse_proxy, so webdavd is never reachable off-loopback directly. The
+# `sftpd` service is now ENABLED (Phase 338): bound on 0.0.0.0:2022 for LAN clients
+# (raw SFTP has no Caddy reverse-proxy path, so it binds all interfaces, unlike the
+# loopback-only webdavd), with host keys PINNED under the persistent /var/lib/sftpgo
+# state dir so a reinstall/update never rotates them. SFTP is LAN-ONLY and is NEVER
+# added to any Cloudflare tunnel ingress (raw TCP, not HTTP — no tunnel path exists
+# for it). The FTP binding stays DISABLED (port 0) and the httpd admin/REST binding
+# is disabled too. Auth for BOTH webdavd and sftpd is delegated to livinityd via the
+# shared `external_auth_hook` → the loopback endpoint (329-05) that validates against
+# the existing PG bcrypt user table (D-07) — SFTPGo never stores a second copy of any
+# password hash; per-user home dirs are auto-derived under the LivOS data root
+# (users_base_dir + the %username% template), reused unchanged by the sftpd listener.
 #
 # Args (the enum is the ONLY input; anything else -> exit 2, nothing privileged runs):
 #   $1  action — install | configure | status | remove
@@ -59,6 +65,14 @@ readonly SFTPGO_URL="https://github.com/drakkan/sftpgo/releases/download/v${SFTP
 readonly SFTPGO_SHA256="6b59559f3a465e89f332057a2bbe6256dacb08220ee9683f66ff5e1de9bc55ea"
 # webdavd loopback port + the livinityd external-auth-hook endpoint (329-05).
 readonly WEBDAV_PORT="9083"
+# SFTP LAN binding (Phase 338 PROTO-01). Bound on all interfaces (0.0.0.0) so LAN
+# clients reach it directly (raw SFTP has no Caddy reverse-proxy path); port 2022
+# (SFTPGo's own default — avoids the OS sshd on :22). NEVER exposed through the
+# Cloudflare tunnel (raw TCP, LAN-only). Host keys pin under the persistent
+# /var/lib/sftpgo state dir (already mkdir -p'd below) so a reinstall/update never
+# rotates them — SFTPGo auto-generates them at those paths on first start if absent,
+# then they persist across remove+reinstall/update churn (no client MITM warnings).
+readonly SFTP_PORT="2022"
 readonly LIVINITYD_PORT="8080"
 readonly AUTH_HOOK_URL="http://127.0.0.1:${LIVINITYD_PORT}/api/internal/webdav-auth"
 # Per-user home dirs live under the LivOS data root (files.ts per-user isolation).
@@ -90,12 +104,14 @@ case "$ACTION" in
 	configure)
 		# Write the wrapper-owned /etc/sftpgo/sftpgo.json. The body is fully
 		# wrapper-generated (only the wrapper's own constants are interpolated — no
-		# caller-supplied content). ONLY webdavd is enabled, on 127.0.0.1 plain HTTP
-		# (enable_https:false — TLS stays with Caddy). sftpd + ftpd bindings are
-		# DISABLED (port 0); the httpd admin/REST binding is disabled too. Auth is
-		# delegated to livinityd via external_auth_hook (scope 1 = password); SFTPGo
-		# keeps no second password hash. Per-user home dirs auto-derive under
-		# users_base_dir via the %username% template.
+		# caller-supplied content). webdavd is enabled on 127.0.0.1 plain HTTP
+		# (enable_https:false — TLS stays with Caddy); sftpd is enabled on
+		# 0.0.0.0:${SFTP_PORT} (LAN-only, persistent host keys — Phase 338 PROTO-01).
+		# The ftpd binding stays DISABLED (port 0); the httpd admin/REST binding is
+		# disabled too. Auth for BOTH listeners is delegated to livinityd via the
+		# shared external_auth_hook (scope 1 = password); SFTPGo keeps no second
+		# password hash. Per-user home dirs auto-derive under users_base_dir via the
+		# %username% template, reused unchanged by the sftpd listener.
 		mkdir -p /etc/sftpgo /var/lib/sftpgo "$USER_DATA_ROOT"
 		cat > /etc/sftpgo/sftpgo.json <<EOF
 {
@@ -112,7 +128,12 @@ case "$ACTION" in
   },
   "sftpd": {
     "bindings": [
-      { "address": "127.0.0.1", "port": 0 }
+      { "address": "0.0.0.0", "port": ${SFTP_PORT} }
+    ],
+    "host_keys": [
+      "/var/lib/sftpgo/ssh_host_ed25519_key",
+      "/var/lib/sftpgo/ssh_host_rsa_key",
+      "/var/lib/sftpgo/ssh_host_ecdsa_key"
     ]
   },
   "ftpd": {
@@ -150,6 +171,9 @@ EOF
 		systemctl is-active sftpgo 2>/dev/null || echo "inactive"
 		echo "webdav.address: 127.0.0.1"
 		echo "webdav.port: ${WEBDAV_PORT}"
+		# Phase 338 (PROTO-01) — the SFTP LAN binding, so the route/UAT can confirm it.
+		echo "sftp.address: 0.0.0.0"
+		echo "sftp.port: ${SFTP_PORT}"
 		exit 0
 		;;
 

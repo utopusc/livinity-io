@@ -3925,6 +3925,74 @@ else
     info "sudoers.d/livos-waf source not found — skipping (WAF abuse-jail unavailable)"
 fi
 
+# ── Step 7.10x: Phase 338 (RECYCLE-01) — .Recycle.Bin provisioning (wrapper + sudoers.d/livos-recycle-bin) ──
+# The livos-recycle-bin NOPASSWD grant + the root-owned provisioning wrapper (creates a
+# share's top-level .Recycle.Bin as 1770 root:livinity, closed-enum {ensure-dir|status},
+# the single caller path allowlist-validated root-side). Deployed EXACTLY like the Phase 332
+# livos-waf block above (content-diff wrapper install + sudoers subject-template + visudo
+# validate-or-remove). This step deploys the PRIVILEGED PLUMBING only — the actual per-share
+# .Recycle.Bin creation happens at share-provision time via samba.ts's fail-soft `sudo -n`
+# call (shares are a dynamic store set, not enumerable at update time). Fully fail-tolerant:
+# a missing source or a visudo rejection never aborts the Update; a box without this degrades
+# to Samba auto-creating the bin (fail-closed for sibling users, no leak; single-user boxes
+# unaffected).
+step "Phase 338 (RECYCLE-01): .Recycle.Bin provisioning (livos-recycle-bin.sh + sudoers.d/livos-recycle-bin)"
+
+_set_desktop_identity   # Phase 277.1 — self-derive the desktop user (no literal bruce)
+
+# --- (a0) livos-recycle-bin.sh wrapper — install BEFORE the grant ---
+_RECYCLE_WRAP_SRC="$LIVOS_DIR/scripts/install/livos-recycle-bin.sh"
+if [[ ! -f "$_RECYCLE_WRAP_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _RECYCLE_WRAP_SRC="$TEMP_DIR/scripts/install/livos-recycle-bin.sh"
+fi
+_RECYCLE_WRAP_DST="/usr/local/lib/livos/livos-recycle-bin.sh"
+if [[ -f "$_RECYCLE_WRAP_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_RECYCLE_WRAP_DST" ]] || ! cmp -s "$_RECYCLE_WRAP_SRC" "$_RECYCLE_WRAP_DST"; then
+        if install -m 0755 -o root -g root "$_RECYCLE_WRAP_SRC" "$_RECYCLE_WRAP_DST"; then
+            ok "livos-recycle-bin.sh installed at $_RECYCLE_WRAP_DST"
+        else
+            warn "Failed to install livos-recycle-bin.sh (non-fatal — .Recycle.Bin provisioning unavailable until fixed)"
+        fi
+    else
+        info "livos-recycle-bin.sh already current"
+    fi
+else
+    info "livos-recycle-bin.sh source not found — skipping (.Recycle.Bin provisioning unavailable)"
+fi
+
+# --- (a) sudoers.d/livos-recycle-bin — install + template the subject to the desktop user ---
+_RECYCLE_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-recycle-bin"
+if [[ ! -f "$_RECYCLE_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _RECYCLE_SUDOERS_SRC="$TEMP_DIR/scripts/install/sudoers.d/livos-recycle-bin"
+fi
+_RECYCLE_SUDOERS_DST="/etc/sudoers.d/livos-recycle-bin"
+if [[ -f "$_RECYCLE_SUDOERS_SRC" ]]; then
+    _RECYCLE_SUDOERS_TMP=$(mktemp)
+    if [[ "$_DESKTOP_USER" != "bruce" ]]; then
+        sed -E "s/^bruce([[:space:]]+ALL=)/${_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DESKTOP_USER})/g" \
+            "$_RECYCLE_SUDOERS_SRC" > "$_RECYCLE_SUDOERS_TMP"
+    else
+        cp -f "$_RECYCLE_SUDOERS_SRC" "$_RECYCLE_SUDOERS_TMP"
+    fi
+    if [[ ! -f "$_RECYCLE_SUDOERS_DST" ]] || ! cmp -s "$_RECYCLE_SUDOERS_TMP" "$_RECYCLE_SUDOERS_DST"; then
+        install -m 0440 -o root -g root "$_RECYCLE_SUDOERS_TMP" "$_RECYCLE_SUDOERS_DST"
+        # SAFETY-CRITICAL: a malformed sudoers file can break sudo system-wide. Validate the
+        # INSTALLED file; if visudo rejects it, REMOVE it (recycle provisioning stays denied).
+        if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_RECYCLE_SUDOERS_DST" >/dev/null 2>&1; then
+            warn "visudo rejected $_RECYCLE_SUDOERS_DST — removing (recycle provisioning stays denied until fixed)"
+            rm -f "$_RECYCLE_SUDOERS_DST"
+        else
+            ok "sudoers.d/livos-recycle-bin installed (subject: ${_DESKTOP_USER})"
+        fi
+    else
+        info "sudoers.d/livos-recycle-bin already current (subject: ${_DESKTOP_USER})"
+    fi
+    rm -f "$_RECYCLE_SUDOERS_TMP"
+else
+    info "sudoers.d/livos-recycle-bin source not found — skipping (.Recycle.Bin provisioning unavailable)"
+fi
+
 # ── Step 7.11: Phase 306 — desktop-user password helper (wrapper + sudoers + bootstrap) ──
 # The "Regenerate" button on the Desktop password row in Settings → Account calls
 # livinityd's system.regenerateDesktopPassword, which runs
