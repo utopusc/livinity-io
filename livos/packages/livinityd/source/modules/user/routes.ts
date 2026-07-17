@@ -4,7 +4,14 @@ import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 import bcrypt from 'bcryptjs'
 
-import {router, publicProcedure, privateProcedure, adminProcedure, stepUpAdminProcedure} from '../server/trpc/trpc.js'
+import {
+	router,
+	publicProcedure,
+	privateProcedure,
+	adminProcedure,
+	stepUpAdminProcedure,
+	scopedAdminReadProcedure,
+} from '../server/trpc/trpc.js'
 import * as totp from '../utilities/totp.js'
 import {
 	getPool,
@@ -964,8 +971,10 @@ export default router({
 			}))
 	}),
 
-	// Admin only - list all users with full details
-	listAllUsers: adminProcedure.query(async ({ctx}) => {
+	// Admin (or Phase 335 scoped viewer) — list all users with full details.
+	// scopedAdminReadProcedure admits admin (byte-identical) PLUS holders of
+	// read-only-admin / share-admin (both need this list to render their UI).
+	listAllUsers: scopedAdminReadProcedure.query(async ({ctx}) => {
 		const users = await listUsers()
 		// Phase 325 STOR-02 — enrich each row with its quota (PG) + last-scanned
 		// used bytes (cached in the FileStore by the user-quota-scan job). Both are

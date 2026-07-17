@@ -56,6 +56,37 @@ export const requireScope = (scope: AdminScope) => {
 }
 
 /**
+ * Boolean form for routes with FALL-THROUGH alternatives (e.g. shareApp also
+ * honors effective-full access): true for admin / legacy / scope-holder,
+ * false on anything else INCLUDING a DB error — never throws.
+ */
+export async function holdsScopeOrAdmin(ctx: Context, scope: AdminScope): Promise<boolean> {
+	if (!ctx.currentUser) return ctx.legacySingleUser === true
+	if (ctx.currentUser.role === 'admin') return true
+	try {
+		return await hasAdminScope(ctx.currentUser.id, scope)
+	} catch {
+		return false
+	}
+}
+
+/**
+ * Middleware admitting ANY of the listed scopes (admin/legacy always pass).
+ * Used for the shared READ surface (user/group lists) that both the
+ * read-only-admin viewer and the share-admin manager need to render their UI.
+ */
+export const requireAnyScope = (scopes: readonly AdminScope[]) => {
+	return async (opts: {ctx: Context; next: () => Promise<any>}) => {
+		for (const scope of scopes) {
+			if (await holdsScopeOrAdmin(opts.ctx, scope)) return opts.next()
+		}
+		// currentUser may exist without any scope, or be absent entirely —
+		// one denial for both (no scope-membership oracle beyond FORBIDDEN).
+		throw scopeDenied(scopes.join(' or '))
+	}
+}
+
+/**
  * Per-app operator assertion (D-335-4): admin / legacy pass; otherwise the
  * caller must hold an app_operators row FOR THIS appId (an operator of app A
  * holds nothing for app B). Routes may compose this with their own

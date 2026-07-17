@@ -6,7 +6,7 @@ import {isAuthenticated, isAuthenticatedIfUserExists, requireRole, requireRoleIf
 import {websocketLogger} from './websocket-logger.js'
 import {auditAdminAction} from '../../security-audit/audit-middleware.js'
 import {requireStepUpGrant} from './step-up-guard.js'
-import {requireScope} from './scope-guard.js'
+import {requireScope, requireAnyScope} from './scope-guard.js'
 
 // `t` is exported (not just internal) so v29.4 Phase 47 Plan 05 can call
 // `t.mergeRouters(appsBase, appsHealthRouter)` from server/trpc/index.ts to
@@ -53,6 +53,12 @@ export const stepUpAdminProcedure = adminProcedure.use(requireStepUpGrant)
 // audit-exempt exactly as on adminProcedure).
 export const readOnlyAdminProcedure = privateProcedure.use(requireScope('read-only-admin')).use(auditAdminAction)
 export const shareAdminProcedure = privateProcedure.use(requireScope('share-admin')).use(auditAdminAction)
+// The shared READ surface (user/group lists) — EITHER scope may view it (the
+// share-admin needs the same lists to drive the sharing UI). Attach ONLY to
+// `.query(` procedures — never a mutation.
+export const scopedAdminReadProcedure = privateProcedure
+	.use(requireAnyScope(['read-only-admin', 'share-admin']))
+	.use(auditAdminAction)
 // Backups-v2 P0 (D10): admin once any user exists, open pre-first-user — for
 // the onboarding-restore procedures that must work on a fresh box but were
 // previously callable by ANY authenticated user afterwards.

@@ -1,9 +1,15 @@
 // Phase 322 (IDENT-01) — groups CRUD. adminProcedure throughout: group membership is a host-wide identity surface consumed by OIDC claims/file-ACLs/app-sharing — same admin-only class as user role management.
+// Phase 335 (ROLE-01, D-335-3) — bounded delegation: the READ pair
+// (list/listMembers) admits scoped viewers; MEMBERSHIP mutations
+// (addMember/removeMember) admit share-admin. Group CREATE/RENAME/DELETE stay
+// hard adminProcedure (a share-admin manages membership of existing groups,
+// never the group topology). Admin behavior on every swapped route is
+// byte-identical (the scope gates admit role==='admin' first).
 
 import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 
-import {router, adminProcedure} from '../server/trpc/trpc.js'
+import {router, adminProcedure, shareAdminProcedure, scopedAdminReadProcedure} from '../server/trpc/trpc.js'
 import {getPool} from '../database/index.js'
 import {
 	createGroup,
@@ -31,7 +37,7 @@ function isUniqueViolation(err: unknown): boolean {
 
 export default router({
 	// List all groups (name-ordered). Wires GroupRow snake_case → camelCase.
-	list: adminProcedure.query(async () => {
+	list: scopedAdminReadProcedure.query(async () => {
 		const rows = await listGroups()
 		return rows.map((g) => ({
 			id: g.id,
@@ -110,7 +116,7 @@ export default router({
 		}),
 
 	// List a group's members (username JOINed). Wires GroupMemberRow → camelCase.
-	listMembers: adminProcedure
+	listMembers: scopedAdminReadProcedure
 		.input(z.object({groupId: z.string().uuid()}))
 		.query(async ({input}) => {
 			const rows = await listGroupMembers(input.groupId)
@@ -122,7 +128,8 @@ export default router({
 		}),
 
 	// Add a user to a group (idempotent at the DAO). Records the acting admin.
-	addMember: adminProcedure
+	// Phase 335: share-admin scope may manage membership (bounded surface).
+	addMember: shareAdminProcedure
 		.input(z.object({groupId: z.string().uuid(), userId: z.string().uuid()}))
 		.mutation(async ({input, ctx}) => {
 			await addGroupMember({
@@ -135,7 +142,7 @@ export default router({
 
 	// Remove a user from a group. DAO-miss (no such membership) → NOT_FOUND (or
 	// PRECONDITION_FAILED with no DB at all).
-	removeMember: adminProcedure
+	removeMember: shareAdminProcedure
 		.input(z.object({groupId: z.string().uuid(), userId: z.string().uuid()}))
 		.mutation(async ({input}) => {
 			const ok = await removeGroupMember(input.groupId, input.userId)

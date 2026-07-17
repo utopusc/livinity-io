@@ -5,6 +5,8 @@ import {router, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
 // Phase 334 (STEPUP-01, D-334-4) — inline grant assertion for the mixed-path
 // uninstall route (only the global/shared-app branch is step-up-gated).
 import {assertStepUpGrant} from '../server/trpc/step-up-guard.js'
+// Phase 335 (ROLE-01, D-335-3) — share-admin fall-through on shareApp/unshareApp.
+import {holdsScopeOrAdmin} from '../server/trpc/scope-guard.js'
 import {BUILTIN_APPS, getBuiltinApp, searchBuiltinApps} from './builtin-apps.js'
 import {isPublicForbidden, type PublicForbiddenSignals} from './public-forbidden.js'
 import {resolvePublicAccess} from './public-access.js'
@@ -841,8 +843,9 @@ export const apps = router({
 			// 323-06 (D-08, T-323-17): the caller must hold effective-FULL on the app
 			// to (re)share it — a readonly user cannot escalate by granting. Inserted
 			// BEFORE any grant write. Admins bypass (D-08: full > readonly for owner/
-			// admin always).
-			if (ctx.currentUser?.role !== 'admin') {
+			// admin always). Phase 335 (D-335-3): a share-admin scope-holder may also
+			// share — sharing IS their bounded surface (fail-closed boolean check).
+			if (ctx.currentUser?.role !== 'admin' && !(await holdsScopeOrAdmin(ctx, 'share-admin'))) {
 				const level = await getEffectiveAppAccess(input.appId, grantedBy)
 				if (level !== 'full') throw new TRPCError({code: 'FORBIDDEN', message: 'Read-only access'})
 			}
@@ -868,8 +871,9 @@ export const apps = router({
 			const actor = ctx.currentUser?.id
 			if (!actor) throw new Error('Authentication required')
 			// 323-06 (D-08): unshare is management — full-only, gated before revoke.
-			// Admins bypass (full > readonly for owner/admin always).
-			if (ctx.currentUser?.role !== 'admin') {
+			// Admins bypass (full > readonly for owner/admin always). Phase 335
+			// (D-335-3): share-admin scope-holders may also unshare (symmetric).
+			if (ctx.currentUser?.role !== 'admin' && !(await holdsScopeOrAdmin(ctx, 'share-admin'))) {
 				const level = await getEffectiveAppAccess(input.appId, actor)
 				if (level !== 'full') throw new TRPCError({code: 'FORBIDDEN', message: 'Read-only access'})
 			}

@@ -13,6 +13,9 @@ import preferences from '../../user/preferences-routes.js'
 // 322-01 groups DAO. The single groups source consumed later by the OIDC
 // groups claim (322-04), file ACLs (Phase 324), and app sharing (Phase 323).
 import groups from '../../user/groups-routes.js'
+// Phase 335 ROLE-01 — adminScopes.{list,grant,revoke,my} (delegated scoped-admin
+// grants; grant/revoke adminProcedure-audited, my = caller's own scopes).
+import adminScopes from '../../user/admin-scopes-routes.js'
 import {appStore, apps as appsBase} from '../../apps/routes.js'
 import widget from '../../widgets/routes.js'
 import files from '../../files/routes.js'
@@ -349,6 +352,8 @@ export function createAppRouter(opts: {
 		preferences,
 		// Phase 322-02 (IDENT-01) — groups.* adminProcedure CRUD namespace.
 		groups,
+		// Phase 335 ROLE-01 — adminScopes.* delegated-grant namespace.
+		adminScopes,
 		appStore,
 		apps,
 		widget,
