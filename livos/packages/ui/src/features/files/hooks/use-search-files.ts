@@ -7,11 +7,11 @@ import {useState} from 'react'
 import {useDebounce} from 'react-use'
 
 import {USE_LIST_DIRECTORY_LOAD_ITEMS} from '@/features/files/constants'
-import type {FileSystemItem} from '@/features/files/types'
+import type {SearchResultItem} from '@/features/files/types'
 import {trpcReact} from '@/trpc/trpc'
 
 export interface UseSearchFilesReturn {
-	results: FileSystemItem[]
+	results: SearchResultItem[]
 	isLoading: boolean
 	isError: boolean
 	error: unknown
@@ -20,9 +20,14 @@ export interface UseSearchFilesReturn {
 export function useSearchFiles({
 	query,
 	maxResults = USE_LIST_DIRECTORY_LOAD_ITEMS.INITIAL,
+	mode = 'filename',
 }: {
 	query: string
 	maxResults?: number
+	// 'filename' (default) is byte-identical to today's basename fuzzy search.
+	// 'content' issues a full-text content query (337-01/02); callers gate it to
+	// committed queries so keystrokes never spawn a scan.
+	mode?: 'filename' | 'content'
 }): UseSearchFilesReturn {
 	const trimmedQuery = query.trim()
 	const [debouncedQuery, setDebouncedQuery] = useState(trimmedQuery)
@@ -38,7 +43,7 @@ export function useSearchFiles({
 	)
 
 	const {data, isLoading, isError, error} = trpcReact.files.search.useQuery(
-		{query: debouncedQuery, maxResults},
+		{query: debouncedQuery, maxResults, mode},
 		{
 			// disable the query if there is no search term
 			enabled: debouncedQuery.length > 0,
@@ -48,7 +53,7 @@ export function useSearchFiles({
 	)
 
 	return {
-		results: (data ?? []) as FileSystemItem[],
+		results: (data ?? []) as SearchResultItem[],
 		isLoading,
 		isError,
 		error,

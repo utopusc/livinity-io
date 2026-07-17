@@ -5,6 +5,13 @@ import type {RouterOutput} from '@/trpc/trpc'
 // ensure that the types are the same for files.list and files.recents
 export type LivinitydFileSystemItem = RouterOutput['files']['list']['files'][number]
 
+// A single result from `files.search`. In content mode (337-01/02) each item also
+// carries the optional `contentMatches` + `matchCount` fields; filename mode never
+// sets them. Structurally a superset of LivinitydFileSystemItem, so it stays
+// assignable to FileSystemItem wherever the shared consumers (Listing, Cmd+K) need it.
+export type SearchResultItem = RouterOutput['files']['search'][number]
+export type ContentMatch = NonNullable<SearchResultItem['contentMatches']>[number]
+
 export type Favorite = RouterOutput['files']['favorites'][number]
 
 export type Share = RouterOutput['files']['shares'][number]
