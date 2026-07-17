@@ -310,6 +310,10 @@ import type {StoragePoolState} from './modules/storage-pool/pool.js'
 // top-level `appSecurity` StoreSchema key below. Type-only import (erased at
 // runtime — waf.ts is a pure module, no cycle).
 import type {AppSecurityState} from './modules/domain/waf.js'
+// Phase 333 (DIAG-01/02, D-333-1) — the connectivity self-diagnosis state for the
+// dedicated top-level `connectivity` StoreSchema key below. Type-only import
+// (connectivity/checks.ts is a pure module, no cycle).
+import type {ConnectivityState} from './modules/connectivity/checks.js'
 
 type StoreSchema = {
 	version: string
@@ -568,6 +572,11 @@ type StoreSchema = {
 	// write). Per-app IP/CIDR ban + UA block + abuse-log opt-in, plus the optional
 	// shared fail2ban jail tuning. Undefined until the first protection is set.
 	appSecurity: AppSecurityState
+	// Phase 333 (DIAG-01/02, D-333-1) — DEDICATED top-level key (dot-prop hazard;
+	// distinct from the AI `diagnostics` module which has no store key). The
+	// scheduled connectivity self-check's per-check status baseline (regression
+	// source), ignore-list, and mail opt-in. Undefined until the first run.
+	connectivity: ConnectivityState
 }
 
 export type LivinitydOptions = {
