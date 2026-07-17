@@ -1,7 +1,7 @@
 import z from 'zod'
 
 import {router, adminProcedure, privateProcedure, publicProcedureWhenNoUserExists} from '../server/trpc/trpc.js'
-import {fileUserContext, type FileUserInfo} from './files.js'
+import {fileUserContext, type FileUserInfo, type SearchResultFile} from './files.js'
 
 // Helper to run file operations within the user's file context
 function withFileUser<T>(ctx: {currentUser?: {username: string; role: string}}, fn: () => Promise<T>): Promise<T> {
@@ -229,16 +229,24 @@ export default router({
 		ctx.livinityd.files.externalStorage.isExternalDeviceConnectedOnUnsupportedDevice(),
 	),
 
-	// Search for a file
+	// Search for a file. `mode` is additive: omitted ⇒ 'filename' ⇒ byte-identical to the
+	// original basename-fuzzy search. 'content' runs the 337-01 full-text engine over the
+	// caller's own /Home tree (bounded + single-flight).
 	search: privateProcedure
 		.input(
 			z.object({
 				query: z.string(),
 				maxResults: z.number().positive().max(1000).default(250).optional(),
+				mode: z.enum(['filename', 'content']).default('filename'),
 			}),
 		)
-		.query(async ({ctx, input}) =>
-			withFileUser(ctx, () => ctx.livinityd.files.search.search(input.query, input.maxResults)),
+		.query(async ({ctx, input}): Promise<SearchResultFile[]> =>
+			withFileUser(ctx, () => {
+				const {files} = ctx.livinityd
+				return input.mode === 'content'
+					? files.searchFileContent(input.query, input.maxResults)
+					: files.search.search(input.query, input.maxResults)
+			}),
 		),
 
 	// List network shares

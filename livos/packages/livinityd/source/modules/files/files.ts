@@ -46,6 +46,11 @@ import ExternalStorage from './external-storage.js'
 import NetworkStorage from './network-storage.js'
 import CloudStorage from './cloud-storage.js'
 import Search from './search.js'
+import ContentSearch, {
+	normalizeQuery,
+	CONTENT_SEARCH_CAPS,
+	type ContentMatch,
+} from './content-search.js'
 
 import type Livinityd from '../../index.js'
 
@@ -107,6 +112,12 @@ type File = {
 	operations: FileOperation[]
 	thumbnail?: string
 }
+
+// Phase 337-01 (FTS-01) — a content-search result: the same File shape the two UI
+// consumers already expect, augmented with the per-file content matches. Exported so
+// the search route's return type carries these optional fields to the client (the
+// filename branch simply never sets them).
+export type SearchResultFile = File & {contentMatches?: ContentMatch[]; matchCount?: number}
 
 type DirectoryListing = File & {
 	files: File[]
@@ -208,6 +219,7 @@ export default class Files {
 	networkStorage: NetworkStorage
 	cloudStorage: CloudStorage
 	search: Search
+	contentSearch: ContentSearch
 
 	constructor(livinityd: Livinityd) {
 		this.#livinityd = livinityd
@@ -235,6 +247,7 @@ export default class Files {
 		this.networkStorage = new NetworkStorage(livinityd)
 		this.cloudStorage = new CloudStorage(livinityd)
 		this.search = new Search(livinityd)
+		this.contentSearch = new ContentSearch(livinityd)
 
 		// TODO: This should really be in a proper DB, refactor this once we've moved to SQLite
 		this.trashMetaDirectory = `${livinityd.dataDirectory}/trash-meta`
@@ -608,6 +621,35 @@ export default class Files {
 			operations,
 			thumbnail,
 		}
+	}
+
+	// Phase 337-01 (FTS-01) — content (full-text) search across the caller's OWN /Home
+	// tree. /Shared roots are ADDED in 337-02. Returns File objects (the same shape the
+	// two UI consumers already expect) each augmented with contentMatches + matchCount.
+	// Bounded by the engine's hard caps + a single box-wide in-flight slot.
+	async searchFileContent(query: string, maxResults = 250): Promise<SearchResultFile[]> {
+		const q = normalizeQuery(query)
+		if (!q) return [] // < min length → no scan, empty result
+		const cap = Math.min(maxResults, CONTENT_SEARCH_CAPS.maxResultFiles)
+		const userInfo = fileUserContext.getStore()
+		const userKey = userInfo?.username ?? '__legacy_single_user__' // stable per-caller slot key
+
+		return this.contentSearch.withSlot(userKey, async (signal) => {
+			// Own /Home root — resolve through the ONE sanctioned resolver (escapes-base
+			// checked), so the engine only ever sees an already-validated absolute path
+			// under the caller's tree; no parallel path-safety code in the engine.
+			const homeRoot = await this.virtualToSystemPath('/Home').catch(() => null)
+			const hits = homeRoot ? await this.contentSearch.scanRoot(homeRoot, q, {signal, remaining: cap}) : []
+
+			// Map each hit's systemPath back to a File via the existing per-user status()
+			// (own-tree → identical to how basename search builds its results).
+			const results: SearchResultFile[] = []
+			for (const hit of hits.slice(0, cap)) {
+				const file = await this.status(hit.systemPath).catch(() => undefined)
+				if (file) results.push({...file, contentMatches: hit.contentMatches, matchCount: hit.matchCount})
+			}
+			return results
+		})
 	}
 
 	// Checks if a filename is hidden
