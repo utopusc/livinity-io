@@ -577,6 +577,18 @@ type StoreSchema = {
 	// scheduled connectivity self-check's per-check status baseline (regression
 	// source), ignore-list, and mail opt-in. Undefined until the first run.
 	connectivity: ConnectivityState
+	// Phase 338 (RECYCLE-01, D-338-1) — DEDICATED top-level key (dot-prop hazard:
+	// NOT nested under `samba`/`files`/any array or scalar). Global SMB soft-delete
+	// policy. `enabled` gates whether the vfs_recycle stanza renders into per-user
+	// share blocks (default ON — but only per-user shares carry it; legacy shares
+	// never do). `purgeDays` is the mtime-age retention window the recycle-purge job
+	// enforces. lastPurge* are fail-soft observability written by the purge handler.
+	smbRecycle: {
+		enabled: boolean
+		purgeDays: number
+		lastPurgeAt?: number
+		lastPurgeStats?: {filesRemoved: number; bytesReclaimed: number; forced: boolean}
+	}
 }
 
 export type LivinitydOptions = {

@@ -1,6 +1,13 @@
 import {describe, test, expect} from 'vitest'
 
-import {sambaAccountName, resolveSambaShareAcls, renderShareBlock} from './samba.js'
+import {
+	sambaAccountName,
+	resolveSambaShareAcls,
+	renderShareBlock,
+	renderRecycleStanza,
+	DEFAULT_SMB_RECYCLE,
+} from './samba.js'
+import Files from './files.js'
 import type {FileAclRow} from './file-acls.js'
 
 // Phase 324-04 (FILES-02, D-09) — unit coverage for the render-time per-user
@@ -133,5 +140,65 @@ describe('renderShareBlock()', () => {
 		expect(block).toBe('')
 		// Defensively assert no empty valid-users directive leaks into smb.conf.
 		expect(block).not.toMatch(/valid users\s*=\s*$/m)
+	})
+})
+
+// Phase 338 (RECYCLE-01, D-338-1) — offline coverage for the vfs_recycle stanza + its
+// wiring. The live SMB delete → .Recycle.Bin/livos-<user>/ behaviour stays HUMAN-UAT.
+describe('renderRecycleStanza() / recycle wiring', () => {
+	const perUser = {validUsers: ['livos-alice'], writeList: []}
+
+	test('enabled per-user block appends the recycle stanza with the full vfs chain', () => {
+		const block = renderShareBlock('S', '/p', {validUsers: ['livos-a'], writeList: []}, true)
+		// The per-share `vfs objects` REPLACES the global chain, so it must re-list the
+		// macOS-compat modules AND recycle (W7 — sourced from the shared SMB_VFS_CHAIN).
+		expect(block).toContain('vfs objects = catia fruit streams_xattr recycle')
+		expect(block).toContain('recycle:repository = .Recycle.Bin/%U')
+		expect(block).toContain('hide files = /.Recycle.Bin/')
+	})
+
+	test('disabled per-user block is BYTE-IDENTICAL to today', () => {
+		// Default param (recycle absent) === explicit false, and neither renders recycle.
+		expect(renderShareBlock('S', '/p', perUser, false)).toBe(renderShareBlock('S', '/p', perUser))
+		expect(renderShareBlock('S', '/p', perUser, false)).not.toContain('recycle:')
+	})
+
+	test('recycle exclude_dir contains the bin itself (no re-recycle loop)', () => {
+		const block = renderShareBlock('S', '/p', perUser, true)
+		const excludeDir = block.split('\n').find((line) => line.startsWith('recycle:exclude_dir'))
+		expect(excludeDir).toContain('.Recycle.Bin//')
+	})
+
+	test('legacy block never carries recycle regardless of flag', () => {
+		const block = renderShareBlock('S', '/p', null, true)
+		expect(block).not.toContain('recycle:')
+		expect(block).toContain('force user = root')
+	})
+
+	test('renderRecycleStanza(false) === empty string', () => {
+		expect(renderRecycleStanza(false)).toBe('')
+	})
+
+	test('DEFAULT_SMB_RECYCLE is the documented default-ON policy', () => {
+		expect(DEFAULT_SMB_RECYCLE).toEqual({enabled: true, purgeDays: 30})
+	})
+})
+
+// Phase 338 (RECYCLE-01, D-338-3) — the SMB bin must be hidden from the web Files-app
+// listing + basename search/recents via the shared isHidden() chokepoint.
+describe('isHidden() — .Recycle.Bin (D-338-3)', () => {
+	function makeFakeLivinityd() {
+		return {
+			logger: {createChildLogger: () => ({log() {}, error() {}, warn() {}})},
+			dataDirectory: '/tmp/livos-test',
+		} as any
+	}
+
+	test('.Recycle.Bin is in the default hiddenFiles list and isHidden() hides it', () => {
+		const files = new Files(makeFakeLivinityd())
+		expect(files.hiddenFiles).toContain('.Recycle.Bin')
+		expect(files.isHidden('.Recycle.Bin')).toBe(true)
+		// A normal dotfile is still shown (no general dot-prefix hide).
+		expect(files.isHidden('.env')).toBe(false)
 	})
 })

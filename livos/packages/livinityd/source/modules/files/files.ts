@@ -216,8 +216,12 @@ export default class Files {
 	poolBaseDirRegistered = false
 	fileOwner = {userId: 1000, groupId: 1000}
 	maxDirectoryListing = 10000
-	// Prevent loads of .DS_Store (macOS) and .directory (KDE Dolphin) results
-	hiddenFiles = ['.DS_Store', '.directory']
+	// Prevent loads of .DS_Store (macOS) and .directory (KDE Dolphin) results, and
+	// Phase 338 (RECYCLE-01, D-338-3) the SMB soft-delete bin — hidden from web
+	// listing + basename search/recents via the shared isHidden() chokepoint (v1 =
+	// SMB-only recycle browsing; no web restore UI). content-search (337) already
+	// skips dot-directories, so this only closes the listing/search gap.
+	hiddenFiles = ['.DS_Store', '.directory', '.Recycle.Bin']
 	hiddenExtensions = ['.livinity-upload']
 	operationsInProgress: OperationsInProgress = []
 	watcher: Watcher

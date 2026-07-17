@@ -23,6 +23,7 @@ export type JobType =
 	| 'pool-sync' // Phase 318 (POOL-03) — nightly snapraid diff → D-08 freeze-gate → sync → status/alert
 	| 'pool-scrub' // Phase 318 (POOL-03) — weekly snapraid scrub -p (parity verification) → status/alert
 	| 'connectivity-self-check' // Phase 333 (DIAG-01/02) — hourly DNS/port/cert/tunnel/mail self-diagnosis → regression alert
+	| 'recycle-purge' // Phase 338 (RECYCLE-01) — daily .Recycle.Bin age+free-floor purge
 
 export type JobRunStatus = 'success' | 'failure' | 'skipped' | 'running'
 

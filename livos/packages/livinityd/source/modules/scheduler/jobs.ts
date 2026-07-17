@@ -24,6 +24,7 @@ import {insertResourceSample, aggregateRollups, pruneOldRows} from '../monitorin
 import {volumeBackupHandler} from './backup.js'
 import {securityAdvisorScanHandler} from '../security-advisor/scheduler-job.js'
 import {connectivitySelfCheckHandler} from '../connectivity/scheduler-job.js'
+import {recyclePurgeHandler} from '../files/recycle-purge.js'
 import {getBuiltinApp} from '../apps/builtin-apps.js'
 import * as snapraidCli from '../storage-pool/snapraid-cli.js'
 import {checkFreezeGate} from '../storage-pool/pool.js'
@@ -1120,6 +1121,7 @@ export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'pool-sync': poolSyncHandler, // Phase 318 POOL-03 — nightly diff→freeze-gate→sync
 	'pool-scrub': poolScrubHandler, // Phase 318 POOL-03 — weekly scrub -p parity verification
 	'connectivity-self-check': connectivitySelfCheckHandler, // Phase 333 DIAG-01/02 — hourly connectivity self-diagnosis
+	'recycle-purge': recyclePurgeHandler, // Phase 338 RECYCLE-01 — daily .Recycle.Bin age+free-floor purge
 }
 
 // =========================================================================
@@ -1203,4 +1205,10 @@ export const DEFAULT_JOB_DEFINITIONS: Array<{
 	// failure class this targets — it must fire unattended. Alerts only on a
 	// pass/warn→fail REGRESSION (coalesced), so a steady box never re-pages.
 	{name: 'connectivity-self-check', schedule: '0 * * * *', type: 'connectivity-self-check', enabled: true},
+	// Phase 338 RECYCLE-01 — daily .Recycle.Bin purge at 05:00 off-peak (co-scheduled
+	// with smart-health-scan, both cheap I/O). enabled=true is SAFE: the handler is a
+	// no-op when no per-user share has a .Recycle.Bin (nothing to walk), and it only
+	// reclaims aged/over-floor entries INSIDE existing bins — never touches live files.
+	// ON CONFLICT (name) DO NOTHING seeds it on every box's next boot.
+	{name: 'recycle-purge', schedule: '0 5 * * *', type: 'recycle-purge', enabled: true},
 ]

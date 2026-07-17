@@ -28,7 +28,13 @@ const execaMock = vi.mocked(execa)
 function makeFakeLivinityd() {
 	return {
 		logger: {createChildLogger: () => ({log() {}, error() {}, warn() {}})},
-		files: {isHidden: (name: string) => name === '.DS_Store' || name === '.directory' || name.endsWith('.livinity-upload')},
+		files: {
+			isHidden: (name: string) =>
+				name === '.DS_Store' ||
+				name === '.directory' ||
+				name === '.Recycle.Bin' ||
+				name.endsWith('.livinity-upload'),
+		},
 	} as any
 }
 
