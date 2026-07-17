@@ -98,15 +98,21 @@ async function realCloudflaredActive(): Promise<boolean> {
 	}
 }
 
+// 333-REVIEW F3: getPublicIp (dns-check.ts) does two fetch() calls with NO
+// AbortSignal, so a stalled endpoint could hang the whole self-check on undici's
+// ~300s default timeout and, via the scheduler's per-job inFlight mutex, skip
+// subsequent hourly fires. Bound its contribution to the run with a hard deadline
+// (the dangling fetch is harmless — getPublicIp catches internally).
+async function boundedPublicIp(timeoutMs: number): Promise<string | null> {
+	return Promise.race<string | null>([
+		getPublicIp().catch(() => null),
+		new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+	])
+}
+
 export const DEFAULT_PROBE_DEPS: ProbeDeps = {
 	now: () => Date.now(),
-	publicIp: async () => {
-		try {
-			return await getPublicIp()
-		} catch {
-			return null
-		}
-	},
+	publicIp: async () => boundedPublicIp(PROBE_TIMEOUT_MS),
 	verifyDns: async (host, expectedIp, tunnelMode) => {
 		const r = await verifyDns(host, expectedIp, tunnelMode)
 		return {resolved: r.resolved, currentIp: r.currentIp, match: r.match}

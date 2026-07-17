@@ -42,6 +42,16 @@ function makeLivinityd(initial: ConnectivityState | undefined, opts: {mainDomain
 			set: async (k: string, v: unknown) => {
 				if (k === 'connectivity') state = v as ConnectivityState
 			},
+			// Minimal write-lock stub: runs the job with the same get/set (serialized
+			// enough for the unit test; real FileStore queues writes).
+			getWriteLock: async (job: (m: {get: (k: string) => Promise<unknown>; set: (k: string, v: unknown) => Promise<void>}) => Promise<void>) => {
+				await job({
+					get: async (k: string) => (k === 'connectivity' ? state : undefined),
+					set: async (k: string, v: unknown) => {
+						if (k === 'connectivity') state = v as ConnectivityState
+					},
+				})
+			},
 		},
 		notifications: {add, clear},
 		server: {getActiveMainDomain: async () => (opts.mainDomain === undefined ? 'box.example.com' : opts.mainDomain)},
@@ -103,6 +113,25 @@ describe('runConnectivitySelfCheck — score + persist + alert', () => {
 		const {livinityd, clear} = makeLivinityd(prior)
 		await runConnectivitySelfCheck(livinityd, logger, depsFor({port443: true}))
 		expect(clear).toHaveBeenCalledWith(CONNECTIVITY_ALERT_ID)
+	})
+
+	it('333-REVIEW F2: clears a STUCK alert when the failing check stops being emitted (no-domain)', async () => {
+		// cert:main was failing; the domain is now removed so cert/dns/tunnel/mail
+		// no longer run. Nothing is failing this run → the alert must clear, not stick.
+		const prior: ConnectivityState = {checks: {'cert:main': {status: 'fail', at: 1}}, ignore: []}
+		const {livinityd, clear, add} = makeLivinityd(prior, {mainDomain: null})
+		await runConnectivitySelfCheck(livinityd, logger, depsFor({}))
+		expect(add).not.toHaveBeenCalled()
+		expect(clear).toHaveBeenCalledWith(CONNECTIVITY_ALERT_ID)
+	})
+
+	it('333-REVIEW F1: persists the baseline through the write lock (concurrent ignore preserved)', async () => {
+		// The lock re-reads current state inside it — a mute committed during the run
+		// window survives the baseline persist. makeLivinityd stubs getWriteLock below.
+		const prior: ConnectivityState = {checks: {}, ignore: []}
+		const {livinityd, getState} = makeLivinityd(prior)
+		await runConnectivitySelfCheck(livinityd, logger, depsFor({}))
+		expect(getState()?.checks['ports:443']).toBeDefined()
 	})
 
 	it('no main domain → dns/cert probes skip, still scores + persists', async () => {

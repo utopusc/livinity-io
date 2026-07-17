@@ -15,7 +15,6 @@
 import type Livinityd from '../../index.js'
 import type {BuiltInJobHandler, SchedulerLogger} from '../scheduler/types.js'
 import {
-	detectRecoveries,
 	detectRegressions,
 	foldPersisted,
 	regressionSeverity,
@@ -61,26 +60,36 @@ export async function runConnectivitySelfCheck(
 	const results = await runConnectivityChecks(ctx, probeDeps)
 	const score = scoreChecks(results)
 
-	// Persist the new baseline (merge over prior so a check that didn't run this
-	// tick — e.g. mail disabled — keeps its last-known status rather than vanishing).
-	const nextChecks = {...prev, ...foldPersisted(results)}
+	// 333-REVIEW F1: persist the baseline INSIDE the write lock, re-reading the
+	// current state so a concurrent setIgnore/setMailEnabled that landed during the
+	// (multi-second) probe I/O is NOT clobbered by our pre-run snapshot. We only own
+	// `checks` + `lastRun`; ignore/mailEnabled belong to the routes.
+	const at = probeDeps.now()
 	await livinityd.store
-		.set('connectivity', {...state, checks: nextChecks, lastRun: probeDeps.now()})
+		.getWriteLock(async ({get, set}) => {
+			const current = (await get('connectivity')) ?? EMPTY_CONNECTIVITY_STATE
+			// Merge over prior so a check that didn't run this tick keeps its last status.
+			const nextChecks = {...(current.checks ?? {}), ...foldPersisted(results)}
+			await set('connectivity', {...current, checks: nextChecks, lastRun: at})
+		})
 		.catch((e) => logger.error('[scheduler/connectivity] failed to persist state', e))
 
 	// Regression / recovery alerting (ignore-aware, coalesced).
 	const regressed = detectRegressions(prev, results, ignore)
-	const recovered = detectRecoveries(prev, results, ignore)
+	const anyLiveFail = results.some((r) => r.status === 'fail' && !ignore.includes(r.id))
 	if (regressed.length > 0) {
 		const severity = regressionSeverity(regressed)
 		await livinityd.notifications.add(CONNECTIVITY_ALERT_ID, {severity, external: true}).catch(() => {})
 		logger.log(
 			`[scheduler/connectivity] ${regressed.length} check(s) regressed to fail (${regressed.map((r) => r.id).join(', ')}) — alerted ${severity}`,
 		)
-	} else if (recovered.length > 0 && !results.some((r) => r.status === 'fail')) {
-		// Everything that was failing recovered and nothing is failing now → clear.
+	} else if (!anyLiveFail) {
+		// 333-REVIEW F2: clear whenever NOTHING is failing this run — not only on an
+		// explicit prior-fail→pass transition. This also clears a stale alert when a
+		// previously-failing check simply STOPPED being emitted (domain removed / left
+		// tunnel mode), which the recovery-transition-only clear would leave stuck.
+		// notifications.clear is a no-op when the id isn't set, so this is safe every run.
 		await livinityd.notifications.clear(CONNECTIVITY_ALERT_ID).catch(() => {})
-		logger.log(`[scheduler/connectivity] all checks recovered — cleared ${CONNECTIVITY_ALERT_ID}`)
 	}
 
 	return {results: score, count: results.length}
