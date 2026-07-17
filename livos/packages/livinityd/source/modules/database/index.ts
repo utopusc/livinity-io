@@ -20,12 +20,19 @@ const currentFilename = fileURLToPath(import.meta.url)
 const currentDirname = dirname(currentFilename)
 const schemaSql = readFileSync(join(currentDirname, 'schema.sql'), 'utf8')
 
+// Phase 335 — the ONE shared Role type (the literal union was duplicated ~13×
+// across the codebase; new code imports this, existing sites migrate
+// opportunistically). users.role stays this closed trio — scoped-admin tiers
+// live in the additive admin_scopes/app_operators tables (admin-grants.ts),
+// NEVER as new role values.
+export type Role = 'admin' | 'member' | 'guest'
+
 export type DatabaseUser = {
 	id: string
 	username: string
 	displayName: string
 	hashedPassword: string
-	role: 'admin' | 'member' | 'guest'
+	role: Role
 	avatarColor: string
 	isActive: boolean
 	createdAt: Date

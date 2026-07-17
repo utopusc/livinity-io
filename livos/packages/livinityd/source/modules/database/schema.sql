@@ -1033,3 +1033,33 @@ CREATE TABLE IF NOT EXISTS app_access (
 -- Hot-path lookup: every grant for a given app (getEffectiveAppAccess +
 -- listAppAccessPrincipals for the share dialog).
 CREATE INDEX IF NOT EXISTS idx_app_access_app ON app_access (app_id);
+
+-- =========================================================================
+-- Phase 335 (ROLE-01/02) — delegated/scoped admin grants (D-335-1/D-335-4).
+-- TWO additive sidecar tables. users.role stays the binary admin/member(/guest)
+-- source of truth and its CHECK is NEVER altered (additive-only invariant,
+-- migrations/index.ts:16-26). A "scoped admin" is a member holding admin_scopes
+-- rows (scope = closed enum, mirrored in database/admin-grants.ts); a per-app
+-- operator is a member holding an app_operators row (app_id keyed like
+-- app_access). Grants are resolved from PG per request — NEVER embedded in the
+-- JWT (no stale-privilege window; contrast server/index.ts payload.role sites).
+-- Absence of a row = absence of privilege (fail-closed by construction: every
+-- existing inline role==='admin' check correctly denies scope-holders).
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS admin_scopes (
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  scope      TEXT NOT NULL CHECK (scope IN ('read-only-admin','share-admin')),
+  granted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, scope)
+);
+CREATE INDEX IF NOT EXISTS idx_admin_scopes_user ON admin_scopes (user_id);
+
+CREATE TABLE IF NOT EXISTS app_operators (
+  app_id     TEXT NOT NULL,
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  granted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_app_operators_user ON app_operators (user_id);

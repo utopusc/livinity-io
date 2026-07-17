@@ -190,7 +190,11 @@ export const requireRole = (requiredRole: string) => {
 			guest: 1,
 		}
 
-		const userLevel = roleHierarchy[ctx.currentUser.role] || 0
+		// Phase 335 (fail-open fix): an UNRECOGNIZED role string used to map to
+		// level 0 via `|| 0`, which PASSED any gate whose required level was also
+		// 0 (e.g. requireRole('guest')-class checks). Unknown roles now map to -1
+		// and fail EVERY gate — fail closed.
+		const userLevel = roleHierarchy[ctx.currentUser.role] ?? -1
 		const requiredLevel = roleHierarchy[requiredRole] || 0
 
 		if (userLevel < requiredLevel) {

@@ -6,6 +6,7 @@ import {isAuthenticated, isAuthenticatedIfUserExists, requireRole, requireRoleIf
 import {websocketLogger} from './websocket-logger.js'
 import {auditAdminAction} from '../../security-audit/audit-middleware.js'
 import {requireStepUpGrant} from './step-up-guard.js'
+import {requireScope} from './scope-guard.js'
 
 // `t` is exported (not just internal) so v29.4 Phase 47 Plan 05 can call
 // `t.mergeRouters(appsBase, appsHealthRouter)` from server/trpc/index.ts to
@@ -44,6 +45,14 @@ export const adminProcedure = privateProcedure.use(requireRole('admin')).use(aud
 // a grant-less admin attempt is still audit-recorded before STEP_UP_REQUIRED.
 // Gated paths MUST also be in httpOnlyPaths (grant cookie is HTTP-only).
 export const stepUpAdminProcedure = adminProcedure.use(requireStepUpGrant)
+// Phase 335 (ROLE-01, D-335-2): scoped-admin procedures. A full admin passes
+// every scope (requireScope admits role==='admin'), so swapping a route from
+// adminProcedure to one of these NEVER changes admin behavior — it only ADDS
+// the bounded scope-holder surface. auditAdminAction composes after the scope
+// gate (scope-holder mutations are audited like admin actions; queries are
+// audit-exempt exactly as on adminProcedure).
+export const readOnlyAdminProcedure = privateProcedure.use(requireScope('read-only-admin')).use(auditAdminAction)
+export const shareAdminProcedure = privateProcedure.use(requireScope('share-admin')).use(auditAdminAction)
 // Backups-v2 P0 (D10): admin once any user exists, open pre-first-user — for
 // the onboarding-restore procedures that must work on a fresh box but were
 // previously callable by ANY authenticated user afterwards.
