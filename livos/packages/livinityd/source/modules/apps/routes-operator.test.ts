@@ -141,11 +141,19 @@ describe('apps lifecycle — Phase 335 operator gate', () => {
 		expect(isAppOperator).not.toHaveBeenCalled()
 	})
 
-	test('legacy single-user (no currentUser) passes through unchanged', async () => {
+	test('legacy single-user (legacySingleUser flag) passes through unchanged', async () => {
 		const apps = makeApps()
-		const caller = createCaller(makeCtx({user: null, apps}))
-		await expect(caller.restart({appId: 'n8n'})).resolves.toBeUndefined()
+		const ctx = {...(makeCtx({user: null, apps}) as Record<string, unknown>), legacySingleUser: true} as never
+		await expect(createCaller(ctx).restart({appId: 'n8n'})).resolves.toBeUndefined()
 		expect(apps.restart).toHaveBeenCalledWith('n8n')
+	})
+
+	test('review WARN-1: absent currentUser WITHOUT the legacy flag FAILS CLOSED (WS/bypass)', async () => {
+		const apps = makeApps()
+		// no currentUser AND no legacySingleUser → must NOT silently pass.
+		const caller = createCaller(makeCtx({user: null, apps}))
+		await expect(caller.restart({appId: 'n8n'})).rejects.toMatchObject({code: 'FORBIDDEN'})
+		expect(apps.restart).not.toHaveBeenCalled()
 	})
 
 	test('setAppOperator: member denied (adminProcedure), admin grants/revokes', async () => {

@@ -20,6 +20,28 @@ import {
 	removeGroupMember,
 	listGroupMembers,
 } from '../database/groups.js'
+// Phase 335 review (CRITICAL-1/Finding-2) — a full-app-access group is an
+// uninstall-/lifecycle-capable superset; a share-admin delegate must not manage
+// its membership (self OR accomplice escalation).
+import {groupHoldsFullAppAccess} from '../apps/app-access.js'
+import type {Context} from '../server/trpc/context.js'
+
+// Phase 335 — bound a share-admin DELEGATE's membership mutation. Admins and the
+// legacy single-user admin-equivalent (no currentUser) bypass entirely
+// (byte-identical to pre-335). A delegate (role==='member' holding share-admin)
+// may NOT: (a) add/remove THEMSELVES (self-escalation into a privileged group),
+// or (b) touch membership of a group that carries a `full` app_access grant
+// (that would transitively hand uninstall/lifecycle to whoever they add).
+// groupHoldsFullAppAccess fails closed (true) on a DB error → deny.
+async function assertDelegateMayManageMembership(ctx: Context, groupId: string, targetUserId: string): Promise<void> {
+	if (!ctx.currentUser || ctx.currentUser.role === 'admin') return
+	if (targetUserId === ctx.currentUser.id) {
+		throw new TRPCError({code: 'FORBIDDEN', message: 'Cannot change your own group membership'})
+	}
+	if (await groupHoldsFullAppAccess(groupId)) {
+		throw new TRPCError({code: 'FORBIDDEN', message: 'This group grants full app access and is admin-managed'})
+	}
+}
 
 // IN-02 (322-review): the groups DAO fails OPEN — it returns false/null both when a
 // row genuinely does not exist AND when there is no DB configured at all (legacy
@@ -132,6 +154,7 @@ export default router({
 	addMember: shareAdminProcedure
 		.input(z.object({groupId: z.string().uuid(), userId: z.string().uuid()}))
 		.mutation(async ({input, ctx}) => {
+			await assertDelegateMayManageMembership(ctx as Context, input.groupId, input.userId)
 			await addGroupMember({
 				groupId: input.groupId,
 				userId: input.userId,
@@ -144,7 +167,8 @@ export default router({
 	// PRECONDITION_FAILED with no DB at all).
 	removeMember: shareAdminProcedure
 		.input(z.object({groupId: z.string().uuid(), userId: z.string().uuid()}))
-		.mutation(async ({input}) => {
+		.mutation(async ({input, ctx}) => {
+			await assertDelegateMayManageMembership(ctx as Context, input.groupId, input.userId)
 			const ok = await removeGroupMember(input.groupId, input.userId)
 			if (!ok) {
 				if (noDbConfigured()) {

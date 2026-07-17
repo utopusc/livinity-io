@@ -139,6 +139,27 @@ export async function revokeAppAccessFromGroup(
 }
 
 /**
+ * Phase 335 (ROLE-01, review CRITICAL-1/Finding-2) — does this GROUP hold a
+ * `full` app_access grant on ANY app? A `full` group grant is a superset that
+ * reaches uninstall + lifecycle (via getEffectiveAppAccess of every member), so
+ * a share-admin DELEGATE must NOT be able to manage membership of such a group
+ * (that would transitively hand full/uninstall to whoever they add, incl.
+ * themselves). FAIL-CLOSED: returns true on a DB error (deny the membership
+ * mutation) and false only on a clean no-rows / no-DB result.
+ */
+export async function groupHoldsFullAppAccess(groupId: string, runner?: QueryRunner | null): Promise<boolean> {
+	const db = resolveRunner(runner)
+	if (!db) return false
+	const {rows} = await db.query(
+		`SELECT 1 FROM app_access
+		 WHERE principal_type = 'group' AND principal_id = $1 AND access_type = 'full'
+		 LIMIT 1`,
+		[groupId],
+	)
+	return rows.length > 0
+}
+
+/**
  * List every app_access grant for an app (both user- and group-principals), for
  * the share dialog (323-07). Returns [] when no DB is available.
  */

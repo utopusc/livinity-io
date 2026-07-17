@@ -9,6 +9,8 @@ import {assertStepUpGrant} from '../server/trpc/step-up-guard.js'
 // (ROLE-02, D-335-4) — per-app operator gate on the global lifecycle routes.
 import {holdsScopeOrAdmin, isOperatorOrAdmin} from '../server/trpc/scope-guard.js'
 import {grantAppOperator, revokeAppOperator, listAppOperators} from '../database/admin-grants.js'
+// Phase 335 review (Finding-3) — audit the delegated share-admin sharing path.
+import {recordAdminActionEvent} from '../security-audit/events.js'
 
 // Phase 335 (ROLE-02, D-335-4) — GLOBAL/shared-app lifecycle gate for
 // restart/stop/update/logs (start additionally admits readonly grantees —
@@ -19,11 +21,22 @@ import {grantAppOperator, revokeAppOperator, listAppOperators} from '../database
 // the per-user-instance branches at each call site are untouched, so owners
 // keep managing their own instances ungated.
 async function assertAppLifecycleAccess(
-	ctx: Parameters<typeof isOperatorOrAdmin>[0] & {currentUser?: {id: string; role: string} | null},
+	ctx: Parameters<typeof isOperatorOrAdmin>[0] & {
+		currentUser?: {id: string; role: string} | null
+		legacySingleUser?: boolean
+	},
 	appId: string,
 	opts: {allowReadonly?: boolean} = {},
 ): Promise<void> {
-	if (!ctx.currentUser) return
+	// Review WARN-1: mirror requireRole — admit an ABSENT currentUser ONLY when
+	// the explicit legacySingleUser flag is set (genuine no-DB single-user box).
+	// A NON-legacy absent currentUser (e.g. a WS/dangerouslyBypass path that left
+	// the role unpopulated) FAILS CLOSED instead of silently passing, so the 335
+	// lifecycle tightening cannot be bypassed on any transport.
+	if (!ctx.currentUser) {
+		if (ctx.legacySingleUser === true) return
+		throw new TRPCError({code: 'FORBIDDEN', message: 'Operator access required'})
+	}
 	if (ctx.currentUser.role === 'admin') return
 	if (await isOperatorOrAdmin(ctx, appId)) return
 	const level = await getEffectiveAppAccess(appId, ctx.currentUser.id)
@@ -902,21 +915,51 @@ export const apps = router({
 		.mutation(async ({ctx, input}) => {
 			const grantedBy = ctx.currentUser?.id
 			if (!grantedBy) throw new Error('Authentication required')
-			// 323-06 (D-08, T-323-17): the caller must hold effective-FULL on the app
-			// to (re)share it — a readonly user cannot escalate by granting. Inserted
-			// BEFORE any grant write. Admins bypass (D-08: full > readonly for owner/
-			// admin always). Phase 335 (D-335-3): a share-admin scope-holder may also
-			// share — sharing IS their bounded surface (fail-closed boolean check).
-			if (ctx.currentUser?.role !== 'admin' && !(await holdsScopeOrAdmin(ctx, 'share-admin'))) {
-				const level = await getEffectiveAppAccess(input.appId, grantedBy)
-				if (level !== 'full') throw new TRPCError({code: 'FORBIDDEN', message: 'Read-only access'})
-			}
 			const principalId = input.principalId ?? input.userId
 			if (!principalId) throw new TRPCError({code: 'BAD_REQUEST', message: 'principalId (or userId) is required'})
+			// 323-06 (D-08, T-323-17): the caller must hold effective-FULL on the app
+			// to (re)share it. Admins bypass. Phase 335 (D-335-3): a share-admin
+			// scope-holder may ALSO share — but BOUNDED (review CRITICAL-1): a
+			// delegate is NOT a full-holder, so granting 'full' would mint an
+			// uninstall-/lifecycle-capable superset (full ⊇ uninstall via
+			// getEffectiveAppAccess) to any target incl. themselves. A delegate may
+			// therefore grant at most 'readonly' and never to SELF. A share-admin
+			// who legitimately holds effective-full takes the full-holder path below
+			// and stays unrestricted (pre-335 behavior).
+			const isAdmin = ctx.currentUser?.role === 'admin'
+			let viaDelegate = false
+			if (!isAdmin) {
+				const level = await getEffectiveAppAccess(input.appId, grantedBy)
+				if (level !== 'full') {
+					if (!(await holdsScopeOrAdmin(ctx, 'share-admin'))) {
+						throw new TRPCError({code: 'FORBIDDEN', message: 'Read-only access'})
+					}
+					viaDelegate = true
+				}
+			}
+			if (viaDelegate) {
+				if (input.accessType === 'full') {
+					throw new TRPCError({code: 'FORBIDDEN', message: 'Share-admins can grant read-only access only'})
+				}
+				if (input.principalType === 'user' && principalId === grantedBy) {
+					throw new TRPCError({code: 'FORBIDDEN', message: 'Cannot grant app access to yourself'})
+				}
+			}
 			if (input.principalType === 'group') {
 				await grantAppAccessToGroup(input.appId, principalId, grantedBy, input.accessType)
 			} else {
 				await grantAppAccess(principalId, input.appId, grantedBy, input.accessType)
+			}
+			// Review Finding-3 (D-335-2): audit the DELEGATED sharing mutation (the
+			// share-admin path is inline privateProcedure, so auditAdminAction never
+			// sees it — record it here, redacting nothing secret).
+			if (viaDelegate) {
+				void recordAdminActionEvent({
+					userId: grantedBy,
+					action: 'apps.shareApp',
+					redactedInput: {appId: input.appId, principalType: input.principalType, principalId, accessType: input.accessType},
+					success: true,
+				})
 			}
 			return {success: true}
 		}),
@@ -933,11 +976,20 @@ export const apps = router({
 			const actor = ctx.currentUser?.id
 			if (!actor) throw new Error('Authentication required')
 			// 323-06 (D-08): unshare is management — full-only, gated before revoke.
-			// Admins bypass (full > readonly for owner/admin always). Phase 335
-			// (D-335-3): share-admin scope-holders may also unshare (symmetric).
-			if (ctx.currentUser?.role !== 'admin' && !(await holdsScopeOrAdmin(ctx, 'share-admin'))) {
+			// Admins bypass. Phase 335 (D-335-3): share-admin delegates may also
+			// unshare. Revoking is de-escalation (can't mint access), so no
+			// accessType/self bound is needed — but we still record the delegated
+			// mutation (Finding-3).
+			const isAdmin = ctx.currentUser?.role === 'admin'
+			let viaDelegate = false
+			if (!isAdmin) {
 				const level = await getEffectiveAppAccess(input.appId, actor)
-				if (level !== 'full') throw new TRPCError({code: 'FORBIDDEN', message: 'Read-only access'})
+				if (level !== 'full') {
+					if (!(await holdsScopeOrAdmin(ctx, 'share-admin'))) {
+						throw new TRPCError({code: 'FORBIDDEN', message: 'Read-only access'})
+					}
+					viaDelegate = true
+				}
 			}
 			const principalId = input.principalId ?? input.userId
 			if (!principalId) throw new TRPCError({code: 'BAD_REQUEST', message: 'principalId (or userId) is required'})
@@ -945,6 +997,14 @@ export const apps = router({
 				await revokeAppAccessFromGroup(input.appId, principalId)
 			} else {
 				await revokeAppAccess(principalId, input.appId)
+			}
+			if (viaDelegate) {
+				void recordAdminActionEvent({
+					userId: actor,
+					action: 'apps.unshareApp',
+					redactedInput: {appId: input.appId, principalType: input.principalType, principalId},
+					success: true,
+				})
 			}
 			return {success: true}
 		}),

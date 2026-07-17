@@ -195,7 +195,11 @@ export const requireRole = (requiredRole: string) => {
 		// 0 (e.g. requireRole('guest')-class checks). Unknown roles now map to -1
 		// and fail EVERY gate — fail closed.
 		const userLevel = roleHierarchy[ctx.currentUser.role] ?? -1
-		const requiredLevel = roleHierarchy[requiredRole] || 0
+		// Review INFO-1: symmetric fail-closed on an unknown REQUIRED role. `|| 0`
+		// let an unrecognized requiredRole map to level 0 (everyone passes); ??
+		// Infinity denies all. `requireRole` is only ever called with 'admin'
+		// today, so this is latent-hole hardening, not a behavior change.
+		const requiredLevel = roleHierarchy[requiredRole] ?? Infinity
 
 		if (userLevel < requiredLevel) {
 			throw new TRPCError({

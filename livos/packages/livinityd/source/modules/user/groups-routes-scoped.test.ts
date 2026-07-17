@@ -26,8 +26,11 @@ vi.mock('../database/admin-grants.js', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('../database/admin-grants.js')>()
 	return {...actual, hasAdminScope: vi.fn(), isAppOperator: vi.fn()}
 })
+// Phase 335 review — the delegate membership guard consults this.
+vi.mock('../apps/app-access.js', () => ({groupHoldsFullAppAccess: vi.fn().mockResolvedValue(false)}))
 
 import {hasAdminScope} from '../database/admin-grants.js'
+import {groupHoldsFullAppAccess} from '../apps/app-access.js'
 import {addGroupMember, createGroup} from '../database/groups.js'
 
 import groupsRouter from './groups-routes.js'
@@ -36,12 +39,14 @@ import {t} from '../server/trpc/trpc.js'
 const createCaller = t.createCallerFactory(groupsRouter)
 const GROUP = '22222222-2222-2222-2222-222222222222'
 const USER = '33333333-3333-3333-3333-333333333333'
+// Self id must be a valid UUID — addMember input is z.string().uuid().
+const SELF = '11111111-1111-1111-1111-111111111111'
 
 function makeCtx(role: 'admin' | 'member' = 'member') {
 	return {
 		dangerouslyBypassAuthentication: true,
 		transport: 'http',
-		currentUser: {id: 'user-A', username: 'alice', role},
+		currentUser: {id: SELF, username: 'alice', role},
 		logger: {log() {}, error() {}, verbose() {}},
 	} as never
 }
@@ -54,6 +59,7 @@ beforeEach(() => {
 	vi.mocked(hasAdminScope).mockReset()
 	vi.mocked(addGroupMember).mockReset()
 	vi.mocked(createGroup).mockReset()
+	vi.mocked(groupHoldsFullAppAccess).mockReset().mockResolvedValue(false)
 })
 
 describe('groups — Phase 335 scoped delegation matrix', () => {
@@ -75,16 +81,38 @@ describe('groups — Phase 335 scoped delegation matrix', () => {
 		expect(addGroupMember).not.toHaveBeenCalled()
 	})
 
-	test('share-admin: reads + membership YES; group topology NO', async () => {
+	test('share-admin: reads + OTHER-user membership of a plain group YES; topology NO', async () => {
 		holdScopes('share-admin')
 		const caller = createCaller(makeCtx())
 		await expect(caller.list()).resolves.toEqual([])
 		await expect(caller.addMember({groupId: GROUP, userId: USER})).resolves.toEqual({success: true})
-		expect(addGroupMember).toHaveBeenCalledWith({groupId: GROUP, userId: USER, addedBy: 'user-A'})
+		expect(addGroupMember).toHaveBeenCalledWith({groupId: GROUP, userId: USER, addedBy: SELF})
 		await expect(caller.removeMember({groupId: GROUP, userId: USER})).resolves.toEqual({success: true})
 		// create/rename/delete stay hard adminProcedure — share-admin denied.
 		await expect(caller.create({name: 'devs'})).rejects.toMatchObject({code: 'FORBIDDEN'})
 		expect(createGroup).not.toHaveBeenCalled()
+	})
+
+	test('share-admin CANNOT add THEMSELVES (self-escalation guard, review Finding-2)', async () => {
+		holdScopes('share-admin')
+		const caller = createCaller(makeCtx())
+		await expect(caller.addMember({groupId: GROUP, userId: SELF})).rejects.toMatchObject({code: 'FORBIDDEN'})
+		expect(addGroupMember).not.toHaveBeenCalled()
+	})
+
+	test('share-admin CANNOT manage membership of a FULL-app-access group (review CRITICAL-1)', async () => {
+		holdScopes('share-admin')
+		vi.mocked(groupHoldsFullAppAccess).mockResolvedValue(true)
+		const caller = createCaller(makeCtx())
+		await expect(caller.addMember({groupId: GROUP, userId: USER})).rejects.toMatchObject({code: 'FORBIDDEN'})
+		expect(addGroupMember).not.toHaveBeenCalled()
+	})
+
+	test('admin CAN add themselves + manage a full-access group (byte-identical, no guard)', async () => {
+		vi.mocked(groupHoldsFullAppAccess).mockResolvedValue(true)
+		const caller = createCaller(makeCtx('admin'))
+		await expect(caller.addMember({groupId: GROUP, userId: SELF})).resolves.toEqual({success: true})
+		expect(groupHoldsFullAppAccess).not.toHaveBeenCalled()
 	})
 
 	test('admin: byte-identical (everything passes, no scope lookup needed)', async () => {

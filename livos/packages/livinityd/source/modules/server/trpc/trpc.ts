@@ -51,7 +51,10 @@ export const stepUpAdminProcedure = adminProcedure.use(requireStepUpGrant)
 // the bounded scope-holder surface. auditAdminAction composes after the scope
 // gate (scope-holder mutations are audited like admin actions; queries are
 // audit-exempt exactly as on adminProcedure).
-export const readOnlyAdminProcedure = privateProcedure.use(requireScope('read-only-admin')).use(auditAdminAction)
+// (review INFO-2: a single-scope read-only-admin procedure was dead code — the
+// read surface uses scopedAdminReadProcedure below, which admits EITHER scope,
+// since a share-admin needs the same lists to drive the sharing UI. Removed to
+// avoid future misuse. Re-add if a read-only-admin-EXCLUSIVE route ever exists.)
 export const shareAdminProcedure = privateProcedure.use(requireScope('share-admin')).use(auditAdminAction)
 // The shared READ surface (user/group lists) — EITHER scope may view it (the
 // share-admin needs the same lists to drive the sharing UI). Attach ONLY to
