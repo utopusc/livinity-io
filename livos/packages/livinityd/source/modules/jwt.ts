@@ -34,6 +34,14 @@ const SSO_TTL_SECONDS = 30
 // cookie path so it never rides another share's request.
 const SHARE_AUDIENCE = 'livinityd-share'
 const SHARE_GRANT_TTL_SECONDS = 30 * 60 // ~30 min (D-03)
+// Phase 334 (STEPUP-01, D-334-1) — sudo-mode step-up grant. A fresh re-auth
+// (password / TOTP / passkey) mints this SHORT-lived grant, bound to the ONE
+// userId it is issued for, so a sensitive action can require a recent factor
+// independent of the week-long session. The distinct audience makes it
+// non-interchangeable with a session/proxy/SSO/share token. The 5-min TTL IS
+// the revocation (no server-side store — the grant simply expires).
+const STEPUP_AUDIENCE = 'livinityd-stepup'
+const STEPUP_GRANT_TTL_SECONDS = 5 * 60 // 5 min (D-334-1)
 
 /**
  * Phase 257-04 WS-A (LIVOS-028): derive a SEPARATE proxy signing secret from the
@@ -237,6 +245,64 @@ export async function verifyShareGrant(token: string, secret: string): Promise<V
 		throw new Error('Invalid share grant (no jti)')
 	}
 	return {shareId: payload.shareId, jti: payload.jti}
+}
+
+/**
+ * Phase 334 (STEPUP-01, D-334-1) — mint a short-lived sudo-mode step-up grant,
+ * bound to the ONE userId it is issued for (a grant minted for user A can never
+ * authorize a sensitive action running as user B — the middleware compares the
+ * claim to ctx.currentUser.id). Minted only AFTER a fresh factor (password /
+ * TOTP / passkey) verifies. The distinct STEPUP_AUDIENCE makes it
+ * non-interchangeable with a session/proxy/SSO/share token. The `jti` is
+ * returned for optional bookkeeping. 5-min TTL is the revocation.
+ */
+export async function signStepUpGrant(
+	secret: string,
+	userId: string,
+): Promise<{token: string; jti: string}> {
+	validateSecret(secret)
+	if (typeof userId !== 'string' || userId.length === 0) throw new Error('signStepUpGrant: userId required')
+	const jti = crypto.randomUUID()
+	const payload = {stepup: true, userId, jti}
+	const token = jwt.sign(payload, secret, {
+		expiresIn: STEPUP_GRANT_TTL_SECONDS,
+		algorithm: JWT_ALGORITHM,
+		audience: STEPUP_AUDIENCE,
+		issuer: TOKEN_ISSUER,
+	})
+	return {token, jti}
+}
+
+export type VerifiedStepUpGrant = {
+	userId: string
+	jti: string
+}
+
+/**
+ * Phase 334 (STEPUP-01, D-334-1) — verify a step-up grant. Enforces the STEPUP
+ * audience + issuer (a session/proxy/SSO/share token can NOT be presented here,
+ * and vice-versa) and returns the bound userId. Throws on any failure
+ * (signature, expiry, wrong audience, missing userId) — the caller (the
+ * requireStepUpGrant middleware) fails CLOSED (refuses the sensitive action and
+ * signals STEP_UP_REQUIRED). The caller MUST additionally check the returned
+ * userId equals the acting user (replay-across-users defense — the audience
+ * alone does not bind the specific user).
+ */
+export async function verifyStepUpGrant(token: string, secret: string): Promise<VerifiedStepUpGrant> {
+	validateSecret(secret)
+	const payload = jwt.verify(token, secret, {
+		algorithms: [JWT_ALGORITHM],
+		audience: STEPUP_AUDIENCE,
+		issuer: TOKEN_ISSUER,
+	}) as any
+	if (payload.stepup !== true) throw new Error('Invalid step-up grant')
+	if (typeof payload.userId !== 'string' || payload.userId.length === 0) {
+		throw new Error('Invalid step-up grant (no userId)')
+	}
+	if (typeof payload.jti !== 'string' || payload.jti.length === 0) {
+		throw new Error('Invalid step-up grant (no jti)')
+	}
+	return {userId: payload.userId, jti: payload.jti}
 }
 
 /**

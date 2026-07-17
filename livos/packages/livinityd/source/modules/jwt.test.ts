@@ -26,7 +26,7 @@ import crypto from 'node:crypto'
 import jwt from 'jsonwebtoken'
 import {describe, expect, test} from 'vitest'
 
-import {sign, signUserToken, verify, signProxyToken, verifyProxyToken, signSsoToken, verifySsoToken, signShareGrant, verifyShareGrant} from './jwt.js'
+import {sign, signUserToken, verify, signProxyToken, verifyProxyToken, signSsoToken, verifySsoToken, signShareGrant, verifyShareGrant, signStepUpGrant, verifyStepUpGrant} from './jwt.js'
 
 // Two valid 64-hex (256-bit) secrets.
 const SESSION_SECRET = 'a'.repeat(64)
@@ -224,5 +224,54 @@ describe('jwt — Phase 324-01 FILES-01 share unlock grant (D-03)', () => {
 			{algorithm: 'HS256', audience: 'livinityd-share', issuer: 'livinityd', expiresIn: -10},
 		)
 		await expect(verifyShareGrant(expired, SESSION_SECRET)).rejects.toThrow()
+	})
+})
+
+describe('jwt — Phase 334 STEPUP-01 sudo-mode step-up grant (D-334-1)', () => {
+	test('signStepUpGrant round-trips userId + jti', async () => {
+		const {token, jti} = await signStepUpGrant(SESSION_SECRET, 'user-A')
+		const claims = await verifyStepUpGrant(token, SESSION_SECRET)
+		expect(claims.userId).toBe('user-A')
+		expect(claims.jti).toBe(jti)
+	})
+
+	test('a grant minted for user A carries user A (middleware rejects a mismatch) — userId binding', async () => {
+		const {token} = await signStepUpGrant(SESSION_SECRET, 'user-A')
+		const claims = await verifyStepUpGrant(token, SESSION_SECRET)
+		expect(claims.userId).toBe('user-A')
+		expect(claims.userId).not.toBe('user-B')
+	})
+
+	test('a step-up grant is NOT accepted by the session verifier (audience binding)', async () => {
+		const {token} = await signStepUpGrant(SESSION_SECRET, 'user-A')
+		await expect(verify(token, SESSION_SECRET)).rejects.toThrow()
+	})
+
+	test('a session token is NOT accepted by the step-up verifier', async () => {
+		const sess = await signUserToken(SESSION_SECRET, 'u1', 'member')
+		await expect(verifyStepUpGrant(sess, SESSION_SECRET)).rejects.toThrow()
+	})
+
+	test('a share grant is NOT accepted by the step-up verifier (distinct audience)', async () => {
+		const {token} = await signShareGrant(SESSION_SECRET, 'share-A')
+		await expect(verifyStepUpGrant(token, SESSION_SECRET)).rejects.toThrow()
+	})
+
+	test('a wrong-secret step-up grant fails verification', async () => {
+		const {token} = await signStepUpGrant(SESSION_SECRET, 'user-A')
+		await expect(verifyStepUpGrant(token, OTHER_SECRET)).rejects.toThrow()
+	})
+
+	test('an expired step-up grant fails verification', async () => {
+		const expired = jwt.sign(
+			{stepup: true, userId: 'user-A', jti: 'j1'},
+			SESSION_SECRET,
+			{algorithm: 'HS256', audience: 'livinityd-stepup', issuer: 'livinityd', expiresIn: -10},
+		)
+		await expect(verifyStepUpGrant(expired, SESSION_SECRET)).rejects.toThrow()
+	})
+
+	test('signStepUpGrant rejects an empty userId', async () => {
+		await expect(signStepUpGrant(SESSION_SECRET, '')).rejects.toThrow()
 	})
 })
