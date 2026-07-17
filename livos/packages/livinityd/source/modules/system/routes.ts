@@ -2236,6 +2236,16 @@ export default router({
 			await ctx.livinityd!.files.samba.setPerUserAuth(input.enabled)
 			return {perUserAuth: input.enabled}
 		}),
+		// ── Phase 338-03 (RECYCLE-01) — SMB soft-delete policy for the Settings UI ──
+		// recycleGetConfig reads the global {enabled, purgeDays} policy (authed read);
+		// recycleSetConfig persists it + re-renders smb.conf so the vfs_recycle stanza
+		// toggles immediately. adminProcedure (admin-only, mirrors the Samba migration
+		// toggle gate) — this UI is a convenience surface, never the authz boundary.
+		// purgeDays is bounded 1..3650 days server-side (defense-in-depth on the input).
+	recycleGetConfig: adminProcedure.query(async ({ctx}) => ctx.livinityd!.files.samba.getRecycleConfig()),
+	recycleSetConfig: adminProcedure
+		.input(z.object({enabled: z.boolean(), purgeDays: z.number().int().min(1).max(3650)}))
+		.mutation(async ({ctx, input}) => ctx.livinityd!.files.samba.setRecycleConfig(input)),
 	sambaProvisionUser: adminProcedure
 		.input(z.object({username: z.string().min(1).max(32).regex(/^[a-z0-9_-]+$/)}))
 		.mutation(async ({ctx, input}) => {

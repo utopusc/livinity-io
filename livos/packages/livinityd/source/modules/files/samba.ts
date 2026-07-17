@@ -329,6 +329,31 @@ export default class Samba {
 		await this.applyShares().catch((error) => this.logger.error('Failed to re-apply shares after migration toggle', error))
 	}
 
+	// Phase 338 (RECYCLE-01, 338-03) — read the global SMB soft-delete policy for the
+	// Settings UI. Fail-soft: a missing/undecodable `smbRecycle` key reads back the
+	// default-ON constant. Only the operator-tunable fields ({enabled, purgeDays}) are
+	// surfaced — lastPurge* are internal observability written by the purge job.
+	async getRecycleConfig() {
+		const state = await this.#livinityd.store.get('smbRecycle').catch(() => undefined)
+		return {
+			enabled: state?.enabled ?? DEFAULT_SMB_RECYCLE.enabled,
+			purgeDays: state?.purgeDays ?? DEFAULT_SMB_RECYCLE.purgeDays,
+		}
+	}
+
+	// Persist the recycle policy then re-render smb.conf so the vfs_recycle stanza
+	// appears/disappears immediately on toggle. Write under the store write-lock,
+	// re-reading current so a concurrent purge-job stats write (lastPurgeAt/Stats) is
+	// NOT clobbered — we own only {enabled, purgeDays} (333-review F1 pattern).
+	async setRecycleConfig(input: {enabled: boolean; purgeDays: number}) {
+		await this.#livinityd.store.getWriteLock(async ({get, set}) => {
+			const current = (await get('smbRecycle')) ?? DEFAULT_SMB_RECYCLE
+			await set('smbRecycle', {...current, enabled: input.enabled, purgeDays: input.purgeDays})
+		})
+		await this.applyShares().catch((error) => this.logger.error('Failed to re-apply shares after recycle toggle', error))
+		return {enabled: input.enabled, purgeDays: input.purgeDays}
+	}
+
 	// Gets (or generates once) a PER-USER Samba SECONDARY password. Clones the single
 	// getSharePassword() surface per-user: a 128-char random token written 0600 under
 	// `secrets/samba-user-<username>-password`. It is NEVER synced from the login

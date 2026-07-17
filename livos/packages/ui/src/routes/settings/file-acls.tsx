@@ -14,8 +14,8 @@
 // en/tr twin per key (parity gate). Principal pickers reuse the Phase-322 sources
 // (user.listAllUsers / groups.list) that the Groups section already uses.
 
-import {useState} from 'react'
-import {TbAlertTriangle, TbCopy, TbKey, TbLoader2, TbPlus, TbUserShield, TbX} from 'react-icons/tb'
+import {useEffect, useState} from 'react'
+import {TbAlertTriangle, TbCopy, TbKey, TbLoader2, TbPlus, TbServer2, TbTrash, TbUserShield, TbX} from 'react-icons/tb'
 import {useCopyToClipboard} from 'react-use'
 import {toast} from 'sonner'
 
@@ -35,6 +35,8 @@ export function FileAclsSection() {
 		<div className='space-y-6'>
 			<GrantEditor />
 			<PerUserSambaPanel />
+			<RecyclePolicyPanel />
+			<SftpInfoPanel />
 		</div>
 	)
 }
@@ -388,6 +390,157 @@ function PerUserSambaPanel() {
 						</div>
 					</div>
 				)}
+			</div>
+		</div>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 338-03 (RECYCLE-01) — SMB recycle-bin soft-delete policy
+// ─────────────────────────────────────────────────────────────────────────────
+// A small settings card over system.recycleGetConfig / recycleSetConfig (both
+// adminProcedure, server-gated — this UI is a convenience surface, never the authz
+// boundary). Toggle + retention-days input + behaviour hints. No browse/restore
+// controls (D-338-4: SMB-only restore in v1), no maxsize input (constant in v1).
+
+function RecyclePolicyPanel() {
+	const utils = trpcReact.useUtils()
+	const configQ = trpcReact.system.recycleGetConfig.useQuery()
+	const [enabled, setEnabled] = useState(false)
+	const [purgeDays, setPurgeDays] = useState('30')
+
+	// Seed local state from the server value once it loads (and re-seed after a save
+	// invalidation so the fields reflect the persisted policy).
+	useEffect(() => {
+		if (configQ.data) {
+			setEnabled(configQ.data.enabled)
+			setPurgeDays(String(configQ.data.purgeDays))
+		}
+	}, [configQ.data])
+
+	const saveMut = trpcReact.system.recycleSetConfig.useMutation({
+		onSuccess: () => {
+			utils.system.recycleGetConfig.invalidate()
+			toast.success(t('files-recycle.saved'))
+		},
+		onError: (error) => toast.error(error.message),
+	})
+
+	const handleSave = () => {
+		// Clamp to the server-enforced 1..3650 bound (defense-in-depth; the route
+		// re-validates). A non-numeric field falls back to the default retention.
+		const parsed = Number.parseInt(purgeDays, 10)
+		const bounded = Number.isFinite(parsed) ? Math.min(3650, Math.max(1, parsed)) : 30
+		saveMut.mutate({enabled, purgeDays: bounded})
+	}
+
+	return (
+		<div className='space-y-4 border-t border-border-default pt-6'>
+			<div className='flex items-start gap-2'>
+				<TbTrash className='mt-0.5 h-5 w-5 shrink-0 text-text-tertiary' />
+				<div>
+					<h3 className='text-base font-medium text-text-primary'>{t('files-recycle.title')}</h3>
+					<p className='text-body-sm text-text-secondary'>{t('files-recycle.description')}</p>
+				</div>
+			</div>
+
+			<div className='space-y-3 rounded-radius-md border border-border-default bg-surface-base p-4'>
+				<div className='flex items-center justify-between gap-3'>
+					<div className='min-w-0'>
+						<div className='text-body-sm font-medium text-text-primary'>{t('files-recycle.toggle')}</div>
+						<div className='text-caption text-text-tertiary'>{t('files-recycle.toggle-hint')}</div>
+					</div>
+					<Switch checked={enabled} onCheckedChange={setEnabled} disabled={configQ.isLoading || saveMut.isPending} />
+				</div>
+
+				<div className='space-y-2'>
+					<label className='text-caption text-text-secondary'>{t('files-recycle.retention-label')}</label>
+					<Input
+						type='number'
+						min={1}
+						max={3650}
+						value={purgeDays}
+						onValueChange={setPurgeDays}
+						disabled={!enabled || configQ.isLoading || saveMut.isPending}
+						className='w-40'
+					/>
+					<p className='text-caption text-text-tertiary'>{t('files-recycle.retention-hint')}</p>
+				</div>
+
+				<Button
+					variant='primary'
+					size='sm'
+					className='h-11'
+					onClick={handleSave}
+					disabled={configQ.isLoading || saveMut.isPending}
+				>
+					{saveMut.isPending ? <TbLoader2 className='h-4 w-4 animate-spin' /> : null}
+					{t('files-recycle.save')}
+				</Button>
+			</div>
+
+			<div className='space-y-1.5 rounded-radius-md bg-surface-1 p-3'>
+				<p className='text-caption text-text-secondary'>{t('files-recycle.maxsize-hint')}</p>
+				<p className='text-caption text-text-secondary'>{t('files-recycle.smb-only-note')}</p>
+			</div>
+		</div>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 338-03 (PROTO-01) — SFTP connection-info card
+// ─────────────────────────────────────────────────────────────────────────────
+// Informational only (mirrors the always-render WebDAV instructions — there is no
+// WebDAV enable/disable toggle UI to clone, so no SFTP on/off toggle is invented in
+// v1; the wrapper flip enables the service). Shows the address template (host / port
+// 2022 / per-user credentials) + explicit LAN-only / not-tunnel-published messaging.
+
+function SftpInfoPanel() {
+	const [, copyToClipboard] = useCopyToClipboard()
+	const address = 'sftp://<your-box-lan-ip>:2022'
+
+	return (
+		<div className='space-y-4 border-t border-border-default pt-6'>
+			<div className='flex items-start gap-2'>
+				<TbServer2 className='mt-0.5 h-5 w-5 shrink-0 text-text-tertiary' />
+				<div>
+					<h3 className='text-base font-medium text-text-primary'>{t('sftp.title')}</h3>
+					<p className='text-body-sm text-text-secondary'>{t('sftp.description')}</p>
+				</div>
+			</div>
+
+			<div className='space-y-3 rounded-radius-md border border-border-default bg-surface-base p-4'>
+				<div className='space-y-2'>
+					<label className='text-caption text-text-secondary'>{t('sftp.address-hint')}</label>
+					<div className='flex items-center gap-2'>
+						<code className='flex-1 select-all break-all rounded-radius-sm bg-surface-1 px-3 py-2 font-mono text-body-sm text-text-primary'>
+							{address}
+						</code>
+						<Button
+							variant='default'
+							size='sm'
+							onClick={() => {
+								copyToClipboard(address)
+								toast.success(t('sftp.address-copied'))
+							}}
+						>
+							<TbCopy className='h-4 w-4' />
+						</Button>
+					</div>
+				</div>
+
+				<p className='text-caption text-text-secondary'>{t('sftp.credentials-note')}</p>
+
+				<div className='flex items-start gap-2 rounded-radius-md bg-surface-1 p-3'>
+					<TbAlertTriangle className='mt-0.5 h-4 w-4 shrink-0 text-yellow-500' />
+					<p className='text-caption text-text-secondary'>{t('sftp.lan-only-note')}</p>
+				</div>
+
+				<div className='space-y-1.5'>
+					<p className='text-caption text-text-tertiary'>{t('sftp.windows-step')}</p>
+					<p className='text-caption text-text-tertiary'>{t('sftp.macos-step')}</p>
+					<p className='text-caption text-text-tertiary'>{t('sftp.linux-step')}</p>
+				</div>
 			</div>
 		</div>
 	)
