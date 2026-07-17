@@ -306,6 +306,10 @@ import {overrideDevelopmentHostname} from './modules/development.js'
 // the dedicated top-level `storagePool` StoreSchema key below. Type-only import
 // (erased at runtime — no module cycle with the storage-pool module).
 import type {StoragePoolState} from './modules/storage-pool/pool.js'
+// Phase 332 (WAF-01/02, D-332-6) — the per-app protection state for the dedicated
+// top-level `appSecurity` StoreSchema key below. Type-only import (erased at
+// runtime — waf.ts is a pure module, no cycle).
+import type {AppSecurityState} from './modules/domain/waf.js'
 
 type StoreSchema = {
 	version: string
@@ -559,6 +563,11 @@ type StoreSchema = {
 	// source for the mass-deletion freeze gate (written by 318-07's handlers). Config
 	// lives here, not in a PG table (D-15 — no new migration this phase).
 	storagePool: StoragePoolState
+	// Phase 332 (WAF-01/02, D-332-6) — DEDICATED top-level key (NOT nested under
+	// `apps`/any array or scalar — dot-prop path collisions silently drop the
+	// write). Per-app IP/CIDR ban + UA block + abuse-log opt-in, plus the optional
+	// shared fail2ban jail tuning. Undefined until the first protection is set.
+	appSecurity: AppSecurityState
 }
 
 export type LivinitydOptions = {

@@ -633,6 +633,35 @@ export const apps = router({
 		)
 		.mutation(async ({ctx, input}) => ctx.apps!.setGpuAccess(input.appId, input.enabled)),
 
+	// Phase 332 (WAF-01/02): per-app protection (IP/CIDR ban + UA block + abuse-log
+	// opt-in). adminProcedure — editing a security control on a shared global app is
+	// host-affecting (same class as setGpuAccess). The input is strictly bounded so
+	// a malformed entry is rejected at the tRPC edge BEFORE it reaches the store /
+	// generator; setAppWafConfig re-validates (defense in depth) and regenerates the
+	// Caddyfile so the change is live without a reinstall.
+	setAppProtection: adminProcedure
+		.input(
+			z.object({
+				appId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,62}$/, 'invalid appId'),
+				banIps: z.array(z.string().max(64)).max(100).optional(),
+				banUserAgents: z.array(z.string().max(64)).max(50).optional(),
+				abuseBan: z.boolean().optional(),
+			}),
+		)
+		.mutation(async ({ctx, input}) =>
+			ctx.apps!.setAppWafConfig(input.appId, {
+				banIps: input.banIps,
+				banUserAgents: input.banUserAgents,
+				abuseBan: input.abuseBan,
+			}),
+		),
+
+	// Phase 332 (WAF-01/02): read the per-app protection config for the settings UI.
+	// privateProcedure — read-only; the mutation above is the admin gate.
+	getAppProtection: privateProcedure
+		.input(z.object({appId: z.string()}))
+		.query(async ({ctx, input}) => (await ctx.apps!.getAppWafConfig(input.appId)) ?? null),
+
 	// 326-01 APPS-01 (D-02/D-21): set post-install env overrides. adminProcedure — this
 	// env-injects + restarts the shared global app (same host-affecting class as
 	// setGpuAccess). The delegator re-runs the manifest allowlist so unknown keys are

@@ -48,6 +48,9 @@ import {
 	type BrokerClient,
 } from './metered-key.js'
 import {applyCaddyConfig, generateFullCaddyfile, writeCaddyfile, reloadCaddy, MAX_DNS_PER_USER, countOwnedSubdomains, appIdOwner, type SubdomainConfig, type CaddyConfig} from '../domain/caddy.js'
+// Phase 332 (WAF-01/02) — per-app protection config type + validation for the
+// setAppProtection route + Caddy regen threading.
+import {validateWafConfig, type AppWafConfig} from '../domain/waf.js'
 import {buildCaddyConfigFromState, type CaddyStateInstance, type CaddyStateSubdomain} from '../domain/caddy-state.js'
 import {getTunnelStatus} from '../domain/tunnel.js'
 import {verifyDns} from '../domain/dns-check.js'
@@ -2032,8 +2035,13 @@ export default class Apps {
 				merged.map(async (s) => {
 					const bearer = s.upstreamBearer ?? (await this.readAppDaemonToken(s.appId))
 					const publicAccess = await this.computeEffectivePublicAccess(s.appId, bearer)
-					const {publicAccess: _stale, ...rest} = s
-					return publicAccess ? {...rest, publicAccess} : rest
+					// Phase 332 (WAF-01/02): re-thread the per-app protection on EVERY
+					// emit from the live `appSecurity` store key (same discipline as
+					// publicAccess — a stale cached SubdomainConfig.waf is dropped). '' emit
+					// when absent keeps the block byte-identical (SC5).
+					const waf = await this.getAppWafConfig(s.appId)
+					const {publicAccess: _stale, waf: _staleWaf, ...rest} = s
+					return {...rest, ...(publicAccess ? {publicAccess} : {}), ...(waf ? {waf} : {})}
 				}),
 			)
 
@@ -2313,6 +2321,61 @@ export default class Apps {
 			this.logger.error(`readAppDaemonToken: failed for ${appId}`, error)
 			return undefined
 		}
+	}
+
+	// ─── Phase 332 (WAF-01/02) — per-app protection persistence ──────────────
+
+	/**
+	 * Read the per-app WAF/protection config from the dedicated `appSecurity`
+	 * store key. Returns undefined when the app has no protection set (→ zero
+	 * Caddy emit, byte-identical block). Best-effort: a read error fails to
+	 * undefined (open for the app — WAF is additive; never breaks routing).
+	 */
+	async getAppWafConfig(appId: string): Promise<AppWafConfig | undefined> {
+		try {
+			const state = await this.#livinityd.store.get('appSecurity')
+			const cfg = state?.apps?.[appId]
+			if (!cfg) return undefined
+			// Only surface a config that has at least one active control.
+			const hasContent = (cfg.banIps?.length ?? 0) > 0 || (cfg.banUserAgents?.length ?? 0) > 0 || !!cfg.abuseBan
+			return hasContent ? cfg : undefined
+		} catch (error) {
+			this.logger.error(`getAppWafConfig: failed for ${appId}`, error)
+			return undefined
+		}
+	}
+
+	/**
+	 * Persist a per-app WAF/protection config to the `appSecurity` store key and
+	 * regenerate the Caddyfile so it takes effect WITHOUT a reinstall (mirrors the
+	 * setPublicAccess → registerAppSubdomain flow). Rejects a config that fails
+	 * strict validation BEFORE persisting (injection kill — the route also
+	 * validates, this is defense in depth). Uses the FileStore write lock so a
+	 * concurrent per-app write can't clobber the sibling apps map.
+	 */
+	async setAppWafConfig(appId: string, cfg: AppWafConfig): Promise<void> {
+		const problems = validateWafConfig(cfg)
+		if (problems.length > 0) {
+			throw new Error(`[waf-invalid] ${problems.join('; ')}`)
+		}
+		await this.#livinityd.store.getWriteLock(async ({get, set}) => {
+			const state = (await get('appSecurity')) ?? {apps: {}}
+			const apps = {...(state.apps ?? {})}
+			// Normalize: drop empty arrays / false so an all-cleared config removes
+			// the entry entirely (keeps the store tidy + getAppWafConfig undefined).
+			const next: AppWafConfig = {}
+			if (cfg.banIps && cfg.banIps.length > 0) next.banIps = cfg.banIps
+			if (cfg.banUserAgents && cfg.banUserAgents.length > 0) next.banUserAgents = cfg.banUserAgents
+			if (cfg.abuseBan) next.abuseBan = true
+			if (Object.keys(next).length === 0) {
+				delete apps[appId]
+			} else {
+				apps[appId] = next
+			}
+			await set('appSecurity', {...state, apps})
+		})
+		// Regenerate the Caddyfile from live state so the new protection is live.
+		await this.rebuildCaddyFromState({rethrow: false})
 	}
 
 	// ─── Phase 258 WS-C (258-03) — public-access persistence + re-assert ─────
