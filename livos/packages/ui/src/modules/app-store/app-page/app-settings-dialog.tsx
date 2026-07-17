@@ -26,6 +26,7 @@ import {GpuAccessSection} from './gpu-access-section'
 import {ImmichPhotoBackupSection} from './immich-photo-backup-section'
 import {JellyfinSetupSection} from './jellyfin-setup-section'
 import {OidcSsoSection} from './oidc-sso-section'
+import {AppProtectionSection} from './app-protection-section'
 import {PublicAccessSection} from './public-access-section'
 import {ResourceLimitsSection} from './resource-limits-section'
 import {UpdatePolicySection} from './update-policy-section'
@@ -205,6 +206,14 @@ function AppSettingsDialogForApp({
 					{/* Configure Section â 326-04 (APPS-01), only for apps whose manifest
 					    declares environmentOverrides. Reopens the exact install-time
 					    validated form, prefilled with the app's persisted values. */}
+					{/* Protection Section — 332 (WAF-01/02). Per-app IP/CIDR ban + UA block +
+					    abuse-ban at the stock-Caddy layer. Non-native apps only (they have an
+					    exposed subdomain to protect; native apps proxy through the gateway). */}
+					{!app.native ? (
+						<div className='border-t border-border-default pt-4 mt-4'>
+							<AppProtectionSection appId={app.id} appName={app.name} />
+						</div>
+					) : null}
 					{app.installOptions?.environmentOverrides?.length ? (
 						<div className='border-t border-border-default pt-4 mt-4'>
 							<EnvironmentOverridesSection
