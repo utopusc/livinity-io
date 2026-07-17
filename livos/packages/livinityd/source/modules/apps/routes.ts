@@ -6,7 +6,31 @@ import {router, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
 // uninstall route (only the global/shared-app branch is step-up-gated).
 import {assertStepUpGrant} from '../server/trpc/step-up-guard.js'
 // Phase 335 (ROLE-01, D-335-3) — share-admin fall-through on shareApp/unshareApp.
-import {holdsScopeOrAdmin} from '../server/trpc/scope-guard.js'
+// (ROLE-02, D-335-4) — per-app operator gate on the global lifecycle routes.
+import {holdsScopeOrAdmin, isOperatorOrAdmin} from '../server/trpc/scope-guard.js'
+import {grantAppOperator, revokeAppOperator, listAppOperators} from '../database/admin-grants.js'
+
+// Phase 335 (ROLE-02, D-335-4) — GLOBAL/shared-app lifecycle gate for
+// restart/stop/update/logs (start additionally admits readonly grantees —
+// starting a stopped shared app is USAGE, not management). Passes for: legacy
+// single-user (no currentUser — pre-335 behavior unchanged), admin, a per-app
+// OPERATOR of this appId, an effective-FULL grantee. TIGHTENING NOTE: pre-335
+// these routes were open to ANY authenticated user — an unintended surface;
+// the per-user-instance branches at each call site are untouched, so owners
+// keep managing their own instances ungated.
+async function assertAppLifecycleAccess(
+	ctx: Parameters<typeof isOperatorOrAdmin>[0] & {currentUser?: {id: string; role: string} | null},
+	appId: string,
+	opts: {allowReadonly?: boolean} = {},
+): Promise<void> {
+	if (!ctx.currentUser) return
+	if (ctx.currentUser.role === 'admin') return
+	if (await isOperatorOrAdmin(ctx, appId)) return
+	const level = await getEffectiveAppAccess(appId, ctx.currentUser.id)
+	if (level === 'full') return
+	if (opts.allowReadonly && level === 'readonly') return
+	throw new TRPCError({code: 'FORBIDDEN', message: 'Operator access required'})
+}
 import {BUILTIN_APPS, getBuiltinApp, searchBuiltinApps} from './builtin-apps.js'
 import {isPublicForbidden, type PublicForbiddenSignals} from './public-forbidden.js'
 import {resolvePublicAccess} from './public-access.js'
@@ -534,6 +558,8 @@ export const apps = router({
 					return
 				}
 			}
+			// Phase 335 (ROLE-02): global restart = admin / operator / effective-full.
+			await assertAppLifecycleAccess(ctx, input.appId)
 			return ctx.apps.restart(input.appId)
 		}),
 
@@ -560,6 +586,9 @@ export const apps = router({
 					return
 				}
 			}
+			// Phase 335 (ROLE-02): starting a stopped shared app is USAGE — readonly
+			// grantees stay able to bring the app up to use it.
+			await assertAppLifecycleAccess(ctx, input.appId, {allowReadonly: true})
 			return ctx.apps.getApp(input.appId).start()
 		}),
 
@@ -586,6 +615,8 @@ export const apps = router({
 					return
 				}
 			}
+			// Phase 335 (ROLE-02): global stop = admin / operator / effective-full.
+			await assertAppLifecycleAccess(ctx, input.appId)
 			return ctx.apps.getApp(input.appId).stop({persistState: true})
 		}),
 
@@ -596,7 +627,12 @@ export const apps = router({
 				appId: z.string(),
 			}),
 		)
-		.mutation(async ({ctx, input}) => ctx.apps.update(input.appId)),
+		.mutation(async ({ctx, input}) => {
+			// Phase 335 (ROLE-02): update = admin / operator / effective-full
+			// (pre-335 this was open to ANY authenticated user — unintended).
+			await assertAppLifecycleAccess(ctx, input.appId)
+			return ctx.apps.update(input.appId)
+		}),
 
 	// Get logs for an app
 	logs: privateProcedure
@@ -605,7 +641,12 @@ export const apps = router({
 				appId: z.string(),
 			}),
 		)
-		.query(async ({ctx, input}) => ctx.apps.getApp(input.appId).getLogs()),
+		.query(async ({ctx, input}) => {
+			// Phase 335 (ROLE-02): logs can carry secrets — admin / operator /
+			// effective-full only (pre-335 any authenticated user could read them).
+			await assertAppLifecycleAccess(ctx, input.appId)
+			return ctx.apps.getApp(input.appId).getLogs()
+		}),
 
 	trackOpen: privateProcedure
 		.input(
@@ -627,6 +668,27 @@ export const apps = router({
 		.mutation(async ({ctx, input}) => ctx.apps.setSelectedDependencies(input.appId, input.dependencies)),
 
 	dependents: privateProcedure.input(z.string()).query(async ({ctx, input}) => ctx.apps.getDependents(input)),
+
+	// Phase 335 (ROLE-02, D-335-6/7) — per-app operator grant management.
+	// adminProcedure both ways: delegating operational control of an app is a
+	// box-admin power (an operator can NOT mint further operators).
+	setAppOperator: adminProcedure
+		.input(z.object({appId: z.string(), userId: z.string().uuid(), operator: z.boolean()}))
+		.mutation(async ({ctx, input}) => {
+			if (input.operator) {
+				await grantAppOperator({appId: input.appId, userId: input.userId, grantedBy: ctx.currentUser?.id ?? null})
+			} else {
+				await revokeAppOperator(input.appId, input.userId)
+			}
+			return {success: true}
+		}),
+
+	listAppOperators: adminProcedure
+		.input(z.object({appId: z.string()}))
+		.query(async ({input}) => {
+			const rows = await listAppOperators(input.appId)
+			return rows.map((r) => ({userId: r.user_id, username: r.username, grantedAt: r.granted_at}))
+		}),
 
 	// 316-02 (GPU-02): toggle a single app's GPU-access override. adminProcedure
 	// (WR-02): GPU passthrough is HOST-resource-affecting — it restarts the app
