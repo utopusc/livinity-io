@@ -24,6 +24,12 @@ export const httpOnlyPaths = [
 	'stepUp.verifyTotp',
 	'stepUp.passkeyOptions',
 	'stepUp.passkeyVerify',
+	// Phase 334 — step-up-GATED route: the LIVINITY_STEPUP grant cookie only
+	// travels on HTTP requests (a WS link's cookies are frozen at upgrade time,
+	// BEFORE the grant is minted), so the gated mutation must ride HTTP too.
+	// user.deleteUser + system.reveal/regenerateDesktopPassword are already
+	// httpOnly (above/below); apps.uninstall joins them here.
+	'apps.uninstall',
 	// public invite acceptance (no auth needed)
 	'user.acceptInvite',
 	// system.status doesn't use cookies/headers, but the UI polls it across restarts to detect when livinityd is back online; we force HTTP to avoid WS reconnect handshake

@@ -2,6 +2,9 @@ import z from 'zod'
 import {TRPCError} from '@trpc/server'
 
 import {router, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
+// Phase 334 (STEPUP-01, D-334-4) — inline grant assertion for the mixed-path
+// uninstall route (only the global/shared-app branch is step-up-gated).
+import {assertStepUpGrant} from '../server/trpc/step-up-guard.js'
 import {BUILTIN_APPS, getBuiltinApp, searchBuiltinApps} from './builtin-apps.js'
 import {isPublicForbidden, type PublicForbiddenSignals} from './public-forbidden.js'
 import {resolvePublicAccess} from './public-access.js'
@@ -502,6 +505,13 @@ export const apps = router({
 			if (ctx.currentUser?.id && ctx.currentUser.role !== 'admin') {
 				const level = await getEffectiveAppAccess(input.appId, ctx.currentUser.id)
 				if (level !== 'full') throw new TRPCError({code: 'FORBIDDEN', message: 'Read-only access'})
+			}
+			// Phase 334 (STEPUP-01, D-334-4): removing the GLOBAL/shared app is
+			// destructive for every user → a DB-backed session needs a fresh step-up
+			// grant (fails closed with STEP_UP_REQUIRED; the UI modal mints + retries).
+			// Legacy single-user (no currentUser) is unaffected — additive-only.
+			if (ctx.currentUser?.id) {
+				await assertStepUpGrant(ctx)
 			}
 			return ctx.apps.uninstall(input.appId)
 		}),

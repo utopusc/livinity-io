@@ -4,7 +4,7 @@ import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 import bcrypt from 'bcryptjs'
 
-import {router, publicProcedure, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
+import {router, publicProcedure, privateProcedure, adminProcedure, stepUpAdminProcedure} from '../server/trpc/trpc.js'
 import * as totp from '../utilities/totp.js'
 import {
 	getPool,
@@ -1146,8 +1146,11 @@ export default router({
 			return {success: true}
 		}),
 
-	// Admin only - delete a user
-	deleteUser: adminProcedure
+	// Admin only - delete a user. Phase 334 (STEPUP-01, D-334-4): destroying an
+	// account is irreversible → requires a fresh 5-min step-up grant on top of
+	// the admin role (stepUpAdminProcedure fails closed with STEP_UP_REQUIRED;
+	// the UI re-auth modal mints the grant and retries).
+	deleteUser: stepUpAdminProcedure
 		.input(
 			z.object({
 				userId: z.string().uuid(),

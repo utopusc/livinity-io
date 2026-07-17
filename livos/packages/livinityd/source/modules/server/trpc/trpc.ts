@@ -5,6 +5,7 @@ import {type Context} from './context.js'
 import {isAuthenticated, isAuthenticatedIfUserExists, requireRole, requireRoleIfUserExists} from './is-authenticated.js'
 import {websocketLogger} from './websocket-logger.js'
 import {auditAdminAction} from '../../security-audit/audit-middleware.js'
+import {requireStepUpGrant} from './step-up-guard.js'
 
 // `t` is exported (not just internal) so v29.4 Phase 47 Plan 05 can call
 // `t.mergeRouters(appsBase, appsHealthRouter)` from server/trpc/index.ts to
@@ -38,6 +39,11 @@ export const publicProcedureWhenNoUserExists = baseProcedure.use(isAuthenticated
 // an unauthorized caller throws in the role gate before the audit fires (ASVS
 // V4 — never log a FORBIDDEN attempt as a legitimate admin action).
 export const adminProcedure = privateProcedure.use(requireRole('admin')).use(auditAdminAction)
+// Phase 334 (STEPUP-01, D-334-2): admin + a fresh 5-min step-up grant. Step-up
+// composes AFTER role + audit, so a non-admin fails on the role gate first and
+// a grant-less admin attempt is still audit-recorded before STEP_UP_REQUIRED.
+// Gated paths MUST also be in httpOnlyPaths (grant cookie is HTTP-only).
+export const stepUpAdminProcedure = adminProcedure.use(requireStepUpGrant)
 // Backups-v2 P0 (D10): admin once any user exists, open pre-first-user — for
 // the onboarding-restore procedures that must work on a fresh box but were
 // previously callable by ANY authenticated user afterwards.

@@ -27,6 +27,10 @@ import {
 import {detectGpu, detectNvidiaGpu, isNvidiaToolkitConfigured, isWsl2, resetGpuDetectionCache} from './gpu.js'
 
 import {adminProcedure, privateProcedure, publicProcedure, router} from '../server/trpc/trpc.js'
+// Phase 334 (STEPUP-01, D-334-4) — step-up grant gate for the desktop-password
+// reveal/regenerate routes (DB-backed sessions; the legacy YAML branch keeps
+// its per-call TOTP via require2faVerified below).
+import {assertStepUpGrant} from '../server/trpc/step-up-guard.js'
 import bcrypt from 'bcryptjs'
 import {createShare, listSharesForUser, revokeShare, type FileShareRow} from '../files/share-tokens.js'
 import {fileUserContext, type FileUserInfo} from '../files/files.js'
@@ -1035,7 +1039,31 @@ async function require2faVerified(
 	}
 }
 
-const desktopTotpInput = z.object({totp: z.string().trim().min(6).max(12)})
+// Phase 334 (STEPUP-01, D-334-4): a DB-backed session re-auths via the
+// LIVINITY_STEPUP grant (password OR DB-TOTP OR passkey — assertStepUpGrant
+// below), so `totp` is now OPTIONAL and only consumed by the legacy
+// single-user (no-DB) branch, which keeps the original per-call YAML TOTP
+// gate unchanged (additive-only — never regress a working legacy box).
+const desktopTotpInput = z.object({totp: z.string().trim().min(6).max(12).optional()})
+
+// Phase 334 — shared dual-path step-up gate for the two desktop-password
+// routes. DB session → grant (fails closed with STEP_UP_REQUIRED, the UI
+// modal mints + retries); legacy YAML session → the pre-334 require2faVerified
+// per-call TOTP, byte-identical behavior including its PRECONDITION_FAILED
+// enable-2FA-first refusal.
+async function requireDesktopPasswordStepUp(
+	ctx: Parameters<typeof assertStepUpGrant>[0] & {user?: {is2faEnabled(): Promise<boolean>; validate2faToken(token: string): Promise<boolean>}},
+	totp: string | undefined,
+): Promise<void> {
+	if (ctx.currentUser) {
+		await assertStepUpGrant(ctx)
+		return
+	}
+	if (!totp) {
+		throw new TRPCError({code: 'UNAUTHORIZED', message: 'Invalid two-factor code.'})
+	}
+	await require2faVerified(ctx.user!, totp)
+}
 
 // Lightweight per-process rate-limit: regenerating rotates the OS password, so
 // double-clicks / spray are capped to one call per 10s.
@@ -1736,14 +1764,14 @@ export default router({
 	// mutation (not a query) so it's never cached and always requires a fresh
 	// step-up verification.
 	revealDesktopPassword: adminProcedure.input(desktopTotpInput).mutation(async ({ctx, input}) => {
-		await require2faVerified(ctx.user!, input.totp)
+		await requireDesktopPasswordStepUp(ctx, input.totp)
 		return readDesktopCredentials()
 	}),
 	// regenerateDesktopPassword: rotate the OS password via the scoped sudo wrapper
 	// (the new password is generated INSIDE the wrapper — never an argv, so it
 	// can't leak via `ps`). 2FA-gated + rate-limited; returns the fresh creds.
 	regenerateDesktopPassword: adminProcedure.input(desktopTotpInput).mutation(async ({ctx, input}) => {
-		await require2faVerified(ctx.user!, input.totp)
+		await requireDesktopPasswordStepUp(ctx, input.totp)
 		const now = Date.now()
 		if (now - lastDesktopPasswordRegenAt < DESKTOP_PASSWORD_REGEN_MIN_INTERVAL_MS) {
 			throw new TRPCError({
