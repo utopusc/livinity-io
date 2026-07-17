@@ -42,6 +42,11 @@ export const CLOUD_STORAGE_PATH = '/Cloud' as const
 // exists; the sidebar entry render-gates off a successful `files.list({path})`.
 export const POOL_PATH = '/Pool' as const
 export const BACKUPS_PATH = '/Backups' as const
+// ACLUI-01 (336) — the synthetic `/Shared` web nav root under which the Files
+// app surfaces the cross-user paths granted to the current user (file_acls).
+// The backend intercepts every `/Shared/*` path and ACL-gates it; the sidebar
+// entry render-gates off a non-empty `files.list({path:'/Shared'})`.
+export const SHARED_PATH = '/Shared' as const
 
 // NOTE: Search and Recents are not real directories on disk. They are
 // pseudo-directories, i.e. they are handled client-side only and are just

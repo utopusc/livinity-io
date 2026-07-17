@@ -13,6 +13,7 @@ import {SidebarHome} from '@/features/files/components/sidebar/sidebar-home'
 import {SidebarNetworkStorage} from '@/features/files/components/sidebar/sidebar-network-storage'
 import {SidebarPool} from '@/features/files/components/sidebar/sidebar-pool'
 import {SidebarRecents} from '@/features/files/components/sidebar/sidebar-recents'
+import {SidebarShared} from '@/features/files/components/sidebar/sidebar-shared'
 import {SidebarShares} from '@/features/files/components/sidebar/sidebar-shares'
 import {SidebarStorage} from '@/features/files/components/sidebar/sidebar-storage'
 import {SidebarTrash} from '@/features/files/components/sidebar/sidebar-trash'
@@ -52,6 +53,9 @@ export function Sidebar({className}: {className?: string}) {
 					<SidebarHome />
 					<SidebarRecents />
 					<SidebarApps />
+					{/* ACLUI-01 (336) — "Shared with me" (/Shared); self-hides until the
+					    user has ≥1 cross-user file_acls grant. */}
+					<SidebarShared />
 				</SidebarSection>
 				{/* Favorites */}
 				<AnimatePresence initial={!isLoadingFavorites}>
