@@ -10,6 +10,8 @@ import {init} from '@/init'
 import {initTokenRenewal} from '@/modules/auth/shared'
 import {ConfirmationProvider} from '@/providers/confirmation'
 import {GlobalSystemStateProvider} from '@/providers/global-system-state/index'
+// Phase 334 STEPUP-01 — app-level sudo-mode re-auth dialog (password/TOTP/passkey).
+import {StepUpProvider} from '@/providers/step-up'
 
 import {AuthBootstrap} from './providers/auth-bootstrap'
 import {GlobalFilesProvider} from './providers/global-files'
@@ -33,11 +35,13 @@ init(
 		<WallpaperProviderConnected>
 			<RemoteWallpaperInjector />
 			<ConfirmationProvider>
-				<GlobalSystemStateProvider>
-					<GlobalFilesProvider>
-						<RouterProvider router={router} />
-					</GlobalFilesProvider>
-				</GlobalSystemStateProvider>
+				<StepUpProvider>
+					<GlobalSystemStateProvider>
+						<GlobalFilesProvider>
+							<RouterProvider router={router} />
+						</GlobalFilesProvider>
+					</GlobalSystemStateProvider>
+				</StepUpProvider>
 			</ConfirmationProvider>
 		</WallpaperProviderConnected>
 		<Prefetcher />

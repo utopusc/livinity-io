@@ -103,6 +103,9 @@ import {useRollback} from '@/providers/global-system-state/rollback'
 import {CopyableField} from '@/components/ui/copyable-field'
 import {PinInput} from '@/components/ui/pin-input'
 import {t} from '@/utils/i18n'
+// Phase 334 STEPUP-01 — generic re-auth wrapper for the DB-session desktop-
+// password reveal/regenerate (legacy YAML keeps the per-call TOTP dialog).
+import {isStepUpCancelled, isStepUpRequired, useStepUp} from '@/providers/step-up'
 import {cn} from '@/shadcn-lib/utils'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 
@@ -729,14 +732,45 @@ function AccountSection() {
 
 	// Phase 306 R2 — desktop user OS/sudo password. The card never loads the
 	// plaintext; reveal + regenerate are 2FA step-up actions.
+	// Phase 334 STEPUP-01 — a DB-backed session (user.get returns an id) now
+	// re-auths via the generic step-up modal (password OR TOTP OR passkey — no
+	// 2FA-enrollment prerequisite); the legacy YAML single-user box keeps the
+	// pre-334 per-call TOTP dialog + its enable-2FA-first requirement.
 	const utils = trpcReact.useUtils()
 	const desktopInfoQ = trpcReact.system.getDesktopUserInfo.useQuery(undefined, {retry: false})
 	const desktopTwoFaQ = trpcReact.user.is2faEnabled.useQuery()
 	const twoFaOn = desktopTwoFaQ.data === true
+	const isDbUser = Boolean((userQ.data as {id?: string} | undefined)?.id)
+	const {withStepUp} = useStepUp()
+	const [desktopStepUpError, setDesktopStepUpError] = useState<string | null>(null)
 	const [revealedDesktopPw, setRevealedDesktopPw] = useState<string | null>(null)
 	const [desktopVerifyIntent, setDesktopVerifyIntent] = useState<null | 'reveal' | 'regenerate'>(null)
 	const revealDesktopPwMut = trpcReact.system.revealDesktopPassword.useMutation()
 	const regenerateDesktopPwMut = trpcReact.system.regenerateDesktopPassword.useMutation()
+
+	// DB path: run the mutation under the step-up wrapper (modal on demand);
+	// legacy path: open the pre-334 TOTP dialog.
+	const handleDesktopAction = (intent: 'reveal' | 'regenerate') => {
+		if (!isDbUser) {
+			setDesktopVerifyIntent(intent)
+			return
+		}
+		setDesktopStepUpError(null)
+		void withStepUp(async () => {
+			const r =
+				intent === 'regenerate'
+					? await regenerateDesktopPwMut.mutateAsync({})
+					: await revealDesktopPwMut.mutateAsync({})
+			if (r?.password) {
+				setRevealedDesktopPw(r.password)
+				if (intent === 'regenerate') utils.system.getDesktopUserInfo.invalidate()
+			}
+		}).catch((error: unknown) => {
+			// A dismissed modal is a silent no-op; a real failure surfaces inline.
+			if (isStepUpCancelled(error) || isStepUpRequired(error)) return
+			setDesktopStepUpError((error as {message?: string})?.message ?? 'Failed')
+		})
+	}
 
 	return (
 		<div className='flex flex-col gap-8'>
@@ -816,8 +850,8 @@ function AccountSection() {
 								<Button
 									variant='v36-ghost'
 									size='v36-pill-sm'
-									disabled={!twoFaOn}
-									onClick={() => setDesktopVerifyIntent('reveal')}
+									disabled={!isDbUser && !twoFaOn}
+									onClick={() => handleDesktopAction('reveal')}
 								>
 									Reveal
 								</Button>
@@ -825,8 +859,8 @@ function AccountSection() {
 							<Button
 								variant='v36-ghost'
 								size='v36-pill-sm'
-								disabled={!twoFaOn}
-								onClick={() => setDesktopVerifyIntent('regenerate')}
+								disabled={!isDbUser && !twoFaOn}
+								onClick={() => handleDesktopAction('regenerate')}
 							>
 								Regenerate
 							</Button>
@@ -834,11 +868,12 @@ function AccountSection() {
 					}
 				/>
 			</FieldCard>
-			{!twoFaOn ? (
+			{!isDbUser && !twoFaOn ? (
 				<p className='text-13 text-[color:var(--fg-faint)]'>
 					Enable two-factor authentication in Settings → 2FA to reveal or regenerate the sudo password.
 				</p>
 			) : null}
+			{desktopStepUpError ? <p className='text-13 text-red-400'>{desktopStepUpError}</p> : null}
 
 			<DesktopPasswordVerifyDialog
 				intent={desktopVerifyIntent}

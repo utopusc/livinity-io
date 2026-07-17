@@ -4,6 +4,11 @@ import {useInterval, usePrevious} from 'react-use'
 import {toast} from 'sonner'
 import {arrayIncludes} from 'ts-extras'
 
+// Phase 334 STEPUP-01 — the global/shared-app uninstall branch is step-up-gated
+// server-side; withStepUp opens the re-auth modal on STEP_UP_REQUIRED and
+// retries once with the fresh grant. Per-user instance uninstalls pass through
+// ungated (the server only gates the global branch).
+import {useStepUp} from '@/providers/step-up'
 import {AppState, AppStateOrLoading, trpcClient, trpcReact} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
 
@@ -21,11 +26,14 @@ export const pollStates = [
 export function useUninstallAllApps() {
 	const apps = trpcReact.apps.list.useQuery().data
 	const utils = trpcReact.useUtils()
+	const {withStepUp} = useStepUp()
 
 	const mut = useMutation({
 		mutationFn: async () => {
 			for (const app of apps ?? []) {
-				await trpcClient.apps.uninstall.mutate({appId: app.id})
+				// Per-call wrap: the FIRST gated uninstall opens the re-auth modal;
+				// the rest ride the same 5-min grant without re-prompting.
+				await withStepUp(() => trpcClient.apps.uninstall.mutate({appId: app.id}))
 			}
 		},
 
@@ -41,6 +49,7 @@ export function useUninstallAllApps() {
 // TODO: rename to something that covers more than install
 export function useAppInstall(id: string) {
 	const utils = trpcReact.useUtils()
+	const {withStepUp} = useStepUp()
 	const appStateQ = trpcReact.apps.state.useQuery({appId: id})
 
 	const refreshAppStates = () => {
@@ -120,7 +129,14 @@ export function useAppInstall(id: string) {
 		if (uninstallTheseFirst.length > 0) {
 			return {uninstallTheseFirst}
 		}
-		uninstallMut.mutate({appId: id})
+		// Step-up wrapper: a dismissed re-auth modal (StepUpCancelledError) is a
+		// silent no-op; onSettled has already refreshed the optimistic state back.
+		try {
+			await withStepUp(() => uninstallMut.mutateAsync({appId: id}))
+		} catch {
+			// Real uninstall errors surface through the mutation state / app state
+			// polling exactly as before (mutate() also swallowed the rejection).
+		}
 	}
 	const restart = async () => restartMut.mutate({appId: id})
 

@@ -15,6 +15,8 @@ import {
 import {toast} from 'sonner'
 
 import {useIsMobile} from '@/hooks/use-is-mobile'
+// Phase 334 STEPUP-01 — re-auth wrapper for the step-up-gated deleteUser.
+import {isStepUpRequired, useStepUp} from '@/providers/step-up'
 import {Button} from '@/shadcn-components/ui/button'
 import {
 	Dialog,
@@ -188,12 +190,17 @@ function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: bool
 		},
 	})
 
+	// Phase 334 STEPUP-01 — deleting a user is step-up-gated server-side. The
+	// first attempt's STEP_UP_REQUIRED denial opens the re-auth modal (via
+	// withStepUp below); it must never surface as an error toast.
+	const {withStepUp} = useStepUp()
 	const deleteMut = trpcReact.user.deleteUser.useMutation({
 		onSuccess: () => {
 			utils.user.listAllUsers.invalidate()
 			toast.success(`${user.display_name} has been deleted`)
 		},
 		onError: (error) => {
+			if (isStepUpRequired(error)) return
 			toast.error(error.message)
 		},
 	})
@@ -208,7 +215,10 @@ function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: bool
 
 	const handleDelete = () => {
 		if (window.confirm(`Are you sure you want to delete ${user.display_name}? This cannot be undone.`)) {
-			deleteMut.mutate({userId: user.id})
+			// Step-up wrapper: retries once after the re-auth modal mints the grant;
+			// a dismissed modal (StepUpCancelledError) is a silent no-op, and any
+			// real failure was already toasted by the mutation's onError.
+			void withStepUp(() => deleteMut.mutateAsync({userId: user.id})).catch(() => {})
 		}
 	}
 
