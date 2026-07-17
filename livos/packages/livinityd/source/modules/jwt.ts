@@ -256,14 +256,20 @@ export async function verifyShareGrant(token: string, secret: string): Promise<V
  * non-interchangeable with a session/proxy/SSO/share token. The `jti` is
  * returned for optional bookkeeping. 5-min TTL is the revocation.
  */
+export type StepUpMethod = 'password' | 'totp' | 'passkey'
+
 export async function signStepUpGrant(
 	secret: string,
 	userId: string,
+	// Review WARN-1 — the grant carries WHICH factor minted it so a gate can
+	// demand a SECOND factor (TOTP/passkey) for the most sensitive reads
+	// (desktop sudo-password) without weakening the pre-334 posture.
+	method: StepUpMethod = 'password',
 ): Promise<{token: string; jti: string}> {
 	validateSecret(secret)
 	if (typeof userId !== 'string' || userId.length === 0) throw new Error('signStepUpGrant: userId required')
 	const jti = crypto.randomUUID()
-	const payload = {stepup: true, userId, jti}
+	const payload = {stepup: true, userId, jti, method}
 	const token = jwt.sign(payload, secret, {
 		expiresIn: STEPUP_GRANT_TTL_SECONDS,
 		algorithm: JWT_ALGORITHM,
@@ -276,6 +282,7 @@ export async function signStepUpGrant(
 export type VerifiedStepUpGrant = {
 	userId: string
 	jti: string
+	method: StepUpMethod
 }
 
 /**
@@ -302,7 +309,11 @@ export async function verifyStepUpGrant(token: string, secret: string): Promise<
 	if (typeof payload.jti !== 'string' || payload.jti.length === 0) {
 		throw new Error('Invalid step-up grant (no jti)')
 	}
-	return {userId: payload.userId, jti: payload.jti}
+	// A grant without a recognized method claim is treated as the WEAKEST factor
+	// (password) — fail-safe for any token minted before the method claim landed.
+	const method: StepUpMethod =
+		payload.method === 'totp' || payload.method === 'passkey' ? payload.method : 'password'
+	return {userId: payload.userId, jti: payload.jti, method}
 }
 
 /**

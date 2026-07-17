@@ -1051,12 +1051,15 @@ const desktopTotpInput = z.object({totp: z.string().trim().min(6).max(12).option
 // modal mints + retries); legacy YAML session → the pre-334 require2faVerified
 // per-call TOTP, byte-identical behavior including its PRECONDITION_FAILED
 // enable-2FA-first refusal.
+// Review WARN-1 — {secondFactor: true}: the OS sudo password was 2FA-gated
+// pre-334, so a password-minted grant is NOT enough here (never-weaken,
+// D-334-5); the grant must come from TOTP or a passkey.
 async function requireDesktopPasswordStepUp(
 	ctx: Parameters<typeof assertStepUpGrant>[0] & {user?: {is2faEnabled(): Promise<boolean>; validate2faToken(token: string): Promise<boolean>}},
 	totp: string | undefined,
 ): Promise<void> {
 	if (ctx.currentUser) {
-		await assertStepUpGrant(ctx)
+		await assertStepUpGrant(ctx, {secondFactor: true})
 		return
 	}
 	if (!totp) {

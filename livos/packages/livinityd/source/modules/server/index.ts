@@ -332,8 +332,8 @@ class Server {
 	}
 
 	/** Phase 334 (STEPUP-01, D-334-1) — mint a 5-min sudo-mode step-up grant bound to one userId. */
-	async signStepUpGrant(userId: string) {
-		return jwt.signStepUpGrant(await this.getJwtSecret(), userId)
+	async signStepUpGrant(userId: string, method: jwt.StepUpMethod = 'password') {
+		return jwt.signStepUpGrant(await this.getJwtSecret(), userId, method)
 	}
 
 	/** Phase 334 (STEPUP-01, D-334-1) — verify a step-up grant (audience-bound, throws on failure). */

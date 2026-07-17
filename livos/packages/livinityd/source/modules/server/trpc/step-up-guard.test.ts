@@ -13,7 +13,7 @@ import {describe, expect, test, vi} from 'vitest'
 import jsonwebtoken from 'jsonwebtoken'
 
 import {signStepUpGrant, verifyStepUpGrant} from '../../jwt.js'
-import {assertStepUpGrant, requireStepUpGrant, STEP_UP_REQUIRED} from './step-up-guard.js'
+import {assertStepUpGrant, requireStepUpGrant, STEP_UP_REQUIRED, STEP_UP_2FA_REQUIRED} from './step-up-guard.js'
 import {STEPUP_COOKIE_NAME} from '../../stepup/constants.js'
 
 // validateSecret (jwt.ts) requires a 256-bit hex string.
@@ -82,6 +82,39 @@ describe('assertStepUpGrant', () => {
 
 	test('garbage in the cookie slot is rejected', async () => {
 		await expectStepUpRequired(assertStepUpGrant(makeCtx({cookie: 'not-a-jwt'})))
+	})
+
+	// Review WARN-1 — {secondFactor: true} demands a TOTP/passkey-minted grant.
+	test('secondFactor: a PASSWORD-minted grant is refused with STEP_UP_2FA_REQUIRED', async () => {
+		const {token} = await signStepUpGrant(SECRET, USER_ID, 'password')
+		await expect(assertStepUpGrant(makeCtx({cookie: token}), {secondFactor: true})).rejects.toMatchObject({
+			code: 'UNAUTHORIZED',
+			message: STEP_UP_2FA_REQUIRED,
+		})
+	})
+
+	test('secondFactor: a TOTP-minted grant passes', async () => {
+		const {token} = await signStepUpGrant(SECRET, USER_ID, 'totp')
+		await expect(assertStepUpGrant(makeCtx({cookie: token}), {secondFactor: true})).resolves.toBeUndefined()
+	})
+
+	test('secondFactor: a PASSKEY-minted grant passes', async () => {
+		const {token} = await signStepUpGrant(SECRET, USER_ID, 'passkey')
+		await expect(assertStepUpGrant(makeCtx({cookie: token}), {secondFactor: true})).resolves.toBeUndefined()
+	})
+
+	test('secondFactor: a legacy grant WITHOUT a method claim is treated as password (fail-safe)', async () => {
+		const legacy = jsonwebtoken.sign({stepup: true, userId: USER_ID, jti: 'j'}, SECRET, {
+			expiresIn: 60,
+			algorithm: 'HS256',
+			audience: 'livinityd-stepup',
+			issuer: 'livinityd',
+		})
+		await expect(assertStepUpGrant(makeCtx({cookie: legacy}), {secondFactor: true})).rejects.toMatchObject({
+			message: STEP_UP_2FA_REQUIRED,
+		})
+		// …but still satisfies the plain (any-factor) gate.
+		await expect(assertStepUpGrant(makeCtx({cookie: legacy}))).resolves.toBeUndefined()
 	})
 })
 

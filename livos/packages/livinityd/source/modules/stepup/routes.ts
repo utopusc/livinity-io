@@ -83,6 +83,18 @@ const stepUpRateLimited = async (
 	}
 }
 
+// Review INFO-3 — a SUCCESSFUL verification clears the failure counter so a
+// user legitimately re-authing many times in one window (e.g. sequential
+// uninstalls across expired grants) is never locked out by their own
+// successes. Best-effort (fail-open like the limiter itself).
+const stepUpRateLimitReset = async (redis: MinimalRedis, userId: string): Promise<void> => {
+	try {
+		await redis.del(`stepup:rl:${userId}`)
+	} catch {
+		// non-fatal
+	}
+}
+
 // Read the box's active mainDomain — null when unconfigured / bare-LAN-IP.
 // Local copy of the user/routes.ts:80 helper (module-private there); fails
 // closed to null on any parse / Redis error.
@@ -125,7 +137,8 @@ export default router({
 				void recordStepUpEvent({userId, method: 'password', success: false, error: 'invalid_password'})
 				throw verificationFailed()
 			}
-			await mintGrantCookie(ctx.server!, ctx.response, userId)
+			await mintGrantCookie(ctx.server!, ctx.response, userId, 'password')
+			await stepUpRateLimitReset(ctx.livinityd!.ai.redis, userId)
 			void recordStepUpEvent({userId, method: 'password', success: true})
 			return {ok: true}
 		}),
@@ -154,7 +167,8 @@ export default router({
 				void recordStepUpEvent({userId, method: 'totp', success: false, error: 'invalid_totp'})
 				throw verificationFailed()
 			}
-			await mintGrantCookie(ctx.server!, ctx.response, userId)
+			await mintGrantCookie(ctx.server!, ctx.response, userId, 'totp')
+			await stepUpRateLimitReset(ctx.livinityd!.ai.redis, userId)
 			void recordStepUpEvent({userId, method: 'totp', success: true})
 			return {ok: true}
 		}),
@@ -254,7 +268,7 @@ export default router({
 			assertCounterOk(Number(cred.counter), newCounter)
 			await updateCounter(cred.credential_id, newCounter)
 
-			await mintGrantCookie(ctx.server!, ctx.response, userId)
+			await mintGrantCookie(ctx.server!, ctx.response, userId, 'passkey')
 			void recordStepUpEvent({userId, method: 'passkey', success: true})
 			return {ok: true}
 		}),
@@ -265,14 +279,22 @@ export default router({
 // TTL. A WS call has no response object → PRECONDITION_FAILED (fail closed;
 // the four paths are in httpOnlyPaths so the typed client never hits this).
 async function mintGrantCookie(
-	server: {signStepUpGrant: (userId: string) => Promise<{token: string; jti: string}>},
+	server: {
+		signStepUpGrant: (
+			userId: string,
+			method?: 'password' | 'totp' | 'passkey',
+		) => Promise<{token: string; jti: string}>
+	},
 	response: {cookie: (name: string, value: string, options: Record<string, unknown>) => unknown} | undefined,
 	userId: string,
+	// Review WARN-1 — the minting factor is stamped into the grant so gates can
+	// demand a second factor (assertStepUpGrant {secondFactor: true}).
+	method: 'password' | 'totp' | 'passkey',
 ): Promise<void> {
 	if (!response) {
 		throw new TRPCError({code: 'PRECONDITION_FAILED', message: 'Step-up requires an HTTP request'})
 	}
-	const {token} = await server.signStepUpGrant(userId)
+	const {token} = await server.signStepUpGrant(userId, method)
 	response.cookie(STEPUP_COOKIE_NAME, token, {
 		httpOnly: true,
 		secure: true,

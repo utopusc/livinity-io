@@ -28,6 +28,12 @@ import {STEPUP_COOKIE_NAME} from '../../stepup/constants.js'
 
 /** Machine-readable denial the UI keys on to open the step-up modal (334-03). */
 export const STEP_UP_REQUIRED = 'STEP_UP_REQUIRED'
+/**
+ * Review WARN-1 — denial for a route demanding a SECOND factor when the
+ * presented grant was minted with the account password only. The UI re-opens
+ * the modal in second-factor-only mode (TOTP / passkey).
+ */
+export const STEP_UP_2FA_REQUIRED = 'STEP_UP_2FA_REQUIRED'
 
 const stepUpRequired = () => new TRPCError({code: 'UNAUTHORIZED', message: STEP_UP_REQUIRED})
 
@@ -37,8 +43,20 @@ const stepUpRequired = () => new TRPCError({code: 'UNAUTHORIZED', message: STEP_
  * Throws UNAUTHORIZED/STEP_UP_REQUIRED unless the request carries a valid,
  * unexpired LIVINITY_STEPUP grant bound to THIS user (aud livinityd-stepup +
  * userId match — a grant minted for user A never authorizes user B).
+ *
+ * opts.secondFactor (WARN-1): additionally require that the grant was minted
+ * with TOTP or a passkey — NOT the account password. Used by the desktop
+ * sudo-password routes so their pre-334 "second factor structurally required"
+ * posture is preserved.
+ *
+ * Review WARN-2 (documented, deliberate): the internal service-token path
+ * (X-Api-Key → admin-equivalent ctx.currentUser) and any WS caller carry no
+ * step-up cookie and CANNOT mint one, so gated routes are effectively
+ * DASHBOARD-ONLY. That is fail-closed by design for destructive actions; any
+ * future automation needing these routes must go through an operator-approved
+ * exemption here — never a silent bypass.
  */
-export async function assertStepUpGrant(ctx: Context): Promise<void> {
+export async function assertStepUpGrant(ctx: Context, opts?: {secondFactor?: boolean}): Promise<void> {
 	// No resolved DB user → nothing to bind a grant to (legacy single-user boxes
 	// keep their route-local legacy gates; this guard is for DB-backed sessions).
 	if (!ctx.currentUser) throw stepUpRequired()
@@ -46,7 +64,7 @@ export async function assertStepUpGrant(ctx: Context): Promise<void> {
 	if (typeof cookie !== 'string' || cookie.length === 0) throw stepUpRequired()
 	const server = ctx.server
 	if (!server) throw stepUpRequired()
-	let claims: {userId: string}
+	let claims: {userId: string; method: 'password' | 'totp' | 'passkey'}
 	try {
 		claims = await server.verifyStepUpGrant(cookie)
 	} catch {
@@ -54,6 +72,9 @@ export async function assertStepUpGrant(ctx: Context): Promise<void> {
 		throw stepUpRequired()
 	}
 	if (claims.userId !== ctx.currentUser.id) throw stepUpRequired()
+	if (opts?.secondFactor && claims.method === 'password') {
+		throw new TRPCError({code: 'UNAUTHORIZED', message: STEP_UP_2FA_REQUIRED})
+	}
 }
 
 /**

@@ -159,6 +159,7 @@
   "step-up.use-password": "Use password instead",
   "step-up.use-totp": "Use 2FA code",
   "step-up.use-passkey": "Use passkey",
+  "step-up.no-second-factor": "This action needs a second factor. Enable two-factor authentication (Settings → 2FA) or add a passkey (Settings → Passkeys) first.",
   "app-share-group.title": "Share {{appName}}",
   "app-share-group.description": "Choose which users and groups can access this app, and whether they can just use it or also manage it. Shared apps appear automatically in the recipient's app list.",
   "app-share-group.users-heading": "Users",

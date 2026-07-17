@@ -17,19 +17,23 @@
  */
 import {useCallback} from 'react'
 
-import {isStepUpRequired, useStepUpContext} from './step-up-provider'
+import {isStepUp2faRequired, isStepUpRequired, useStepUpContext, type StepUpRequestOptions} from './step-up-provider'
 
 export function useStepUp() {
 	const {requestStepUp} = useStepUpContext()
 
 	const withStepUp = useCallback(
-		async <T>(action: () => Promise<T>): Promise<T> => {
+		async <T>(action: () => Promise<T>, options?: StepUpRequestOptions): Promise<T> => {
 			try {
 				return await action()
 			} catch (error) {
 				if (!isStepUpRequired(error)) throw error
+				// WARN-1: STEP_UP_2FA_REQUIRED (or a caller that KNOWS its route
+				// demands one, e.g. desktop sudo-password) forces second-factor-only.
+				await requestStepUp({
+					secondFactorOnly: options?.secondFactorOnly === true || isStepUp2faRequired(error),
+				})
 				// Rejects with StepUpCancelledError on dismiss — propagates to the caller.
-				await requestStepUp()
 				return await action()
 			}
 		},

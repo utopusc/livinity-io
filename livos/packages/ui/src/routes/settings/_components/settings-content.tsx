@@ -741,6 +741,14 @@ function AccountSection() {
 	const desktopTwoFaQ = trpcReact.user.is2faEnabled.useQuery()
 	const twoFaOn = desktopTwoFaQ.data === true
 	const isDbUser = Boolean((userQ.data as {id?: string} | undefined)?.id)
+	// Review WARN-1 — the sudo password stays SECOND-FACTOR-gated (never-weaken):
+	// a DB session needs TOTP OR a passkey enrolled; the account password alone
+	// is not accepted for these two routes (server: assertStepUpGrant
+	// {secondFactor:true}).
+	const webauthnAvailQ = trpcReact.user.webauthnAvailable.useQuery()
+	const passkeysListQ = trpcReact.user.listPasskeys.useQuery(undefined, {enabled: isDbUser})
+	const passkeyUsable = (webauthnAvailQ.data?.available ?? false) && (passkeysListQ.data?.length ?? 0) > 0
+	const secondFactorAvailable = isDbUser ? twoFaOn || passkeyUsable : twoFaOn
 	const {withStepUp} = useStepUp()
 	const [desktopStepUpError, setDesktopStepUpError] = useState<string | null>(null)
 	const [revealedDesktopPw, setRevealedDesktopPw] = useState<string | null>(null)
@@ -756,16 +764,20 @@ function AccountSection() {
 			return
 		}
 		setDesktopStepUpError(null)
-		void withStepUp(async () => {
-			const r =
-				intent === 'regenerate'
-					? await regenerateDesktopPwMut.mutateAsync({})
-					: await revealDesktopPwMut.mutateAsync({})
-			if (r?.password) {
-				setRevealedDesktopPw(r.password)
-				if (intent === 'regenerate') utils.system.getDesktopUserInfo.invalidate()
-			}
-		}).catch((error: unknown) => {
+		void withStepUp(
+			async () => {
+				const r =
+					intent === 'regenerate'
+						? await regenerateDesktopPwMut.mutateAsync({})
+						: await revealDesktopPwMut.mutateAsync({})
+				if (r?.password) {
+					setRevealedDesktopPw(r.password)
+					if (intent === 'regenerate') utils.system.getDesktopUserInfo.invalidate()
+				}
+			},
+			// WARN-1 — this route demands a TOTP/passkey-minted grant.
+			{secondFactorOnly: true},
+		).catch((error: unknown) => {
 			// A dismissed modal is a silent no-op; a real failure surfaces inline.
 			if (isStepUpCancelled(error) || isStepUpRequired(error)) return
 			setDesktopStepUpError((error as {message?: string})?.message ?? 'Failed')
@@ -850,7 +862,7 @@ function AccountSection() {
 								<Button
 									variant='v36-ghost'
 									size='v36-pill-sm'
-									disabled={!isDbUser && !twoFaOn}
+									disabled={!secondFactorAvailable}
 									onClick={() => handleDesktopAction('reveal')}
 								>
 									Reveal
@@ -859,7 +871,7 @@ function AccountSection() {
 							<Button
 								variant='v36-ghost'
 								size='v36-pill-sm'
-								disabled={!isDbUser && !twoFaOn}
+								disabled={!secondFactorAvailable}
 								onClick={() => handleDesktopAction('regenerate')}
 							>
 								Regenerate
@@ -868,9 +880,11 @@ function AccountSection() {
 					}
 				/>
 			</FieldCard>
-			{!isDbUser && !twoFaOn ? (
+			{!secondFactorAvailable ? (
 				<p className='text-13 text-[color:var(--fg-faint)]'>
-					Enable two-factor authentication in Settings → 2FA to reveal or regenerate the sudo password.
+					{isDbUser
+						? 'Enable two-factor authentication (Settings → 2FA) or add a passkey (Settings → Passkeys) to reveal or regenerate the sudo password.'
+						: 'Enable two-factor authentication in Settings → 2FA to reveal or regenerate the sudo password.'}
 				</p>
 			) : null}
 			{desktopStepUpError ? <p className='text-13 text-red-400'>{desktopStepUpError}</p> : null}

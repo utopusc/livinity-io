@@ -274,4 +274,14 @@ describe('jwt — Phase 334 STEPUP-01 sudo-mode step-up grant (D-334-1)', () => 
 	test('signStepUpGrant rejects an empty userId', async () => {
 		await expect(signStepUpGrant(SESSION_SECRET, '')).rejects.toThrow()
 	})
+
+	// Review WARN-1 — the minting factor rides the grant.
+	test('method claim round-trips; omitted method defaults to password (fail-safe)', async () => {
+		const totp = await signStepUpGrant(SESSION_SECRET, 'user-A', 'totp')
+		expect((await verifyStepUpGrant(totp.token, SESSION_SECRET)).method).toBe('totp')
+		const passkey = await signStepUpGrant(SESSION_SECRET, 'user-A', 'passkey')
+		expect((await verifyStepUpGrant(passkey.token, SESSION_SECRET)).method).toBe('passkey')
+		const dflt = await signStepUpGrant(SESSION_SECRET, 'user-A')
+		expect((await verifyStepUpGrant(dflt.token, SESSION_SECRET)).method).toBe('password')
+	})
 })

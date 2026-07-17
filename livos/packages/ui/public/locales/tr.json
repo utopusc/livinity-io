@@ -159,6 +159,7 @@
   "step-up.use-password": "Bunun yerine şifre kullan",
   "step-up.use-totp": "2FA kodu kullan",
   "step-up.use-passkey": "Parola anahtarı kullan",
+  "step-up.no-second-factor": "Bu işlem ikinci bir doğrulama faktörü gerektirir. Önce iki adımlı doğrulamayı etkinleştirin (Ayarlar → 2FA) veya bir parola anahtarı ekleyin (Ayarlar → Parola anahtarları).",
   "app-share-group.title": "{{appName}} uygulamasını paylaş",
   "app-share-group.description": "Bu uygulamaya hangi kullanıcıların ve grupların erişebileceğini ve yalnızca kullanabileceklerini mi yoksa yönetebileceklerini mi seçin. Paylaşılan uygulamalar alıcının uygulama listesinde otomatik olarak görünür.",
   "app-share-group.users-heading": "Kullanıcılar",

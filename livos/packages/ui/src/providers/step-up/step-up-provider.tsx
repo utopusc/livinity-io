@@ -29,12 +29,19 @@ import {PasswordInput} from '@/shadcn-components/ui/input'
 import {trpcReact} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
 
-/** The server-side denial message requireStepUpGrant throws (step-up-guard.ts). */
+/** The server-side denial messages step-up-guard.ts throws. */
 export const STEP_UP_REQUIRED = 'STEP_UP_REQUIRED'
+export const STEP_UP_2FA_REQUIRED = 'STEP_UP_2FA_REQUIRED'
 
-/** True when a tRPC mutation was refused for lack of a step-up grant. */
+/** True when a tRPC mutation was refused by the step-up gate (either flavor). */
 export function isStepUpRequired(error: unknown): boolean {
-	return (error as {message?: string} | null | undefined)?.message === STEP_UP_REQUIRED
+	const message = (error as {message?: string} | null | undefined)?.message
+	return message === STEP_UP_REQUIRED || message === STEP_UP_2FA_REQUIRED
+}
+
+/** True when the gate specifically demands a TOTP/passkey-minted grant (WARN-1). */
+export function isStepUp2faRequired(error: unknown): boolean {
+	return (error as {message?: string} | null | undefined)?.message === STEP_UP_2FA_REQUIRED
 }
 
 /** Thrown by withStepUp when the user dismisses the dialog without verifying. */
@@ -49,9 +56,17 @@ export function isStepUpCancelled(error: unknown): boolean {
 	return (error as {name?: string} | null | undefined)?.name === 'StepUpCancelledError'
 }
 
+export type StepUpRequestOptions = {
+	/**
+	 * Hide the password factor — the target route demands a TOTP/passkey-minted
+	 * grant (server STEP_UP_2FA_REQUIRED, e.g. the desktop sudo-password).
+	 */
+	secondFactorOnly?: boolean
+}
+
 type StepUpContextType = {
 	/** Opens the re-auth dialog; resolves once a grant is minted, rejects with StepUpCancelledError on dismiss. */
-	requestStepUp: () => Promise<void>
+	requestStepUp: (options?: StepUpRequestOptions) => Promise<void>
 }
 
 const StepUpContext = createContext<StepUpContextType | undefined>(undefined)
@@ -66,13 +81,15 @@ type Method = 'password' | 'totp' | 'passkey'
 
 export const StepUpProvider: React.FC<{children: React.ReactNode}> = ({children}) => {
 	const [open, setOpen] = useState(false)
+	const [secondFactorOnly, setSecondFactorOnly] = useState(false)
 	const resolveRef = useRef<(() => void) | null>(null)
 	const rejectRef = useRef<((reason: unknown) => void) | null>(null)
 
-	const requestStepUp = useCallback(() => {
+	const requestStepUp = useCallback((options?: StepUpRequestOptions) => {
 		return new Promise<void>((resolve, reject) => {
 			resolveRef.current = resolve
 			rejectRef.current = reject
+			setSecondFactorOnly(options?.secondFactorOnly === true)
 			setOpen(true)
 		})
 	}, [])
@@ -88,12 +105,20 @@ export const StepUpProvider: React.FC<{children: React.ReactNode}> = ({children}
 	return (
 		<StepUpContext.Provider value={{requestStepUp}}>
 			{children}
-			<StepUpDialog open={open} onSettle={settle} />
+			<StepUpDialog open={open} secondFactorOnly={secondFactorOnly} onSettle={settle} />
 		</StepUpContext.Provider>
 	)
 }
 
-function StepUpDialog({open, onSettle}: {open: boolean; onSettle: (verified: boolean) => void}) {
+function StepUpDialog({
+	open,
+	secondFactorOnly,
+	onSettle,
+}: {
+	open: boolean
+	secondFactorOnly: boolean
+	onSettle: (verified: boolean) => void
+}) {
 	const [method, setMethod] = useState<Method>('password')
 	const [password, setPassword] = useState('')
 	const [error, setError] = useState<string | null>(null)
@@ -111,6 +136,18 @@ function StepUpDialog({open, onSettle}: {open: boolean; onSettle: (verified: boo
 	const verifyPasswordMut = trpcReact.stepUp.verifyPassword.useMutation()
 	const verifyTotpMut = trpcReact.stepUp.verifyTotp.useMutation()
 	const passkeyVerifyMut = trpcReact.stepUp.passkeyVerify.useMutation()
+
+	// WARN-1 — second-factor-only mode (desktop sudo-password): the password
+	// branch is hidden; resolve the initial method to an actually-usable second
+	// factor, or 'none' (renders the enroll-first note) when neither exists.
+	const effectiveMethod: Method | 'none' =
+		secondFactorOnly && method === 'password'
+			? totpAvailable
+				? 'totp'
+				: passkeyAvailable
+					? 'passkey'
+					: 'none'
+			: method
 
 	// Reset transient state whenever the dialog (re)opens.
 	const wasOpen = useRef(false)
@@ -147,6 +184,8 @@ function StepUpDialog({open, onSettle}: {open: boolean; onSettle: (verified: boo
 			finishSuccess()
 			return true
 		} catch {
+			// INFO-8 — surface an explicit error line (PinInput also shakes/resets).
+			setError(t('step-up.error'))
 			return false
 		}
 	}
@@ -190,7 +229,11 @@ function StepUpDialog({open, onSettle}: {open: boolean; onSettle: (verified: boo
 					</DialogHeader>
 					<p className='text-body-sm text-text-secondary'>{t('step-up.description')}</p>
 
-					{method === 'password' ? (
+					{effectiveMethod === 'none' ? (
+						<p className='text-body-sm text-text-secondary'>{t('step-up.no-second-factor')}</p>
+					) : null}
+
+					{effectiveMethod === 'password' ? (
 						<form
 							onSubmit={(e) => {
 								e.preventDefault()
@@ -205,14 +248,14 @@ function StepUpDialog({open, onSettle}: {open: boolean; onSettle: (verified: boo
 						</form>
 					) : null}
 
-					{method === 'totp' ? (
+					{effectiveMethod === 'totp' ? (
 						<div className='flex flex-col items-center gap-3'>
 							<p className='text-body-sm text-text-secondary text-center'>{t('step-up.totp-hint')}</p>
 							<PinInput autoFocus length={6} onCodeCheck={submitTotp} />
 						</div>
 					) : null}
 
-					{method === 'passkey' ? (
+					{effectiveMethod === 'passkey' ? (
 						<div className='flex flex-col gap-3'>
 							<p className='text-body-sm text-text-secondary'>{t('step-up.passkey-hint')}</p>
 							<Button size='dialog' variant='primary' disabled={busy} onClick={() => void submitPasskey()}>
@@ -223,19 +266,20 @@ function StepUpDialog({open, onSettle}: {open: boolean; onSettle: (verified: boo
 
 					{error ? <p className='text-13 text-red-400'>{error}</p> : null}
 
-					{/* Alternative-factor switcher — only real options are shown. */}
+					{/* Alternative-factor switcher — only real options are shown; the
+					    password factor is hidden entirely in second-factor-only mode. */}
 					<div className='flex flex-wrap items-center gap-2'>
-						{method !== 'password' ? (
+						{!secondFactorOnly && effectiveMethod !== 'password' ? (
 							<Button size='sm' variant='default' onClick={() => setMethod('password')}>
 								{t('step-up.use-password')}
 							</Button>
 						) : null}
-						{totpAvailable && method !== 'totp' ? (
+						{totpAvailable && effectiveMethod !== 'totp' ? (
 							<Button size='sm' variant='default' onClick={() => setMethod('totp')}>
 								{t('step-up.use-totp')}
 							</Button>
 						) : null}
-						{passkeyAvailable && method !== 'passkey' ? (
+						{passkeyAvailable && effectiveMethod !== 'passkey' ? (
 							<Button size='sm' variant='default' onClick={() => setMethod('passkey')}>
 								{t('step-up.use-passkey')}
 							</Button>
