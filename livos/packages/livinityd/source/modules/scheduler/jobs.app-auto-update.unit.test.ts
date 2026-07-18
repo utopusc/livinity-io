@@ -31,11 +31,15 @@ const fakeJob = {name: 'app-auto-update', type: 'app-auto-update'} as unknown as
 const fakeLogger = {log: vi.fn(), error: vi.fn()}
 
 // Build an installed-app stub whose store.get() answers per-key.
+// 342-01: `window` (optional) is returned for store.get('updateWindow'). undefined
+// (the default for the 6 pre-existing tests) keeps an app OWNED by the 4am job;
+// a set window makes the 4am handler SKIP it (disjoint predicate — D-342-3).
 function makeApp(opts: {
 	id: string
 	policy?: 'auto' | 'manual'
 	installed: string
 	ignored?: string
+	window?: {start: string; end: string}
 	update: ReturnType<typeof vi.fn>
 }) {
 	return {
@@ -46,6 +50,7 @@ function makeApp(opts: {
 			get: vi.fn(async (key: string) => {
 				if (key === 'autoUpdatePolicy') return opts.policy
 				if (key === 'ignoredVersion') return opts.ignored
+				if (key === 'updateWindow') return opts.window
 				return undefined
 			}),
 		},
@@ -119,5 +124,21 @@ describe('appAutoUpdateHandler — opt-in, pin-aware true auto-update', () => {
 
 		expect(result.status).toBe('success')
 		expect(update).not.toHaveBeenCalled()
+	})
+
+	// 342-01 (D-342-3): the 4am job now SKIPS any app with an updateWindow — that app is
+	// owned by the */15 app-update-window job, so 04:00 must never update it (else the
+	// admin's maintenance window is pointless). Disjoint predicate: window undefined ↔ defined.
+	test('policy auto + window SET + newer: 4am handler SKIPS it (owned by the windowed job)', async () => {
+		mockGetBuiltinApp.mockReset()
+		mockGetBuiltinApp.mockReturnValue({version: '2.0.0'})
+		const update = vi.fn().mockResolvedValue(undefined)
+		const app = makeApp({id: 'gitea', policy: 'auto', installed: '1.0.0', window: {start: '09:00', end: '17:00'}, update})
+
+		const result = await appAutoUpdateHandler(fakeJob, {logger: fakeLogger, livinityd: daemonWith(app)})
+
+		expect(result.status).toBe('success')
+		expect(update).not.toHaveBeenCalled()
+		expect((result.output as {updated: string[]}).updated).toEqual([])
 	})
 })

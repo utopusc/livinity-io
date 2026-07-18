@@ -31,8 +31,9 @@ import * as snapraidCli from '../storage-pool/snapraid-cli.js'
 import {checkFreezeGate} from '../storage-pool/pool.js'
 import type {PoolStore, StoragePoolState, PoolStatusSummary} from '../storage-pool/pool.js'
 import type {StatusResult} from '../storage-pool/snapraid-log.js'
+import {isWithinUpdateWindow} from '../apps/app-lifecycle-depth.js'
 import type Livinityd from '../../index.js'
-import type {BuiltInJobHandler, JobType, JobRunStatus} from './types.js'
+import type {BuiltInJobHandler, JobType, JobRunStatus, SchedulerLogger} from './types.js'
 
 // =========================================================================
 // image-prune — wraps existing pruneImages() from docker.ts
@@ -509,6 +510,42 @@ export const resourceMetricsRollupHandler: BuiltInJobHandler = async (job, ctx) 
 // auto-updates until an admin opts an app in (T-326-17). Follows the
 // disk-critical-watch never-throw contract (guard→skipped, try/catch→failure).
 // =========================================================================
+// Shared per-app auto-update pass (342-01). Exported for unit tests. Never throws — the
+// per-app try/catch is preserved verbatim from the 326 handler. `owns` selects which apps
+// THIS pass processes (disjoint window predicate → the 4am and windowed jobs can never race
+// the same app in one boot). Returns the ids that were actually updated.
+export async function runWindowedAutoUpdatePass(opts: {
+	livinityd: Livinityd
+	logger: SchedulerLogger
+	logPrefix: string
+	now: Date
+	owns: (window: {start: string; end: string} | undefined, now: Date) => boolean
+}): Promise<string[]> {
+	const updated: string[] = []
+	for (const app of opts.livinityd.apps.instances) {
+		try {
+			const policy = await app.store.get('autoUpdatePolicy')
+			// Opt-in only: 'manual' (the default) and undefined are left untouched.
+			if (policy !== 'auto') continue
+			// Disjoint predicate — 4am owns window===undefined, the */15 job owns window!==undefined AND inside.
+			const window = await app.store.get('updateWindow')
+			if (!opts.owns(window, opts.now)) continue
+			const installed = (await app.readManifest()).version
+			const available = getBuiltinApp(app.id)?.version
+			const ignored = await app.store.get('ignoredVersion')
+			// Skip when up-to-date OR when the available version is the admin's pin.
+			if (available && available !== installed && available !== ignored) {
+				await app.update()
+				updated.push(app.id)
+			}
+		} catch (err) {
+			// Per-app isolation: one app's failure must not fail the whole tick.
+			opts.logger.error(`${opts.logPrefix} ${app.id}: ${err instanceof Error ? err.message : String(err)}`)
+		}
+	}
+	return updated
+}
+
 export const appAutoUpdateHandler: BuiltInJobHandler = async (job, ctx) => {
 	// Guard: no daemon ref (isolated unit test / Scheduler built without
 	// livinityd) → skip cleanly, never throw.
@@ -518,28 +555,47 @@ export const appAutoUpdateHandler: BuiltInJobHandler = async (job, ctx) => {
 	}
 	try {
 		ctx.logger.log(`[scheduler/app-auto-update] running job ${job.name}`)
-		const updated: string[] = []
-		for (const app of ctx.livinityd.apps.instances) {
-			try {
-				const policy = await app.store.get('autoUpdatePolicy')
-				// Opt-in only: 'manual' (the default) and undefined are left untouched.
-				if (policy !== 'auto') continue
-				const installed = (await app.readManifest()).version
-				const available = getBuiltinApp(app.id)?.version
-				const ignored = await app.store.get('ignoredVersion')
-				// Skip when up-to-date OR when the available version is the admin's pin.
-				if (available && available !== installed && available !== ignored) {
-					await app.update()
-					updated.push(app.id)
-				}
-			} catch (err) {
-				// Per-app isolation: one app's failure must not fail the whole tick.
-				ctx.logger.error(
-					`[scheduler/app-auto-update] ${app.id}: ${err instanceof Error ? err.message : String(err)}`,
-				)
-			}
-		}
+		// 342-01 (D-342-3): SKIP-WINDOWED amendment — the 4am job now owns ONLY apps with NO
+		// window (window===undefined). Windowed apps are updated by the app-update-window job
+		// inside their window, so 04:00 must never touch them (else the window is pointless).
+		const updated = await runWindowedAutoUpdatePass({
+			livinityd: ctx.livinityd,
+			logger: ctx.logger,
+			logPrefix: '[scheduler/app-auto-update]',
+			now: new Date(),
+			owns: (window) => window === undefined,
+		})
 		ctx.logger.log(`[scheduler/app-auto-update] auto-updated ${updated.length} app(s)`)
+		return {status: 'success', output: {updated}}
+	} catch (err) {
+		// NOTE: 'failure', NOT 'error' — JobRunResult.status has no 'error' member.
+		return {status: 'failure', error: err instanceof Error ? err.message : String(err)}
+	}
+}
+
+// =========================================================================
+// app-update-window — Phase 342 APPD-01 (D-342-3). The windowed half of the
+// auto-update split. Runs every 15 min; processes ONLY apps that have BOTH
+// autoUpdatePolicy==='auto' AND an updateWindow, and only while now is INSIDE
+// that window (isWithinUpdateWindow). Disjoint from the 4am app-auto-update job
+// (which owns window===undefined), so the two can never double-update one app.
+// Same never-throw contract (guard→skipped, per-app try/catch, outer→failure).
+// =========================================================================
+export const appUpdateWindowHandler: BuiltInJobHandler = async (job, ctx) => {
+	if (!ctx.livinityd) {
+		ctx.logger.log(`[scheduler/app-update-window] no daemon reference — skipping job ${job.name}`)
+		return {status: 'skipped', error: 'daemon reference unavailable'}
+	}
+	try {
+		ctx.logger.log(`[scheduler/app-update-window] running job ${job.name}`)
+		const updated = await runWindowedAutoUpdatePass({
+			livinityd: ctx.livinityd,
+			logger: ctx.logger,
+			logPrefix: '[scheduler/app-update-window]',
+			now: new Date(),
+			owns: (window, now) => window !== undefined && isWithinUpdateWindow(now, window),
+		})
+		ctx.logger.log(`[scheduler/app-update-window] auto-updated ${updated.length} app(s)`)
 		return {status: 'success', output: {updated}}
 	} catch (err) {
 		// NOTE: 'failure', NOT 'error' — JobRunResult.status has no 'error' member.
@@ -1116,6 +1172,7 @@ export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'resource-metrics-rollup': resourceMetricsRollupHandler,
 	'security-advisor-scan': securityAdvisorScanHandler,
 	'app-auto-update': appAutoUpdateHandler,
+	'app-update-window': appUpdateWindowHandler, // Phase 342 APPD-01 — */15 windowed auto-update
 	'ups-watch': upsWatchHandler,
 	'user-quota-scan': userQuotaScanHandler,
 	'custom-command': customCommandHandler, // Phase 329 APPS-04 (user-created only — never auto-seeded)
@@ -1178,6 +1235,11 @@ export const DEFAULT_JOB_DEFINITIONS: Array<{
 	// until an admin explicitly opts an app into 'auto' (T-326-17); the ignoredVersion
 	// pin is honored and each app runs in its own try/catch (T-326-18).
 	{name: 'app-auto-update', schedule: '0 4 * * *', type: 'app-auto-update', enabled: true},
+	// Phase 342 APPD-01 — windowed auto-update, every 15 min. enabled=true is SAFE: a NO-OP until
+	// an app has BOTH autoUpdatePolicy==='auto' AND an updateWindow. The 4am app-auto-update job
+	// skips windowed apps (disjoint predicate), so the two never double-update. */15 guarantees ≥1
+	// tick inside the 30-min-minimum window. NEW name → seeds on next boot via ON CONFLICT DO NOTHING.
+	{name: 'app-update-window', schedule: '*/15 * * * *', type: 'app-update-window', enabled: true},
 	// Phase 326 HW-01 — UPS status watch, every minute. enabled=true: a box with no
 	// UPS returns 'unavailable' (no-op, no LLM spend), and mains-loss must alert even
 	// with no Settings tab open. This poll is STATUS/ALERT-only — upsmon (POLLFREQ 5s)

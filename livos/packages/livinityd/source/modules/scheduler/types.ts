@@ -25,6 +25,7 @@ export type JobType =
 	| 'connectivity-self-check' // Phase 333 (DIAG-01/02) — hourly DNS/port/cert/tunnel/mail self-diagnosis → regression alert
 	| 'recycle-purge' // Phase 338 (RECYCLE-01) — daily .Recycle.Bin age+free-floor purge
 	| 'folder-quota-scan' // Phase 339 (STORD-01) — per-folder du accounting → folder-quota-exceeded bell
+	| 'app-update-window' // Phase 342 APPD-01 — */15 windowed auto-update; disjoint from app-auto-update (processes ONLY apps WITH a window, inside it)
 
 export type JobRunStatus = 'success' | 'failure' | 'skipped' | 'running'
 
