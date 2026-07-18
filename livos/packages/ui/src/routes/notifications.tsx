@@ -189,8 +189,13 @@ export function Notifications() {
 	const hasUsbImportNotification = notifications.some(
 		(n) => n.split(':')[0] === 'usb-import-complete' || n.split(':')[0] === 'usb-import-failed',
 	)
+	const {isAdmin, isLoading: isLoadingUser} = useCurrentUser()
+	const canSeeAdminNotifications = !isLoadingUser && isAdmin
+	// usbImportList is adminProcedure — only query it for an admin (review WARN-02);
+	// a non-admin with a usb-import notification in the shared store would otherwise
+	// fire a guaranteed 403.
 	const usbImportQuery = trpcReact.files.usbImportList.useQuery(undefined, {
-		enabled: hasUsbImportNotification,
+		enabled: hasUsbImportNotification && canSeeAdminNotifications,
 	})
 
 	// Backups-v2 P0 + Phase 313 SMART: these are ADMIN-actionable only (their CTAs
@@ -216,8 +221,6 @@ export function Notifications() {
 		'usb-import-complete',
 		'usb-import-failed',
 	]
-	const {isAdmin, isLoading: isLoadingUser} = useCurrentUser()
-	const canSeeAdminNotifications = !isLoadingUser && isAdmin
 
 	// Phase 30 hot-patch round 3: WhatsNewModal removed (Umbrel-leftover content).
 	// `livos-updated` notification is silently cleared — the new

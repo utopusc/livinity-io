@@ -40,6 +40,13 @@ const DEVICE_ID_RE = /^(sd[a-z]+|nvme\d+n\d+|mmcblk\d+)$/
 // must not fire a spurious import/notification. The empty-source skip in the runner is
 // the primary guard; this is the precise device-scoped belt-and-suspenders.
 const USB_IMPORT_FORMAT_SUPPRESS_MS = 15_000
+// Phase 340 USBIMP-01 (WARN-1 / review WARN-01) — a device with flaky physical contact
+// can drop and re-mount repeatedly; without a dedupe window each involuntary remount would
+// enqueue another whole-card copy and fill the owner's tree with duplicate timestamped
+// dumps. Suppress a re-import of the SAME device+label within this window. A deliberate
+// re-insert after the window still imports (a fresh timestamped folder — the desired
+// multi-versioned behavior, D-340-1).
+const USB_IMPORT_REMOUNT_DEDUPE_MS = 60_000
 
 // Get block devices
 // TODO: This should probably be in a system module once we have a proper one
@@ -108,6 +115,10 @@ export default class ExternalStorage {
 	// Phase 340 USBIMP-01 (WARN-1) — device ids recently formatted; the auto-import hook
 	// skips these so a freshly-formatted (empty) remount does not trigger a spurious import.
 	#recentlyFormatted: Set<string> = new Set()
+	// Phase 340 USBIMP-01 (review WARN-01) — device+label keys imported within the dedupe
+	// window; a flaky-contact remount of the same device is skipped so it can't spam
+	// duplicate imports.
+	#recentlyImported: Set<string> = new Set()
 
 	constructor(livinityd: Livinityd) {
 		this.#livinityd = livinityd
@@ -227,7 +238,12 @@ export default class ExternalStorage {
 						// concurrency:1 mount queue (D-340-1). handleNewMount enqueues on its own
 						// serialized queue and returns fast. Skipped for a just-formatted device
 						// (WARN-1) so an empty post-format remount does not trigger a spurious import.
-						if (!this.#recentlyFormatted.has(device.id)) {
+						const importDedupeKey = `${device.id}:${partition.label}`
+						if (!this.#recentlyFormatted.has(device.id) && !this.#recentlyImported.has(importDedupeKey)) {
+							this.#recentlyImported.add(importDedupeKey)
+							void setTimeout(USB_IMPORT_REMOUNT_DEDUPE_MS, undefined, {ref: false}).then(() =>
+								this.#recentlyImported.delete(importDedupeKey),
+							)
 							void this.#livinityd.files.usbImport
 								.handleNewMount({label: partition.label, virtualMountPoint})
 								.catch((error) => this.logger.error('[usb-import] handleNewMount failed', error))
