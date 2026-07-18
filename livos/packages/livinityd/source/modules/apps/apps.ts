@@ -29,7 +29,10 @@ import {
 	grantContainerCredsAcl,
 } from './inject-local-ai-clis.js'
 import {startCredEgressProxyIfNeeded} from './cred-egress-proxy.js'
-import {sanitizeNonBuiltinCompose, ComposeRejected} from './compose-sanitizer.js'
+import {sanitizeNonBuiltinCompose, ComposeRejected, assertFederatedComposeSafe} from './compose-sanitizer.js'
+// Phase 341-02 (REPO-02) — federated install path (deployCustom mirror, no creds).
+import {namespacedAppId, type AppStoreSource} from './app-store-sources.js'
+import {fetchFederatedCatalog} from './federated-catalog.js'
 import {
 	decodeTunnelToken,
 	discoverZoneId,
@@ -1126,6 +1129,168 @@ export default class Apps {
 		}
 		const app = new App(this.#livinityd, slug)
 		return this.#finishInstall(slug, manifest, app)
+	}
+
+	/**
+	 * Phase 341-02 (REPO-02, D-341-2 / D-341-2b / D-341-5) — install a FEDERATED
+	 * (third-party catalog) app. THE credential-denial gate.
+	 *
+	 * A federated source is UNTRUSTED-by-default. This method mirrors deployCustom
+	 * VERBATIM in its trust posture — it FORCES `isGeneratedTemplate = false`,
+	 * always runs the compose-safety REJECT gate + `sanitizeNonBuiltinCompose`, and
+	 * NEVER calls `injectAiProviderConfig` / `chooseCredentialPath` /
+	 * `mintMeteredKeyForApp` / `fetchPlatformTemplate`. So a federated app receives
+	 * NOTHING privileged: no broker sentinel, no OAuth, no metered key, no
+	 * host-CLI / cred-proxy reach. The broker/metered path is UNREACHABLE from any
+	 * `fed-*` id by construction (there is simply no call to it on this path).
+	 *
+	 * `requiresLocalAiClis` is a HARD DENY (install refused) — a federated app
+	 * never gets a cred-proxy per-app token / host-CLI reach.
+	 * `requiresAiProvider` installs providerless (badged in the UI; 341-03).
+	 *
+	 * MVP (like deployCustom): installs as the BOX OWNER (admin). Per-user
+	 * federated isolation is DEFERRED.
+	 */
+	async installFederated(input: {sourceId: string; catalogSlug: string}): Promise<boolean> {
+		const {sourceId, catalogSlug} = input
+
+		// 1. Resolve the source (must exist + be enabled). Fail-closed: an unknown
+		// or disabled source is not installable.
+		const sources = ((await this.#livinityd.store.get('appStoreSources', [])) as AppStoreSource[]) ?? []
+		const source = sources.find((s) => s.id === sourceId)
+		if (!source) throw new Error(`installFederated: unknown app-store source ${sourceId}`)
+		if (source.enabled === false) throw new Error(`installFederated: source ${sourceId} is disabled`)
+
+		// 2. The installed id is source-namespaced (fed-<sourceId12hex>-<slug>) —
+		// un-shadowable + docker/path/subdomain-safe. Throws on an invalid slug.
+		// isInstalled also blocks any official-id collision (slug is always fed-*).
+		const slug = namespacedAppId(sourceId, catalogSlug)
+		if (await this.isInstalled(slug)) throw new Error(`App ${slug} is already installed`)
+
+		// 3. Re-fetch FRESH from the source, never the browse cache (D-341-5 "on
+		// every fetch"). fetchFederatedCatalog is SSRF-hardened + strict-parses each
+		// manifest (Zod), so `entry.manifest` is already a validated AppManifest.
+		const apps = await fetchFederatedCatalog(source.url, {})
+		const entry = apps.find((a) => a.catalogSlug === catalogSlug)
+		if (!entry) throw new Error(`installFederated: ${catalogSlug} not found in ${source.name} — refusing install`)
+		const manifest = entry.manifest
+
+		// 4. HARD DENY requiresLocalAiClis (D-341-2) — a federated app is never
+		// granted a cred-proxy per-app token / host-CLI reach. MUST be BEFORE any
+		// staging / #finishInstall.
+		if (manifest.requiresLocalAiClis === true) {
+			throw new Error(
+				'Federated apps cannot request host AI CLIs (requiresLocalAiClis) — install refused',
+			)
+		}
+
+		// 5. FORCE isGeneratedTemplate = false — the entire trust premise. DO NOT
+		// reassign to true (deployCustom discipline). Kept explicit for the reader;
+		// the federated path simply never calls the credential-injecting branches.
+		const isGeneratedTemplate = false
+		void isGeneratedTemplate
+
+		this.logger.log(`341-02: installFederated ${slug} from source ${sourceId} (${source.name}) — untrusted, no creds`)
+
+		const yaml = (await import('js-yaml')).default
+
+		// 6. Stage the source compose + a synthesized manifest (mirror deployCustom
+		// L1063-1103). The staged manifest FORCES id=slug and STRIPS requiresAiProvider
+		// / requiresLocalAiClis so NO downstream re-config path (e.g. reapplyAppConfig)
+		// can ever inject a broker credential for this untrusted app. NO broker/user
+		// env is interpolated.
+		const composeString = entry.dockerCompose
+		const tmpDir = path.join(os.tmpdir(), `livos-fed-${slug}-${Date.now()}`)
+		await fse.mkdirp(tmpDir)
+		await fse.writeFile(path.join(tmpDir, 'docker-compose.yml'), composeString)
+		const {requiresAiProvider: _rap, requiresLocalAiClis: _rlc, ...manifestRest} = manifest as AppManifest & {
+			requiresAiProvider?: boolean
+			requiresLocalAiClis?: boolean
+		}
+		const stagedManifest = {...manifestRest, id: slug}
+		await fse.writeFile(
+			path.join(tmpDir, 'livinity-app.yml'),
+			yaml.dump(stagedManifest, {lineWidth: -1, noRefs: true}),
+		)
+
+		const appDataDirectory = `${this.#livinityd.dataDirectory}/app-data/${slug}`
+		await fse.mkdirp(appDataDirectory)
+		await $`rsync --archive --verbose --exclude ".gitkeep" ${tmpDir}/. ${appDataDirectory}`
+		// Pre-create ${APP_DATA_DIR} volume mount dirs so Docker doesn't own them as root.
+		try {
+			const composeFile = `${appDataDirectory}/docker-compose.yml`
+			const composeContent = await fse.readFile(composeFile, 'utf8')
+			const volumeMatches = composeContent.matchAll(/\$\{APP_DATA_DIR\}\/([^:]+):/g)
+			for (const match of volumeMatches) {
+				await fse.mkdirp(`${appDataDirectory}/${match[1].trim()}`)
+			}
+		} catch {}
+		await fse.remove(tmpDir).catch(() => {})
+
+		// 7. THE REJECT GATE, then loopback port rewrite, then the mutating sanitizer.
+		// Order matters: assert FIRST (an escape-class directive / broker reach /
+		// sensitive port aborts the install BEFORE we neutralize anything). Let
+		// ComposeRejected propagate — do NOT catch.
+		const composeFile = `${appDataDirectory}/docker-compose.yml`
+		const composeContent = await fse.readFile(composeFile, 'utf8')
+		const composeData = yaml.load(composeContent) as any
+
+		assertFederatedComposeSafe(composeData, appDataDirectory)
+
+		// Rewrite ports to loopback-only regardless of what the catalog declared:
+		// main service → 127.0.0.1:<port>:<internalPort>; strip every other
+		// service's host publishes (mirror installForUser L2878-2892). MVP: single
+		// host port from manifest.port (per-user allocatePort() isolation DEFERRED).
+		const svcNames = Object.keys(composeData.services || {})
+		const mainServiceName = svcNames[0]
+		let internalPort = manifest.port
+		const mainSvc = mainServiceName ? composeData.services?.[mainServiceName] : undefined
+		if (mainSvc?.ports && Array.isArray(mainSvc.ports)) {
+			for (const p of mainSvc.ports) {
+				const ps = p.toString().replace('/udp', '').replace('/tcp', '')
+				if (ps.includes(':')) {
+					const parts = ps.split(':')
+					const n = parseInt(parts[parts.length - 1], 10)
+					if (n) {
+						internalPort = n
+						break
+					}
+				}
+			}
+		}
+		for (const svcName of svcNames) {
+			if (svcName === mainServiceName) continue
+			if (composeData.services[svcName]?.ports) delete composeData.services[svcName].ports
+		}
+		if (mainServiceName && composeData.services[mainServiceName]) {
+			composeData.services[mainServiceName].ports = [`127.0.0.1:${manifest.port}:${internalPort}`]
+		}
+
+		// Defense-in-depth: the mutating sanitizer for no-new-privileges hardening.
+		const {removed} = sanitizeNonBuiltinCompose(composeData, appDataDirectory)
+		await fse.writeFile(composeFile, yaml.dump(composeData))
+		this.logger.log(`341-02: staged federated ${slug} (sanitizer removed=${removed.join(',') || '(none)'})`)
+
+		// 8. NEVER inject a credential. requiresAiProvider is NOT honored for an
+		// untrusted source — the box never mints/forwards a broker/metered key. The
+		// app installs providerless (badged, 341-03). We stripped the flag from the
+		// staged manifest so nothing re-adds it later.
+		if (manifest.requiresAiProvider === true) {
+			this.logger.log(
+				`341: federated ${slug} declares requiresAiProvider — NOT honored (untrusted source, no broker/metered key)`,
+			)
+		}
+
+		// 9. Reuse the shared install tail. #finishInstall's requiresLocalAiClis ACL
+		// branch is unreachable (step 4 denied it; the staged manifest omits it too).
+		let installedManifest: AppManifest
+		try {
+			installedManifest = await readManifestInDirectory(appDataDirectory)
+		} catch {
+			throw new Error('installFederated: staged manifest not found')
+		}
+		const app = new App(this.#livinityd, slug)
+		return this.#finishInstall(slug, installedManifest, app)
 	}
 
 	/**
@@ -2873,7 +3038,38 @@ export default class Apps {
 
 		// Phase 43 (FR-MARKET-01, D-43-06/07): inject AI broker config when manifest opts in.
 		// No-op when manifest.requiresAiProvider is absent or false.
-		injectAiProviderConfig(composeData, userId, manifest)
+		//
+		// Phase 341-02 (REPO-02, D-341-2 §2b) — CLOSE THE MULTI-USER SENTINEL GAP,
+		// FAIL-CLOSED. Previously this was a BARE injectAiProviderConfig that always
+		// wired the REAL broker OAuth sentinel with no chooseCredentialPath branch —
+		// so anything reaching installForUser got broker access. Now it keys off the
+		// SAME trust dimension install() uses (isGeneratedTemplate, computed L2731):
+		//   - VERIFIED (official/builtin, isGeneratedTemplate===true) → sentinel,
+		//     BYTE-IDENTICAL to the previous behavior (the ONLY case that reaches
+		//     installForUser today — no change for existing apps).
+		//   - UNVERIFIED (isGeneratedTemplate===false) → per-app metered key, NEVER
+		//     the operator sentinel (the fail-closed guard for this latent path).
+		// Federated apps NEVER reach installForUser — they install via
+		// installFederated, which injects NO credential at all.
+		if (manifest.requiresAiProvider === true) {
+			if (chooseCredentialPath({isGeneratedTemplate}) === 'metered-key') {
+				const {virtualKey, keyId} = await mintMeteredKeyForApp(
+					{appSlug: appId, userId, budget: {maxUsd: 5}, modelAllowlist: undefined},
+					this.#brokerClient(),
+				)
+				injectAiProviderConfig(composeData, userId, manifest, {virtualKey})
+				// NOTE (341-02 deviation, documented): user_app_instances has no
+				// meteredKeyId column, so per-user metered keys are not yet persisted
+				// for uninstall-revocation. This branch is effectively dead today
+				// (installForUser only sees isGeneratedTemplate===true official apps);
+				// revocation-parity for a future federated/unverified multi-user path
+				// is a documented follow-up — do NOT expand the schema this phase.
+				this.logger.log(`341-02: installForUser UNVERIFIED ${appId} → per-app metered key (keyId=${keyId}); operator OAuth NOT lent`)
+			} else {
+				// VERIFIED → broker sentinel (unchanged for official/builtin).
+				injectAiProviderConfig(composeData, userId, manifest)
+			}
+		}
 
 		// Set the host port mapping on the main service — and STRIP host ports
 		// from every other service. A per-user instance is only reachable via its

@@ -1,6 +1,11 @@
 import path from 'node:path'
 
 import {CLI_MOUNT_PREFIX} from './inject-local-ai-clis.js'
+// Phase 341-02 (D-341-2b) — import the REAL broker/cred-proxy identifiers so the
+// federated broker-reach reject list can NEVER drift from the values the daemon
+// actually injects. Do NOT hardcode duplicates of these strings here.
+import {BROKER_HOST, BROKER_SENTINEL_KEY} from './inject-ai-provider.js'
+import {CREDPROXY_HOST, CREDPROXY_PLACEHOLDER_KEY} from './cred-egress-proxy.js'
 
 /**
  * WS-C (Phase 256-03) — non-builtin compose sanitizer.
@@ -195,4 +200,183 @@ export function sanitizeNonBuiltinCompose(
 	}
 
 	return {compose: composeData, removed}
+}
+
+// ── Phase 341-02 (REPO-02, D-341-5 + D-341-2b) — federated compose safety = REJECT ──
+//
+// A federated app author is UNTRUSTED. `sanitizeNonBuiltinCompose` above silently
+// STRIPS escape-class directives (privileged/cap_add/host-net…) — which for a
+// federated app would look installed-but-defanged/broken
+// (feedback_app_running_vs_ready_state). So the federated path runs THIS assert
+// FIRST and THROWS `ComposeRejected` on any escape-class directive rather than
+// editing it away. It is assert-only (no mutation, no no-new-privileges merge);
+// `installFederated` still runs the mutating `sanitizeNonBuiltinCompose`
+// afterward for the no-new-privileges hardening + defense-in-depth.
+//
+// D-341-2b (the compose-side broker door): NOT injecting the broker credential
+// daemon-side is necessary but NOT sufficient — the broker sentinel path
+// authenticates VERIFIED apps by source-IP (docker-bridge subnet) + URL path
+// only (it did NOT get the 262-04 per-app-token hardening the cred-egress proxy
+// got). So a federated app could SELF-DECLARE the reach in its own compose
+// (extra_hosts: livinity-broker:host-gateway + ANTHROPIC_API_KEY:
+// livinity-broker-managed) and spend the operator's subscription. Therefore this
+// gate ALSO rejects any compose-declared reach to the broker / cred-proxy.
+//
+// ⚠ KNOWN v1 RESIDUAL (surfaced in 341-HUMAN-UAT + STATE): a federated app that
+// constructs the NUMERIC host-gateway IP (e.g. 172.17.0.1:8080) at RUNTIME — not
+// in its compose — can still hit the broker's source-IP-gated sentinel. This
+// compose-reject cannot see runtime-constructed hosts. Fully closing it needs
+// EITHER the 262-04 per-app-token pattern applied to the broker (touches the
+// broker path — OUT OF SCOPE here) OR firewall/network isolation of federated
+// containers from the host broker port (the parked per-app micro-segmentation
+// item). v1 compensating controls: admin-only install + untrusted badge +
+// blocking trust warning + this compose-reject.
+
+// The broker/cred-proxy identifier tokens a federated compose may not reference.
+// Sourced from the REAL constants (imported above) so they can't drift. Lowercased
+// for case-insensitive substring matching. `livinity-broker` already subsumes the
+// `livinity-broker-managed` sentinel and any `…//livinity-broker:8080…` base URL;
+// `livinity-credproxy` subsumes an `HTTPS_PROXY=http://livinity-credproxy:…`; the
+// underscore-form credproxy placeholder is listed explicitly (hyphen forms miss it).
+const BROKER_REACH_TOKENS = [
+	BROKER_HOST, // 'livinity-broker'
+	BROKER_SENTINEL_KEY, // 'livinity-broker-managed'
+	CREDPROXY_HOST, // 'livinity-credproxy'
+	CREDPROXY_PLACEHOLDER_KEY, // '__livinity_credproxy__'
+].map((t) => t.toLowerCase())
+
+function referencesBrokerReach(value: string): boolean {
+	const v = value.toLowerCase()
+	return BROKER_REACH_TOKENS.some((tok) => v.includes(tok))
+}
+
+/** Flatten an `environment` (map or `KEY=VALUE` list) + `env_file` (string or
+ * list) into scannable strings. For a map we join `key=value` so both sides are
+ * covered; a list entry is already `KEY=VALUE`. */
+function collectEnvStrings(env: any): string[] {
+	if (env == null) return []
+	if (Array.isArray(env)) return env.map((e) => String(e))
+	if (typeof env === 'object') return Object.entries(env).map(([k, v]) => `${k}=${v}`)
+	return [String(env)]
+}
+
+/** Normalize `extra_hosts` (list of `alias:ip` or a map `{alias: ip}`) to strings. */
+function collectExtraHosts(eh: any): string[] {
+	if (eh == null) return []
+	if (Array.isArray(eh)) return eh.map((e) => String(e))
+	if (typeof eh === 'object') return Object.entries(eh).map(([k, v]) => `${k}:${v}`)
+	return [String(eh)]
+}
+
+/**
+ * REJECT (throw) if a single `ports` entry publishes to a PRIVILEGED host port
+ * (<1024) or an EXPLICIT non-loopback host interface. A bare container port or a
+ * `HOST:CONTAINER` with no interface is allowed here (installFederated rewrites
+ * every port to loopback afterward); only an explicit non-loopback bind or a
+ * privileged host port is irremediable enough to refuse up-front.
+ */
+function assertPortEntrySafe(entry: any, reject: (directive: string) => never): void {
+	let hostIp: string | undefined
+	let hostPort: string | undefined
+
+	if (typeof entry === 'number') return // bare container port, no host publish
+	if (typeof entry === 'string') {
+		const s = entry.trim().replace(/\/(tcp|udp)$/i, '')
+		const bracket = s.match(/^\[([^\]]+)\]:(.*)$/) // [::1]:host:container IPv6 form
+		if (bracket) {
+			hostIp = bracket[1]
+			const rest = bracket[2].split(':')
+			if (rest.length >= 2) hostPort = rest[0]
+		} else {
+			const parts = s.split(':')
+			if (parts.length === 1) return // container port only
+			if (parts.length === 2) hostPort = parts[0] // HOST:CONTAINER
+			else {
+				hostIp = parts[0] // HOST_IP:HOST_PORT:CONTAINER
+				hostPort = parts[1]
+			}
+		}
+	} else if (entry && typeof entry === 'object') {
+		if (entry.host_ip != null) hostIp = String(entry.host_ip)
+		if (entry.published != null) hostPort = String(entry.published)
+	} else {
+		return
+	}
+
+	if (hostIp !== undefined && hostIp !== '') {
+		const ip = hostIp.toLowerCase()
+		const loopback = ip === '127.0.0.1' || ip === '::1' || ip === 'localhost' || ip.startsWith('127.')
+		if (!loopback) reject(`ports:non-loopback(${hostIp})`)
+	}
+	if (hostPort !== undefined && hostPort !== '') {
+		const n = parseInt(hostPort, 10)
+		if (Number.isInteger(n) && n > 0 && n < 1024) reject(`ports:privileged-host-port(${hostPort})`)
+	}
+}
+
+/**
+ * The federated REJECT gate. THROWS `ComposeRejected('<service>.<directive>')` on
+ * the first offending directive; returns void when the compose is safe. Runs
+ * BEFORE staging mutation. See the block comment above for the D-341-2b rationale
+ * and the known v1 runtime-numeric-IP residual.
+ */
+export function assertFederatedComposeSafe(composeData: any, appDataDir: string): void {
+	const services = composeData?.services
+	if (!services || typeof services !== 'object') return
+
+	const normAppDir = path.posix.normalize(appDataDir.replace(/\\/g, '/'))
+
+	for (const serviceName of Object.keys(services)) {
+		const service = services[serviceName]
+		if (!service || typeof service !== 'object') continue
+		const reject = (directive: string): never => {
+			throw new ComposeRejected(`${serviceName}.${directive}`)
+		}
+
+		// Privileged / capabilities / host-namespace escapes.
+		if (service.privileged) reject('privileged')
+		if ('cap_add' in service) {
+			const c = service.cap_add
+			const nonEmpty = Array.isArray(c) ? c.length > 0 : c != null && c !== ''
+			if (nonEmpty) reject('cap_add')
+		}
+		if (service.network_mode === 'host') reject('network_mode:host')
+		if (service.pid === 'host') reject('pid:host')
+		if (service.ipc === 'host') reject('ipc:host') // NOT covered by the silent stripper
+		if (service.userns_mode === 'host') reject('userns_mode:host')
+		if (Array.isArray(service.security_opt)) {
+			for (const s of service.security_opt) {
+				if (typeof s === 'string' && /unconfined/.test(s)) reject('security_opt:unconfined')
+			}
+		}
+
+		// Volume binds outside the app's own data dir (docker.sock, /, ~, other
+		// users' data, operator secrets). NO CLI_MOUNT_PREFIX allowlist here —
+		// federated apps get no operator-CLI mounts.
+		if (Array.isArray(service.volumes)) {
+			for (const entry of service.volumes) {
+				const host = bindHostSide(entry)
+				if (host === null) continue // named volume / non-bind
+				const normHost = normalizeHost(host, normAppDir)
+				if (!isUnder(normHost, normAppDir)) reject(`host-path-bind:${host}`)
+			}
+		}
+
+		// Sensitive host ports — privileged (<1024) or explicit non-loopback iface.
+		if (Array.isArray(service.ports)) {
+			for (const p of service.ports) assertPortEntrySafe(p, reject)
+		}
+
+		// D-341-2b — the compose-side broker / cred-proxy door.
+		for (const eh of collectExtraHosts(service.extra_hosts)) {
+			const s = String(eh).toLowerCase()
+			if (s.includes('host-gateway') || referencesBrokerReach(s)) reject('extra_hosts:broker-reach')
+		}
+		for (const ev of collectEnvStrings(service.environment)) {
+			if (referencesBrokerReach(ev)) reject('environment:broker-reach')
+		}
+		for (const ef of collectEnvStrings(service.env_file)) {
+			if (referencesBrokerReach(ef)) reject('env_file:broker-reach')
+		}
+	}
 }

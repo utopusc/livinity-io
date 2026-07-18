@@ -1,8 +1,15 @@
 import type {AppManifest} from './schema.js'
 
-const BROKER_HOST = 'livinity-broker'
+// Exported (Phase 341-02, D-341-2b) so the federated compose-safety gate
+// (assertFederatedComposeSafe) rejects any federated compose that reaches the
+// broker by hostname/sentinel, importing the SAME constant rather than
+// hardcoding a duplicate that could drift from this real value.
+export const BROKER_HOST = 'livinity-broker'
 const BROKER_PORT = 8080
 const HOST_GATEWAY_ENTRY = `${BROKER_HOST}:host-gateway`
+// The verified-app broker sentinel injected into the *_API_KEY slots. Exported
+// (341-02) for the same non-drift reason as BROKER_HOST.
+export const BROKER_SENTINEL_KEY = 'livinity-broker-managed'
 
 /**
  * Build the broker env block. `apiKey` is the value injected into the various
@@ -12,7 +19,7 @@ const HOST_GATEWAY_ENTRY = `${BROKER_HOST}:host-gateway`
  *   - a REAL per-app `lvb_…` virtual key for UNVERIFIED apps (256-02 SC4b), so
  *     the broker meters + budget-caps that key independently per app.
  */
-function buildBrokerEnv(userId: string, apiKey: string = 'livinity-broker-managed'): Record<string, string> {
+function buildBrokerEnv(userId: string, apiKey: string = BROKER_SENTINEL_KEY): Record<string, string> {
 	const base = `http://${BROKER_HOST}:${BROKER_PORT}/u/${userId}`
 	const v1 = `${base}/v1`
 	return {

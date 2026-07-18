@@ -45,6 +45,8 @@ async function assertAppLifecycleAccess(
 	throw new TRPCError({code: 'FORBIDDEN', message: 'Operator access required'})
 }
 import {BUILTIN_APPS, getBuiltinApp, searchBuiltinApps} from './builtin-apps.js'
+// Phase 341-02 (REPO-02) — source-namespaced id for the federated install grant.
+import {namespacedAppId} from './app-store-sources.js'
 import {isPublicForbidden, type PublicForbiddenSignals} from './public-forbidden.js'
 import {resolvePublicAccess} from './public-access.js'
 import {
@@ -157,6 +159,26 @@ export const appStore = router({
 		.mutation(async ({ctx, input}) => ctx.appStore!.setSourceEnabled(input.id, input.enabled)),
 
 	federatedCatalog: adminProcedure.query(async ({ctx}) => ctx.appStore!.getFederatedCatalog()),
+
+	// Phase 341-02 (REPO-02, D-341-2) — install a federated app. adminProcedure =
+	// RBAC + audit for free; the install-admin gate independently blocks non-admins
+	// on isGeneratedTemplate=false anyway. This NEVER routes through the bare-id
+	// apps.install / installForUser mutations — installFederated is the credential-
+	// denial path (no broker/OAuth/metered key, compose-safety REJECT). `ctx.apps!`
+	// mirrors deployCustom (the partial-ctx type widens apps to optional).
+	installFederated: adminProcedure
+		.input(z.object({sourceId: z.string(), catalogSlug: z.string()}))
+		.mutation(async ({ctx, input}) => {
+			const ok = await ctx.apps!.installFederated(input)
+			if (ok && ctx.currentUser?.id) {
+				await grantAppAccess(
+					ctx.currentUser.id,
+					namespacedAppId(input.sourceId, input.catalogSlug),
+					ctx.currentUser.id,
+				)
+			}
+			return ok
+		}),
 })
 
 export const apps = router({
