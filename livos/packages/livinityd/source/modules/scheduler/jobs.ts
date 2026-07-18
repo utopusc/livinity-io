@@ -31,7 +31,7 @@ import * as snapraidCli from '../storage-pool/snapraid-cli.js'
 import {checkFreezeGate} from '../storage-pool/pool.js'
 import type {PoolStore, StoragePoolState, PoolStatusSummary} from '../storage-pool/pool.js'
 import type {StatusResult} from '../storage-pool/snapraid-log.js'
-import {isWithinUpdateWindow} from '../apps/app-lifecycle-depth.js'
+import {isWithinUpdateWindow, validateUpdateWindow} from '../apps/app-lifecycle-depth.js'
 import type Livinityd from '../../index.js'
 import type {BuiltInJobHandler, JobType, JobRunStatus, SchedulerLogger} from './types.js'
 
@@ -520,6 +520,14 @@ export async function runWindowedAutoUpdatePass(opts: {
 	logPrefix: string
 	now: Date
 	owns: (window: {start: string; end: string} | undefined, now: Date) => boolean
+	// WARN-01: only the WINDOW job's pass (the owner of defined windows) sets this. When a
+	// policy==='auto' app has a DEFINED-but-INVALID window (corrupt store — malformed HH:MM,
+	// start===end, <30-min span), BOTH scheduler paths skip it forever and silently: the 4am
+	// job skips any window!==undefined, and the */15 job's isWithinUpdateWindow returns false.
+	// Emit a clear error naming the app so the stall is observable instead of silent. This is
+	// OBSERVABILITY ONLY — the predicates stay disjoint (the 4am job never adopts these apps,
+	// which would update outside the admin's intended window).
+	warnInvalidWindow?: boolean
 }): Promise<string[]> {
 	const updated: string[] = []
 	for (const app of opts.livinityd.apps.instances) {
@@ -529,6 +537,17 @@ export async function runWindowedAutoUpdatePass(opts: {
 			if (policy !== 'auto') continue
 			// Disjoint predicate — 4am owns window===undefined, the */15 job owns window!==undefined AND inside.
 			const window = await app.store.get('updateWindow')
+			// WARN-01: surface a defined-but-invalid window from the window job's pass so a corrupt
+			// store value can't silently disable auto-update while the admin believes it is on.
+			if (opts.warnInvalidWindow && window !== undefined) {
+				const windowError = validateUpdateWindow(window)
+				if (windowError) {
+					opts.logger.error(
+						`${opts.logPrefix} ${app.id}: updateWindow is invalid (${windowError}) — auto-update is stalled until it is cleared or re-set`,
+					)
+					continue
+				}
+			}
 			if (!opts.owns(window, opts.now)) continue
 			const installed = (await app.readManifest()).version
 			const available = getBuiltinApp(app.id)?.version
@@ -594,6 +613,9 @@ export const appUpdateWindowHandler: BuiltInJobHandler = async (job, ctx) => {
 			logPrefix: '[scheduler/app-update-window]',
 			now: new Date(),
 			owns: (window, now) => window !== undefined && isWithinUpdateWindow(now, window),
+			// WARN-01: this pass owns defined windows, so it is the one that surfaces a corrupt/invalid
+			// window (skipped by BOTH jobs otherwise) as a clear stalled-auto-update error line.
+			warnInvalidWindow: true,
 		})
 		ctx.logger.log(`[scheduler/app-update-window] auto-updated ${updated.length} app(s)`)
 		return {status: 'success', output: {updated}}

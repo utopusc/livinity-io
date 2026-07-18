@@ -485,7 +485,9 @@ export default class App {
 		// compose-spec-schema models Service.cpuset?: string — NO `as any` needed.
 		const hasCpuSet = typeof cpuSet === 'string' && cpuSet.trim() !== ''
 		if (limitMainService) {
-			if (hasCpuSet) limitMainService.cpuset = cpuSet
+			// INFO-02: emit the TRIMMED value (hasCpuSet guarantees cpuSet is a string) so a
+			// whitespace-laden corrupt store value can never reach the compose cpuset field.
+			if (hasCpuSet) limitMainService.cpuset = (cpuSet as string).trim()
 			else if ('cpuset' in limitMainService) delete (limitMainService as {cpuset?: string}).cpuset
 		}
 

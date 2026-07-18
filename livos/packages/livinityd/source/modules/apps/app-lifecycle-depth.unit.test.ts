@@ -71,6 +71,20 @@ describe('validateCpuSet — semantic (index<coreCount, ascending range)', () =>
 	test('"4" on 4 → error (0-indexed; valid max = coreCount-1)', () => {
 		expect(validateCpuSet('4', 4)).not.toBeNull()
 	})
+	// INFO-01: empty tokens/endpoints must be rejected regardless of the route regex pre-gate
+	// (Number('') === 0 would otherwise let "0,,2" / ",0" / "0-" / "" slip through as index 0).
+	test('"0,,2" on 4 → error (empty middle segment)', () => {
+		expect(validateCpuSet('0,,2', 4)).not.toBeNull()
+	})
+	test('",0" on 4 → error (leading empty segment)', () => {
+		expect(validateCpuSet(',0', 4)).not.toBeNull()
+	})
+	test('"0-" on 4 → error (empty range endpoint)', () => {
+		expect(validateCpuSet('0-', 4)).not.toBeNull()
+	})
+	test('"" on 4 → error (empty spec)', () => {
+		expect(validateCpuSet('', 4)).not.toBeNull()
+	})
 })
 
 describe('validateUpdateWindow — malformed / start==end / <30-min rejected', () => {

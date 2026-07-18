@@ -138,6 +138,26 @@ describe('appUpdateWindowHandler — windowed, inside-only, disjoint from 4am', 
 		expect(update).not.toHaveBeenCalled()
 	})
 
+	test('WARN-01: policy auto + malformed window (start===end): NOT updated + invalid-window error logged', async () => {
+		mockGetBuiltinApp.mockReset()
+		mockGetBuiltinApp.mockReturnValue({version: '2.0.0'})
+		fakeLogger.error.mockClear()
+		const update = vi.fn().mockResolvedValue(undefined)
+		// A DEFINED-but-INVALID window (start===end) is skipped by BOTH scheduler jobs forever
+		// and silently — the window job must surface it as a stalled-auto-update error.
+		const app = makeApp({id: 'gitea', policy: 'auto', installed: '1.0.0', window: {start: '09:00', end: '09:00'}, update})
+
+		const result = await withNow(12, 0, () =>
+			appUpdateWindowHandler(fakeJob, {logger: fakeLogger, livinityd: daemonWith(app)}),
+		)
+
+		expect(result.status).toBe('success')
+		expect(update).not.toHaveBeenCalled()
+		expect(fakeLogger.error).toHaveBeenCalledTimes(1)
+		expect(fakeLogger.error.mock.calls[0][0]).toContain('gitea')
+		expect(fakeLogger.error.mock.calls[0][0]).toMatch(/invalid|stalled/i)
+	})
+
 	test('policy auto + window + inside + available===ignoredVersion: update() NOT called (pin honored)', async () => {
 		mockGetBuiltinApp.mockReset()
 		mockGetBuiltinApp.mockReturnValue({version: '2.0.0'})

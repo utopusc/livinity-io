@@ -37,6 +37,12 @@ export function isWithinUpdateWindow(now: Date, window: {start: string; end: str
 // valid max index is coreCount-1; a range `a-b` requires a <= b.
 export function validateCpuSet(spec: string, coreCount: number): string | null {
 	for (const token of spec.split(',')) {
+		// INFO-01 (defense-in-depth): reject an empty segment BEFORE Number() coercion —
+		// Number('') === 0, so "0,,2" / ",0" / "" would otherwise pass as a valid index 0 if a
+		// future caller ever bypasses the route regex pre-gate. Reject empty tokens outright.
+		if (token === '') {
+			return 'Empty CPU segment is not allowed (stray or leading/trailing comma)'
+		}
 		const parts = token.split('-')
 		if (parts.length === 1) {
 			const idx = Number(parts[0])
@@ -44,6 +50,11 @@ export function validateCpuSet(spec: string, coreCount: number): string | null {
 				return `CPU index ${idx} is out of range (this box has ${coreCount} core(s): valid 0-${coreCount - 1})`
 			}
 		} else {
+			// INFO-01: reject an empty range endpoint ("0-" / "-2") — Number('') === 0 would
+			// otherwise coerce a missing endpoint to a spurious 0 and pass validation.
+			if (parts[0] === '' || parts[1] === '') {
+				return `CPU range ${token} has an empty endpoint`
+			}
 			const a = Number(parts[0])
 			const b = Number(parts[1])
 			if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0 || a >= coreCount || b >= coreCount) {
