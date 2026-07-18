@@ -222,10 +222,13 @@ export function sanitizeNonBuiltinCompose(
 // livinity-broker-managed) and spend the operator's subscription. Therefore this
 // gate ALSO rejects any compose-declared reach to the broker / cred-proxy.
 //
-// ⚠ KNOWN v1 RESIDUAL (surfaced in 341-HUMAN-UAT + STATE): a federated app that
-// constructs the NUMERIC host-gateway IP (e.g. 172.17.0.1:8080) at RUNTIME — not
-// in its compose — can still hit the broker's source-IP-gated sentinel. This
-// compose-reject cannot see runtime-constructed hosts. Fully closing it needs
+// ⚠ KNOWN v1 RESIDUAL (surfaced in 341-HUMAN-UAT + STATE): the static compose can no
+// longer declare the reach — the hostname/sentinel form AND the numeric private/
+// host-gateway IP form (172.17.0.1:8080 etc.) are both rejected (WR-01). The residual
+// is strictly a RUNTIME one: the app's OWN CODE can construct the gateway IP at run
+// time (read it from /proc/net/route, resolve host.docker.internal, etc.) and hit the
+// broker's source-IP-gated sentinel — the compose-reject cannot see runtime-built hosts.
+// Fully closing it needs
 // EITHER the 262-04 per-app-token pattern applied to the broker (touches the
 // broker path — OUT OF SCOPE here) OR firewall/network isolation of federated
 // containers from the host broker port (the parked per-app micro-segmentation
@@ -249,6 +252,39 @@ function referencesBrokerReach(value: string): boolean {
 	const v = value.toLowerCase()
 	return BROKER_REACH_TOKENS.some((tok) => v.includes(tok))
 }
+
+// WR-01 — a federated compose can reach the source-IP-gated broker WITHOUT naming
+// it, by pointing at the numeric docker host-gateway / a private IP (e.g.
+// `ANTHROPIC_BASE_URL: http://172.17.0.1:8080/u/<id>` or `extra_hosts:[a:172.17.0.1]`).
+// Match private/loopback/link-local IPv4 literals + `host-gateway` so the broker-reach
+// reject covers the numeric form too. (IPv6 host-gateway is not a docker default; the
+// runtime-constructed residual is documented on the gate.)
+const PRIVATE_IP_RE =
+	/\b(?:127(?:\.\d{1,3}){3}|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|169\.254(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})\b/
+function referencesPrivateHost(value: string): boolean {
+	const v = value.toLowerCase()
+	return v.includes('host-gateway') || PRIVATE_IP_RE.test(v)
+}
+
+// CR-01 — `bindHostSide` classifies a `$`-interpolated host (`${APP_DATA_DIR}/…`,
+// `${HOME}/.ssh`) as a NAMED VOLUME (it doesn't start with / . ~) and skips it, so a
+// federated app could bind `${APP_DATA_DIR}/../../../var/run/docker.sock` past the gate
+// → host root. This superset extractor returns the host side for `$`-prefixed binds too;
+// the federated volume loop then resolves ONLY the box-set `${APP_DATA_DIR}` token and
+// rejects any bind still carrying an unresolved `$` (unverifiable) or escaping app-data.
+function federatedVolumeHost(entry: any): string | null {
+	if (typeof entry === 'string') {
+		const firstColon = entry.indexOf(':')
+		if (firstColon === -1) return null // no container target → not a host bind
+		const host = entry.slice(0, firstColon)
+		return /^[/.~$]/.test(host) ? host : null // path- or variable-like ⇒ bind; plain ident ⇒ named volume
+	}
+	if (entry && typeof entry === 'object' && typeof entry.source === 'string') {
+		if (/^[/.~$]/.test(entry.source) || entry.type === 'bind') return entry.source
+	}
+	return null
+}
+const APP_DATA_TOKEN_RE = /\$\{APP_DATA_DIR\}|\$APP_DATA_DIR\b/g
 
 /** Flatten an `environment` (map or `KEY=VALUE` list) + `env_file` (string or
  * list) into scannable strings. For a map we join `key=value` so both sides are
@@ -344,6 +380,19 @@ export function assertFederatedComposeSafe(composeData: any, appDataDir: string)
 		if (service.pid === 'host') reject('pid:host')
 		if (service.ipc === 'host') reject('ipc:host') // NOT covered by the silent stripper
 		if (service.userns_mode === 'host') reject('userns_mode:host')
+		// WR-02 — additional host-reach surfaces an untrusted author must not use.
+		if (typeof service.network_mode === 'string' && /^(?:container|service):/.test(service.network_mode)) {
+			reject('network_mode:container')
+		}
+		if (typeof service.pid === 'string' && /^(?:container|service):/.test(service.pid)) reject('pid:container')
+		for (const [dir, val] of [
+			['devices', service.devices],
+			['group_add', service.group_add],
+			['sysctls', service.sysctls],
+		] as const) {
+			const present = dir in service && (Array.isArray(val) ? val.length > 0 : typeof val === 'object' && val !== null ? Object.keys(val).length > 0 : val != null && val !== '')
+			if (present) reject(dir)
+		}
 		if (Array.isArray(service.security_opt)) {
 			for (const s of service.security_opt) {
 				if (typeof s === 'string' && /unconfined/.test(s)) reject('security_opt:unconfined')
@@ -352,12 +401,17 @@ export function assertFederatedComposeSafe(composeData: any, appDataDir: string)
 
 		// Volume binds outside the app's own data dir (docker.sock, /, ~, other
 		// users' data, operator secrets). NO CLI_MOUNT_PREFIX allowlist here —
-		// federated apps get no operator-CLI mounts.
+		// federated apps get no operator-CLI mounts. Uses the CR-01 superset
+		// extractor so a `$`-interpolated host is inspected, not skipped.
 		if (Array.isArray(service.volumes)) {
 			for (const entry of service.volumes) {
-				const host = bindHostSide(entry)
+				const host = federatedVolumeHost(entry)
 				if (host === null) continue // named volume / non-bind
-				const normHost = normalizeHost(host, normAppDir)
+				// Resolve ONLY the box-set ${APP_DATA_DIR}; any other unresolved `$` is
+				// unverifiable → refuse (docker would resolve it at runtime).
+				const resolved = host.replace(APP_DATA_TOKEN_RE, normAppDir)
+				if (resolved.includes('$')) reject(`host-path-bind-var:${host}`)
+				const normHost = normalizeHost(resolved, normAppDir)
 				if (!isUnder(normHost, normAppDir)) reject(`host-path-bind:${host}`)
 			}
 		}
@@ -367,13 +421,16 @@ export function assertFederatedComposeSafe(composeData: any, appDataDir: string)
 			for (const p of service.ports) assertPortEntrySafe(p, reject)
 		}
 
-		// D-341-2b — the compose-side broker / cred-proxy door.
+		// D-341-2b — the compose-side broker / cred-proxy door. Reject a reach named
+		// by hostname/sentinel (referencesBrokerReach) OR by a private/host-gateway IP
+		// (referencesPrivateHost, WR-01) — the broker source-IP-gates the docker bridge,
+		// so a numeric `172.17.0.1:8080` reach is as dangerous as the hostname form.
 		for (const eh of collectExtraHosts(service.extra_hosts)) {
 			const s = String(eh).toLowerCase()
-			if (s.includes('host-gateway') || referencesBrokerReach(s)) reject('extra_hosts:broker-reach')
+			if (referencesBrokerReach(s) || referencesPrivateHost(s)) reject('extra_hosts:broker-reach')
 		}
 		for (const ev of collectEnvStrings(service.environment)) {
-			if (referencesBrokerReach(ev)) reject('environment:broker-reach')
+			if (referencesBrokerReach(ev) || referencesPrivateHost(ev)) reject('environment:broker-reach')
 		}
 		for (const ef of collectEnvStrings(service.env_file)) {
 			if (referencesBrokerReach(ef)) reject('env_file:broker-reach')

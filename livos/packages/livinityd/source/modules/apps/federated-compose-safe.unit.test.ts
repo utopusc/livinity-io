@@ -89,3 +89,31 @@ test('BENIGN federated compose passes (loopback port, in-tree bind, ordinary env
 	})
 	expect(() => assertFederatedComposeSafe(compose, APP_DATA_DIR)).not.toThrow()
 })
+
+// ── CR-01: $-interpolated volume host binds (were skipped as "named volumes") ──
+test('CR-01 REJECTS ${APP_DATA_DIR}-rooted traversal to docker.sock', () =>
+	expectRejected(svc({volumes: ['${APP_DATA_DIR}/../../../../var/run/docker.sock:/var/run/docker.sock']}), /host-path/))
+test('CR-01 REJECTS an unknown ${HOME} interpolated bind', () =>
+	expectRejected(svc({volumes: ['${HOME}/.ssh:/root/.ssh']}), /host-path-bind-var/))
+test('CR-01 REJECTS a bare $LIVINITY_ROOT interpolated bind', () =>
+	expectRejected(svc({volumes: ['$LIVINITY_ROOT:/host']}), /host-path-bind-var/))
+test('CR-01 REJECTS a long-form bind whose $-source escapes app-data', () =>
+	expectRejected(svc({volumes: [{type: 'bind', source: '${APP_DATA_DIR}/../../etc', target: '/etc'}]}), /host-path/))
+test('CR-01 ACCEPTS a clean ${APP_DATA_DIR}-rooted bind (resolves in-tree)', () =>
+	expect(() => assertFederatedComposeSafe(svc({volumes: ['${APP_DATA_DIR}/data:/data']}), APP_DATA_DIR)).not.toThrow())
+
+// ── WR-01: numeric private / host-gateway IP broker reach (no hostname) ────────
+test('WR-01 REJECTS an env pointing at the numeric docker gateway IP', () =>
+	expectRejected(svc({environment: {ANTHROPIC_BASE_URL: 'http://172.17.0.1:8080/u/x'}}), /environment/))
+test('WR-01 REJECTS an extra_hosts alias mapped to a private IP', () =>
+	expectRejected(svc({extra_hosts: ['broker:172.17.0.1']}), /extra_hosts/))
+test('WR-01 REJECTS an env pointing at a 10.x host', () =>
+	expectRejected(svc({environment: {OPENAI_API_BASE_URL: 'http://10.0.0.1:8080/v1'}}), /environment/))
+
+// ── WR-02: additional host-reach surfaces ─────────────────────────────────────
+test('WR-02 REJECTS devices', () => expectRejected(svc({devices: ['/dev/kmsg:/dev/kmsg']}), /devices/))
+test('WR-02 REJECTS group_add', () => expectRejected(svc({group_add: ['docker']}), /group_add/))
+test('WR-02 REJECTS sysctls', () => expectRejected(svc({sysctls: {'net.ipv4.ip_forward': '1'}}), /sysctls/))
+test('WR-02 REJECTS network_mode:container:<name>', () =>
+	expectRejected(svc({network_mode: 'container:other'}), /network_mode:container/))
+test('WR-02 REJECTS pid:service:<name>', () => expectRejected(svc({pid: 'service:other'}), /pid:container/))
