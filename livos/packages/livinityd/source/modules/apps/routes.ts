@@ -131,6 +131,32 @@ export const appStore = router({
 			}),
 		)
 		.mutation(async ({ctx, input}) => ctx.appStore.removeRepository(input.url)),
+
+	// Phase 341-01 (REPO-01, D-341-6) — federated app-store source management.
+	// adminProcedure = privateProcedure + requireRole('admin') + auditAdminAction,
+	// so every mutation is RBAC-gated + audited for free. The official
+	// livinity.io/store iframe path is UNTOUCHED — this is the admin-only
+	// federated surface (install is admin-only anyway per the install-admin gate).
+	// `ctx.appStore` is always populated by createContext (the Context Merge type
+	// widens it to optional, which is why the legacy registry/addRepository routes
+	// above read it too); assert non-null here to keep the tsc baseline unchanged.
+	listSources: adminProcedure.query(async ({ctx}) => ctx.appStore!.listSources()),
+
+	addSource: adminProcedure
+		.input(z.object({url: z.string().url(), name: z.string().min(1).max(80)}))
+		.mutation(async ({ctx, input}) =>
+			ctx.appStore!.addSource({url: input.url, name: input.name, addedBy: ctx.currentUser?.id}),
+		),
+
+	removeSource: adminProcedure
+		.input(z.object({id: z.string()}))
+		.mutation(async ({ctx, input}) => ctx.appStore!.removeSource(input.id)),
+
+	setSourceEnabled: adminProcedure
+		.input(z.object({id: z.string(), enabled: z.boolean()}))
+		.mutation(async ({ctx, input}) => ctx.appStore!.setSourceEnabled(input.id, input.enabled)),
+
+	federatedCatalog: adminProcedure.query(async ({ctx}) => ctx.appStore!.getFederatedCatalog()),
 })
 
 export const apps = router({

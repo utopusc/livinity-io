@@ -319,6 +319,10 @@ import type {ConnectivityState} from './modules/connectivity/checks.js'
 // — folder-quota-scan.ts does not import index.ts, no cycle).
 import type {FolderQuotaEntry} from './modules/files/folder-quota-scan.js'
 import type {UsbImportRule} from './modules/files/usb-import.js'
+// Phase 341-01 (REPO-01, D-341-1) — the federated app-store source shape for the
+// dedicated top-level `appStoreSources` StoreSchema key below. Type-only import
+// (app-store-sources.ts is a pure module — only node:crypto — no cycle).
+import type {AppStoreSource} from './modules/apps/app-store-sources.js'
 
 type StoreSchema = {
 	version: string
@@ -634,6 +638,17 @@ type StoreSchema = {
 	// base dir (never inferred from a "current user" — there isn't one). `lastRun` is
 	// fail-soft observability written by the runner. Undefined until the first rule is created.
 	usbImport: UsbImportRule[]
+	// Phase 341-01 (REPO-01, D-341-1) — DEDICATED top-level key (dot-prop hazard:
+	// NOT nested under `appRepositories`/`apps`/any array or scalar — dot-prop
+	// path collisions silently drop the write, same convention as `folderQuotas`/
+	// `usbImport`/`encryptedDisks` above). Admin-added federated app-store sources
+	// (untrusted-by-default). Holds ONLY non-secret bookkeeping — a catalog URL is
+	// not a secret (contrast cloudDrives.configBlob). Trust is NEVER stored here
+	// as a payload-derived flag; a federated app's untrusted status is stamped at
+	// fetch time from the source, never read back from a `verified` field. The
+	// legacy bare-string `appRepositories` key stays inert (its object shape is
+	// insufficient — the richer AppStoreSource shape is required here).
+	appStoreSources: AppStoreSource[]
 }
 
 export type LivinitydOptions = {

@@ -523,6 +523,8 @@ export async function performReset(livinityd: Livinityd) {
 			await livinityd.store.set('version', livinityd.version)
 			await livinityd.store.set('apps', [])
 			await livinityd.store.set('appRepositories', [])
+			// Phase 341-01 (REPO-01) — clear federated app-store sources on reset.
+			await livinityd.store.set('appStoreSources', [])
 		} catch {}
 	}
 
