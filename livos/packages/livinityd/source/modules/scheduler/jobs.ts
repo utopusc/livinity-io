@@ -25,6 +25,7 @@ import {volumeBackupHandler} from './backup.js'
 import {securityAdvisorScanHandler} from '../security-advisor/scheduler-job.js'
 import {connectivitySelfCheckHandler} from '../connectivity/scheduler-job.js'
 import {recyclePurgeHandler} from '../files/recycle-purge.js'
+import {folderQuotaScanHandler} from '../files/folder-quota-scan.js'
 import {getBuiltinApp} from '../apps/builtin-apps.js'
 import * as snapraidCli from '../storage-pool/snapraid-cli.js'
 import {checkFreezeGate} from '../storage-pool/pool.js'
@@ -1122,6 +1123,7 @@ export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'pool-scrub': poolScrubHandler, // Phase 318 POOL-03 — weekly scrub -p parity verification
 	'connectivity-self-check': connectivitySelfCheckHandler, // Phase 333 DIAG-01/02 — hourly connectivity self-diagnosis
 	'recycle-purge': recyclePurgeHandler, // Phase 338 RECYCLE-01 — daily .Recycle.Bin age+free-floor purge
+	'folder-quota-scan': folderQuotaScanHandler, // Phase 339 STORD-01 — per-folder du accounting → folder-quota-exceeded bell
 }
 
 // =========================================================================
@@ -1211,4 +1213,10 @@ export const DEFAULT_JOB_DEFINITIONS: Array<{
 	// reclaims aged/over-floor entries INSIDE existing bins — never touches live files.
 	// ON CONFLICT (name) DO NOTHING seeds it on every box's next boot.
 	{name: 'recycle-purge', schedule: '0 5 * * *', type: 'recycle-purge', enabled: true},
+	// Phase 339 STORD-01 — per-folder du accounting, every 30 min (matches user-quota-scan,
+	// A1). enabled=true: a serialized du walk is cheap (no LLM spend) and a folder nearing
+	// its cap must warn even with no Settings tab open. A no-op until an admin sets the first
+	// folder quota (empty `folderQuotas` → nothing to walk). ON CONFLICT (name) DO NOTHING
+	// re-seeds it on every box's next boot.
+	{name: 'folder-quota-scan', schedule: '*/30 * * * *', type: 'folder-quota-scan', enabled: true},
 ]

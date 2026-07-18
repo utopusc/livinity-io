@@ -24,6 +24,7 @@ export type JobType =
 	| 'pool-scrub' // Phase 318 (POOL-03) — weekly snapraid scrub -p (parity verification) → status/alert
 	| 'connectivity-self-check' // Phase 333 (DIAG-01/02) — hourly DNS/port/cert/tunnel/mail self-diagnosis → regression alert
 	| 'recycle-purge' // Phase 338 (RECYCLE-01) — daily .Recycle.Bin age+free-floor purge
+	| 'folder-quota-scan' // Phase 339 (STORD-01) — per-folder du accounting → folder-quota-exceeded bell
 
 export type JobRunStatus = 'success' | 'failure' | 'skipped' | 'running'
 

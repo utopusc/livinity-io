@@ -314,6 +314,10 @@ import type {AppSecurityState} from './modules/domain/waf.js'
 // dedicated top-level `connectivity` StoreSchema key below. Type-only import
 // (connectivity/checks.ts is a pure module, no cycle).
 import type {ConnectivityState} from './modules/connectivity/checks.js'
+// Phase 339 (STORD-01, D-339-1) — the per-folder quota entry shape for the dedicated
+// top-level `folderQuotas` StoreSchema key below. Type-only import (erased at runtime
+// — folder-quota-scan.ts does not import index.ts, no cycle).
+import type {FolderQuotaEntry} from './modules/files/folder-quota-scan.js'
 
 type StoreSchema = {
 	version: string
@@ -589,6 +593,19 @@ type StoreSchema = {
 		lastPurgeAt?: number
 		lastPurgeStats?: {filesRemoved: number; bytesReclaimed: number; forced: boolean}
 	}
+	// Phase 339 (STORD-01, D-339-1) — DEDICATED top-level key (dot-prop hazard: NOT
+	// nested under `storageQuota`/`storage`/`files`/any array or scalar — dot-prop path
+	// collisions silently drop the write, same convention as `smbRecycle`/`monitoring`/
+	// `security` above). Per-FOLDER byte quotas, additive to the shipped per-USER
+	// `storageQuota` scan. Each entry holds BOTH the config (`virtualPath`/`limitBytes`/
+	// `hardBlock`) AND the scan cache (`usageBytes`/`scannedAt`) — there is NO PG table
+	// for folder quotas (unlike the per-user `quota_bytes` column). `limitBytes <= 0` =
+	// no effective cap (matches the NULL user-quota semantics); `hardBlock` false
+	// (default) = advisory warn-only, true = block a write projected over 100%. Written
+	// by the `folder-quota-scan` job (cache) + the folderQuotaSet/Remove admin routes
+	// (config); read by the files write-gate `assertWithinFolderQuota`. Undefined until
+	// the first quota is set.
+	folderQuotas: FolderQuotaEntry[]
 }
 
 export type LivinitydOptions = {

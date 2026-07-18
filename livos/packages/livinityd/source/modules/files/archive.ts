@@ -5,6 +5,8 @@ import {pipeline} from 'node:stream/promises'
 
 import {$} from 'execa'
 
+import getDirectorySize from '../utilities/get-directory-size.js'
+
 import type Livinityd from '../../index.js'
 
 export default class Archive {
@@ -67,6 +69,27 @@ export default class Archive {
 			virtualPaths.map((virtualPath) => this.#livinityd.files.virtualToSystemPath(virtualPath)),
 		)
 
+		// Phase 339 STORD-01 (W1) — the zip is a NEW write into dirname(paths[0]) that
+		// previously bypassed BOTH the per-user AND per-folder quota gates. Gate it now
+		// with a best-effort uncompressed-size estimate (sum of each source's byte size;
+		// `du` for a directory subtree). An over-estimate vs. the compressed zip is fine —
+		// the gate should err toward blocking, not under-counting. Behavior-TIGHTENING:
+		// closes the pre-existing bypass, same class as 336's C1 archive fix.
+		if (virtualPaths[0]) {
+			let estimatedBytes = 0
+			for (const systemPath of systemPaths) {
+				try {
+					const stat = await fse.stat(systemPath)
+					estimatedBytes += stat.isDirectory() ? await getDirectorySize(systemPath) : stat.size
+				} catch {
+					// A racing/absent source contributes 0 — createZipStream surfaces the real error.
+				}
+			}
+			const destinationVirtualDirectory = nodePath.dirname(virtualPaths[0])
+			await this.#livinityd.files.assertWithinQuota(this.#livinityd.files.quotaUsername(), estimatedBytes)
+			await this.#livinityd.files.assertWithinFolderQuota(destinationVirtualDirectory, estimatedBytes)
+		}
+
 		// Calculate the zip path
 		let zipPath = nodePath.join(nodePath.dirname(systemPaths[0]), this.zipName(systemPaths))
 		zipPath = await this.#livinityd.files.getUniqueName(zipPath)
@@ -109,6 +132,30 @@ export default class Archive {
 		// Unarchive
 		// TODO: Add progress reporting
 		await $`unar -force-overwrite -no-directory -output-directory ${targetDirectory} ${systemPath}`
+
+		// Phase 339 STORD-01 (W1) — extraction previously bypassed BOTH quota gates and
+		// could inflate far past the compressed size. The extracted size is only knowable
+		// AFTER extraction (unar spans many formats with no cheap pre-scan), so measure the
+		// just-written tree and run the SAME per-user + per-folder gates copy() uses. On a
+		// HARD breach (per-user over-quota, or a hardBlock folder cap over 100%) roll the
+		// extraction back so a cap cannot be defeated by unarchive; a warn-only folder cap
+		// just fires its target-qualified bell. Fail-open if the size probe itself errors —
+		// never strand a successful extraction on infra failure. Behavior-TIGHTENING.
+		try {
+			const extractedBytes = await getDirectorySize(targetDirectory)
+			const destinationVirtualDirectory = nodePath.dirname(virtualPath)
+			await this.#livinityd.files.assertWithinQuota(this.#livinityd.files.quotaUsername(), extractedBytes)
+			await this.#livinityd.files.assertWithinFolderQuota(destinationVirtualDirectory, extractedBytes)
+		} catch (error) {
+			if (
+				error instanceof Error &&
+				(error.message === '[quota-exceeded]' || error.message === '[folder-quota-exceeded]')
+			) {
+				await fse.remove(targetDirectory).catch(() => {})
+				throw error
+			}
+			// A non-quota error (e.g. du failing) must NOT strand a good extraction.
+		}
 
 		// Return virtual path of the unarchived files
 		return this.#livinityd.files.systemToVirtualPath(targetDirectory)

@@ -35,6 +35,7 @@ import {
 	type AclLevel,
 } from './file-acls.js'
 
+import {nearestAncestorFolderQuota, decideFolderQuota, type FolderQuotaEntry} from './folder-quota-scan.js'
 import Watcher from './watcher.js'
 import Recents from './recents.js'
 import Favorites from './favorites.js'
@@ -908,6 +909,43 @@ export default class Files {
 		}
 	}
 
+	// Phase 339 STORD-01 — resolve the quota-subject username for the CURRENT file
+	// context: a member/guest is their own username, an admin (global tree, no per-user
+	// quota) is exempt (undefined). Centralizes the admin-exempt rule the
+	// copy()/saveTextFile()/move() gates apply inline so Archive can reuse it WITHOUT
+	// importing fileUserContext (avoids a files⇄archive value-import cycle).
+	quotaUsername(): string | undefined {
+		const quotaUser = fileUserContext.getStore()
+		return quotaUser && quotaUser.role !== 'admin' ? quotaUser.username : undefined
+	}
+
+	// Phase 339 STORD-01 (D-339-1) — soft/hard per-FOLDER quota pre-check. An ADDED
+	// SIBLING to assertWithinQuota (never a replacement): the per-user gate stays
+	// byte-identical above. Unlike the per-user gate this applies to ALL writers
+	// regardless of role — a cap is a property of the FOLDER, not the user. The
+	// nearest-ancestor entry governs; a write projected over 100% BLOCKS only when
+	// that entry's `hardBlock` is true (default false = advisory warn-only), and
+	// at/over the soft ratio ALWAYS fires a target-qualified `folder-quota-exceeded:<path>`
+	// bell (NEVER the bare per-user `quota-exceeded` id). Fail-open on any store error
+	// (mirrors assertWithinQuota — never block a write on infra failure).
+	async assertWithinFolderQuota(virtualPath: string, addBytes: number): Promise<void> {
+		let entries: FolderQuotaEntry[] = []
+		try {
+			entries = (await this.#livinityd.store.get('folderQuotas')) ?? []
+		} catch {
+			// Fail-open on a store-read error — never block a write on infra failure.
+			return
+		}
+		const entry = nearestAncestorFolderQuota(entries, virtualPath)
+		const {block, warn} = decideFolderQuota(entry, addBytes)
+		if (block) throw new Error('[folder-quota-exceeded]')
+		if (warn && entry) {
+			await this.#livinityd.notifications
+				.add('folder-quota-exceeded:' + entry.virtualPath, {severity: 'warning', external: false})
+				.catch(() => {})
+		}
+	}
+
 	async copy(sourceVirtualPath: string, destinationVirtualDirectory: string, {collision = 'error'} = {}) {
 		// Check if operation is allowed
 		const allowedOperations = await this.getAllowedOperations(destinationVirtualDirectory)
@@ -937,6 +975,9 @@ export default class Files {
 		// checked against their cached usage + quota_bytes.
 		const quotaUser = fileUserContext.getStore()
 		await this.assertWithinQuota(quotaUser && quotaUser.role !== 'admin' ? quotaUser.username : undefined, sourceStats.size)
+		// Phase 339 STORD-01 — sibling per-FOLDER gate on the destination directory
+		// (applies to ALL roles; a no-op unless a folder cap governs the destination).
+		await this.assertWithinFolderQuota(destinationVirtualDirectory, sourceStats.size)
 
 		// Add trailing slash to source path if it's a directoryso we only copy the contents
 		if (sourceStats.isDirectory()) sourceSystemPath = `${sourceSystemPath}/`
@@ -995,6 +1036,9 @@ export default class Files {
 			quotaUser && quotaUser.role !== 'admin' ? quotaUser.username : undefined,
 			Math.max(0, newSize - oldSize),
 		)
+		// Phase 339 STORD-01 — sibling per-FOLDER gate on the target file's folder
+		// (same growth-only delta as the user gate; applies to ALL roles).
+		await this.assertWithinFolderQuota(virtualPath, Math.max(0, newSize - oldSize))
 
 		// (3) Atomic write — mirror the /upload route's temp+rename structure
 		// (api.ts:152-172) so the file is never left half-written on a crash, and
@@ -1071,6 +1115,9 @@ export default class Files {
 				quotaUser && quotaUser.role !== 'admin' ? quotaUser.username : undefined,
 				sourceStats.size,
 			)
+			// Phase 339 STORD-01 — sibling per-FOLDER gate on the destination directory
+			// (cross-fs move ADDS bytes to the destination; applies to ALL roles).
+			await this.assertWithinFolderQuota(destinationVirtualDirectory, sourceStats.size)
 			// If we're moving across filesystems there will be a slow copy and delete so
 			// we'll use our own implementation that reports progress.
 			await this.#copyWithProgress(sourceSystemPath, destinationSystemPath, {move: true})

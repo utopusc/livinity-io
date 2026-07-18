@@ -51,6 +51,9 @@ function makeStub(overrides: Partial<Record<string, unknown>> = {}): Files {
 		getAllowedOperations: vi.fn(async () => ['writable']),
 		virtualToSystemPath,
 		assertWithinQuota: vi.fn(async () => {}),
+		// Phase 339 STORD-01 — saveTextFile now also calls the sibling per-folder gate;
+		// stub it as a no-op (its own semantics are covered by files.assertWithinFolderQuota.test.ts).
+		assertWithinFolderQuota: vi.fn(async () => {}),
 		chownSystemPath: vi.fn(async () => {}),
 		systemToVirtualPath: vi.fn((systemPath: string) => systemPath),
 		...overrides,

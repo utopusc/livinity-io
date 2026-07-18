@@ -11,6 +11,17 @@ function withFileUser<T>(ctx: {currentUser?: {username: string; role: string}}, 
 	return fileUserContext.run(userInfo, fn)
 }
 
+// Phase 339 STORD-01 — the quota'd folder's VIRTUAL path. Absolute (leading `/`),
+// restricted charset (allows spaces in folder names), and NO `..` segment (mirrors
+// cryptoPathSchema, system/routes.ts:721, for defense-in-depth). An unresolvable path
+// is harmless — the scan/gate simply no-op it — so no virtualToSystemPath check here.
+const folderQuotaPathSchema = z
+	.string()
+	.min(1)
+	.max(1024)
+	.regex(/^\/[A-Za-z0-9 ._/-]+$/, 'must be an absolute virtual path (restricted charset)')
+	.refine((p) => !p.split('/').includes('..'), 'path traversal (..) is not allowed')
+
 export default router({
 	// List a directory
 	list: publicProcedureWhenNoUserExists
@@ -293,4 +304,56 @@ export default router({
 	isServerAnLivinityDevice: privateProcedure
 		.input(z.object({address: z.string()}))
 		.query(async ({ctx, input}) => ctx.livinityd.files.networkStorage.isServerAnLivinityDevice(input.address)),
+
+	// Phase 339 STORD-01 (D-339-1) — per-folder quota config + scan cache. adminProcedure
+	// (host storage management is admin-only, same as addShare/formatExternalDevice); these
+	// are non-destructive config writes so NO 334 step-up (no data loss).
+	//
+	// List the folder-quota rows (config + cached usage) for the Storage UI usage bars.
+	folderQuotaList: adminProcedure.query(async ({ctx}) => (await ctx.livinityd!.store.get('folderQuotas').catch(() => [])) ?? []),
+
+	// Upsert a folder cap by virtualPath, preserving any existing scan cache
+	// (usageBytes/scannedAt) across a config edit (333-review F1 own-only pattern).
+	// limitBytes 0 = clear the effective cap (matches the user-quota <=0 unlimited rule).
+	folderQuotaSet: adminProcedure
+		.input(
+			z.object({
+				virtualPath: folderQuotaPathSchema,
+				limitBytes: z.number().int().nonnegative(),
+				hardBlock: z.boolean(),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			await ctx.livinityd!.store.getWriteLock(async ({get, set}) => {
+				const current = (await get('folderQuotas')) ?? []
+				const existing = current.find((entry) => entry.virtualPath === input.virtualPath)
+				const others = current.filter((entry) => entry.virtualPath !== input.virtualPath)
+				await set('folderQuotas', [
+					...others,
+					{
+						virtualPath: input.virtualPath,
+						limitBytes: input.limitBytes,
+						hardBlock: input.hardBlock,
+						usageBytes: existing?.usageBytes,
+						scannedAt: existing?.scannedAt,
+					},
+				])
+			})
+			return {success: true}
+		}),
+
+	// Remove a folder cap + clear any lingering target-qualified bell for it.
+	folderQuotaRemove: adminProcedure
+		.input(z.object({virtualPath: folderQuotaPathSchema}))
+		.mutation(async ({ctx, input}) => {
+			await ctx.livinityd!.store.getWriteLock(async ({get, set}) => {
+				const current = (await get('folderQuotas')) ?? []
+				await set(
+					'folderQuotas',
+					current.filter((entry) => entry.virtualPath !== input.virtualPath),
+				)
+			})
+			await ctx.livinityd!.notifications.clear('folder-quota-exceeded:' + input.virtualPath).catch(() => {})
+			return {success: true}
+		}),
 })
