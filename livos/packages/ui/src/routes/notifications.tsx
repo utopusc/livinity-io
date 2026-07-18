@@ -182,6 +182,17 @@ export function Notifications() {
 		enabled: hasBackupNotification,
 	})
 
+	// Phase 340-02 USBIMP-01 — a USB copy-on-insert finished. The id is suffixed
+	// (usb-import-complete:<ruleId> / usb-import-failed:<ruleId>); the counts live in
+	// the rule's lastRun, so fetch the rule list only when such a notification exists
+	// (the backups-failing precedent).
+	const hasUsbImportNotification = notifications.some(
+		(n) => n.split(':')[0] === 'usb-import-complete' || n.split(':')[0] === 'usb-import-failed',
+	)
+	const usbImportQuery = trpcReact.files.usbImportList.useQuery(undefined, {
+		enabled: hasUsbImportNotification,
+	})
+
 	// Backups-v2 P0 + Phase 313 SMART: these are ADMIN-actionable only (their CTAs
 	// lead to admin-gated screens/mutations, and a self-test is adminProcedure).
 	// Non-admins must neither see them nor be able to snooze them away from the
@@ -200,6 +211,10 @@ export function Notifications() {
 		// power events, gated the same way as the disk/SMART host alerts.
 		'ups-power-loss',
 		'ups-power-restored',
+		// Phase 340-02 USBIMP-01 — USB copy-on-insert results. Admin-actionable host
+		// storage events (base kinds; the suffixed :<ruleId> ids collapse to these).
+		'usb-import-complete',
+		'usb-import-failed',
 	]
 	const {isAdmin, isLoading: isLoadingUser} = useCurrentUser()
 	const canSeeAdminNotifications = !isLoadingUser && isAdmin
@@ -482,6 +497,46 @@ export function Notifications() {
 								tabIndex={0}
 							>
 								Open Storage settings
+							</AlertDialogAction>
+						</>
+					),
+				}
+			}
+
+			// Phase 340-02 USBIMP-01 — a USB copy-on-insert finished (complete) or could
+			// not finish (failed). Suffixed per-rule id; the "N copied / M failed / K
+			// skipped" numbers come from the rule's lastRun via usbImportQuery. Admin-only.
+			if (notification.startsWith('usb-import-complete:') || notification.startsWith('usb-import-failed:')) {
+				const failed = notification.startsWith('usb-import-failed:')
+				const ruleId = notification.split(':')[1]
+				const lr = usbImportQuery.data?.find((r) => r.id === ruleId)?.lastRun
+				return {
+					title: t(failed ? 'notifications.usb-import-failed.title' : 'notifications.usb-import-complete.title'),
+					description: lr
+						? t(failed ? 'notifications.usb-import-failed.description' : 'notifications.usb-import-complete.description', {
+								copied: lr.copied,
+								failed: lr.failed,
+								skipped: lr.skipped,
+							})
+						: t(
+								failed
+									? 'notifications.usb-import-failed.description-generic'
+									: 'notifications.usb-import-complete.description-generic',
+							),
+					action: (
+						<>
+							<Button variant='default' size='dialog' onClick={() => clearNotification(notification)} tabIndex={-1}>
+								{t('ok')}
+							</Button>
+							<AlertDialogAction
+								variant='primary'
+								onClick={() => {
+									clearNotification(notification)
+									navigate('/settings/storage')
+								}}
+								tabIndex={0}
+							>
+								{t('notifications.usb-import.open-storage')}
 							</AlertDialogAction>
 						</>
 					),

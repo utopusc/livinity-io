@@ -8,6 +8,8 @@ import {SettingsPageHeader} from '@/components/settings-page-header'
 import AddNetworkShareDialog from '@/features/files/components/dialogs/add-network-share-dialog'
 import {useExternalStorage} from '@/features/files/hooks/use-external-storage'
 import {useNetworkStorage} from '@/features/files/hooks/use-network-storage'
+// Phase 340-02 USBIMP-01 — copy-on-insert rule hook.
+import {useUsbImport} from '@/features/files/hooks/use-usb-import'
 import {useSmartDrives} from '@/features/files/hooks/use-smart-drives'
 import {PoolWizard} from '@/features/storage-pool/components/pool-wizard'
 import {useStoragePool} from '@/features/storage-pool/hooks/use-storage-pool'
@@ -30,6 +32,7 @@ import {
 import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/shadcn-components/ui/select'
+import {Switch} from '@/shadcn-components/ui/switch'
 import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
@@ -76,6 +79,10 @@ export function StorageDrivesSection() {
 			<DiskEncryptionBlock />
 
 			<UsbDrivesBlock />
+
+			{/* Phase 340-02 USBIMP-01 — opt-in copy-on-insert rule (beside the raw USB
+			    drive list; both are the removable-media surface). Admin-only. */}
+			<UsbImportBlock />
 
 			<NetworkSharesBlock />
 
@@ -639,6 +646,239 @@ function UsbDrivesBlock() {
 					}
 				}}
 			/>
+		</section>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 340-02 USBIMP-01 — USB auto-import (copy-on-insert) rule
+// A single global opt-in rule (D-340-2 A1): enable toggle + destination folder
+// (confined to the owner's tree, validated client-side to the same charset the
+// backend enforces) + last-run summary + owner-missing state. adminProcedure
+// routes → admin-only block (mirrors the host-storage blocks). Fully t()-driven.
+// ─────────────────────────────────────────────────────────────────────────────
+function UsbImportBlock() {
+	const {isAdmin} = useCurrentUser()
+	const {rules, isLoading, saveRule, isSaving, removeRule, isRemoving} = useUsbImport()
+	// Owner-resolution for the "owner missing" state (A2): the rule stores an
+	// explicit ownerUsername; if that user no longer exists the import is inert.
+	const usersQ = trpcReact.user.listAllUsers.useQuery(undefined, {enabled: isAdmin})
+
+	// `null` draft = "mirror the saved rule"; a string = the admin is editing.
+	const [draft, setDraft] = useState<string | null>(null)
+	const [confirmRemove, setConfirmRemove] = useState(false)
+
+	// adminProcedure routes — hide the block entirely for non-admins.
+	if (!isAdmin) return null
+
+	const rule = rules[0]
+	const destination = draft ?? rule?.destinationVirtualPath ?? ''
+	const trimmed = destination.trim()
+	// Reuse the folder-quota client mirror of the server charset (absolute, no `..`).
+	const pathValid = FOLDER_QUOTA_PATH_RE.test(trimmed) && !trimmed.split('/').includes('..')
+
+	const ownerMissing = !!rule && !!usersQ.data && !usersQ.data.some((u) => u.username === rule.ownerUsername)
+
+	const eyebrow = (
+		<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--fg-faint)]'>
+			{t('storage.usb-import.title')}
+		</span>
+	)
+
+	if (isLoading) {
+		return (
+			<section className='flex flex-col gap-3'>
+				{eyebrow}
+				<FieldCard>
+					<div className='flex items-center justify-center gap-2 py-8 text-[color:var(--fg-faint)]'>
+						<Loader2 className='size-4 animate-spin' />
+						<span className='text-[13px]'>{t('storage.usb-import.title')}</span>
+					</div>
+				</FieldCard>
+			</section>
+		)
+	}
+
+	const saveInvalid = () => toast.error(t('storage.usb-import.destination-invalid'))
+
+	// Empty state — no rule yet: choose a destination and create (disabled rule).
+	if (!rule) {
+		const onCreate = () => {
+			if (!pathValid) return saveInvalid()
+			saveRule({enabled: false, destinationVirtualPath: trimmed})
+				.then(() => setDraft(null))
+				.catch(saveInvalid)
+		}
+		return (
+			<section className='flex flex-col gap-3'>
+				{eyebrow}
+				<FieldCard>
+					<FieldRow
+						label={t('storage.usb-import.destination-label')}
+						value={
+							<div className='flex flex-col gap-1.5'>
+								<span className='text-[13px] text-[color:var(--fg-faint)]'>{t('storage.usb-import.empty')}</span>
+								<Input
+									value={destination}
+									onChange={(e) => setDraft(e.target.value)}
+									placeholder='/Home/USB Imports'
+									spellCheck={false}
+								/>
+								<span className='text-[12px] text-[color:var(--fg-faint)]'>{t('storage.usb-import.destination-hint')}</span>
+							</div>
+						}
+						trailing={
+							<Button variant='v36-ghost' size='v36-pill-sm' disabled={isSaving || !pathValid} onClick={onCreate}>
+								{isSaving ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.usb-import.create')}
+							</Button>
+						}
+					/>
+				</FieldCard>
+			</section>
+		)
+	}
+
+	const onToggle = (next: boolean) => {
+		if (next && (!trimmed || !pathValid)) {
+			toast.error(t('storage.usb-import.destination-required'))
+			return
+		}
+		saveRule({id: rule.id, enabled: next, destinationVirtualPath: trimmed || rule.destinationVirtualPath}).catch(saveInvalid)
+	}
+
+	const onSaveDestination = () => {
+		if (!pathValid) return saveInvalid()
+		saveRule({id: rule.id, enabled: rule.enabled, destinationVirtualPath: trimmed})
+			.then(() => {
+				setDraft(null)
+				toast.success(t('storage.usb-import.save'))
+			})
+			.catch(saveInvalid)
+	}
+
+	const lastRun = rule.lastRun
+
+	return (
+		<section className='flex flex-col gap-3'>
+			{eyebrow}
+			<FieldCard>
+				{/* Enable toggle */}
+				<FieldRow
+					label={t('storage.usb-import.enable-label')}
+					value={<span className='text-[13px] text-[color:var(--fg-faint)]'>{t('storage.usb-import.enable-hint')}</span>}
+					trailing={<Switch checked={rule.enabled} onCheckedChange={onToggle} disabled={isSaving} />}
+				/>
+
+				{/* Destination folder */}
+				<FieldRow
+					label={t('storage.usb-import.destination-label')}
+					value={
+						<div className='flex flex-col gap-1.5'>
+							<Input
+								value={destination}
+								onChange={(e) => setDraft(e.target.value)}
+								placeholder='/Home/USB Imports'
+								spellCheck={false}
+							/>
+							<span className='text-[12px] text-[color:var(--fg-faint)]'>{t('storage.usb-import.destination-hint')}</span>
+						</div>
+					}
+					trailing={
+						<Button
+							variant='v36-ghost'
+							size='v36-pill-sm'
+							disabled={isSaving || !pathValid || trimmed === rule.destinationVirtualPath}
+							onClick={onSaveDestination}
+						>
+							{isSaving ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.usb-import.save')}
+						</Button>
+					}
+				/>
+
+				{/* Last-run summary — only after the first import wrote lastRun. */}
+				{lastRun && (
+					<FieldRow
+						label={t('storage.usb-import.title')}
+						value={
+							<div className='flex flex-col gap-0.5'>
+								<span className={cn('text-[13px]', lastRun.failed > 0 && 'text-[color:#d97706]')}>
+									{t('storage.usb-import.last-run', {
+										copied: lastRun.copied,
+										failed: lastRun.failed,
+										skipped: lastRun.skipped,
+									})}
+								</span>
+								<span className='text-[12px] text-[color:var(--fg-faint)]'>
+									{t('storage.usb-import.last-run-where', {path: lastRun.destinationPath})} ·{' '}
+									{new Date(lastRun.at).toLocaleString()}
+								</span>
+							</div>
+						}
+					/>
+				)}
+
+				{/* Owner-missing (A2) — the stored owner no longer exists → the rule is inert. */}
+				{ownerMissing && (
+					<FieldRow
+						label={
+							<span className='inline-flex w-fit items-center rounded-[3px] border border-[color:#d97706] px-1.5 py-0.5 text-[11px] leading-none text-[color:#d97706]'>
+								{t('storage.usb-import.title')}
+							</span>
+						}
+						value={
+							<span className='text-[13px] text-[color:#d97706]'>
+								{t('storage.usb-import.owner-missing', {user: rule.ownerUsername})}
+							</span>
+						}
+						trailing={
+							<Button
+								variant='v36-ghost'
+								size='v36-pill-sm'
+								disabled={isRemoving}
+								onClick={() => setConfirmRemove(true)}
+							>
+								{t('storage.usb-import.remove')}
+							</Button>
+						}
+					/>
+				)}
+			</FieldCard>
+
+			{/* Remove-rule affordance (always available so a bad/inert rule is recoverable). */}
+			{!ownerMissing && (
+				<div className='flex justify-end'>
+					<Button variant='v36-ghost' size='v36-pill-sm' disabled={isRemoving} onClick={() => setConfirmRemove(true)}>
+						{t('storage.usb-import.remove')}
+					</Button>
+				</div>
+			)}
+
+			{/* Remove confirm — light (deletes the rule config; no files touched). */}
+			<AlertDialog open={confirmRemove} onOpenChange={(open) => !open && setConfirmRemove(false)}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>{t('storage.usb-import.remove')}</AlertDialogTitle>
+						<AlertDialogDescription>{t('storage.usb-import.remove-body')}</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogAction
+							variant='destructive'
+							disabled={isRemoving}
+							onClick={async () => {
+								try {
+									await removeRule({id: rule.id})
+									setDraft(null)
+								} finally {
+									setConfirmRemove(false)
+								}
+							}}
+						>
+							{isRemoving ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.usb-import.remove')}
+						</AlertDialogAction>
+						<AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</section>
 	)
 }
