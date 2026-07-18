@@ -223,6 +223,13 @@ export const AppSettingsSchema = z.object({
 	// patchComposeFile().then(restart) (compose-recreation-safe), never docker update.
 	cpuLimit: z.number().optional(),
 	memoryLimit: z.number().optional(),
+	// 342-01 APPD-01 (D-342-1): per-app maintenance window — HH:MM box-local, ONE top-level
+	// per-app key (oidcLastProvision nested-object precedent), delete-to-clear. Gates ONLY the
+	// automatic path; wrap-past-midnight allowed. start===end + <30min rejected at the route.
+	updateWindow: z.object({start: z.string(), end: z.string()}).optional(),
+	// 342-01 APPD-02 (D-342-4): per-app CPU pinning (cpuset). Regex-shaped + semantic-validated
+	// at the route (validateCpuSet) before persist; applied on the main service in patchComposeFile.
+	cpuSet: z.string().optional(),
 	// 326-01 MEDIA-01 (D-19/D-23): Immich onboarding QR card dismissal flag (UI-only).
 	immichCardDismissed: z.boolean().optional(),
 	// 329-11 MEDIA-02 (D-23): Jellyfin setup onboarding card dismissal flag (UI-only).
