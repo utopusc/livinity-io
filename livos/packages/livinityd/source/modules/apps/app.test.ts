@@ -145,7 +145,7 @@ describe('patchComposeFile — AMD ROCm image swap + revert (WR-04)', () => {
 // so cpuLimit/memoryLimit are read independently of gpuAccess. Proves: set-when-present,
 // untouched-when-absent, and delete-when-cleared (authoritative-from-store reconciliation).
 describe('patchComposeFile — resource limits (326-01 APPS-03)', () => {
-	async function runLimitPatch(store: {cpuLimit?: number; memoryLimit?: number}, existingCompose?: any) {
+	async function runLimitPatch(store: {cpuLimit?: number; memoryLimit?: number; cpuSet?: string}, existingCompose?: any) {
 		vi.mocked(detectGpu).mockResolvedValue({
 			vendor: 'none',
 			wsl2: false,
@@ -189,5 +189,61 @@ describe('patchComposeFile — resource limits (326-01 APPS-03)', () => {
 	test('a non-number store value never coerces to String(<non-number>) (defensive typeof guard)', async () => {
 		const written = await runLimitPatch({cpuLimit: true as any, memoryLimit: true as any})
 		expect(written.services.ollama.deploy).toBeUndefined()
+	})
+})
+
+describe('patchComposeFile — cpuset (342-01 APPD-02)', () => {
+	async function runLimitPatch(store: {cpuLimit?: number; memoryLimit?: number; cpuSet?: string}, existingCompose?: any) {
+		vi.mocked(detectGpu).mockResolvedValue({
+			vendor: 'none',
+			wsl2: false,
+			toolkitConfigured: false,
+			present: false,
+			driverSource: 'none',
+		} as any)
+		vi.mocked(isNvidiaToolkitConfigured).mockResolvedValue(false)
+		vi.spyOn(fse, 'exists').mockResolvedValue(false as any)
+		const app = new App(fakeLivinityd, 'ollama')
+		vi.spyOn(app, 'readManifest').mockResolvedValue({permissions: []} as any)
+		vi.spyOn(app.store, 'get').mockImplementation(async (key: any) => (store as any)[key])
+		vi.spyOn(app, 'readCompose').mockResolvedValue(
+			(existingCompose ?? {services: {ollama: {image: 'ollama/ollama:latest'}}}) as any,
+		)
+		let written: any
+		vi.spyOn(app, 'writeCompose').mockImplementation(async (c: any) => {
+			written = c
+		})
+		await app.patchComposeFile()
+		return written
+	}
+
+	test('cpuSet "0-2" set → cpuset emitted on the main service', async () => {
+		const written = await runLimitPatch({cpuSet: '0-2'})
+		expect(written.services.ollama.cpuset).toBe('0-2')
+	})
+
+	test('cpuSet + cpuLimit + memoryLimit all set → cpuset AND deploy.resources.limits coexist', async () => {
+		const written = await runLimitPatch({cpuSet: '0-2', cpuLimit: 1.5, memoryLimit: 536870912})
+		expect(written.services.ollama.cpuset).toBe('0-2')
+		expect(written.services.ollama.deploy.resources.limits).toEqual({cpus: '1.5', memory: '536870912'})
+	})
+
+	test('cpuSet cleared on an app whose compose already had cpuset → cpuset removed', async () => {
+		const written = await runLimitPatch({}, {
+			services: {ollama: {image: 'ollama/ollama:latest', cpuset: '0-2'}},
+		})
+		expect(written.services.ollama.cpuset).toBeUndefined()
+		expect('cpuset' in written.services.ollama).toBe(false)
+	})
+
+	test('empty-string / whitespace cpuSet → cpuset NOT emitted (treated as cleared)', async () => {
+		const written = await runLimitPatch({cpuSet: '   '})
+		expect(written.services.ollama.cpuset).toBeUndefined()
+	})
+
+	test('no cpuSet + no limits → deploy AND cpuset both absent (byte-identical)', async () => {
+		const written = await runLimitPatch({})
+		expect(written.services.ollama.deploy).toBeUndefined()
+		expect(written.services.ollama.cpuset).toBeUndefined()
 	})
 })

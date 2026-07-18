@@ -239,6 +239,8 @@ export default class App {
 		const storedEnvOverrides = await this.store.get('environmentOverrides')
 		const cpuLimit = await this.store.get('cpuLimit')
 		const memoryLimit = await this.store.get('memoryLimit')
+		// 342-01 APPD-02 (D-342-4): per-app CPU pinning (cpuset), authoritative from the store.
+		const cpuSet = await this.store.get('cpuSet')
 
 		const compose = await this.readCompose()
 
@@ -474,6 +476,17 @@ export default class App {
 			} else if (deploy.resources) {
 				delete deploy.resources.limits
 			}
+		}
+
+		// 342-01 APPD-02 (D-342-4): CPU pinning on the SAME main service as the limits above.
+		// Store-authoritative: set when a non-empty trimmed string, delete when cleared. Coexists
+		// with deploy.resources.limits (docker honors both). Semantic validation happened at the
+		// route (validateCpuSet) BEFORE persist — a bad cpuset would brick `compose up`.
+		// compose-spec-schema models Service.cpuset?: string — NO `as any` needed.
+		const hasCpuSet = typeof cpuSet === 'string' && cpuSet.trim() !== ''
+		if (limitMainService) {
+			if (hasCpuSet) limitMainService.cpuset = cpuSet
+			else if ('cpuset' in limitMainService) delete (limitMainService as {cpuset?: string}).cpuset
 		}
 
 		// For apps that need CSRF origin whitelisting (e.g. Portainer behind reverse proxy)
@@ -1057,12 +1070,17 @@ export default class App {
 	// effect via compose recreation — NEVER an in-place live-container mutation.
 	// FileStore.set() throws on undefined, so DELETE a key to CLEAR its limit and SET to
 	// APPLY it (cpuLimit = decimal cores, memoryLimit = BYTES).
-	async setResourceLimits({cpuLimit, memoryLimit}: {cpuLimit?: number; memoryLimit?: number}) {
+	// 342-01 APPD-02 (D-342-4): cpuSet extends this ADDITIVELY — added as the LAST write so
+	// `success` still gates the patch-then-restart. 326 callers passing only {cpuLimit,
+	// memoryLimit} are unaffected (cpuSet undefined → delete-to-clear, restart still fires).
+	async setResourceLimits({cpuLimit, memoryLimit, cpuSet}: {cpuLimit?: number; memoryLimit?: number; cpuSet?: string}) {
 		if (cpuLimit == null) await this.store.delete('cpuLimit')
 		else await this.store.set('cpuLimit', cpuLimit)
-		const success = memoryLimit == null
-			? await this.store.delete('memoryLimit')
-			: await this.store.set('memoryLimit', memoryLimit)
+		if (memoryLimit == null) await this.store.delete('memoryLimit')
+		else await this.store.set('memoryLimit', memoryLimit)
+		const success = cpuSet == null
+			? await this.store.delete('cpuSet')
+			: await this.store.set('cpuSet', cpuSet)
 		if (success) {
 			this.patchComposeFile()
 				.then(() => this.restart())
@@ -1075,6 +1093,13 @@ export default class App {
 	// change, no restart (consumed by the app-auto-update scheduler job in a later plan).
 	async setUpdatePolicy(policy: 'auto' | 'manual') {
 		return this.store.set('autoUpdatePolicy', policy)
+	}
+
+	// 342-01 APPD-01 (D-342-1): per-app maintenance window. delete-to-clear (FileStore.set throws
+	// on undefined). No restart — the app-update-window job reads it; the 4am app-auto-update job
+	// skips windowed apps (disjoint predicate → the two jobs never double-update the same app).
+	async setUpdateWindow(window: {start: string; end: string} | undefined) {
+		return window == null ? this.store.delete('updateWindow') : this.store.set('updateWindow', window)
 	}
 
 	// 326-01 APPS-02 (D-05): pin/un-pin an exact available version out of the updates

@@ -1,7 +1,12 @@
+import os from 'node:os'
+
 import z from 'zod'
 import {TRPCError} from '@trpc/server'
 
 import {router, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
+// Phase 342 (APPD-01/02) — server-side semantic guards run BEFORE persist so a bricking
+// cpuset / malformed window is rejected at the route, never written to the store.
+import {validateCpuSet, validateUpdateWindow} from './app-lifecycle-depth.js'
 // Phase 334 (STEPUP-01, D-334-4) — inline grant assertion for the mixed-path
 // uninstall route (only the global/shared-app branch is step-up-gated).
 import {assertStepUpGrant} from '../server/trpc/step-up-guard.js'
@@ -242,6 +247,8 @@ export const apps = router({
 						ignoredVersion,
 						cpuLimit,
 						memoryLimit,
+						updateWindow,
+						cpuSet,
 						immichCardDismissed,
 						jellyfinCardDismissed,
 						oidcLastProvision,
@@ -256,6 +263,9 @@ export const apps = router({
 						app.store.get('ignoredVersion'),
 						app.store.get('cpuLimit'),
 						app.store.get('memoryLimit'),
+						// 342-01 APPD-01/02: per-app maintenance window + CPU pinning (raw store values).
+						app.store.get('updateWindow'),
+						app.store.get('cpuSet'),
 						app.store.get('immichCardDismissed'),
 						app.store.get('jellyfinCardDismissed'),
 						// 331-02 (FIX-02): last SSO provisioning outcome — reason is already
@@ -333,6 +343,9 @@ export const apps = router({
 						ignoredVersion,
 						cpuLimit,
 						memoryLimit,
+						// 342-01 APPD-01/02: per-app maintenance window + CPU pinning (raw store values).
+						updateWindow,
+						cpuSet,
 						immichCardDismissed,
 						jellyfinCardDismissed,
 						// 331-02 (FIX-02): honest SSO-activation state for the 322-07 section —
@@ -383,6 +396,9 @@ export const apps = router({
 					ignoredVersion: undefined,
 					cpuLimit: undefined,
 					memoryLimit: undefined,
+					// 342-01 APPD-01/02: union-shape uniformity — native builtins carry no per-app window/cpuset.
+					updateWindow: undefined,
+					cpuSet: undefined,
 					immichCardDismissed: undefined,
 					jellyfinCardDismissed: undefined,
 					// 331-02 (FIX-02): union-shape uniformity — native builtins never provision SSO.
@@ -819,15 +835,39 @@ export const apps = router({
 				appId: z.string(),
 				cpuLimit: z.number().positive().optional(),
 				memoryLimit: z.number().int().min(6 * 1024 * 1024).optional(),
+				// 342-01 APPD-02 (D-342-4, T-342-01): regex-shape the cpuset here; the SEMANTIC
+				// guard (index<coreCount, ascending range) runs in the mutation before persist.
+				cpuSet: z.string().regex(/^\d{1,3}(-\d{1,3})?(,\d{1,3}(-\d{1,3})?)*$/, 'Invalid cpuset format').optional(),
 			}),
 		)
-		.mutation(async ({ctx, input}) => ctx.apps!.setResourceLimits(input.appId, {cpuLimit: input.cpuLimit, memoryLimit: input.memoryLimit})),
+		.mutation(async ({ctx, input}) => {
+			// 342-01 APPD-02 (T-342-01): reject a bricking cpuset (out-of-range index /
+			// descending range) BEFORE persist — a bad value makes `compose up` refuse.
+			if (input.cpuSet != null) {
+				const err = validateCpuSet(input.cpuSet, os.cpus().length)
+				if (err) throw new TRPCError({code: 'BAD_REQUEST', message: err})
+			}
+			return ctx.apps!.setResourceLimits(input.appId, {cpuLimit: input.cpuLimit, memoryLimit: input.memoryLimit, cpuSet: input.cpuSet})
+		}),
 
 	// 326-01 APPS-02 (D-04/D-21): set the per-app auto-update policy. adminProcedure —
 	// governs the update state of the shared global app for all users.
 	setUpdatePolicy: adminProcedure
 		.input(z.object({appId: z.string(), policy: z.enum(['auto', 'manual'])}))
 		.mutation(async ({ctx, input}) => ctx.apps!.setUpdatePolicy(input.appId, input.policy)),
+
+	// 342-01 APPD-01 (D-342-1/D-342-2): set/clear the per-app maintenance window. adminProcedure —
+	// same shared-global-app update-governance class as setUpdatePolicy. Gates ONLY the automatic
+	// path. validateUpdateWindow rejects malformed / start==end / <30-min windows before persist.
+	setUpdateWindow: adminProcedure
+		.input(z.object({appId: z.string(), window: z.object({start: z.string(), end: z.string()}).optional()}))
+		.mutation(async ({ctx, input}) => {
+			if (input.window) {
+				const err = validateUpdateWindow(input.window)
+				if (err) throw new TRPCError({code: 'BAD_REQUEST', message: err})
+			}
+			return ctx.apps!.setUpdateWindow(input.appId, input.window)
+		}),
 
 	// 326-01 APPS-02 (D-05/D-21): pin/un-pin an exact ignored version. adminProcedure —
 	// same shared-global-app update-governance class as setUpdatePolicy.

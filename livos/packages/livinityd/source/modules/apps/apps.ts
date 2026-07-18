@@ -1565,13 +1565,18 @@ export default class Apps {
 
 	// 326-01 APPS-03 (D-07): set per-app CPU/RAM limits (delegates; app instance
 	// patch-then-restarts so deploy.resources.limits reconciles via compose recreation).
-	async setResourceLimits(appId: string, limits: {cpuLimit?: number; memoryLimit?: number}) {
+	async setResourceLimits(appId: string, limits: {cpuLimit?: number; memoryLimit?: number; cpuSet?: string}) {
 		return this.getApp(appId).setResourceLimits(limits)
 	}
 
 	// 326-01 APPS-02 (D-04): set the per-app auto-update policy (plain store write).
 	async setUpdatePolicy(appId: string, policy: 'auto' | 'manual') {
 		return this.getApp(appId).setUpdatePolicy(policy)
+	}
+
+	// 342-01 APPD-01: set/clear the per-app maintenance window (plain store write; delete-to-clear).
+	async setUpdateWindow(appId: string, window: {start: string; end: string} | undefined) {
+		return this.getApp(appId).setUpdateWindow(window)
 	}
 
 	// 326-01 APPS-02 (D-05): pin/un-pin an exact ignored version (plain store write).
