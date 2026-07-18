@@ -32,6 +32,8 @@ const RestartDialog = React.lazy(() => import('@/routes/settings/restart'))
 const ShutdownDialog = React.lazy(() => import('@/routes/settings/shutdown'))
 const TroubleshootDialog = React.lazy(() => import('@/routes/settings/troubleshoot/index'))
 const TerminalDialog = React.lazy(() => import('@/routes/settings/terminal/index'))
+// Phase 341-03 (REPO-01/02, D-341-6) — admin-only federated app-store manage-sources.
+const CommunityAppStoresDialog = React.lazy(() => import('@/routes/settings/community-app-stores'))
 const DeviceInfoDialog = React.lazy(() => import('@/routes/settings/device-info'))
 const BackupsRestoreDialog = React.lazy(() => import('@/features/backups/index'))
 
@@ -145,6 +147,7 @@ export function Settings() {
 						{isMobile && <Route path='/language' Component={LanguageDrawer} />}
 						<Route path='/troubleshoot/*' Component={TroubleshootDialog} />
 						<Route path='/terminal/*' Component={TerminalDialog} />
+						<Route path='/community-app-stores' Component={CommunityAppStoresDialog} />
 						{isMobile && <Route path='/software-update' Component={SoftwareUpdateDrawer} />}
 						<Route path='/software-update/confirm' Component={SoftwareUpdateConfirmDialog} />
 						<Route path='/advanced/:advancedSelection?' Component={AdvancedSettingsDrawerOrDialog} />

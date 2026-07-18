@@ -1,8 +1,12 @@
 import {useRef, useState} from 'react'
 
 import {Loading} from '@/components/ui/loading'
+import {useCurrentUser} from '@/hooks/use-current-user'
 import {useAppStoreBridge} from '@/hooks/use-app-store-bridge'
 import {EnvironmentOverridesDialog} from '@/modules/app-store/environment-overrides-dialog'
+// Phase 341-03 (REPO-01/02) — native "Community · Unverified" federated browse
+// section rendered BELOW the official iframe (the iframe itself is untouched).
+import {FederatedAppsSection, type FederatedApp} from '@/modules/app-store/federated-apps-section'
 import {trpcReact} from '@/trpc/trpc'
 
 type EnvOverride = {
@@ -38,6 +42,14 @@ export default function AppStoreWindowContent() {
 
 	const apiKey = apiKeyQ.data?.apiKey ?? null
 	const hostname = domainQ.data?.domain || window.location.hostname
+
+	// Phase 341-03 (D-341-6) — federated catalog is adminProcedure; gate the query
+	// on isAdmin so a non-admin never fires a 403 and always sees the unchanged
+	// official store. Empty/absent → the section renders nothing.
+	const {isAdmin} = useCurrentUser()
+	const fedQ = trpcReact.appStore.federatedCatalog.useQuery(undefined, {enabled: isAdmin})
+	const federatedApps = (fedQ.data ?? []) as FederatedApp[]
+	const showFederated = federatedApps.length > 0
 	useAppStoreBridge(iframeRef, {
 		apiKey,
 		instanceName: hostname,
@@ -78,19 +90,29 @@ export default function AppStoreWindowContent() {
 	const storeUrl = `https://livinity.io/store?token=${encodeURIComponent(apiKey)}&instance=${encodeURIComponent(hostname)}`
 
 	return (
-		<>
-			<iframe
-				ref={iframeRef}
-				src={storeUrl}
-				// Phase 295 — render the embedded store LIGHT even when the OS
-				// theme is dark. color-scheme is inherited from the
-				// `.livos-app-light` wrapper too, but Chromium needs it on the
-				// iframe element itself to propagate prefers-color-scheme:light
-				// into the embedded document on some versions (belt-and-suspenders).
-				style={{width: '100%', height: '100%', border: 'none', colorScheme: 'light'}}
-				allow='clipboard-write'
-				title='App Store'
-			/>
+		<div className='flex h-full flex-col'>
+			{/* The official iframe stays the trusted default. When federated apps
+			    exist it shares the window with the native section below (flex-1);
+			    with none, it keeps its full-height behavior (unchanged store). */}
+			<div className={showFederated ? 'min-h-0 flex-1' : 'h-full'}>
+				<iframe
+					ref={iframeRef}
+					src={storeUrl}
+					// Phase 295 — render the embedded store LIGHT even when the OS
+					// theme is dark. color-scheme is inherited from the
+					// `.livos-app-light` wrapper too, but Chromium needs it on the
+					// iframe element itself to propagate prefers-color-scheme:light
+					// into the embedded document on some versions (belt-and-suspenders).
+					style={{width: '100%', height: '100%', border: 'none', colorScheme: 'light'}}
+					allow='clipboard-write'
+					title='App Store'
+				/>
+			</div>
+			{showFederated && (
+				<div className='max-h-[45%] shrink-0 overflow-y-auto'>
+					<FederatedAppsSection apps={federatedApps} />
+				</div>
+			)}
 			{pending && (
 				<EnvironmentOverridesDialog
 					open={true}
@@ -112,7 +134,7 @@ export default function AppStoreWindowContent() {
 					}}
 				/>
 			)}
-		</>
+		</div>
 	)
 }
 

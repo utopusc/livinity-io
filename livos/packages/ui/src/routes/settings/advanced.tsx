@@ -3,6 +3,7 @@ import {useParams} from 'react-router-dom'
 
 import {Icon, IconTypes} from '@/components/ui/icon'
 import {IconButtonLink} from '@/components/ui/icon-button-link'
+import {useCurrentUser} from '@/hooks/use-current-user'
 import {useIsExternalDns} from '@/hooks/use-is-externaldns'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useSoftwareUpdate} from '@/hooks/use-software-update'
@@ -24,11 +25,30 @@ export default function AdvancedSettingsDrawerOrDialog() {
 
 	const isExternalDns = useIsExternalDns()
 
+	// Phase 341-03 (D-341-6) — the federated app-store manage-sources entry is
+	// admin-only (every route behind it is adminProcedure).
+	const {isAdmin} = useCurrentUser()
+
 	const isMobile = useIsMobile()
 
 	const {advancedSelection} = useParams<{
 		advancedSelection?: 'beta-program' | 'external-dns'
 	}>()
+
+	// Phase 341-03 (REPO-01/02, D-341-6) — admin-only entry to the federated
+	// app-store manage-sources surface. Rendered in both the mobile Drawer and
+	// desktop Dialog branches after the Terminal card.
+	const communityAppStoresCard = isAdmin ? (
+		<label className={cardClass}>
+			<CardText
+				title={t('app-store.menu.community-app-stores')}
+				description={t('community-app-stores.description')}
+			/>
+			<IconButtonLink className='pointer-events-auto self-center' to={'/settings/community-app-stores'}>
+				{t('manage')}
+			</IconButtonLink>
+		</label>
+	) : null
 
 	if (isMobile) {
 		return (
@@ -45,6 +65,7 @@ export default function AdvancedSettingsDrawerOrDialog() {
 									{t('open')}
 								</IconButtonLink>
 							</label>
+							{communityAppStoresCard}
 							<label className={cn(cardClass, advancedSelection === 'beta-program' && 'livinity-pulse-a-few-times')}>
 								<CardText
 									title={t('beta-program')}
@@ -90,6 +111,7 @@ export default function AdvancedSettingsDrawerOrDialog() {
 								{t('open')}
 							</IconButtonLink>
 						</label>
+						{communityAppStoresCard}
 						<label className={cn(cardClass, advancedSelection === 'beta-program' && 'livinity-pulse-a-few-times')}>
 							<CardText
 								title={t('beta-program')}
