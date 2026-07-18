@@ -123,6 +123,14 @@ _refuse_system_disk() {
 	root_disks=$(_disk_for_mount /)
 	boot_disks=$(_disk_for_mount /boot)
 	efi_disks=$(_disk_for_mount /boot/efi)
+	# IN-01: this is a DESTRUCTIVE wrapper — if we cannot even resolve the disk
+	# backing /, refuse (fail-closed) rather than proceed blind. livos-pool.sh fails
+	# open here (non-destructive add path); luksFormat wipes a whole disk, so the
+	# stricter posture is warranted on top of the TS-side assertNotOsDisk.
+	if [[ -z "$root_disks" ]]; then
+		echo "[livos-luks] cannot resolve the disk backing / — refusing (fail-closed)" >&2
+		return 2
+	fi
 	if _dev_in_list "$dev" "$root_disks"; then
 		echo "[livos-luks] refusing the ROOT disk (/dev/${dev}) — it backs /" >&2
 		return 2
@@ -164,6 +172,30 @@ _guard() {
 	_refuse_system_disk "$d" || return 2  # gate 2: OS / boot / EFI disk refusal
 	_refuse_non_internal "$d" || return 4 # gate 3: USB / removable refusal
 	printf '%s' "$d"
+}
+
+# gate 4 (format only) — refuse a device that is NOT provably empty: mounted (itself
+# or any child), carrying a filesystem/partition-table signature, or holding child
+# partitions. IN-02 wrapper-side belt-and-braces on top of the TS `isEmptyDiskLive`
+# eligibility probe — closes the check→format window against wiping a mounted/used
+# disk that somehow passed eligibility. Returns 2 on any non-empty signal.
+_refuse_nonempty() {
+	local dev="$1" mounts kids
+	mounts=$(lsblk -rno MOUNTPOINT "/dev/${dev}" 2>/dev/null | grep -c . || true)
+	if [[ "${mounts:-0}" -gt 0 ]]; then
+		echo "[livos-luks] refusing /dev/${dev} — it (or a partition) is mounted (not empty)" >&2
+		return 2
+	fi
+	if blkid -p "/dev/${dev}" >/dev/null 2>&1; then
+		echo "[livos-luks] refusing /dev/${dev} — it carries a filesystem/partition signature (not empty)" >&2
+		return 2
+	fi
+	kids=$(lsblk -rno NAME "/dev/${dev}" 2>/dev/null | tail -n +2 | grep -c . || true)
+	if [[ "${kids:-0}" -gt 0 ]]; then
+		echo "[livos-luks] refusing /dev/${dev} — it has partitions (not empty)" >&2
+		return 2
+	fi
+	return 0
 }
 
 # Refuse destructive actions under WSL2 (no real internal disks; block-device
@@ -220,8 +252,21 @@ case "$ACTION" in
 		# stdin-sentinel key-file — stdin is already drained by the read -r calls above).
 		_refuse_wsl2
 		_dev=$(_guard "${1:-}") || exit 2
+		_refuse_nonempty "$_dev" || exit 2   # gate 4 (IN-02): provably-empty only
 		_read_two_secrets
 		_mapper="${MAPPER_PREFIX}${_dev}"
+		_mp=""
+		# WR-02: if ANY step after luksFormat fails (mkfs/mount/mapper collision), the
+		# disk is left crypto_LUKS → excluded from BOTH eligibility (not empty) and the
+		# managed list (route never registered it) → an unmanageable orphan a retry
+		# can't reuse (mapper busy). Best-effort unwind on failure so the disk returns
+		# to the eligible pool. The disk was provably empty (gate 4) → wipefs is safe.
+		_format_cleanup() {
+			[[ -n "${_mp:-}" ]] && umount "$_mp" 2>/dev/null || true
+			cryptsetup luksClose "$_mapper" 2>/dev/null || true
+			wipefs -a "/dev/${_dev}" 2>/dev/null || true
+		}
+		trap '_format_cleanup' ERR
 		# keyslot 0 = passphrase.
 		cryptsetup luksFormat --type luks2 --batch-mode \
 			--key-file=<(printf '%s' "$_LUKS_PASS") "/dev/${_dev}"
@@ -236,6 +281,7 @@ case "$ACTION" in
 		mkfs.ext4 -F "/dev/mapper/${_mapper}"
 		_mp=$(_prepare_mountpoint "$_dev")
 		mount "/dev/mapper/${_mapper}" "$_mp"
+		trap - ERR
 		unset _LUKS_PASS _LUKS_RECOVERY
 		echo "formatted ${_dev} ${_mp}"
 		exit 0

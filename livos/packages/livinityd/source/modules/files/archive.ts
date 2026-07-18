@@ -76,18 +76,31 @@ export default class Archive {
 		// the gate should err toward blocking, not under-counting. Behavior-TIGHTENING:
 		// closes the pre-existing bypass, same class as 336's C1 archive fix.
 		if (virtualPaths[0]) {
+			const destinationVirtualDirectory = nodePath.dirname(virtualPaths[0])
 			let estimatedBytes = 0
-			for (const systemPath of systemPaths) {
+			// WR-03: the per-FOLDER gate must count only bytes genuinely ENTERING the
+			// destination folder. Sources already inside it are ALREADY reflected in the
+			// folder's cached usage, so counting their (uncompressed) size again — against
+			// a smaller, possibly hardBlock folder — would falsely block a legitimate
+			// archive-in-place. Sources from OUTSIDE the folder do add net-new bytes.
+			let folderEstimateBytes = 0
+			const destPrefix = `${destinationVirtualDirectory}/`
+			for (let i = 0; i < systemPaths.length; i++) {
 				try {
-					const stat = await fse.stat(systemPath)
-					estimatedBytes += stat.isDirectory() ? await getDirectorySize(systemPath) : stat.size
+					const stat = await fse.stat(systemPaths[i])
+					const size = stat.isDirectory() ? await getDirectorySize(systemPaths[i]) : stat.size
+					estimatedBytes += size
+					const vp = virtualPaths[i]
+					const alreadyInFolder = vp === destinationVirtualDirectory || vp.startsWith(destPrefix)
+					if (!alreadyInFolder) folderEstimateBytes += size
 				} catch {
 					// A racing/absent source contributes 0 — createZipStream surfaces the real error.
 				}
 			}
-			const destinationVirtualDirectory = nodePath.dirname(virtualPaths[0])
+			// Per-user gate keeps the full conservative estimate (user quotas are generous;
+			// over-block toward safety matches the pre-existing intent).
 			await this.#livinityd.files.assertWithinQuota(this.#livinityd.files.quotaUsername(), estimatedBytes)
-			await this.#livinityd.files.assertWithinFolderQuota(destinationVirtualDirectory, estimatedBytes)
+			await this.#livinityd.files.assertWithinFolderQuota(destinationVirtualDirectory, folderEstimateBytes)
 		}
 
 		// Calculate the zip path

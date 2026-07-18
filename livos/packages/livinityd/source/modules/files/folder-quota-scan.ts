@@ -125,10 +125,15 @@ export const folderQuotaScanHandler: BuiltInJobHandler = async (job, ctx) => {
 
 		// Serialized du walk — one folder at a time (T-325-02 discipline).
 		const usageByPath = new Map<string, number>()
+		// IN-03: only folders that actually re-measured get a fresh scannedAt; a du
+		// failure preserves the stale value AND the stale timestamp (don't advance
+		// "last scanned" when nothing was measured).
+		const freshlyScanned = new Set<string>()
 		for (const entry of entries) {
 			try {
 				const systemPath = await livinityd.files.virtualToSystemPath(entry.virtualPath)
 				usageByPath.set(entry.virtualPath, await getDirectorySize(systemPath))
+				freshlyScanned.add(entry.virtualPath)
 			} catch (err) {
 				// A missing/racing folder (or an unresolvable virtual path) must not fail the
 				// whole tick — preserve the previous cache value (or 0) and move on.
@@ -145,7 +150,7 @@ export const folderQuotaScanHandler: BuiltInJobHandler = async (job, ctx) => {
 		await livinityd.store.getWriteLock(async ({get, set}) => {
 			const latest = (await get('folderQuotas')) ?? []
 			const merged = latest.map((entry) =>
-				usageByPath.has(entry.virtualPath)
+				freshlyScanned.has(entry.virtualPath)
 					? {...entry, usageBytes: usageByPath.get(entry.virtualPath)!, scannedAt: Date.now()}
 					: entry,
 			)

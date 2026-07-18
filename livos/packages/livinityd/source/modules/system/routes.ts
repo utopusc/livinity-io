@@ -2121,7 +2121,11 @@ export default router({
 		.input(
 			z.object({
 				deviceId: luksDeviceIdSchema,
-				passphrase: z.string().min(12),
+				// WR-01: reject CR/LF. The wrapper reads the passphrase + recovery key as
+				// two newline-separated stdin lines; a newline in the passphrase would shift
+				// line 2 so the daemon recovery key never lands in keyslot 1 — yet the route
+				// would still hand the operator that (uninstalled) key. Fail-safe here.
+				passphrase: z.string().min(12).regex(/^[^\r\n]+$/, '[passphrase-newline]'),
 				label: z
 					.string()
 					.regex(/^[A-Za-z0-9 _-]{1,64}$/)
@@ -2161,7 +2165,7 @@ export default router({
 	// key (same keyslots — either works). Daemon-side rate limit BEFORE the wrapper
 	// (10 failed opens / 15 min per device); cleared on a successful unlock.
 	luksOpen: adminProcedure
-		.input(z.object({deviceId: luksDeviceIdSchema, passphrase: z.string().min(1)}))
+		.input(z.object({deviceId: luksDeviceIdSchema, passphrase: z.string().min(1).regex(/^[^\r\n]+$/, '[passphrase-newline]')}))
 		.mutation(async ({input}) => {
 			const now = Date.now()
 			const prior = (luksUnlockAttempts.get(input.deviceId) ?? []).filter((t) => now - t < LUKS_UNLOCK_WINDOW_MS)

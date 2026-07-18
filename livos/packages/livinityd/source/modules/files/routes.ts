@@ -327,17 +327,18 @@ export default router({
 			await ctx.livinityd!.store.getWriteLock(async ({get, set}) => {
 				const current = (await get('folderQuotas')) ?? []
 				const existing = current.find((entry) => entry.virtualPath === input.virtualPath)
-				const others = current.filter((entry) => entry.virtualPath !== input.virtualPath)
-				await set('folderQuotas', [
-					...others,
-					{
-						virtualPath: input.virtualPath,
-						limitBytes: input.limitBytes,
-						hardBlock: input.hardBlock,
-						usageBytes: existing?.usageBytes,
-						scannedAt: existing?.scannedAt,
-					},
-				])
+				const updated = {
+					virtualPath: input.virtualPath,
+					limitBytes: input.limitBytes,
+					hardBlock: input.hardBlock,
+					usageBytes: existing?.usageBytes,
+					scannedAt: existing?.scannedAt,
+				}
+				// IN-04: edit in place so an existing row keeps its position (no UI list churn); a new path appends.
+				const next = existing
+					? current.map((entry) => (entry.virtualPath === input.virtualPath ? updated : entry))
+					: [...current, updated]
+				await set('folderQuotas', next)
 			})
 			return {success: true}
 		}),
