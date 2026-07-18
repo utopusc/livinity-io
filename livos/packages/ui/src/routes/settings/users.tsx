@@ -56,10 +56,16 @@ type UserRow = {
 
 // Bytes per gigabyte using the decimal convention that pretty-bytes renders (GB = 1e9),
 // so the editor input round-trips against what the used/limit cell displays.
-const BYTES_PER_GB = 1_000_000_000
+// EXPORTED (Phase 339-03 W2) so the folder-quota editor shares this exact unit
+// constant rather than hand-copying the literal.
+export const BYTES_PER_GB = 1_000_000_000
 // Past this fraction of the limit, the used/limit cell warns (mirrors the backend
 // QUOTA_SOFT_RATIO soft-warn threshold in files.ts / jobs.ts).
-const QUOTA_SOFT_RATIO = 0.9
+// EXPORTED (Phase 339-03 W2) as the single UI-side source of truth: the folder-quota
+// editor imports it instead of copying a 4th literal. The server keeps its own
+// intentionally-decoupled copies (files.ts / folder-quota-scan.ts) — do NOT unify
+// those into this UI module.
+export const QUOTA_SOFT_RATIO = 0.9
 
 function getInitials(name: string): string {
 	return name

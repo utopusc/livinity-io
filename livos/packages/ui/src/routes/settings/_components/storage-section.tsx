@@ -1,6 +1,7 @@
 import {Loader2} from 'lucide-react'
 import {useState} from 'react'
-import {TbCheck, TbCopy, TbEye, TbEyeOff} from 'react-icons/tb'
+import {TbCheck, TbCopy, TbEye, TbEyeOff, TbLock, TbLockOpen} from 'react-icons/tb'
+import {toast} from 'sonner'
 
 import {FieldCard, FieldRow} from '@/components/field-card'
 import {SettingsPageHeader} from '@/components/settings-page-header'
@@ -12,6 +13,10 @@ import {PoolWizard} from '@/features/storage-pool/components/pool-wizard'
 import {useStoragePool} from '@/features/storage-pool/hooks/use-storage-pool'
 import {useCurrentUser} from '@/hooks/use-current-user'
 import {useSystemDiskForUi} from '@/hooks/use-disk'
+// Phase 334 STEPUP-01 — re-auth wrapper for the step-up-gated system.luksFormat.
+import {isStepUpRequired, useStepUp} from '@/providers/step-up'
+// Phase 339-03 W2 — single UI-side source of truth for the quota unit + soft ratio.
+import {BYTES_PER_GB, QUOTA_SOFT_RATIO} from '@/routes/settings/users'
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -28,7 +33,7 @@ import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/s
 import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
-import {maybePrettyBytes} from '@/utils/pretty-bytes'
+import {formatBytes, maybePrettyBytes} from '@/utils/pretty-bytes'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Storage & Drives (SYSTEM)
@@ -66,11 +71,19 @@ export function StorageDrivesSection() {
 
 			<StoragePoolBlock />
 
+			{/* Phase 339-03 STORD-02 — whole-disk LUKS (between pool + USB, same
+			    internal-non-pool disk universe as the pool wizard). */}
+			<DiskEncryptionBlock />
+
 			<UsbDrivesBlock />
 
 			<NetworkSharesBlock />
 
 			<FolderSharingBlock />
+
+			{/* Phase 339-03 STORD-01 — per-folder quota editor (beside folder sharing;
+			    both operate on shared/managed virtual folders). */}
+			<FolderQuotaBlock />
 		</div>
 	)
 }
@@ -975,5 +988,797 @@ function FolderSharingBlock() {
 				</AlertDialogContent>
 			</AlertDialog>
 		</section>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BLOCK D — Encrypted disks (Phase 339-03 STORD-02, D-339-2)
+//
+// Whole-disk LUKS2 for STANDALONE new/empty internal disks. Admin-only (every
+// route is adminProcedure; luksFormat is additionally step-up-gated). The ENTIRE
+// block is HARD-HIDDEN under WSL2 (donor StoragePoolBlock @307) — a Windows-managed
+// VM has no real block-device topology.
+//
+// Create wizard: pick eligible disk → typed-confirm (type the device id, STRICT
+// equality) → passphrase (client min 12; server re-checks) → system.luksFormat
+// (via the 334 useStepUp().withStepUp retry) → recovery-key-shown-once modal
+// (typed ack required to dismiss). Per-disk Locked/Unlocked cards + a lock/unlock
+// flow. The passphrase + recovery key live in TRANSIENT component state ONLY —
+// never the shared store, a query-cache key, or a persisted field; wiped on close.
+// Manual re-unlock is the lockout-safe default (nothing auto-mounts at boot).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// The never-throw discriminated result the LUKS routes return (mirrors runLuks).
+type LuksProbe = {ok: true; stdout: string} | {ok: false; reason: string}
+
+// Locked/Unlocked/unknown → dot color + label, in the same 3-state visual language
+// as driveHealthBadge. A LOCKED disk is LOUD (amber) because it needs an unlock
+// (D-339-2); an unreadable probe is muted/faint (never a false "unlocked").
+function luksStatusBadge(status: LuksProbe): {dotClass: string; textClass: string; label: string; locked: boolean} {
+	if (status.ok && status.stdout.trim() === 'unlocked') {
+		return {
+			dotClass: 'bg-[color:var(--fg)]',
+			textClass: 'text-[color:var(--fg-mute)]',
+			label: t('storage.disk-encryption.badge.unlocked'),
+			locked: false,
+		}
+	}
+	if (status.ok && status.stdout.trim() === 'locked') {
+		return {
+			dotClass: 'bg-[color:#d97706]',
+			textClass: 'text-[color:#d97706]',
+			label: t('storage.disk-encryption.badge.locked'),
+			locked: true,
+		}
+	}
+	// Not-ok (cryptsetup missing / probe error) — muted, honest, treated as locked.
+	return {
+		dotClass: 'bg-[color:var(--fg-faint)]',
+		textClass: 'text-[color:var(--fg-faint)]',
+		label: t('storage.disk-encryption.failed'),
+		locked: true,
+	}
+}
+
+function DiskEncryptionBlock() {
+	const {isAdmin} = useCurrentUser()
+	const {isWsl2} = useStoragePool()
+	const utils = trpcReact.useUtils()
+	// adminProcedure + WSL2-meaningless → only fetch when it can actually resolve.
+	const enabled = isAdmin && !isWsl2
+	const listQ = trpcReact.system.luksList.useQuery(undefined, {enabled})
+	const eligibleQ = trpcReact.system.luksListEligible.useQuery(undefined, {enabled})
+
+	const [showCreate, setShowCreate] = useState(false)
+	const [unlockTarget, setUnlockTarget] = useState<{deviceId: string; label?: string} | null>(null)
+
+	const lockMut = trpcReact.system.luksClose.useMutation({
+		onSuccess: (result) => {
+			if (result.ok) {
+				utils.system.luksList.invalidate()
+			} else {
+				// EBUSY / in-use → soft "in use" message; never a force (mirrors gocryptfs lock UX).
+				const busy = /busy|in use|ebusy/i.test(result.reason)
+				toast.error(busy ? t('storage.disk-encryption.busy') : `${t('storage.disk-encryption.failed')} ${result.reason}`)
+			}
+		},
+		onError: (error) => toast.error(error.message),
+	})
+
+	// adminProcedure routes — the block is a no-op for non-admins.
+	if (!isAdmin) return null
+
+	// ── WSL2 HARD-HIDE — whole-disk LUKS is meaningless without real block topology.
+	if (isWsl2) {
+		return (
+			<section className='flex flex-col gap-3'>
+				<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--fg-faint)]'>
+					{t('storage.disk-encryption.title')}
+				</span>
+				<FieldCard>
+					<FieldRow
+						label={t('storage.disk-encryption.title')}
+						value={<span className='text-[color:var(--fg-faint)]'>{t('storage.disk-encryption.wsl2-unavailable')}</span>}
+					/>
+				</FieldCard>
+			</section>
+		)
+	}
+
+	const disks = listQ.data?.disks ?? []
+	const eligible = eligibleQ.data
+	const canCreate = eligible?.ok === true && eligible.drives.length > 0
+
+	return (
+		<section className='flex flex-col gap-3'>
+			<div className='flex items-baseline justify-between gap-2'>
+				<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--fg-faint)]'>
+					{t('storage.disk-encryption.title')}
+				</span>
+				{canCreate && (
+					<Button variant='v36-ghost' size='v36-pill-sm' onClick={() => setShowCreate(true)}>
+						{t('storage.disk-encryption.create')}
+					</Button>
+				)}
+			</div>
+
+			{/* Registered encrypted disks (default state after reboot is Locked). */}
+			{listQ.isLoading ? (
+				<FieldCard>
+					<div className='flex items-center justify-center gap-2 py-8 text-[color:var(--fg-faint)]'>
+						<Loader2 className='size-4 animate-spin' />
+						<span className='text-[13px]'>{t('storage.disk-encryption.loading')}</span>
+					</div>
+				</FieldCard>
+			) : disks.length === 0 ? (
+				<FieldCard>
+					<FieldRow
+						label={t('storage.disk-encryption.title')}
+						value={<span className='text-[color:var(--fg-faint)]'>{t('storage.disk-encryption.none')}</span>}
+					/>
+				</FieldCard>
+			) : (
+				<FieldCard>
+					{disks.map((disk) => {
+						const badge = luksStatusBadge(disk.status)
+						return (
+							<FieldRow
+								key={disk.deviceId}
+								label={
+									<div className='flex flex-col gap-1'>
+										<span className='inline-flex items-center gap-2'>
+											<span className={cn('inline-block size-2 shrink-0 rounded-full', badge.dotClass)} />
+											<span className={cn('text-[13px] font-medium', badge.textClass)}>{badge.label}</span>
+										</span>
+										<span
+											className='truncate text-[12px] text-[color:var(--fg-faint)]'
+											title={`${disk.label || disk.deviceId} · /dev/${disk.deviceId}`}
+										>
+											{disk.label || disk.deviceId} · /dev/{disk.deviceId}
+										</span>
+									</div>
+								}
+								value={
+									<span className='truncate text-[12px] text-[color:var(--fg-faint)]' title={disk.mountpoint}>
+										{disk.mountpoint}
+									</span>
+								}
+								trailing={
+									badge.locked ? (
+										<Button
+											variant='v36-ghost'
+											size='v36-pill-sm'
+											onClick={() => setUnlockTarget({deviceId: disk.deviceId, label: disk.label})}
+										>
+											<TbLockOpen className='h-3.5 w-3.5' />
+											{t('storage.disk-encryption.unlock')}
+										</Button>
+									) : (
+										<Button
+											variant='v36-ghost'
+											size='v36-pill-sm'
+											disabled={lockMut.isPending}
+											onClick={() => lockMut.mutate({deviceId: disk.deviceId})}
+										>
+											<TbLock className='h-3.5 w-3.5' />
+											{t('storage.disk-encryption.lock')}
+										</Button>
+									)
+								}
+							/>
+						)
+					})}
+				</FieldCard>
+			)}
+
+			{/* Eligibility notes — fail-closed "cannot list" vs "nothing eligible". */}
+			{eligible?.ok === false ? (
+				<p className='text-[12px] leading-[1.5] text-[color:var(--fg-faint)]'>{t('storage.disk-encryption.cannot-list')}</p>
+			) : eligible?.ok === true && eligible.drives.length === 0 ? (
+				<p className='text-[12px] leading-[1.5] text-[color:var(--fg-faint)]'>{t('storage.disk-encryption.none-eligible')}</p>
+			) : null}
+
+			<p className='text-[12px] leading-[1.5] text-[color:var(--fg-faint)]'>{t('storage.disk-encryption.description')}</p>
+
+			{/* Create wizard — mounted only while open so its secret-bearing state is
+			    fresh on mount + fully discarded on unmount. */}
+			{showCreate && eligible?.ok === true && (
+				<DiskEncryptionCreateDialog
+					eligible={eligible.drives}
+					onClose={() => setShowCreate(false)}
+					onCreated={() => utils.system.luksList.invalidate()}
+				/>
+			)}
+
+			{/* Unlock card — likewise mounted only while a target is set. */}
+			{unlockTarget && (
+				<DiskEncryptionUnlockDialog
+					target={unlockTarget}
+					onClose={() => setUnlockTarget(null)}
+					onUnlocked={() => utils.system.luksList.invalidate()}
+				/>
+			)}
+		</section>
+	)
+}
+
+function DiskEncryptionCreateDialog({
+	eligible,
+	onClose,
+	onCreated,
+}: {
+	eligible: {id: string; model: string; size: number}[]
+	onClose: () => void
+	onCreated: () => void
+}) {
+	const {withStepUp} = useStepUp()
+	const [step, setStep] = useState<'pick' | 'confirm' | 'passphrase' | 'recovery'>('pick')
+	const [deviceId, setDeviceId] = useState(eligible[0]?.id ?? '')
+	const [label, setLabel] = useState('')
+	const [typed, setTyped] = useState('')
+	const [passphrase, setPassphrase] = useState('')
+	const [passphraseConfirm, setPassphraseConfirm] = useState('')
+	const [localError, setLocalError] = useState('')
+	// Transient, shown-ONCE secrets — never persisted anywhere.
+	const [recoveryKey, setRecoveryKey] = useState('')
+	const [savedAck, setSavedAck] = useState('')
+
+	const formatMut = trpcReact.system.luksFormat.useMutation({
+		onError: (error) => {
+			// The first attempt's STEP_UP_REQUIRED denial opens the re-auth modal — it
+			// must never surface as an error toast (334-03 pattern).
+			if (isStepUpRequired(error)) return
+			toast.error(error.message)
+		},
+	})
+
+	const busy = formatMut.isPending
+	// STRICT equality typed-confirm (NO trim/lowercase/normalize) — the value here is
+	// the device id (doubles as "did I pick the right disk"); reuses the factory-reset
+	// type-to-confirm discipline (typed-confirm.ts) applied to a dynamic value.
+	const typedConfirmed = typed === deviceId
+	// The recovery-key modal can only be dismissed once the operator types the exact
+	// ack phrase — STRICT equality against the localized confirm string.
+	const savedConfirmed = savedAck === t('storage.disk-encryption.recovery-key-saved-confirm')
+
+	const handleClose = () => {
+		// Wipe every secret-bearing surface before unmount.
+		setPassphrase('')
+		setPassphraseConfirm('')
+		setRecoveryKey('')
+		setSavedAck('')
+		formatMut.reset()
+		onClose()
+	}
+
+	const handleFormat = async () => {
+		setLocalError('')
+		if (passphrase.length < 12) {
+			setLocalError(t('storage.disk-encryption.passphrase-hint'))
+			return
+		}
+		if (passphrase !== passphraseConfirm) {
+			setLocalError(t('storage.disk-encryption.passphrase-mismatch'))
+			return
+		}
+		try {
+			const result = await withStepUp(() =>
+				formatMut.mutateAsync({deviceId, passphrase, label: label.trim() || undefined}),
+			)
+			if (result.ok) {
+				setRecoveryKey(result.recoveryKey)
+				// The passphrase is no longer needed once the disk exists — wipe it now.
+				setPassphrase('')
+				setPassphraseConfirm('')
+				onCreated()
+				setStep('recovery')
+			} else {
+				setLocalError(`${t('storage.disk-encryption.failed')} ${result.reason}`)
+			}
+		} catch {
+			// Dismissed step-up modal (StepUpCancelledError) or an already-toasted
+			// failure — leave the dialog on the passphrase step so the operator can retry.
+		}
+	}
+
+	const selected = eligible.find((d) => d.id === deviceId)
+
+	return (
+		<AlertDialog
+			open
+			onOpenChange={(nextOpen) => {
+				// The recovery-key step must NOT close until the ack is typed.
+				if (nextOpen || step === 'recovery') return
+				handleClose()
+			}}
+		>
+			<AlertDialogContent className='max-sm:px-4'>
+				<AlertDialogHeader>
+					<AlertDialogTitle>{t('storage.disk-encryption.create-title')}</AlertDialogTitle>
+					{step !== 'recovery' && (
+						<AlertDialogDescription>{t('storage.disk-encryption.description')}</AlertDialogDescription>
+					)}
+				</AlertDialogHeader>
+
+				<div className='flex flex-col gap-4 text-left'>
+					{step === 'pick' && (
+						<>
+							<label className='flex flex-col gap-1.5'>
+								<span className='text-[13px] font-medium text-text-secondary'>{t('storage.disk-encryption.pick-disk')}</span>
+								<Select value={deviceId} onValueChange={setDeviceId}>
+									<SelectTrigger>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{eligible.map((d) => (
+											<SelectItem key={d.id} value={d.id}>
+												{(d.model || 'Drive') + ' · ' + maybePrettyBytes(d.size) + ' · /dev/' + d.id}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</label>
+							<label className='flex flex-col gap-1.5'>
+								<span className='text-[13px] font-medium text-text-secondary'>{t('storage.disk-encryption.label-label')}</span>
+								<Input value={label} onValueChange={setLabel} placeholder={t('storage.disk-encryption.label-placeholder')} maxLength={64} />
+							</label>
+						</>
+					)}
+
+					{step === 'confirm' && (
+						<>
+							<p className='text-[13px] font-medium text-[color:var(--red,#dc2626)]'>
+								{t('storage.disk-encryption.erase-warning')}
+							</p>
+							<label className='flex flex-col gap-1.5'>
+								<span className='text-[13px] font-medium text-text-secondary'>
+									{t('storage.disk-encryption.typed-confirm-label')}
+								</span>
+								<Input
+									value={typed}
+									onValueChange={setTyped}
+									placeholder={deviceId}
+									autoComplete='off'
+									autoFocus
+								/>
+							</label>
+						</>
+					)}
+
+					{step === 'passphrase' && (
+						<>
+							<label className='flex flex-col gap-1.5'>
+								<span className='text-[13px] font-medium text-text-secondary'>{t('storage.disk-encryption.passphrase')}</span>
+								<Input
+									type='password'
+									value={passphrase}
+									onValueChange={setPassphrase}
+									autoComplete='new-password'
+									autoFocus
+									disabled={busy}
+								/>
+							</label>
+							<label className='flex flex-col gap-1.5'>
+								<span className='text-[13px] font-medium text-text-secondary'>{t('storage.disk-encryption.passphrase-confirm')}</span>
+								<Input
+									type='password'
+									value={passphraseConfirm}
+									onValueChange={setPassphraseConfirm}
+									autoComplete='new-password'
+									disabled={busy}
+								/>
+								<span className='text-[12px] text-text-tertiary'>{t('storage.disk-encryption.passphrase-hint')}</span>
+							</label>
+						</>
+					)}
+
+					{step === 'recovery' && (
+						<div className='flex flex-col gap-3'>
+							<span className='text-[13px] font-medium text-text-primary'>{t('storage.disk-encryption.recovery-key-title')}</span>
+							<div className='flex items-start gap-2 rounded-[var(--r-sm)] border border-[#d97706]/60 bg-[#d97706]/10 p-3'>
+								<code className='min-w-0 flex-1 select-all whitespace-pre-wrap break-all font-mono text-[12px] text-text-primary'>
+									{recoveryKey}
+								</code>
+								<button
+									type='button'
+									onClick={() => {
+										if (recoveryKey) void navigator.clipboard?.writeText(recoveryKey)
+									}}
+									className='flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[12px] text-text-secondary hover:bg-surface-1'
+								>
+									<TbCopy className='h-4 w-4' />
+									{t('storage.disk-encryption.copy-key')}
+								</button>
+							</div>
+							<p className='text-[12px] leading-[1.5] text-[color:#d97706]'>{t('storage.disk-encryption.recovery-key-warning')}</p>
+							<p className='text-[12px] leading-[1.5] text-[color:var(--fg-faint)]'>{t('storage.disk-encryption.no-recovery')}</p>
+							<label className='flex flex-col gap-1.5'>
+								<span className='text-[12px] text-text-secondary'>
+									{t('storage.disk-encryption.recovery-key-saved-hint', {phrase: t('storage.disk-encryption.recovery-key-saved-confirm')})}
+								</span>
+								<Input value={savedAck} onValueChange={setSavedAck} autoComplete='off' placeholder={t('storage.disk-encryption.recovery-key-saved-confirm')} />
+							</label>
+						</div>
+					)}
+
+					{localError ? <p className='text-[12px] text-[color:var(--red,#dc2626)]'>{localError}</p> : null}
+				</div>
+
+				<AlertDialogFooter>
+					{step === 'pick' && (
+						<>
+							<Button variant='v36-ghost' size='dialog' disabled={!deviceId} onClick={() => setStep('confirm')}>
+								{t('storage.disk-encryption.continue')}
+							</Button>
+							<Button variant='default' size='dialog' onClick={handleClose}>
+								{t('cancel')}
+							</Button>
+						</>
+					)}
+					{step === 'confirm' && (
+						<>
+							<Button variant='destructive' size='dialog' disabled={!typedConfirmed} onClick={() => setStep('passphrase')}>
+								{t('storage.disk-encryption.continue')}
+							</Button>
+							<Button variant='default' size='dialog' onClick={() => setStep('pick')}>
+								{t('storage.disk-encryption.back')}
+							</Button>
+						</>
+					)}
+					{step === 'passphrase' && (
+						<>
+							<Button variant='destructive' size='dialog' disabled={busy} onClick={handleFormat}>
+								{busy ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.disk-encryption.create-submit')}
+							</Button>
+							<Button variant='default' size='dialog' disabled={busy} onClick={() => setStep('confirm')}>
+								{t('storage.disk-encryption.back')}
+							</Button>
+						</>
+					)}
+					{step === 'recovery' && (
+						<Button variant='primary' size='dialog' disabled={!savedConfirmed} onClick={handleClose}>
+							{t('storage.disk-encryption.recovery-key-saved')}
+						</Button>
+					)}
+				</AlertDialogFooter>
+
+				{/* Selected-disk hint on the pick step (below the fold, non-interactive). */}
+				{step === 'pick' && selected ? (
+					<span className='text-[11px] text-[color:var(--fg-faint)]'>
+						/dev/{selected.id} · {maybePrettyBytes(selected.size)}
+					</span>
+				) : null}
+			</AlertDialogContent>
+		</AlertDialog>
+	)
+}
+
+function DiskEncryptionUnlockDialog({
+	target,
+	onClose,
+	onUnlocked,
+}: {
+	target: {deviceId: string; label?: string}
+	onClose: () => void
+	onUnlocked: () => void
+}) {
+	// Transient secret — accepts the passphrase OR the recovery key (same keyslots).
+	const [secret, setSecret] = useState('')
+	const [reason, setReason] = useState('')
+
+	const openMut = trpcReact.system.luksOpen.useMutation({
+		onError: (error) => setReason(error.message),
+	})
+
+	const handleClose = () => {
+		setSecret('')
+		setReason('')
+		openMut.reset()
+		onClose()
+	}
+
+	const handleUnlock = async () => {
+		setReason('')
+		try {
+			const result = await openMut.mutateAsync({deviceId: target.deviceId, passphrase: secret})
+			if (result.ok) {
+				onUnlocked()
+				handleClose()
+			} else {
+				setReason(result.reason)
+			}
+		} catch {
+			// error already surfaced via onError → reason
+		}
+	}
+
+	const busy = openMut.isPending
+
+	return (
+		<AlertDialog open onOpenChange={(nextOpen) => !nextOpen && handleClose()}>
+			<AlertDialogContent>
+				<AlertDialogHeader>
+					<AlertDialogTitle>{t('storage.disk-encryption.unlock-title', {name: target.label || target.deviceId})}</AlertDialogTitle>
+					<AlertDialogDescription>{t('storage.disk-encryption.unlock-body')}</AlertDialogDescription>
+				</AlertDialogHeader>
+
+				<div className='flex flex-col gap-2 text-left'>
+					<Input
+						type='password'
+						value={secret}
+						onValueChange={setSecret}
+						autoComplete='off'
+						autoFocus
+						disabled={busy}
+						placeholder={t('storage.disk-encryption.unlock-placeholder')}
+					/>
+					<span className='text-[12px] text-[color:var(--fg-faint)]'>{t('storage.disk-encryption.no-recovery')}</span>
+					{reason ? <p className='text-[12px] text-[color:var(--red,#dc2626)]'>{`${t('storage.disk-encryption.failed')} ${reason}`}</p> : null}
+				</div>
+
+				<AlertDialogFooter>
+					<Button variant='primary' size='dialog' disabled={busy || !secret} onClick={handleUnlock}>
+						{busy ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.disk-encryption.unlock')}
+					</Button>
+					<Button variant='default' size='dialog' disabled={busy} onClick={handleClose}>
+						{t('cancel')}
+					</Button>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BLOCK E — Folder quotas (Phase 339-03 STORD-01)
+//
+// Admin-only per-FOLDER storage caps — extends the shipped per-user quota +
+// du-scan pattern (325). Each row shows the folder path, a usage bar from the
+// scan cache (usageBytes / limitBytes), a warn-only-vs-blocking badge, and
+// Edit/Remove. Copy distinguishes "warn only" (default, additive) from "block
+// writes at the limit". All routes are adminProcedure — a no-op for members.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type FolderQuotaRow = {
+	virtualPath: string
+	limitBytes: number
+	hardBlock: boolean
+	usageBytes?: number
+	scannedAt?: number
+}
+
+// Mirror of the server folderQuotaPathSchema (files/routes.ts) — an absolute
+// virtual path, restricted charset, no `..` segment. Client-side pre-validation
+// only; the server is the authority.
+const FOLDER_QUOTA_PATH_RE = /^\/[A-Za-z0-9 ._/-]+$/
+
+function FolderQuotaBlock() {
+	const {isAdmin} = useCurrentUser()
+	const utils = trpcReact.useUtils()
+	const listQ = trpcReact.files.folderQuotaList.useQuery(undefined, {enabled: isAdmin})
+
+	const [dialogTarget, setDialogTarget] = useState<FolderQuotaRow | 'new' | null>(null)
+	const [removeTarget, setRemoveTarget] = useState<FolderQuotaRow | null>(null)
+
+	const removeMut = trpcReact.files.folderQuotaRemove.useMutation({
+		onSuccess: () => {
+			utils.files.folderQuotaList.invalidate()
+			setRemoveTarget(null)
+		},
+		onError: (error) => toast.error(error.message),
+	})
+
+	// adminProcedure routes — no-op for members.
+	if (!isAdmin) return null
+
+	const rows = listQ.data ?? []
+
+	return (
+		<section className='flex flex-col gap-3'>
+			<div className='flex items-baseline justify-between gap-2'>
+				<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--fg-faint)]'>
+					{t('storage.folder-quota.title')}
+				</span>
+				<Button variant='v36-ghost' size='v36-pill-sm' onClick={() => setDialogTarget('new')}>
+					{t('storage.folder-quota.add')}
+				</Button>
+			</div>
+
+			{listQ.isLoading ? (
+				<FieldCard>
+					<div className='flex items-center justify-center gap-2 py-8 text-[color:var(--fg-faint)]'>
+						<Loader2 className='size-4 animate-spin' />
+						<span className='text-[13px]'>{t('storage.folder-quota.loading')}</span>
+					</div>
+				</FieldCard>
+			) : rows.length === 0 ? (
+				<FieldCard>
+					<FieldRow
+						label={t('storage.folder-quota.title')}
+						value={<span className='text-[color:var(--fg-faint)]'>{t('storage.folder-quota.none')}</span>}
+					/>
+				</FieldCard>
+			) : (
+				<FieldCard>
+					{rows.map((row) => {
+						const hasLimit = row.limitBytes > 0
+						const used = row.usageBytes ?? 0
+						const pct = hasLimit ? Math.max(0, Math.min(1, used / row.limitBytes)) * 100 : 0
+						const overSoft = hasLimit && used >= row.limitBytes * QUOTA_SOFT_RATIO
+						return (
+							<FieldRow
+								key={row.virtualPath}
+								label={
+									<div className='flex flex-col gap-1'>
+										<span className='truncate text-[13px] font-medium text-[color:var(--fg)]' title={row.virtualPath}>
+											{row.virtualPath}
+										</span>
+										<span
+											className={cn(
+												'inline-flex w-fit items-center rounded-[3px] border px-1.5 py-0.5 text-[11px] leading-none',
+												row.hardBlock ? 'border-[color:#d97706] text-[color:#d97706]' : 'border-line text-[color:var(--fg-faint)]',
+											)}
+										>
+											{row.hardBlock ? t('storage.folder-quota.blocking') : t('storage.folder-quota.warn-only')}
+										</span>
+									</div>
+								}
+								value={
+									hasLimit ? (
+										<div className='flex flex-col gap-2'>
+											<div className='h-1.5 w-full overflow-hidden rounded-[2px] bg-[color:var(--bg-2)]'>
+												<div
+													className={cn(
+														'h-full rounded-[2px] transition-[width] duration-300 ease-out',
+														overSoft ? 'bg-[color:var(--red,#dc2626)]' : 'bg-[color:var(--fg)]',
+													)}
+													style={{width: `${pct}%`}}
+												/>
+											</div>
+											<span className={cn('text-[12px]', overSoft ? 'text-[color:var(--red,#dc2626)]' : 'text-[color:var(--fg-faint)]')}>
+												{t('storage.folder-quota.usage', {used: formatBytes(used), limit: formatBytes(row.limitBytes)})}
+											</span>
+										</div>
+									) : (
+										<span className='text-[12px] text-[color:var(--fg-faint)]'>{t('storage.folder-quota.unlimited')}</span>
+									)
+								}
+								trailing={
+									<div className='flex items-center gap-2'>
+										<Button variant='v36-ghost' size='v36-pill-sm' onClick={() => setDialogTarget(row)}>
+											{t('storage.folder-quota.edit')}
+										</Button>
+										<Button
+											variant='v36-ghost'
+											size='v36-pill-sm'
+											disabled={removeMut.isPending}
+											onClick={() => setRemoveTarget(row)}
+										>
+											{t('storage.folder-quota.remove')}
+										</Button>
+									</div>
+								}
+							/>
+						)
+					})}
+				</FieldCard>
+			)}
+
+			<p className='text-[12px] leading-[1.5] text-[color:var(--fg-faint)]'>{t('storage.folder-quota.description')}</p>
+
+			{/* Add / edit — mounted only while open. */}
+			{dialogTarget && (
+				<FolderQuotaDialog
+					existing={dialogTarget === 'new' ? null : dialogTarget}
+					onClose={() => setDialogTarget(null)}
+					onSaved={() => utils.files.folderQuotaList.invalidate()}
+				/>
+			)}
+
+			{/* Remove confirm — light (removes the cap, files untouched). */}
+			<AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>{t('storage.folder-quota.remove-title', {path: removeTarget?.virtualPath ?? ''})}</AlertDialogTitle>
+						<AlertDialogDescription>{t('storage.folder-quota.remove-body')}</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogAction
+							variant='destructive'
+							disabled={removeMut.isPending}
+							onClick={() => {
+								if (removeTarget) removeMut.mutate({virtualPath: removeTarget.virtualPath})
+							}}
+						>
+							{removeMut.isPending ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.folder-quota.remove')}
+						</AlertDialogAction>
+						<AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+		</section>
+	)
+}
+
+function FolderQuotaDialog({
+	existing,
+	onClose,
+	onSaved,
+}: {
+	existing: FolderQuotaRow | null
+	onClose: () => void
+	onSaved: () => void
+}) {
+	const isEdit = existing !== null
+	// Seed once on mount (the dialog is mounted only while open).
+	const [path, setPath] = useState(existing?.virtualPath ?? '')
+	const [gb, setGb] = useState(existing && existing.limitBytes > 0 ? String(Math.round(existing.limitBytes / BYTES_PER_GB)) : '')
+	const [hardBlock, setHardBlock] = useState(existing?.hardBlock ?? false)
+
+	const setMut = trpcReact.files.folderQuotaSet.useMutation({
+		onSuccess: () => {
+			onSaved()
+			toast.success(t('storage.folder-quota.save'))
+			onClose()
+		},
+		onError: (error) => toast.error(error.message),
+	})
+
+	const trimmedPath = path.trim()
+	const pathValid = FOLDER_QUOTA_PATH_RE.test(trimmedPath) && !trimmedPath.split('/').includes('..')
+
+	const handleSave = () => {
+		// Empty / non-positive GB = unlimited (send 0 — the backend's clear-cap value).
+		const parsed = Number.parseFloat(gb)
+		const limitBytes = !Number.isFinite(parsed) || parsed <= 0 ? 0 : Math.round(parsed * BYTES_PER_GB)
+		setMut.mutate({virtualPath: trimmedPath, limitBytes, hardBlock})
+	}
+
+	return (
+		<AlertDialog open onOpenChange={(open) => !open && onClose()}>
+			<AlertDialogContent>
+				<AlertDialogHeader>
+					<AlertDialogTitle>{isEdit ? t('storage.folder-quota.edit-title') : t('storage.folder-quota.add-title')}</AlertDialogTitle>
+				</AlertDialogHeader>
+
+				<div className='flex flex-col gap-4 text-left'>
+					<label className='flex flex-col gap-1.5'>
+						<span className='text-[13px] font-medium text-text-secondary'>{t('storage.folder-quota.folder-label')}</span>
+						<Input
+							value={path}
+							onValueChange={setPath}
+							placeholder={t('storage.folder-quota.folder-placeholder')}
+							disabled={isEdit}
+							autoFocus={!isEdit}
+						/>
+					</label>
+
+					<label className='flex flex-col gap-1.5'>
+						<span className='text-[13px] font-medium text-text-secondary'>{t('storage.folder-quota.limit-label')}</span>
+						<Input type='number' inputMode='decimal' min={0} value={gb} onValueChange={setGb} placeholder={t('storage.folder-quota.limit-placeholder')} />
+					</label>
+
+					<label className='flex items-start gap-3'>
+						<input type='checkbox' checked={hardBlock} onChange={(e) => setHardBlock(e.target.checked)} className='mt-1 size-4 shrink-0' />
+						<span className='flex flex-col gap-0.5'>
+							<span className='text-[13px] font-medium text-text-secondary'>{t('storage.folder-quota.hard-block-toggle')}</span>
+							<span className='text-[12px] text-text-tertiary'>{t('storage.folder-quota.hard-block-help')}</span>
+						</span>
+					</label>
+				</div>
+
+				<AlertDialogFooter>
+					{/* Plain buttons (not AlertDialogAction/Cancel): this dialog is mounted
+					    only while open, so an auto-closing action would unmount before the
+					    mutation's onSuccess can fire. Save closes via onSuccess → onClose. */}
+					<Button variant='primary' size='dialog' disabled={!pathValid || setMut.isPending} onClick={handleSave}>
+						{setMut.isPending ? <Loader2 className='h-4 w-4 animate-spin' /> : t('storage.folder-quota.save')}
+					</Button>
+					<Button variant='default' size='dialog' disabled={setMut.isPending} onClick={onClose}>
+						{t('cancel')}
+					</Button>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
 	)
 }
