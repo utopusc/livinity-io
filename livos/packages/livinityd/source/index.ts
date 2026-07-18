@@ -318,6 +318,7 @@ import type {ConnectivityState} from './modules/connectivity/checks.js'
 // top-level `folderQuotas` StoreSchema key below. Type-only import (erased at runtime
 // — folder-quota-scan.ts does not import index.ts, no cycle).
 import type {FolderQuotaEntry} from './modules/files/folder-quota-scan.js'
+import type {UsbImportRule} from './modules/files/usb-import.js'
 
 type StoreSchema = {
 	version: string
@@ -623,6 +624,16 @@ type StoreSchema = {
 		mountpoint: string
 		createdAt: number
 	}[]
+	// Phase 340 (USBIMP-01, D-340-2) — DEDICATED top-level key (dot-prop hazard: NOT
+	// nested under `smbRecycle`/`folderQuotas`/`files`/any array or scalar — dot-prop
+	// path collisions silently drop the write, same convention as `folderQuotas`/
+	// `smbRecycle`/`encryptedDisks` above). Opt-in USB copy-on-insert rules. Each rule
+	// carries an EXPLICIT owner (`ownerUsername`/`ownerRole`) because a USB insert has no
+	// request/session — the detached runner re-resolves the owner from the DB and wraps
+	// the copy in the owner's file context so the destination is confined to that owner's
+	// base dir (never inferred from a "current user" — there isn't one). `lastRun` is
+	// fail-soft observability written by the runner. Undefined until the first rule is created.
+	usbImport: UsbImportRule[]
 }
 
 export type LivinitydOptions = {

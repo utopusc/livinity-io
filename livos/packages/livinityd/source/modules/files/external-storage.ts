@@ -35,6 +35,12 @@ type BlockDevice = {
 // external set (never the OS disk).
 const DEVICE_ID_RE = /^(sd[a-z]+|nvme\d+n\d+|mmcblk\d+)$/
 
+// Phase 340 USBIMP-01 (WARN-1) — how long after a format a device is suppressed from
+// the auto-import hook. A just-formatted card remounts empty on the next disk scan and
+// must not fire a spurious import/notification. The empty-source skip in the runner is
+// the primary guard; this is the precise device-scoped belt-and-suspenders.
+const USB_IMPORT_FORMAT_SUPPRESS_MS = 15_000
+
 // Get block devices
 // TODO: This should probably be in a system module once we have a proper one
 export async function getBlockDevices() {
@@ -99,6 +105,9 @@ export default class ExternalStorage {
 	#mountQueue = new PQueue({concurrency: 1})
 	#removeDeviceChangeListener?: () => void
 	formatJobs: Set<string> = new Set()
+	// Phase 340 USBIMP-01 (WARN-1) — device ids recently formatted; the auto-import hook
+	// skips these so a freshly-formatted (empty) remount does not trigger a spurious import.
+	#recentlyFormatted: Set<string> = new Set()
 
 	constructor(livinityd: Livinityd) {
 		this.#livinityd = livinityd
@@ -212,6 +221,17 @@ export default class ExternalStorage {
 						// Log on success
 						const virtualMountPoint = this.#livinityd.files.systemToVirtualPath(systemMountpoint)
 						this.logger.log(`Mounted partition ${device.name} ${partition.label} as ${virtualMountPoint}`)
+
+						// Phase 340 USBIMP-01 — kick any enabled USB-import rule DETACHED. Never
+						// awaited: a full-card copy takes minutes and must not stall the
+						// concurrency:1 mount queue (D-340-1). handleNewMount enqueues on its own
+						// serialized queue and returns fast. Skipped for a just-formatted device
+						// (WARN-1) so an empty post-format remount does not trigger a spurious import.
+						if (!this.#recentlyFormatted.has(device.id)) {
+							void this.#livinityd.files.usbImport
+								.handleNewMount({label: partition.label, virtualMountPoint})
+								.catch((error) => this.logger.error('[usb-import] handleNewMount failed', error))
+						}
 					} catch (error) {
 						// Just log the error and continue to the next partition
 						this.logger.error(`Failed to mount partition ${device.name} ${partition.label}`, error)
@@ -350,6 +370,14 @@ export default class ExternalStorage {
 			return true
 		} finally {
 			this.formatJobs.delete(deviceId)
+			// Phase 340 USBIMP-01 (WARN-1) — suppress the auto-import hook for this device
+			// for a short window past the synchronous format job: the emptied partition
+			// remounts on the next disk scan and must not fire a spurious import. Uses the
+			// promise-based setTimeout imported at the top (the global is shadowed here).
+			this.#recentlyFormatted.add(deviceId)
+			void setTimeout(USB_IMPORT_FORMAT_SUPPRESS_MS, undefined, {ref: false}).then(() =>
+				this.#recentlyFormatted.delete(deviceId),
+			)
 		}
 	}
 

@@ -1,7 +1,10 @@
+import {randomUUID} from 'node:crypto'
+
 import z from 'zod'
 
 import {router, adminProcedure, privateProcedure, publicProcedureWhenNoUserExists} from '../server/trpc/trpc.js'
 import {fileUserContext, type FileUserInfo, type SearchResultFile} from './files.js'
+import type {UsbImportRule} from './usb-import.js'
 
 // Helper to run file operations within the user's file context
 function withFileUser<T>(ctx: {currentUser?: {username: string; role: string}}, fn: () => Promise<T>): Promise<T> {
@@ -357,4 +360,71 @@ export default router({
 			await ctx.livinityd!.notifications.clear('folder-quota-exceeded:' + input.virtualPath).catch(() => {})
 			return {success: true}
 		}),
+
+	// Phase 340 USBIMP-01 — USB copy-on-insert rules. adminProcedure (host storage
+	// management, same gate as formatExternalDevice/folderQuota*). Config writes only.
+	usbImportList: adminProcedure.query(
+		async ({ctx}) => (await ctx.livinityd!.store.get('usbImport').catch(() => [])) ?? [],
+	),
+
+	usbImportSet: adminProcedure
+		.input(
+			z.object({
+				id: z.string().min(1).max(128).optional(), // omitted ⇒ create (new uuid); present ⇒ update
+				enabled: z.boolean(),
+				destinationVirtualPath: folderQuotaPathSchema,
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			// Confinement gate at SAVE time: the destination must resolve + be writable under
+			// the CALLING ADMIN's context (owner captured below). Reject up front. (The
+			// IMPORT-time runner re-resolves + re-confines under the true stored owner, so a
+			// save-time pass never widens import-time confinement — documented limitation.)
+			const owner = {
+				username: ctx.currentUser!.username,
+				role: ctx.currentUser!.role as 'admin' | 'member' | 'guest',
+			}
+			await fileUserContext.run(owner, async () => {
+				const ops = await ctx.livinityd!.files.getAllowedOperations(input.destinationVirtualPath)
+				if (!ops.includes('writable')) throw new Error('[operation-not-allowed]')
+				await ctx.livinityd!.files.virtualToSystemPath(input.destinationVirtualPath) // throws [escapes-base] if not confined
+			})
+			await ctx.livinityd!.store.getWriteLock(async ({get, set}) => {
+				const current = (await get('usbImport')) ?? []
+				if (input.id) {
+					const existing = current.find((r) => r.id === input.id)
+					if (!existing) throw new Error('[usb-import-rule-not-found]')
+					// Owner is IMMUTABLE on edit (never re-point another user's destination); only
+					// enabled + destination change, and the destination stays confined to the same owner.
+					const updated = {...existing, enabled: input.enabled, destinationVirtualPath: input.destinationVirtualPath}
+					await set(
+						'usbImport',
+						current.map((r) => (r.id === input.id ? updated : r)),
+					)
+				} else {
+					const rule: UsbImportRule = {
+						id: randomUUID(),
+						enabled: input.enabled,
+						destinationVirtualPath: input.destinationVirtualPath,
+						ownerUsername: owner.username,
+						ownerRole: owner.role,
+					}
+					await set('usbImport', [...current, rule])
+				}
+			})
+			return {success: true}
+		}),
+
+	usbImportRemove: adminProcedure.input(z.object({id: z.string().min(1).max(128)})).mutation(async ({ctx, input}) => {
+		await ctx.livinityd!.store.getWriteLock(async ({get, set}) => {
+			const current = (await get('usbImport')) ?? []
+			await set(
+				'usbImport',
+				current.filter((r) => r.id !== input.id),
+			)
+		})
+		await ctx.livinityd!.notifications.clear('usb-import-complete:' + input.id).catch(() => {})
+		await ctx.livinityd!.notifications.clear('usb-import-failed:' + input.id).catch(() => {})
+		return {success: true}
+	}),
 })

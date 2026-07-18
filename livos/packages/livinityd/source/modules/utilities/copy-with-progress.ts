@@ -5,6 +5,10 @@ export async function copyWithProgress(
 	source: string,
 	destination: string,
 	onProgress?: (progress: {progress: number; bytesPerSecond: number; secondsRemaining?: number}) => void,
+	// Phase 340 USBIMP-01 — additive optional basename excludes threaded through to
+	// rsync `--exclude=` args. Defaulted empty so every existing caller is byte-identical
+	// (the rsync argv is unchanged when `excludes` is []).
+	excludes: string[] = [],
 ) {
 	const rsyncExtraOptions = []
 
@@ -24,6 +28,9 @@ export async function copyWithProgress(
 		// Inplace mode, update files in place instead of temporary files with a random suffix
 		// which confuses recents tracking.
 		'--inplace',
+		// Phase 340 USBIMP-01 — skip removable-media junk (bare-name --exclude patterns
+		// match by basename at any depth). Empty for every non-import caller.
+		...excludes.map((name) => `--exclude=${name}`),
 		// Drop in extra options
 		...rsyncExtraOptions,
 		// Absolute source and target

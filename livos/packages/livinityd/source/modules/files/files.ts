@@ -44,6 +44,7 @@ import Thumbnails from './thumbnails.js'
 import Samba from './samba.js'
 import WebDav from './webdav.js'
 import ExternalStorage from './external-storage.js'
+import UsbImport from './usb-import.js'
 import NetworkStorage from './network-storage.js'
 import CloudStorage from './cloud-storage.js'
 import Search from './search.js'
@@ -233,6 +234,7 @@ export default class Files {
 	samba: Samba
 	webdav: WebDav
 	externalStorage: ExternalStorage
+	usbImport: UsbImport
 	networkStorage: NetworkStorage
 	cloudStorage: CloudStorage
 	search: Search
@@ -261,6 +263,7 @@ export default class Files {
 		this.samba = new Samba(livinityd)
 		this.webdav = new WebDav(livinityd)
 		this.externalStorage = new ExternalStorage(livinityd)
+		this.usbImport = new UsbImport(livinityd)
 		this.networkStorage = new NetworkStorage(livinityd)
 		this.cloudStorage = new CloudStorage(livinityd)
 		this.search = new Search(livinityd)
@@ -834,7 +837,11 @@ export default class Files {
 	}
 
 	// Internal utility to copy (or copy and delete (psuedo-move)) a file or directory using rsync and report progress
-	async #copyWithProgress(sourceSystemPath: string, destinationSystemPath: string, {move = false} = {}) {
+	async #copyWithProgress(
+		sourceSystemPath: string,
+		destinationSystemPath: string,
+		{move = false, excludes = []}: {move?: boolean; excludes?: string[]} = {},
+	) {
 		// Error handling consistent with fse.copy and move
 		const destinationExists = await fse.exists(destinationSystemPath)
 		if (destinationExists) throw new Error('[destination-already-exists]')
@@ -853,12 +860,17 @@ export default class Files {
 
 		try {
 			// Wait for copy to finish and throw if copy fails
-			await copyWithProgress(sourceSystemPath, destinationSystemPath, (progress) => {
-				operationProgress.percent = progress.progress
-				operationProgress.bytesPerSecond = progress.bytesPerSecond
-				operationProgress.secondsRemaining = progress.secondsRemaining
-				this.#livinityd.eventBus.emit('files:operation-progress', this.operationsInProgress)
-			})
+			await copyWithProgress(
+				sourceSystemPath,
+				destinationSystemPath,
+				(progress) => {
+					operationProgress.percent = progress.progress
+					operationProgress.bytesPerSecond = progress.bytesPerSecond
+					operationProgress.secondsRemaining = progress.secondsRemaining
+					this.#livinityd.eventBus.emit('files:operation-progress', this.operationsInProgress)
+				},
+				excludes,
+			)
 
 			// If we're moving, delete the source file or directory on completion
 			if (move) await fse.remove(sourceSystemPath)
@@ -919,6 +931,15 @@ export default class Files {
 		return quotaUser && quotaUser.role !== 'admin' ? quotaUser.username : undefined
 	}
 
+	// Phase 340 USBIMP-01 (WARN-2) — run `fn` inside an EXPLICIT user's file context.
+	// Lets a non-request-scoped caller (the detached USB-import runner) act as a specific
+	// owner WITHOUT importing the `fileUserContext` value into its own module, which would
+	// form a files⇄usb-import import cycle (the same cycle documented for Archive above,
+	// solved the same way — the runner holds only a `#livinityd` handle and calls this).
+	runAsUser<T>(owner: FileUserInfo, fn: () => T): T {
+		return fileUserContext.run(owner, fn)
+	}
+
 	// Phase 339 STORD-01 (D-339-1) — soft/hard per-FOLDER quota pre-check. An ADDED
 	// SIBLING to assertWithinQuota (never a replacement): the per-user gate stays
 	// byte-identical above. Unlike the per-user gate this applies to ALL writers
@@ -946,7 +967,14 @@ export default class Files {
 		}
 	}
 
-	async copy(sourceVirtualPath: string, destinationVirtualDirectory: string, {collision = 'error'} = {}) {
+	async copy(
+		sourceVirtualPath: string,
+		destinationVirtualDirectory: string,
+		// Phase 340 USBIMP-01 — additive optional `excludes` (rsync basename skips) threaded
+		// through to #copyWithProgress. Defaulted empty ⇒ byte-identical for every existing
+		// caller (routes copy route, archive, etc.).
+		{collision = 'error', excludes = []}: {collision?: 'error' | 'keep-both' | 'replace'; excludes?: string[]} = {},
+	) {
 		// Check if operation is allowed
 		const allowedOperations = await this.getAllowedOperations(destinationVirtualDirectory)
 		if (!allowedOperations.includes('writable')) throw new Error('[operation-not-allowed]')
@@ -1002,7 +1030,7 @@ export default class Files {
 		}
 
 		// Perform the copy operation
-		await this.#copyWithProgress(sourceSystemPath, destinationSystemPath)
+		await this.#copyWithProgress(sourceSystemPath, destinationSystemPath, {excludes})
 
 		// Return the virtual path of the new copy
 		return this.systemToVirtualPath(destinationSystemPath)
