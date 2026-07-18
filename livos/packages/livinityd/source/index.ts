@@ -606,6 +606,23 @@ type StoreSchema = {
 	// (config); read by the files write-gate `assertWithinFolderQuota`. Undefined until
 	// the first quota is set.
 	folderQuotas: FolderQuotaEntry[]
+	// Phase 339 (STORD-02, D-339-2) — DEDICATED top-level key (dot-prop hazard: NOT
+	// nested under `storage`/`storagePool`/`folderQuotas`/any array or scalar — dot-prop
+	// path collisions silently drop the write, same convention as `folderQuotas`/
+	// `smbRecycle`/`monitoring` above). Registry of whole-disk LUKS2 volumes created by
+	// the STORD-02 guided flow. Holds ONLY NON-secret metadata — the operator passphrase
+	// and the daemon-generated recovery key are NEVER persisted here (mirrors
+	// `storage.encryptedFolders`' non-secret-only discipline). Written by
+	// system.luksFormat (append) / read by system.luksList + luksListEligible (exclusion
+	// set) + system.luksFormat (already-encrypted hard-block). `mountpoint` is the fixed
+	// /mnt/encrypted/<deviceId> namespace; nothing auto-mounts at boot (lockout-safe —
+	// after a reboot the disk is LOCKED until the operator re-enters the passphrase).
+	encryptedDisks: {
+		deviceId: string
+		label?: string
+		mountpoint: string
+		createdAt: number
+	}[]
 }
 
 export type LivinitydOptions = {

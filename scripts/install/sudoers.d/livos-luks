@@ -1,0 +1,10 @@
+# Phase 339 (STORD-02) — sudoers grant for the whole-disk LUKS2 encryption wrapper.
+# Security model: grant on ONE explicit binary path, NO glob, NO arg wildcard.
+# The wrapper validates its action enum {format|open|close|status}, re-validates
+# every target device root-side against THREE gates (device-shape regex + OS/boot/EFI
+# refusal + USB/removable refusal) BEFORE any cryptsetup/mkfs/mount runs, and takes
+# the passphrase + recovery key on STDIN only (never argv) — so no caller string can
+# format the OS disk, a USB/removable device, or leak a secret via /proc/<pid>/cmdline.
+# Deploy: update.sh Step 7.10y (content-diff + subject-template + visudo validate-or-remove).
+Cmnd_Alias LIVINITYD_LUKS = /usr/local/lib/livos/livos-luks.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_LUKS

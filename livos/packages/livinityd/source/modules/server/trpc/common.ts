@@ -30,6 +30,10 @@ export const httpOnlyPaths = [
 	// user.deleteUser + system.reveal/regenerateDesktopPassword are already
 	// httpOnly (above/below); apps.uninstall joins them here.
 	'apps.uninstall',
+	// Phase 339 STORD-02 — system.luksFormat is stepUpAdminProcedure (irreversibly
+	// destroys a whole disk). The LIVINITY_STEPUP grant cookie rides HTTP only, so a
+	// WS call would fail closed every time — force it onto HTTP like apps.uninstall.
+	'system.luksFormat',
 	// public invite acceptance (no auth needed)
 	'user.acceptInvite',
 	// system.status doesn't use cookies/headers, but the UI polls it across restarts to detect when livinityd is back online; we force HTTP to avoid WS reconnect handshake

@@ -26,7 +26,12 @@ import {
 } from './system.js'
 import {detectGpu, detectNvidiaGpu, isNvidiaToolkitConfigured, isWsl2, resetGpuDetectionCache} from './gpu.js'
 
-import {adminProcedure, privateProcedure, publicProcedure, router} from '../server/trpc/trpc.js'
+import crypto from 'node:crypto'
+import type Livinityd from '../../index.js'
+import {DEVICE_ID_RE} from '../monitoring/smart.js'
+import {assertNotOsDisk} from '../storage-pool/root-disk.js'
+import {getLuksEligibleDisks, makeLuksEligibilityDeps} from '../storage-pool/luks-eligibility.js'
+import {adminProcedure, privateProcedure, publicProcedure, router, stepUpAdminProcedure} from '../server/trpc/trpc.js'
 // Phase 334 (STEPUP-01, D-334-4) — step-up grant gate for the desktop-password
 // reveal/regenerate routes (DB-backed sessions; the legacy YAML branch keeps
 // its per-call TOTP via require2faVerified below).
@@ -797,6 +802,133 @@ async function runCrypto(
 				reason: stderr.trim().slice(0, 500) || `wrapper exited with code ${code ?? 'unknown'}`,
 			})
 		})
+	})
+}
+
+// ── Phase 339 (STORD-02, D-339-2) — whole-disk LUKS2 encryption ──────────────
+// Managed through the root-owned closed-enum wrapper
+// (scripts/install/livos-luks.sh → /usr/local/lib/livos/livos-luks.sh, built in
+// 339-02) via the scoped /etc/sudoers.d/livos-luks NOPASSWD grant.
+//
+// ⚠ runLuks CLONES runCrypto's stdin discipline (NOT the ignore-stdin
+// runOsPatch/runUps donor): the operator passphrase (keyslot 0) + the daemon
+// recovery key (keyslot 1) MUST go over the child's stdin, NEVER argv (would be
+// `ps`-visible via /proc/<pid>/cmdline). It writes 0/1/2 newline-separated lines
+// (vs. runCrypto's single passphrase) and never throws — an undeployed wrapper
+// degrades to {ok:false} instead of 500-ing the Storage card.
+const LUKS_WRAPPER = '/usr/local/lib/livos/livos-luks.sh'
+
+async function runLuks(
+	args: string[],
+	stdinLines?: string[],
+): Promise<{ok: true; stdout: string} | {ok: false; reason: string}> {
+	return new Promise((resolve) => {
+		// `format` runs luksFormat + luksAddKey + luksOpen + mkfs.ext4 + mount; give
+		// it 5-min headroom (open/close/status are all sub-second).
+		const timeoutMs = 300_000
+		let settled = false
+		let stdout = ''
+		let stderr = ''
+		const settle = (result: {ok: true; stdout: string} | {ok: false; reason: string}): void => {
+			if (settled) return
+			settled = true
+			clearTimeout(timer)
+			resolve(result)
+		}
+
+		// stdio[0]='pipe' (THE DEVIATION, clone of runCrypto) so the secrets reach the
+		// wrapper via fd 0, NEVER as argv elements.
+		const child = spawn('sudo', ['-n', LUKS_WRAPPER, ...args], {
+			stdio: ['pipe', 'pipe', 'pipe'],
+			windowsHide: true,
+		})
+
+		const timer = setTimeout(() => {
+			try {
+				child.kill('SIGTERM')
+			} catch {
+				/* best-effort */
+			}
+			settle({ok: false, reason: `timeout after ${timeoutMs}ms`})
+		}, timeoutMs)
+
+		// EPIPE if the wrapper exits before reading stdin — swallow the stream error.
+		child.stdin?.on('error', () => {})
+
+		// Write the secret lines to stdin (join with '\n', trailing newline so the
+		// wrapper's last `read -r` sees a full line), then close it. When there are no
+		// secrets (open with no key never happens; close/status) just close stdin so a
+		// stray read never blocks. Values are NEVER logged.
+		try {
+			if (stdinLines && stdinLines.length > 0) {
+				child.stdin?.write(stdinLines.join('\n') + '\n')
+			}
+			child.stdin?.end()
+		} catch {
+			/* stdin already gone (spawn error) — the 'error' handler settles */
+		}
+
+		child.stdout?.on('data', (chunk: Buffer) => {
+			stdout += chunk.toString('utf8')
+		})
+
+		child.stderr?.on('data', (chunk: Buffer) => {
+			stderr += chunk.toString('utf8')
+		})
+
+		child.on('error', (err: Error) => {
+			settle({ok: false, reason: err.message || 'sudo spawn failed'})
+		})
+
+		child.on('close', (code) => {
+			if (code === 0) {
+				settle({ok: true, stdout})
+				return
+			}
+			settle({
+				ok: false,
+				reason: stderr.trim().slice(0, 500) || `wrapper exited with code ${code ?? 'unknown'}`,
+			})
+		})
+	})
+}
+
+// Route-side device-id guard (V5 — reuse the single-source smart.ts export; a
+// malformed id is rejected at the zod boundary, so it never reaches the wrapper).
+const luksDeviceIdSchema = z.string().regex(DEVICE_ID_RE, '[invalid-device-id]')
+
+// Recovery key (keyslot 1) generated route-side, returned ONCE, NEVER persisted
+// (A3, RESEARCH §4). 160 bits of crypto-random hex, grouped in 4-char blocks for
+// legibility. The backing Buffer is best-effort zeroed after encoding (documented
+// best-effort only — the derived string still lives in V8's heap, RESEARCH §4).
+function generateLuksRecoveryKey(): string {
+	const buf = crypto.randomBytes(20)
+	const hex = buf.toString('hex')
+	buf.fill(0)
+	return (hex.match(/.{1,4}/g) ?? []).join('-')
+}
+
+// ── Daemon-side unlock rate limit (mirror 334 10-per-15-min) ─────────────────
+// In-memory Map<deviceId, failed-open timestamps[]>. Argon2id is the real KDF
+// protection; this is defense-in-depth against a scripted local-API guesser
+// (RESEARCH §4). An in-memory reset on daemon restart is acceptable.
+const LUKS_UNLOCK_WINDOW_MS = 15 * 60_000
+const LUKS_UNLOCK_MAX = 10
+const luksUnlockAttempts = new Map<string, number[]>()
+
+// PURE window check (unit-tested with ZERO timers/disk): true if `timestamps` has
+// at least `max` entries newer than `windowMs` before `nowMs`.
+export function isRateLimited(timestamps: number[], nowMs: number, windowMs: number, max: number): boolean {
+	return timestamps.filter((t) => nowMs - t < windowMs).length >= max
+}
+
+// Live eligibility deps for the LUKS routes: getEligibleInternalDrives (root-disk.ts,
+// throws OsDiskResolutionError fail-closed) + the two store-derived exclusion sets +
+// the live emptiness probe.
+function luksLiveDeps(livinityd: Livinityd | undefined) {
+	return makeLuksEligibilityDeps({
+		poolMemberIds: async () => ((await livinityd?.store.get('storagePool'))?.members ?? []).map((m) => m.deviceId),
+		encryptedIds: async () => ((await livinityd?.store.get('encryptedDisks')) ?? []).map((d) => d.deviceId),
 	})
 }
 
@@ -1933,6 +2065,123 @@ export default router({
 	cryptoLock: adminProcedure
 		.input(z.object({plainDir: cryptoPathSchema}))
 		.mutation(async ({input}) => runCrypto(['lock', input.plainDir])),
+	// ── Phase 339 (STORD-02, D-339-2) — whole-disk LUKS2 encryption ──────────────
+	// FLAT route names (matches the crypto*/network* convention above). `luksFormat`
+	// is stepUpAdminProcedure (irreversibly destroys a whole disk — strictly MORE
+	// destructive than deleteUser, so it belongs in the 334 second-ceremony tier;
+	// registered in httpOnlyPaths as `system.luksFormat` so the grant cookie rides
+	// HTTP). The rest are adminProcedure: unlock needs the passphrase (already a
+	// strong factor + non-destructive), lock is reversible, list/status are reads —
+	// matching the cryptoUnlock/cryptoLock precedent. Every device input is
+	// DEVICE_ID_RE-zod-constrained BEFORE the wrapper; secrets go over stdin (never
+	// argv); the recovery key is generated route-side, returned ONCE, never persisted.
+	//
+	// luksListEligible surfaces the pure-filtered eligible set (root-disk.ts reused
+	// verbatim + pool-member / already-encrypted / non-empty exclusions). An
+	// OsDiskResolutionError (unresolvable OS disk) fails CLOSED to {ok:false} — the UI
+	// offers NOTHING rather than a list it cannot vouch for.
+	luksListEligible: adminProcedure.query(async ({ctx}) => {
+		try {
+			const drives = await getLuksEligibleDisks(luksLiveDeps(ctx.livinityd))
+			return {ok: true as const, drives}
+		} catch (err) {
+			return {ok: false as const, reason: err instanceof Error ? err.message : 'cannot-list-drives'}
+		}
+	}),
+	// luksList: the encryptedDisks registry + each disk's live Locked/Unlocked state
+	// (via the wrapper `status` action). Default state after reboot is LOCKED by design
+	// (no auto-mount — lockout-safe).
+	luksList: adminProcedure.query(async ({ctx}) => {
+		const registry = (await ctx.livinityd?.store.get('encryptedDisks')) ?? []
+		const disks = await Promise.all(
+			registry.map(async (d) => ({
+				deviceId: d.deviceId,
+				label: d.label,
+				mountpoint: d.mountpoint,
+				createdAt: d.createdAt,
+				status: await runLuks(['status', d.deviceId]),
+			})),
+		)
+		return {disks}
+	}),
+	// luksStatus: single-disk Locked/Unlocked probe (also doubles as a cryptsetup
+	// presence probe — cryptsetup is installed by update.sh block (e), NOT a wrapper verb).
+	luksStatus: adminProcedure
+		.input(z.object({deviceId: luksDeviceIdSchema}))
+		.query(async ({input}) => runLuks(['status', input.deviceId])),
+	// luksFormat: LUKS2-format an eligible NEW/EMPTY disk (keyslot 0 = passphrase,
+	// keyslot 1 = daemon recovery key shown ONCE). stepUpAdminProcedure. Guard chain
+	// clones pool.ts's 4-step order: (1) DEVICE_ID_RE (zod) → (2) membership: the id
+	// MUST be in the current eligible set → (3) TOCTOU assertNotOsDisk re-check (no
+	// cache) IMMEDIATELY before the wrapper → (4) hard-block a pool member / an
+	// already-encrypted disk. On success register NON-secret metadata in the dedicated
+	// top-level `encryptedDisks` key (whole-object write). Returns the recovery key
+	// ONCE — never written to the store / logs / job_runs.
+	luksFormat: stepUpAdminProcedure
+		.input(
+			z.object({
+				deviceId: luksDeviceIdSchema,
+				passphrase: z.string().min(12),
+				label: z
+					.string()
+					.regex(/^[A-Za-z0-9 _-]{1,64}$/)
+					.optional(),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			const store = ctx.livinityd?.store
+			// (2) membership: only a disk currently in the eligible set may be formatted.
+			const eligible = await getLuksEligibleDisks(luksLiveDeps(ctx.livinityd))
+			if (!eligible.some((d) => d.id === input.deviceId)) {
+				throw new TRPCError({code: 'BAD_REQUEST', message: '[device-not-eligible]'})
+			}
+			// (3) TOCTOU re-check with NO cache, immediately before the destructive call.
+			await assertNotOsDisk(input.deviceId)
+			// (4) hard-block: pool member or already-encrypted (belt-and-braces on top of
+			// the eligibility exclusions).
+			const poolMembers = (await store?.get('storagePool'))?.members ?? []
+			if (poolMembers.some((m) => m.deviceId === input.deviceId)) {
+				throw new TRPCError({code: 'BAD_REQUEST', message: '[device-is-pool-member]'})
+			}
+			const existing = (await store?.get('encryptedDisks')) ?? []
+			if (existing.some((d) => d.deviceId === input.deviceId)) {
+				throw new TRPCError({code: 'BAD_REQUEST', message: '[device-already-encrypted]'})
+			}
+			// Generate the recovery key (keyslot 1) — returned ONCE, never persisted.
+			const recoveryKey = generateLuksRecoveryKey()
+			const result = await runLuks(['format', input.deviceId], [input.passphrase, recoveryKey])
+			if (!result.ok) return {ok: false as const, reason: result.reason}
+			const mountpoint = `/mnt/encrypted/${input.deviceId}`
+			const next = existing.filter((d) => d.deviceId !== input.deviceId)
+			next.push({deviceId: input.deviceId, label: input.label, mountpoint, createdAt: Date.now()})
+			await store?.set('encryptedDisks', next)
+			return {ok: true as const, recoveryKey, mountpoint}
+		}),
+	// luksOpen: unlock + mount an existing LUKS disk with its passphrase OR recovery
+	// key (same keyslots — either works). Daemon-side rate limit BEFORE the wrapper
+	// (10 failed opens / 15 min per device); cleared on a successful unlock.
+	luksOpen: adminProcedure
+		.input(z.object({deviceId: luksDeviceIdSchema, passphrase: z.string().min(1)}))
+		.mutation(async ({input}) => {
+			const now = Date.now()
+			const prior = (luksUnlockAttempts.get(input.deviceId) ?? []).filter((t) => now - t < LUKS_UNLOCK_WINDOW_MS)
+			if (isRateLimited(prior, now, LUKS_UNLOCK_WINDOW_MS, LUKS_UNLOCK_MAX)) {
+				throw new TRPCError({code: 'TOO_MANY_REQUESTS', message: '[luks-unlock-rate-limited]'})
+			}
+			const result = await runLuks(['open', input.deviceId], [input.passphrase])
+			if (result.ok) {
+				luksUnlockAttempts.delete(input.deviceId)
+			} else {
+				prior.push(now)
+				luksUnlockAttempts.set(input.deviceId, prior)
+			}
+			return result
+		}),
+	// luksClose: umount + luksClose (refuses on EBUSY → {ok:false}). The registry row
+	// is KEPT (a locked disk still exists), mirroring cryptoLock.
+	luksClose: adminProcedure
+		.input(z.object({deviceId: luksDeviceIdSchema}))
+		.mutation(async ({input}) => runLuks(['close', input.deviceId])),
 	// ── Phase 325 (NET-01, 325-08) — host networking (hostname / static IP / DNS) ─
 	// FLAT route names (matches the osPatch*/ups*/crypto* convention above, not a
 	// nested router). All adminProcedure: writing /etc/netplan + hostnamectl is a

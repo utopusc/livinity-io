@@ -2966,6 +2966,18 @@ elif [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
         || warn "ripgrep install failed (non-fatal — file-content search uses the pure-Node fallback until fixed)"
 fi
 
+# --- (e) Phase 339 (STORD-02): cryptsetup — day-2 presence-ensure so ALREADY-DEPLOYED
+# boxes get `cryptsetup` for whole-disk LUKS2 encryption (livos-luks.sh wrapper). Same
+# idempotent apt idiom as (b)/(c)/(d); a distro package (matches gocryptfs's own
+# apt-get install — NO sha256 pin, NO GitHub-release recipe, sacred-sha N/A). Non-fatal
+# — disk encryption stays unavailable until fixed. ---
+if command -v cryptsetup >/dev/null 2>&1; then
+    info "update.sh: cryptsetup already present — skipping install"
+elif [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq cryptsetup 2>&1 | tail -3 \
+        || warn "cryptsetup install failed (non-fatal — disk encryption unavailable until fixed)"
+fi
+
 # ── Step 7.10c: Phase 316 (GPU-01) — NVIDIA install provisioning (sudoers.d/livos-gpu + wrapper) ──
 # The livos-gpu NOPASSWD grant + the root-owned install wrapper must reach
 # ALREADY-DEPLOYED boxes on Update, not just fresh installs. Mirrors Step 7.10b
@@ -3991,6 +4003,72 @@ if [[ -f "$_RECYCLE_SUDOERS_SRC" ]]; then
     rm -f "$_RECYCLE_SUDOERS_TMP"
 else
     info "sudoers.d/livos-recycle-bin source not found — skipping (.Recycle.Bin provisioning unavailable)"
+fi
+
+# ── Step 7.10y: Phase 339 (STORD-02) — whole-disk LUKS2 encryption (wrapper + sudoers.d/livos-luks) ──
+# The livos-luks NOPASSWD grant + the root-owned encryption wrapper (closed-enum
+# {format|open|close|status}, 3-gate device re-validation + stdin-only passphrase/recovery).
+# Deployed EXACTLY like Step 7.10x (livos-recycle-bin) above (content-diff wrapper install +
+# sudoers subject-template + visudo validate-or-remove), retargeted to livos-luks. Deploys the
+# PRIVILEGED PLUMBING only — the actual luksFormat/open/close cycle is operator-driven from the
+# Storage UI (339-03). `cryptsetup` itself is presence-ensured by the (e) apt block above. Fully
+# fail-tolerant: a missing source or a visudo rejection never aborts the Update; a box without
+# this simply cannot encrypt a disk until fixed (no auto-mount, no data risk).
+step "Phase 339 (STORD-02): whole-disk LUKS2 encryption (livos-luks.sh + sudoers.d/livos-luks)"
+
+_set_desktop_identity   # Phase 277.1 — self-derive the desktop user (no literal bruce)
+
+# --- (a0) livos-luks.sh wrapper — install BEFORE the grant ---
+_LUKS_WRAP_SRC="$LIVOS_DIR/scripts/install/livos-luks.sh"
+if [[ ! -f "$_LUKS_WRAP_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _LUKS_WRAP_SRC="$TEMP_DIR/scripts/install/livos-luks.sh"
+fi
+_LUKS_WRAP_DST="/usr/local/lib/livos/livos-luks.sh"
+if [[ -f "$_LUKS_WRAP_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_LUKS_WRAP_DST" ]] || ! cmp -s "$_LUKS_WRAP_SRC" "$_LUKS_WRAP_DST"; then
+        if install -m 0755 -o root -g root "$_LUKS_WRAP_SRC" "$_LUKS_WRAP_DST"; then
+            ok "livos-luks.sh installed at $_LUKS_WRAP_DST"
+        else
+            warn "Failed to install livos-luks.sh (non-fatal — disk encryption unavailable until fixed)"
+        fi
+    else
+        info "livos-luks.sh already current"
+    fi
+else
+    info "livos-luks.sh source not found — skipping (disk encryption unavailable)"
+fi
+
+# --- (a) sudoers.d/livos-luks — install + template the subject to the desktop user ---
+_LUKS_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-luks"
+if [[ ! -f "$_LUKS_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _LUKS_SUDOERS_SRC="$TEMP_DIR/scripts/install/sudoers.d/livos-luks"
+fi
+_LUKS_SUDOERS_DST="/etc/sudoers.d/livos-luks"
+if [[ -f "$_LUKS_SUDOERS_SRC" ]]; then
+    _LUKS_SUDOERS_TMP=$(mktemp)
+    if [[ "$_DESKTOP_USER" != "bruce" ]]; then
+        sed -E "s/^bruce([[:space:]]+ALL=)/${_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DESKTOP_USER})/g" \
+            "$_LUKS_SUDOERS_SRC" > "$_LUKS_SUDOERS_TMP"
+    else
+        cp -f "$_LUKS_SUDOERS_SRC" "$_LUKS_SUDOERS_TMP"
+    fi
+    if [[ ! -f "$_LUKS_SUDOERS_DST" ]] || ! cmp -s "$_LUKS_SUDOERS_TMP" "$_LUKS_SUDOERS_DST"; then
+        install -m 0440 -o root -g root "$_LUKS_SUDOERS_TMP" "$_LUKS_SUDOERS_DST"
+        # SAFETY-CRITICAL: a malformed sudoers file can break sudo system-wide. Validate the
+        # INSTALLED file; if visudo rejects it, REMOVE it (disk encryption stays denied).
+        if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_LUKS_SUDOERS_DST" >/dev/null 2>&1; then
+            warn "visudo rejected $_LUKS_SUDOERS_DST — removing (disk encryption stays denied until fixed)"
+            rm -f "$_LUKS_SUDOERS_DST"
+        else
+            ok "sudoers.d/livos-luks installed (subject: ${_DESKTOP_USER})"
+        fi
+    else
+        info "sudoers.d/livos-luks already current (subject: ${_DESKTOP_USER})"
+    fi
+    rm -f "$_LUKS_SUDOERS_TMP"
+else
+    info "sudoers.d/livos-luks source not found — skipping (disk encryption unavailable)"
 fi
 
 # ── Step 7.11: Phase 306 — desktop-user password helper (wrapper + sudoers + bootstrap) ──
