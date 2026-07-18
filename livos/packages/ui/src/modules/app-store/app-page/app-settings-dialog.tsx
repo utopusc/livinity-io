@@ -233,6 +233,7 @@ function AppSettingsDialogForApp({
 								appName={app.name}
 								initialCpuLimit={app.cpuLimit}
 								initialMemoryLimit={app.memoryLimit}
+								initialCpuSet={app.cpuSet}
 							/>
 						</div>
 					) : null}
@@ -245,6 +246,7 @@ function AppSettingsDialogForApp({
 								appName={app.name}
 								initialPolicy={app.autoUpdatePolicy ?? 'manual'}
 								ignoredVersion={app.ignoredVersion}
+								initialWindow={app.updateWindow}
 							/>
 						</div>
 					) : null}

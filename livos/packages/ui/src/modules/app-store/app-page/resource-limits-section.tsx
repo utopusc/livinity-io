@@ -14,6 +14,8 @@ interface ResourceLimitsSectionProps {
 	initialCpuLimit?: number
 	/** Persisted per-app memory limit in BYTES (`app.memoryLimit`) — or undefined for no limit. */
 	initialMemoryLimit?: number
+	/** Persisted per-app cpuset pin (`app.cpuSet`) — e.g. "0-2,4", or undefined for no pinning. */
+	initialCpuSet?: string
 }
 
 /**
@@ -31,7 +33,7 @@ interface ResourceLimitsSectionProps {
  *
  * All copy flows through `t('app-resource-limits.*')` against public/locales/{en,tr}.json.
  */
-export function ResourceLimitsSection({appId, appName, initialCpuLimit, initialMemoryLimit}: ResourceLimitsSectionProps) {
+export function ResourceLimitsSection({appId, appName, initialCpuLimit, initialMemoryLimit, initialCpuSet}: ResourceLimitsSectionProps) {
 	const utils = trpcReact.useUtils()
 	const {isAdmin} = useCurrentUser()
 
@@ -39,6 +41,8 @@ export function ResourceLimitsSection({appId, appName, initialCpuLimit, initialM
 	const [memoryLimitMB, setMemoryLimitMB] = useState(
 		initialMemoryLimit != null ? String(Math.round(initialMemoryLimit / 1024 / 1024)) : '',
 	)
+	// 342-02 APPD-02 (D-342-5): per-app CPU-core pinning (`cpuset`). Empty = no pinning.
+	const [cpuSet, setCpuSet] = useState(initialCpuSet ?? '')
 
 	// 326-review (WR-02): Docker refuses a memory limit below 6 MB and the app is
 	// then stuck stopped (the bad limit re-applies on every patchComposeFile). Reject
@@ -46,6 +50,10 @@ export function ResourceLimitsSection({appId, appName, initialCpuLimit, initialM
 	// still means "no limit" (cleared), so only a positive < 6 is invalid.
 	const memoryMBNum = parseFloat(memoryLimitMB)
 	const memoryBelowMin = memoryLimitMB.trim() !== '' && Number.isFinite(memoryMBNum) && memoryMBNum > 0 && memoryMBNum < 6
+
+	// 342-02 APPD-02 (T-342-05): FORMAT mirror of the server route regex — the SEMANTIC
+	// core-count guard stays server-side (validateCpuSet, os.cpus().length). Empty = cleared.
+	const cpuSetInvalid = cpuSet.trim() !== '' && !/^\d{1,3}(-\d{1,3})?(,\d{1,3}(-\d{1,3})?)*$/.test(cpuSet.trim())
 
 	const setResourceLimitsMut = trpcReact.apps.setResourceLimits.useMutation({
 		onSuccess: () => {
@@ -57,6 +65,8 @@ export function ResourceLimitsSection({appId, appName, initialCpuLimit, initialM
 	const handleSave = () => {
 		// 326-review (WR-02): never send a below-6-MB limit — Docker would brick the app.
 		if (memoryBelowMin) return
+		// 342-02 APPD-02: never send a malformed cpuset — the format mirror blocks it.
+		if (cpuSetInvalid) return
 		// Empty / non-positive fields CLEAR the limit (send undefined). Convert MB->bytes
 		// and CPU->decimal cores exactly like container-create-form.tsx.
 		const cpu = cpuLimit.trim() && parseFloat(cpuLimit) > 0 ? parseFloat(cpuLimit) : undefined
@@ -64,7 +74,7 @@ export function ResourceLimitsSection({appId, appName, initialCpuLimit, initialM
 			memoryLimitMB.trim() && parseFloat(memoryLimitMB) > 0
 				? Math.round(parseFloat(memoryLimitMB) * 1024 * 1024)
 				: undefined
-		setResourceLimitsMut.mutate({appId, cpuLimit: cpu, memoryLimit: mem})
+		setResourceLimitsMut.mutate({appId, cpuLimit: cpu, memoryLimit: mem, cpuSet: cpuSet.trim() || undefined})
 	}
 
 	return (
@@ -111,6 +121,28 @@ export function ResourceLimitsSection({appId, appName, initialCpuLimit, initialM
 						</p>
 					) : null}
 				</div>
+				{/* 342-02 APPD-02 (D-342-5): CPU-core pinning (`cpuset`). Format-validated inline;
+				    server enforces the semantic core-count guard. Empty clears the pin. */}
+				<div>
+					<label className='mb-1.5 block px-[5px] text-caption -tracking-2 text-text-secondary'>
+						{t('app-resource-limits.cpuset-label')}
+					</label>
+					<Input
+						type='text'
+						inputMode='text'
+						value={cpuSet}
+						onValueChange={setCpuSet}
+						placeholder={t('app-resource-limits.cpuset-placeholder')}
+						disabled={!isAdmin || setResourceLimitsMut.isPending}
+						aria-invalid={cpuSetInvalid || undefined}
+					/>
+					<p className='mt-1.5 px-[5px] text-caption text-text-tertiary'>{t('app-resource-limits.cpuset-help')}</p>
+					{cpuSetInvalid ? (
+						<p role='alert' className='mt-1.5 px-[5px] text-caption text-red-400'>
+							{t('app-resource-limits.cpuset-format-error')}
+						</p>
+					) : null}
+				</div>
 			</div>
 
 			{/* T-326-16 — limits apply via compose recreation, so the app restarts to apply. */}
@@ -124,7 +156,7 @@ export function ResourceLimitsSection({appId, appName, initialCpuLimit, initialM
 					size='sm'
 					variant='default'
 					onClick={handleSave}
-					disabled={!isAdmin || setResourceLimitsMut.isPending || memoryBelowMin}
+					disabled={!isAdmin || setResourceLimitsMut.isPending || memoryBelowMin || cpuSetInvalid}
 				>
 					{setResourceLimitsMut.isPending ? <TbLoader2 className='mr-1 h-4 w-4 animate-spin' /> : null}
 					{t('app-resource-limits.save')}
