@@ -23,11 +23,19 @@ import { nanoid } from 'nanoid';
 import pool from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
 import { sendVerificationEmail } from '@/lib/email';
+import { rateLimit, getClientIp, tooManyRequests } from '@/lib/rate-limit';
+import { isDisposableEmailDomain } from '@/lib/disposable-email-domains';
 
 const TOKEN_EXPIRY_HOURS = 24;
 
 export async function POST(req: NextRequest) {
   try {
+    // Per-IP flood guard — closes the gap that let a single script mint 33
+    // disposable-email accounts over 3 days (2026-07-16..18, web-library.net)
+    // to probe the free-trial/promo/API-key flow. Fails open on limiter outage.
+    const ipLimit = await rateLimit(`register:ip:${getClientIp(req)}`, 8, 3600);
+    if (!ipLimit.allowed) return tooManyRequests(ipLimit.retryAfter);
+
     // Phase 274: signup no longer collects a username. The create page asks for
     // email + password (+ confirm-password, client-side). The user picks a
     // username in the /username step AFTER verifying their email, so the pending
@@ -55,6 +63,13 @@ export async function POST(req: NextRequest) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
+    }
+
+    if (isDisposableEmailDomain(email)) {
+      return NextResponse.json(
+        { error: 'Please use a permanent email address to sign up.' },
+        { status: 400 },
+      );
     }
 
     const normalizedEmail = email.toLowerCase().trim();
