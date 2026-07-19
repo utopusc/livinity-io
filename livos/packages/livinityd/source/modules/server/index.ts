@@ -844,7 +844,13 @@ class Server {
 				// itself serves no authenticated data. See APEX_PUBLIC_GET_PREFIXES.
 				if (request.method === 'GET') {
 					for (const prefix of APEX_PUBLIC_GET_PREFIXES) {
-						if (path.startsWith(prefix)) return next()
+						// WARN-345-1: the `/public` entry (no trailing slash) must match on a
+						// path BOUNDARY only — a bare startsWith('/public') would also admit
+						// /publications, /public-admin, etc. The trailing-slash prefixes
+						// (/files/share/, /invite/) are already boundary-bounded → startsWith.
+						const matched =
+							prefix === '/public' ? path === '/public' || path.startsWith('/public/') : path.startsWith(prefix)
+						if (matched) return next()
 					}
 				}
 

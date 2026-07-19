@@ -46,10 +46,14 @@ export function baseAppId(appId: string): string {
 }
 
 /**
- * The fail-closed ownership decision (D-345-2). Written as an ALLOW-LIST:
- * a shared grant admits ONLY on an explicit `full`|`readonly` level — NEVER
- * `effectiveAccessLevel !== undefined` (that would fail-OPEN on `'none'`, the
- * value getEffectiveAppAccess actually returns for no grant — PLAN-CHECK W1).
+ * The fail-closed ownership decision (D-345-2 + CR-345-1). Written as an
+ * ALLOW-LIST. A per-user composite instance (`${base}:user:${uid}`, owner set)
+ * is authorized ONLY for its OWNER or an admin — NEVER via a BASE-app share
+ * grant. CR-345-1: the widget data fetch reads the SPECIFIC owner's container
+ * (`getApp('${base}:user:${uid}').getWidgetData`), so a grant on the BASE app
+ * (`getEffectiveAppAccess(base, caller)`) does NOT prove access to another
+ * user's instance — admitting on it let Alice (base `full` on jellyfin) read
+ * Bob's `jellyfin:user:<bobId>` widget data. Owner-only closes that.
  *
  * Admits:
  *   - owner === null           → ownerless built-in / global app (box-global,
@@ -57,10 +61,8 @@ export function baseAppId(appId: string): string {
  *                                global widgets keep working, never-break)
  *   - isAdmin                  → an admin may access any owned widget
  *   - currentUserId === owner  → the owner themselves
- *   - effectiveAccessLevel is  → an explicit share grant (full or readonly)
- *     'full' | 'readonly'
  * DENIES (fail-closed) everything else, notably:
- *   - owner set, currentUserId !== owner, effectiveAccessLevel === 'none'
+ *   - owner set, currentUserId !== owner (ANY base-app grant — no cross-user)
  *   - owner set, currentUserId === undefined (unidentified caller)
  *   - unknown / empty inputs
  */
@@ -68,9 +70,8 @@ export function decideWidgetAccess(args: {
 	owner: string | null
 	currentUserId: string | undefined
 	isAdmin: boolean
-	effectiveAccessLevel: WidgetAccessLevel | undefined
 }): boolean {
-	const {owner, currentUserId, isAdmin, effectiveAccessLevel} = args
+	const {owner, currentUserId, isAdmin} = args
 
 	// Ownerless built-in / global app — box-global, unchanged (bypass).
 	if (owner === null) return true
@@ -81,9 +82,8 @@ export function decideWidgetAccess(args: {
 	// Beyond here the caller must be an identified user.
 	if (!currentUserId) return false
 
-	// The owner themselves.
-	if (currentUserId === owner) return true
-
-	// A non-owner is admitted ONLY on an explicit share grant (ALLOW-LIST).
-	return effectiveAccessLevel === 'full' || effectiveAccessLevel === 'readonly'
+	// A per-user composite instance is authorized ONLY for its OWNER. A BASE-app
+	// share grant is NOT accepted here (CR-345-1): the data fetch reads the
+	// owner's container, so a base grant would leak another user's instance.
+	return currentUserId === owner
 }

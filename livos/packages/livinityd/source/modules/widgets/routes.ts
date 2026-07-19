@@ -6,12 +6,12 @@ import {router, privateProcedure} from '../server/trpc/trpc.js'
 import {systemWidgets} from '../system/system-widgets.js'
 import {filesWidgets} from '../files/widgets.js'
 import {appIdOwner} from '../domain/caddy.js'
-import {getEffectiveAppAccess} from '../apps/app-access.js'
 import {WidgetDataSchema} from '../apps/widget-manifest.js'
 // Phase 345-01 (WIDG-01, D-345-2) — the pure, unit-tested widget multi-user
 // safety core. splitWidgetId now rsplits on the LAST colon (composite per-user
-// id fix); decideWidgetAccess is the fail-closed ownership allow-list.
-import {splitWidgetId, baseAppId, decideWidgetAccess} from './widget-access.js'
+// id fix); decideWidgetAccess is the fail-closed ownership allow-list
+// (CR-345-1: per-user composites are owner/admin-only, no base-grant crossover).
+import {splitWidgetId, decideWidgetAccess} from './widget-access.js'
 
 const MAX_ALLOWED_WIDGETS = 3
 
@@ -34,10 +34,11 @@ async function assertWidgetAccess(ctx: WidgetAccessCtx, appId: string): Promise<
 
 	const owner = appIdOwner(appId)
 	const isAdmin = ctx.currentUser ? ctx.currentUser.role === 'admin' : ctx.legacySingleUser === true
-	const effectiveAccessLevel =
-		owner && ctx.currentUser ? await getEffectiveAppAccess(baseAppId(appId), ctx.currentUser.id) : undefined
 
-	if (!decideWidgetAccess({owner, currentUserId: ctx.currentUser?.id, isAdmin, effectiveAccessLevel})) {
+	// CR-345-1: a per-user composite instance is owner/admin-only. A BASE-app
+	// share grant is deliberately NOT consulted — it does not prove access to
+	// another user's specific instance whose container the data fetch reads.
+	if (!decideWidgetAccess({owner, currentUserId: ctx.currentUser?.id, isAdmin})) {
 		throw new TRPCError({code: 'FORBIDDEN', message: 'You do not have access to this app widget'})
 	}
 }
@@ -144,11 +145,17 @@ export default router({
 				// that throws in the UI render.
 				const raw = await ctx.apps.getApp(appId).getWidgetData(widgetName)
 				const parsed = WidgetDataSchema.safeParse(raw)
-				widgetData = parsed.success ? raw : {type: 'unknown', refresh: raw?.refresh ?? '30s'}
+				// IN-345-1: on success return the VALIDATED data (stripped to the
+				// four typed fields) — never the raw container payload — so only
+				// typed fields ever structurally leave the box.
+				widgetData = parsed.success ? parsed.data : {type: 'unknown', refresh: raw?.refresh ?? '30s'}
 			}
 
-			// Parse refresh time from human-readable string to milliseconds
-			widgetData.refresh = ms(widgetData.refresh)
+			// Parse refresh time from human-readable string to milliseconds.
+			// IN-345-2: `refresh` is OPTIONAL in WidgetDataSchema, so a conformant
+			// payload may omit it — default to '30s' (mirrors the degrade path)
+			// rather than letting ms(undefined) throw a 500.
+			widgetData.refresh = ms(widgetData.refresh ?? '30s')
 
 			return widgetData
 		}),
