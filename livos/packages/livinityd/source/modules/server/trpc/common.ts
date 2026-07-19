@@ -864,4 +864,18 @@ export const httpOnlyPaths = [
 	'announcements.markSeen',
 	'announcements.submitVote',
 	'announcements.submitFeedback',
+	// Phase 344-03 (XFER-01) — cross-box single-app migration.
+	//   - appMigration.importBundle is stepUpAdminProcedure: it executes an
+	//     uploaded compose + writes app data (same irreversible-risk tier as
+	//     system.luksFormat / apps.uninstall). The LIVINITY_STEPUP grant cookie
+	//     is minted on an HTTP response and a WS link's cookies are frozen at
+	//     upgrade time — a WS call would fail closed every time, so force HTTP.
+	//   - appMigration.exportApp is a long-running mutation (stop → tar every
+	//     named volume → start), and appMigration.migrationStatus is POLLED for
+	//     progress across the WS reconnect window. Both ride HTTP for the same
+	//     reason as system.update / system.updateStatus (pitfall B-12 / X-04).
+	// listBundles + deleteBundle stay on WS — cheap, idempotent admin ops.
+	'appMigration.importBundle',
+	'appMigration.exportApp',
+	'appMigration.migrationStatus',
 ] as const

@@ -17,6 +17,11 @@ import groups from '../../user/groups-routes.js'
 // grants; grant/revoke adminProcedure-audited, my = caller's own scopes).
 import adminScopes from '../../user/admin-scopes-routes.js'
 import {appStore, apps as appsBase} from '../../apps/routes.js'
+// Phase 344-03 (XFER-01) — `appMigration.*` cross-box single-app migration namespace.
+// exportApp / migrationStatus / listBundles / deleteBundle (adminProcedure) + importBundle
+// (stepUpAdminProcedure + httpOnlyPaths — executes an uploaded compose + writes app data).
+// Fresh top-level sibling of `apps` (NOT merged in — migration is its own domain surface).
+import {appMigration} from '../../apps/migration-routes.js'
 import widget from '../../widgets/routes.js'
 import files from '../../files/routes.js'
 // Phase 318 (POOL-02/03/04, D-15) — `storagePool.*` adminProcedure namespace.
@@ -356,6 +361,8 @@ export function createAppRouter(opts: {
 		adminScopes,
 		appStore,
 		apps,
+		// Phase 344-03 (XFER-01) — cross-box single-app migration namespace.
+		appMigration,
 		widget,
 		files,
 		// Phase 318 — storagePool.* pool lifecycle namespace (POOL-02/03/04).

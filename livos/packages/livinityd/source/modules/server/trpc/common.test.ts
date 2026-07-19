@@ -22,6 +22,7 @@ import assert from 'node:assert/strict'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import {fileURLToPath} from 'node:url'
+import {test} from 'vitest'
 import {httpOnlyPaths} from './common.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -361,7 +362,63 @@ function runTests() {
 		ok('Test 20: bare sendAuthInput/uninstall absent (cliInstaller.* convention preserved)')
 	}
 
-	console.log('\nAll common.test.ts tests passed (20/20)')
+	// Phase 344-03 (XFER-01) — appMigration cross-box migration httpOnlyPaths.
+	// importBundle is stepUpAdminProcedure (the LIVINITY_STEPUP grant cookie only
+	// travels on HTTP — a WS call fails closed, same as system.luksFormat).
+	// exportApp is a long-running mutation + migrationStatus is polled for progress
+	// across the WS reconnect window (same rationale as system.update/updateStatus).
+	// Test 21: the three appMigration.* entries present in httpOnlyPaths
+	{
+		assert.ok(
+			httpOnlyPaths.includes('appMigration.importBundle' as any),
+			"httpOnlyPaths must include 'appMigration.importBundle' (Phase 344-03 — stepUpAdminProcedure; the LIVINITY_STEPUP grant cookie rides HTTP only, a WS call fails closed like system.luksFormat)",
+		)
+		assert.ok(
+			httpOnlyPaths.includes('appMigration.exportApp' as any),
+			"httpOnlyPaths must include 'appMigration.exportApp' (Phase 344-03 — long-running stop→tar→start mutation must survive the WS reconnect window like system.update)",
+		)
+		assert.ok(
+			httpOnlyPaths.includes('appMigration.migrationStatus' as any),
+			"httpOnlyPaths must include 'appMigration.migrationStatus' (Phase 344-03 — polled progress across the WS reconnect window like system.updateStatus)",
+		)
+		ok('Test 21: all 3 appMigration.* entries present in httpOnlyPaths')
+	}
+
+	// Test 22: bare-name / half-namespaced footgun guard for Phase 344-03 entries.
+	// Mirrors Tests 4 / 7 / 9 / 12 / 14 / 16 / 18 / 20 — every entry follows the
+	// <router>.<route> convention. deleteBundle + listBundles stay on WS (cheap
+	// admin ops), so they MUST NOT appear here.
+	{
+		assert.ok(
+			!httpOnlyPaths.includes('importBundle' as any),
+			"httpOnlyPaths must NOT include bare 'importBundle' (must be namespaced as 'appMigration.importBundle')",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('exportApp' as any),
+			"httpOnlyPaths must NOT include bare 'exportApp' (must be namespaced as 'appMigration.exportApp')",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('migrationStatus' as any),
+			"httpOnlyPaths must NOT include bare 'migrationStatus' (must be namespaced as 'appMigration.migrationStatus')",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('appMigration.deleteBundle' as any),
+			"httpOnlyPaths must NOT include 'appMigration.deleteBundle' (a cheap idempotent admin op — stays on WS, not httpOnly)",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('appMigration.listBundles' as any),
+			"httpOnlyPaths must NOT include 'appMigration.listBundles' (a cheap admin query — stays on WS, not httpOnly)",
+		)
+		ok('Test 22: bare/half-namespaced + non-httpOnly appMigration names correct')
+	}
+
+	console.log('\nAll common.test.ts tests passed (22/22)')
 }
 
-runTests()
+// Phase 344-03 — this file historically ran as a standalone tsx script. It is now
+// wrapped in a vitest `test()` so the plan's `vitest run` gate sees a real test
+// (a bare-assertion file reports "No test suite found" and fails the suite). All
+// assertions still throw via node:assert, so a regression fails the vitest test.
+test('httpOnlyPaths allowlist (Phase 344-03 + regression)', () => {
+	runTests()
+})
