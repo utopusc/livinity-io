@@ -1,0 +1,11 @@
+# Phase 347 (LANDNS-01) — sudoers grant for the LAN-DNS / mDNS wrapper.
+# Security model: grant on ONE explicit binary path, NO glob, NO arg wildcard.
+# The wrapper validates its closed 6-action enum
+# {install|enable|disable|status|mdns-enable|mdns-disable},
+# regex-validates every ip/domain token BEFORE it reaches dnsmasq/avahi/systemctl (and
+# REJECTS .local for split-horizon), keeps LAN-DNS DEFAULT OFF / never the sole resolver,
+# and builds every argv + /etc file body itself — so no caller-supplied string reaches a
+# privileged command or a config file. Disjoint from the CF/portal path by construction
+# (own /etc/dnsmasq.d/livos-landns.conf namespace). Deploy day-2: update.sh Step 7.10z.
+Cmnd_Alias LIVINITYD_LANDNS = /usr/local/lib/livos/livos-landns.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_LANDNS
