@@ -89,6 +89,26 @@ export const V47_P323_APP_ACCESS_MIGRATIONS: ReadonlyArray<string> = [
 	'2026-07-16-p323-app-access.sql',
 ] as const
 
+// Phase 335 (ROLE-01/02) — admin_scopes + app_operators scoped-admin grant
+// tables. INCIDENTAL CROSS-PHASE FIX (346-01): the migration file has shipped on
+// disk since Phase 335 (da84da11) but was NEVER registered here — the exact
+// drift-#7 omission the p329 comment warns about (same class as the p325 fix).
+// Left unregistered, the ROLE-01/02 grant surface has no reviewable artifact in
+// ALL_MIGRATIONS even though schema.sql already applies the tables at boot.
+// Registered here so the migration-registration guard (files/share-tokens.test.ts)
+// stays green and the artifact is discoverable. Additive-only per the invariant.
+export const V48_P335_ADMIN_GRANTS_MIGRATIONS: ReadonlyArray<string> = [
+	'2026-07-17-p335-admin-grants.sql',
+] as const
+
+// Phase 346-01 (MCP-01, D-346-4) — mcp_control_keys table for scoped `liv_mcp_*`
+// MCP control-plane keys (SEPARATE from api_keys by design). Registered here
+// (drift #7 / 325 omission lesson) — additive-only per the expand invariant.
+// Appended AFTER the 323-05 app-access entry; all prior entries are untouched.
+export const V48_P346_MCP_CONTROL_KEYS_MIGRATIONS: ReadonlyArray<string> = [
+	'2026-07-19-p346-mcp-control-keys.sql',
+] as const
+
 export const ALL_MIGRATIONS: ReadonlyArray<string> = [
 	...V32_AGENTS_MIGRATIONS,
 	...V36_P131_PINNED_WINDOWS_MIGRATIONS,
@@ -99,4 +119,6 @@ export const ALL_MIGRATIONS: ReadonlyArray<string> = [
 	...V47_P324_FILE_ACLS_MIGRATIONS,
 	...V47_P323_WEBAUTHN_MIGRATIONS,
 	...V47_P323_APP_ACCESS_MIGRATIONS,
+	...V48_P335_ADMIN_GRANTS_MIGRATIONS, // incidental cross-phase fix (346-01)
+	...V48_P346_MCP_CONTROL_KEYS_MIGRATIONS,
 ] as const
