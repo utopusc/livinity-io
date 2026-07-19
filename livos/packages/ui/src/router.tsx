@@ -51,6 +51,11 @@ const InviteAcceptPage = React.lazy(() => import('./routes/invite'))
 // in the URL IS the auth (D-02/D-04); mounted OUTSIDE EnsureLoggedIn (no session
 // cookie assumed), next to the invite/:token public token route.
 const PublicSharePage = React.lazy(() => import('./features/files/public-share-page'))
+// GUEST-01 (345-04) — unauthenticated public dashboard landing page. UNLIKE the
+// invite/share precedents there is NO token in the URL: the page is openly
+// browsable because its payload is admin-curated + provably leak-free server-side
+// (publicDashboard.get / curate.ts), so it needs no path credential. Default-OFF.
+const PublicDashboardPage = React.lazy(() => import('./features/public-dashboard/public-dashboard-page'))
 // Phase 66 / Plan 05 — Liv Design System v1 playground.
 // Single visual reference for every primitive shipped by Plans 66-01..66-04.
 // Hidden from main nav (D-21); reachable only via direct URL.
@@ -229,6 +234,13 @@ export const router = createBrowserRouter([
 				// the generic not-available state itself.
 				path: 'files/share/:token',
 				element: <PublicSharePage />,
+			},
+			{
+				// GUEST-01 (345-04) — anonymous public dashboard. No token: the
+				// payload is admin-curated + leak-free server-side (D-345-4/5),
+				// default-OFF renders an honest "not available" state.
+				path: 'public',
+				element: <PublicDashboardPage />,
 			},
 		],
 	},
