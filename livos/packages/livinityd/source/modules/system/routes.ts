@@ -1872,6 +1872,31 @@ export default router({
 			}
 			return result
 		}),
+	// ── Phase 347 (PWR-01, 347-01) — CPU/platform power profiles ────────────────
+	// powerProfileGet / powerProfileSet drive the wrapper's profile-get/profile-set
+	// (powerprofilesctl) over the existing sudoers grant. The profile is z.enum-
+	// constrained here (defense-in-depth on top of the wrapper's own _valid_profile
+	// closed-enum match) BEFORE it reaches powerprofilesctl. Unlike powerScheduleSet
+	// (whose input demands a z.literal(true) acknowledgment), these routes deliberately
+	// take NO such acknowledgment input: switching a power profile is fully REVERSIBLE
+	// (any profile can be re-selected instantly), so it carries no no-software-revert
+	// risk (D-347-2). WSL2 handling is unchanged and route-side in powerStatus (the UI
+	// hard-hides the whole card under WSL2).
+	powerProfileGet: adminProcedure.query(async () => runPower(['profile-get'])),
+	powerProfileSet: adminProcedure
+		.input(z.object({profile: z.enum(['balanced', 'power-saver', 'performance'])}))
+		.mutation(async ({ctx, input}) => {
+			const result = await runPower(['profile-set', input.profile])
+			if (result.ok) {
+				const existing = (await ctx.livinityd?.store.get('power')) ?? {}
+				await ctx.livinityd?.store.set('power', {
+					...existing,
+					profiles: {active: input.profile},
+					lastAppliedAt: Date.now(),
+				})
+			}
+			return result
+		}),
 	// ── Phase 306 R2 — desktop-user OS/sudo password (Settings → Account) ───────
 	// getDesktopUserInfo: lightweight, NON-secret. Returns just the username + a
 	// hasPassword flag so the card can render without ever shipping the plaintext.

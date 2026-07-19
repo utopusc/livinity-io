@@ -556,6 +556,9 @@ type StoreSchema = {
 		spindown?: {device: string; timeout: number}[]
 		schedule?: {shutdown: string; wake: string}
 		wol?: string[]
+		// 347-01 PWR-01 display-only mirror of the active power profile; source of truth
+		// is powerprofilesctl (wrapper-owned). Reversible → no lockout/ack gate (D-347-2).
+		profiles?: {active: string}
 		lastAppliedAt?: number
 	}
 	backups: {
