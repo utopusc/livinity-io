@@ -649,6 +649,17 @@ type StoreSchema = {
 	// legacy bare-string `appRepositories` key stays inert (its object shape is
 	// insufficient — the richer AppStoreSource shape is required here).
 	appStoreSources: AppStoreSource[]
+	// Phase 345-03 (GUEST-01, D-345-6) — DEDICATED top-level key (dot-prop hazard:
+	// NOT nested under `apps`/`widgets`/any array or scalar — dot-prop path
+	// collisions silently drop the write, same convention as `folderQuotas`/
+	// `usbImport`/`appStoreSources` above). Box-global, admin-curated config for the
+	// anonymous public dashboard (GUEST-01). Holds ONLY non-secret display data:
+	// enabled flag, an optional title, and free-form {label,url} links. NEVER any
+	// credential/token — the per-app opt-in lives on each app's own store key
+	// (showOnPublicDashboard), and the curation (public-dashboard/curate.ts) emits
+	// only {name,icon,url}. Default (missing/enabled!==true) → the endpoint returns
+	// {enabled:false} and leaks nothing.
+	publicDashboard: {enabled: boolean; title?: string; links: {label: string; url: string}[]}
 }
 
 export type LivinitydOptions = {

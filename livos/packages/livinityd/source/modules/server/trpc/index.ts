@@ -23,6 +23,8 @@ import {appStore, apps as appsBase} from '../../apps/routes.js'
 // Fresh top-level sibling of `apps` (NOT merged in — migration is its own domain surface).
 import {appMigration} from '../../apps/migration-routes.js'
 import widget from '../../widgets/routes.js'
+// Phase 345-03 GUEST-01 — publicDashboard.{get (anonymous),getConfig,setConfig (admin)}
+import publicDashboard from '../../public-dashboard/routes.js'
 import files from '../../files/routes.js'
 // Phase 318 (POOL-02/03/04, D-15) — `storagePool.*` adminProcedure namespace.
 // Fresh top-level sibling of `files`/`scheduler`/`monitoring` (NOT nested under
@@ -364,6 +366,9 @@ export function createAppRouter(opts: {
 		// Phase 344-03 (XFER-01) — cross-box single-app migration namespace.
 		appMigration,
 		widget,
+		// Phase 345-03 GUEST-01 — anonymous public dashboard (get=publicProcedure,
+		// default-OFF leaks nothing) + admin config. Fresh top-level namespace.
+		publicDashboard,
 		files,
 		// Phase 318 — storagePool.* pool lifecycle namespace (POOL-02/03/04).
 		storagePool,
