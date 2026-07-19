@@ -115,6 +115,14 @@ export async function readOomInspect(name: string): Promise<OomInspectSnapshot> 
 	}
 }
 
+// Module-scoped indirection so the handler test can replace the raw inspect without touching a
+// real docker socket (offline dev host). ESM internal calls bind to the module-local reference, so
+// a vi.mock/vi.spyOn on the export would NOT intercept the handler's call — routing through this
+// mutable object (which the test overwrites `.read` on) is the reliable seam.
+export const oomInspector: {read: (name: string) => Promise<OomInspectSnapshot>} = {
+	read: readOomInspect,
+}
+
 // ---------------------------------------------------------------------------
 // Process-scoped anti-thrash window (ai-resource-watch _throttledTimeCache precedent)
 // ---------------------------------------------------------------------------
@@ -153,7 +161,7 @@ export const oomWatchHandler: BuiltInJobHandler = async (job, ctx) => {
 				if (!containerName) continue
 				checked++
 
-				const inspect = await readOomInspect(containerName)
+				const inspect = await oomInspector.read(containerName)
 				const oomSelfHeal = await app.store.get('oomSelfHeal')
 				const debugMode = await app.store.get('debugMode')
 				const window = _oomRestartWindow.get(app.id) ?? []
