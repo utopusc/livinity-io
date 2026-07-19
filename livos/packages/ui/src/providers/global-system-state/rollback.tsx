@@ -65,7 +65,10 @@ export function useRollback({
 	})
 
 	return {
-		rollback: () => rollbackMut.mutate(),
+		// Phase 348 (ABUPD-02): optional opt-in DB restore. No-arg / withDb=false
+		// callers send NO input (undefined) so the pre-348 wire shape is
+		// byte-identical; only an explicit true sends {withDb: true}.
+		rollback: (opts?: {withDb?: boolean}) => rollbackMut.mutate(opts?.withDb === true ? {withDb: true} : undefined),
 		isPending: rollbackMut.isPending,
 		error: rollbackMut.error,
 	}

@@ -1962,6 +1962,9 @@ function SoftwareUpdateSection() {
 						open={rollbackOpen}
 						onOpenChange={setRollbackOpen}
 						target={rollbackTarget.data ?? null}
+						/* 348 (ABUPD-02): strict === true — an absent/false manifest flag
+						   hides the DB-restore checkbox entirely (fail-closed). */
+						dbSnapshotAvailable={rollbackTarget.data?.dbSnapshot === true}
 						rollback={rollback}
 						rollbackPending={rollbackPending}
 					/>
