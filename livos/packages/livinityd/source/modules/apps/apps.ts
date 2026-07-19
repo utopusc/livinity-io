@@ -14,6 +14,18 @@ import appEnvironment from './legacy-compat/app-environment.js'
 import App, {readManifestInDirectory, resolveWantsGpu} from './app.js'
 import type {OidcEnabledApp} from '../oidc/clients.js'
 import {reconcileAppVolumeOwnership} from './reconcile-volume-ownership.js'
+// Phase 344-02 (XFER-01) — the import engine primitives (prechecks / safe-extract /
+// volume restore / rollback ledger). docker-free + mockable; consumed ONLY by the
+// additive importAppBundle() tail below.
+import {
+	newLedger,
+	restoreVolumes,
+	rollback,
+	runImportPrechecks,
+	safeExtractBundle,
+} from './app-bundle-import.js'
+import type {BundleManifest} from './app-bundle-format.js'
+import {getDiskUsageByPath} from '../system/system.js'
 import {classifyInspect} from './health-poll.js'
 import type {AppManifest, AppSettings} from './schema.js'
 import {fillSelectedDependencies} from '../utilities/dependencies.js'
@@ -1305,6 +1317,228 @@ export default class Apps {
 		}
 		const app = new App(this.#livinityd, slug)
 		return this.#finishInstall(slug, installedManifest, app)
+	}
+
+	/**
+	 * Phase 344-02 (XFER-01, D-344-4) — import ONE app from an uploaded `.livbundle`
+	 * produced by exportAppBundle() on another box. The bundle is UNTRUSTED input even
+	 * though it came from the operator's own box, so this method mirrors installFederated's
+	 * trust posture: it funnels through the SAME untrusted-compose sanitize gate + the
+	 * shared `#finishInstall` tail (NO new install path), and rolls back COMPLETELY on any
+	 * failure so the box is left as-if-never-imported.
+	 *
+	 * Order (fail as early + as cheaply as possible):
+	 *   1. safeExtractBundle → staging  (path-traversal-safe + per-entry sha256 verified)
+	 *   2. B1 appId charset assert + runImportPrechecks (schema/version/collision/space)
+	 *   3. collision hard-reject: instances + isInstalled + on-disk app-data + persisted
+	 *      `apps` array + on-disk dir (an orphaned dir from an interrupted uninstall is
+	 *      REJECTED, never silently merged into — W addendum)
+	 *   4. stage app-data + compose + manifest → THE SANITIZE GATE (deployCustom-identical)
+	 *   5. restore volumes + reconcile ownership → `#finishInstall` → best-effort subdomain
+	 *      replay → clean staging
+	 * Any throw runs the FULL rollback (volumes + app-data + staging + instance/apps revert).
+	 *
+	 * D-344-7: GLOBAL apps only (this.instances) — per-user-instance import is DEFERRED.
+	 * D-344-6: bundles are PLAINTEXT — there is NO decrypt path.
+	 */
+	async importAppBundle(input: {
+		bundlePath: string
+	}): Promise<{ok: true; appId: string} | {ok: false; reason: string}> {
+		const {bundlePath} = input
+		const staging = path.join(os.tmpdir(), `livos-import-${Date.now()}`)
+		const ledger = newLedger()
+		let manifest: BundleManifest | undefined
+		let appDataDirectory: string | undefined
+
+		try {
+			// 1. Extract into a fresh staging dir. safeExtractBundle validates every tar
+			// entry BEFORE writing and verifies every manifest sha256 AFTER — so nothing
+			// past this point trusts an unverified byte. Staging is always cleaned (success
+			// removes it; failure pushes it onto the ledger for the catch-block rollback).
+			const extracted = await safeExtractBundle(bundlePath, staging)
+			manifest = extracted.manifest
+
+			// 2a. B1 (BLOCKER, belt-and-suspenders): the appId is the SOLE manifest string
+			// that flows into a path join / fse.copy / volume runtime name below. The Zod
+			// schema already pinned it, but re-assert the App-ctor charset HERE before any
+			// path use — reject '[invalid-app-id]' rather than construct a path from it.
+			if (!/^[a-zA-Z0-9-_]+$/.test(manifest.appId)) {
+				await fse.remove(staging).catch(() => {})
+				return {ok: false, reason: '[invalid-app-id]'}
+			}
+
+			// 2b. Prechecks (schema / version-floor / collision / free-space). Run against
+			// the LIVE instance list + real free space at the data root. Nothing applied yet.
+			const installedAppIds = this.instances.map((a) => a.id)
+			const availableBytes = (await getDiskUsageByPath(this.#livinityd.dataDirectory)).available
+			const pre = runImportPrechecks(manifest, {installedAppIds, availableBytes})
+			if (!pre.ok) {
+				await fse.remove(staging).catch(() => {})
+				return {ok: false, reason: pre.reason}
+			}
+
+			// 3. Collision hard-reject (D-344-4) — defense-in-depth beyond the precheck:
+			// the running instance list, the persisted `apps` FileStore array, AND an
+			// on-disk app-data dir (an orphan from an interrupted uninstall must be
+			// rejected, never silently merged into — W addendum). No in-place overwrite
+			// in v1; the operator uninstalls first.
+			appDataDirectory = `${this.#livinityd.dataDirectory}/app-data/${manifest.appId}`
+			if (await this.isInstalled(manifest.appId)) {
+				await fse.remove(staging).catch(() => {})
+				return {ok: false, reason: '[app-already-installed]'}
+			}
+			const persistedApps = ((await this.#livinityd.store.get('apps')) as string[]) ?? []
+			if (persistedApps.includes(manifest.appId)) {
+				await fse.remove(staging).catch(() => {})
+				return {ok: false, reason: '[app-already-installed]'}
+			}
+			if (await fse.pathExists(appDataDirectory)) {
+				await fse.remove(staging).catch(() => {})
+				return {ok: false, reason: '[app-data-dir-exists]'}
+			}
+
+			// --- From here EVERYTHING is under the rollback ledger. ---
+
+			// 4. Stage the extracted payload into app-data/<appId> (mirror deployCustom's
+			// write pattern). Register the app-data dir on the ledger BEFORE writing into it
+			// so a failure mid-copy still cleans it.
+			await fse.mkdirp(appDataDirectory)
+			ledger.dirs.push(appDataDirectory)
+			const stagedAppData = path.join(staging, 'app-data')
+			if (await fse.pathExists(stagedAppData)) await fse.copy(stagedAppData, appDataDirectory)
+			const stagedCompose = path.join(staging, 'compose', 'docker-compose.yml')
+			if (await fse.pathExists(stagedCompose)) {
+				await fse.copy(stagedCompose, path.join(appDataDirectory, 'docker-compose.yml'))
+			}
+			const stagedManifestFile = path.join(staging, 'livinity-app.yml')
+			if (await fse.pathExists(stagedManifestFile)) {
+				await fse.copy(stagedManifestFile, path.join(appDataDirectory, 'livinity-app.yml'))
+			}
+
+			const composeFile = `${appDataDirectory}/docker-compose.yml`
+			// Pre-create ${APP_DATA_DIR}/<subdir> mount dirs so Docker doesn't own them as
+			// root — the SAME regex install()/deployCustom() use.
+			try {
+				const composeContent0 = await fse.readFile(composeFile, 'utf8')
+				const volumeMatches = composeContent0.matchAll(/\$\{APP_DATA_DIR\}\/([^:]+):/g)
+				for (const match of volumeMatches) await fse.mkdirp(`${appDataDirectory}/${match[1].trim()}`)
+			} catch {}
+
+			// 5. THE SANITIZE GATE — identical to deployCustom (isGeneratedTemplate forced
+			// false). An uploaded compose is UNTRUSTED; ComposeRejected propagates to the
+			// catch → full rollback. Never reuse the builtin/catalog bypass for this input.
+			const yaml = (await import('js-yaml')).default
+			const composeContent = await fse.readFile(composeFile, 'utf8')
+			const composeData = yaml.load(composeContent)
+			const {compose, removed} = sanitizeNonBuiltinCompose(composeData, appDataDirectory)
+			await fse.writeFile(composeFile, yaml.dump(compose))
+			this.logger.log(
+				`344-02: sanitized imported compose for ${manifest.appId} removed=${removed.join(',') || '(none)'}`,
+			)
+
+			// 6. Restore named volumes (each tar.gz already sha256-verified) + reconcile
+			// ownership via the TESTED reconcile path BEFORE the app starts. The App ctor
+			// `/^[a-zA-Z0-9-_]+$/` guard is the final appId safety net.
+			await restoreVolumes(manifest, {projectName: manifest.appId, stagingRoot: staging}, ledger)
+			const app = new App(this.#livinityd, manifest.appId)
+			await reconcileAppVolumeOwnership(app, {projectName: manifest.appId})
+
+			// 7. Hand off to the shared install tail. #finishInstall owns the single
+			// instances.push + docker-up + persist + subdomain provision. On docker-up
+			// failure it returns false (having already filtered this.instances and WITHOUT
+			// writing the `apps` array), so we throw to run the rest of the rollback.
+			let appManifest: AppManifest
+			try {
+				appManifest = await readManifestInDirectory(appDataDirectory)
+			} catch {
+				throw new Error('[import-manifest-not-found]')
+			}
+			const ok = await this.#finishInstall(manifest.appId, appManifest, app)
+			if (!ok) throw new Error('[finish-install-failed]')
+
+			// 8. Subdomain-STRING replay (best-effort, AFTER a successful #finishInstall —
+			// which already registered the appId-derived DEFAULT subdomain). Only re-register
+			// when the source captured a DIFFERENT subdomain string, and only when that
+			// string is not already taken by ANOTHER app on this target (W addendum: reject
+			// the replay with a clear error naming the conflict; the imported app stays
+			// functional on its default subdomain — v1: no auto-rename).
+			//
+			// D-344-5 / SC5 fail-safe: public-access + WAF are NOT auto-restored here. A
+			// forbidden/public flag from the SOURCE box must never silently make the app
+			// public on the TARGET — the imported app comes up PRIVATE by default and the
+			// operator re-enables public access explicitly. Documented deferral (D-344-7).
+			try {
+				const subdomainFile = path.join(staging, 'meta', 'subdomain.json')
+				if (manifest.hasSubdomain && (await fse.pathExists(subdomainFile))) {
+					const captured = JSON.parse(await fse.readFile(subdomainFile, 'utf8')) as {
+						subdomain?: string
+					} | null
+					const desiredSub = (captured?.subdomain ?? '').toLowerCase()
+					if (desiredSub && desiredSub !== manifest.appId.toLowerCase()) {
+						const all = await this.getAllSubdomains()
+						const conflict = all.find(
+							(s) => (s.subdomain ?? '').toLowerCase() === desiredSub && s.appId !== manifest!.appId,
+						)
+						if (conflict) {
+							this.logger.error(
+								`344-02: imported subdomain '${desiredSub}' is already used by app '${conflict.appId}' on this box — ` +
+									`skipping replay; imported app '${manifest.appId}' stays on its default appId-derived subdomain (v1: no auto-rename).`,
+							)
+						} else {
+							await this.registerAppSubdomain(manifest.appId, appManifest.port, desiredSub)
+							this.logger.log(`344-02: replayed subdomain '${desiredSub}' for imported app ${manifest.appId}`)
+						}
+					}
+				}
+			} catch (replayErr) {
+				// A replay hiccup must NOT fail a good import — the app is already up on its
+				// freshly-minted default subdomain.
+				this.logger.error(
+					`344-02: subdomain replay failed for ${manifest.appId} (app is up on its default subdomain)`,
+					replayErr,
+				)
+			}
+
+			// 9. Success — remove staging (it was never added to the ledger yet).
+			await fse.remove(staging).catch(() => {})
+			return {ok: true, appId: manifest.appId}
+		} catch (err) {
+			const reason =
+				err instanceof ComposeRejected
+					? `[compose-rejected] ${err.message}`
+					: err instanceof Error
+						? err.message
+						: String(err)
+
+			// FULL rollback — leave the box as-if-never-imported. #finishInstall structurally
+			// cannot throw AFTER it writes the `apps` array (verified), so a throw here means
+			// either a pre-#finishInstall stage failed OR #finishInstall returned false having
+			// already filtered this.instances and NOT written the array. The instance/array
+			// reverts below are therefore idempotent defense-in-depth.
+			if (manifest) {
+				const doomedId = manifest.appId
+				this.instances = this.instances.filter((a) => a.id !== doomedId)
+				try {
+					await this.#livinityd.store.getWriteLock(async ({get, set}) => {
+						const apps = (await get('apps')) as string[]
+						await set(
+							'apps',
+							apps.filter((id) => id !== doomedId),
+						)
+					})
+				} catch (revertErr) {
+					this.logger.error(`344-02: failed to revert persisted apps array for ${doomedId}`, revertErr)
+				}
+			}
+			// Volumes + app-data dir + staging (add staging so rollback cleans it too).
+			ledger.dirs.push(staging)
+			const result = await rollback(ledger, {logger: this.logger})
+			if (result.failed.length) {
+				this.logger.error(`344-02: import rollback had failures: ${result.failed.join(', ')}`)
+			}
+			this.logger.error(`344-02: importAppBundle failed (${reason}) — rolled back`)
+			return {ok: false, reason}
+		}
 	}
 
 	/**

@@ -11,9 +11,11 @@ import path from 'node:path'
 import zlib from 'node:zlib'
 
 import fse from 'fs-extra'
+import yaml from 'js-yaml'
 import tar from 'tar-stream'
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest'
 
+import {ComposeRejected, sanitizeNonBuiltinCompose} from './compose-sanitizer.js'
 import {BUNDLE_SCHEMA_VERSION, sha256Hex, type BundleManifest} from './app-bundle-format.js'
 import {
 	newLedger,
@@ -316,5 +318,73 @@ describe('restoreVolumes + rollback (seam-mocked, no docker)', () => {
 	})
 })
 
-// buildManifest/packGoodBundle/writeTarGz + vi are reused by the Task 3 suite below.
-void packGoodBundle
+// ---------------------------------------------------------------------------
+// Test 10 & 11 — importAppBundle orchestration invariants, exercised via the module
+// functions directly (the plan-sanctioned offline alternative to standing up a full
+// Apps instance): real safeExtract + real restoreVolumes(seam) + real sanitize gate +
+// real rollback — the EXACT primitives importAppBundle wires together.
+// ---------------------------------------------------------------------------
+
+describe('importAppBundle orchestration invariants (module-level)', () => {
+	test('a sanitize rejection triggers a full rollback (app-data dir + volume + staging cleaned)', async () => {
+		// A bundle whose compose mounts docker.sock — an untrusted escape the sanitize
+		// gate REJECTS with ComposeRejected (deployCustom-identical).
+		const evilCompose = yaml.dump({
+			services: {web: {image: 'x', volumes: ['/var/run/docker.sock:/var/run/docker.sock']}},
+		})
+		const files = [
+			{path: 'compose/docker-compose.yml', content: Buffer.from(evilCompose)},
+			{path: 'livinity-app.yml', content: Buffer.from('version: 1')},
+		]
+		const volPayload = Buffer.from('vol-bytes')
+		const manifest = buildManifest({
+			files,
+			volumes: [{key: 'data', entryPath: 'volumes/data.tar.gz', content: volPayload}],
+		})
+		const bundlePath = path.join(tmp, 'evil.livbundle')
+		await packGoodBundle(bundlePath, manifest, files, [{entryPath: 'volumes/data.tar.gz', content: volPayload}])
+
+		// 1. Extract (untrusted-safe) into staging.
+		const staging = path.join(tmp, 'staging')
+		const {manifest: got} = await safeExtractBundle(bundlePath, staging)
+
+		// 2. Stage: create the app-data dir + restore volumes (seam-mocked) recording the ledger.
+		const ledger = newLedger()
+		const appDataDir = path.join(tmp, 'app-data', got.appId)
+		await fse.mkdirp(appDataDir)
+		ledger.dirs.push(appDataDir)
+		const removeSpy = vi.fn(async () => {})
+		volumeRestoreAdapter.restoreVolume = async () => {}
+		volumeRestoreAdapter.removeVolume = removeSpy
+		await restoreVolumes(got, {projectName: got.appId, stagingRoot: staging}, ledger)
+		expect(ledger.volumes).toEqual(['immich_data'])
+
+		// 3. THE SANITIZE GATE throws ComposeRejected → catch → full rollback.
+		let threw = false
+		try {
+			const composeContent = fs.readFileSync(path.join(staging, 'compose', 'docker-compose.yml'), 'utf8')
+			sanitizeNonBuiltinCompose(yaml.load(composeContent), appDataDir)
+		} catch (e) {
+			threw = e instanceof ComposeRejected
+			ledger.dirs.push(staging)
+			const result = await rollback(ledger)
+			expect(removeSpy).toHaveBeenCalledWith('immich_data')
+			expect(fs.existsSync(appDataDir)).toBe(false)
+			expect(fs.existsSync(staging)).toBe(false)
+			expect(result.failed).toEqual([])
+		}
+		expect(threw).toBe(true)
+	})
+
+	test('collision reject applies nothing (no app-data dir created)', async () => {
+		const manifest = buildManifest({
+			appId: 'immich',
+			files: [{path: 'app-data/settings.yml', content: Buffer.from('a: 1')}],
+		})
+		// installedAppIds already contains the appId → precheck rejects before any staging.
+		const pre = runImportPrechecks(manifest, {installedAppIds: ['immich'], availableBytes: 10_000_000})
+		expect(pre).toEqual({ok: false, reason: '[app-already-installed]'})
+		// Nothing was created on disk for it.
+		expect(fs.existsSync(path.join(tmp, 'app-data', 'immich'))).toBe(false)
+	})
+})
