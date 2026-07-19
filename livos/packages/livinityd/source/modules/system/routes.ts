@@ -1338,21 +1338,28 @@ export default router({
 	//   tree (T-311-03-02; the 311-02 script's flock is the second, independent
 	//   guard). performRollback shells out to /opt/livos/livos-manual-rollback.sh.
 	// ─────────────────────────────────────────────────────────────────────
-	rollbackToPrevious: adminProcedure.mutation(async ({ctx}) => {
-		if (systemStatus === 'updating') {
-			throw new TRPCError({code: 'CONFLICT', message: 'An update or rollback is already in progress'})
-		}
-		// Reuse the SAME 'updating' status enum value — the UI already polls
-		// system.status to know when a long-running deploy is in flight.
-		systemStatus = 'updating'
-		let success = false
-		try {
-			success = await performRollback(ctx.livinityd!)
-		} finally {
-			systemStatus = 'running'
-		}
-		return success
-	}),
+	rollbackToPrevious: adminProcedure
+		// Phase 348 (ABUPD-02): optional opt-in DB restore. `.optional()` keeps
+		// every pre-348 no-input caller byte-identical (withDb resolves false →
+		// buildManualRollbackArgs emits NO extra argv). true adds the literal
+		// `--with-db` flag — the script refuses (exit 2) when the snapshot has
+		// no DB dump, so a stale client can never trigger a partial restore.
+		.input(z.object({withDb: z.boolean().default(false)}).optional())
+		.mutation(async ({ctx, input}) => {
+			if (systemStatus === 'updating') {
+				throw new TRPCError({code: 'CONFLICT', message: 'An update or rollback is already in progress'})
+			}
+			// Reuse the SAME 'updating' status enum value — the UI already polls
+			// system.status to know when a long-running deploy is in flight.
+			systemStatus = 'updating'
+			let success = false
+			try {
+				success = await performRollback(ctx.livinityd!, {withDb: input?.withDb === true})
+			} finally {
+				systemStatus = 'running'
+			}
+			return success
+		}),
 	// Phase 311 UPDSAFE-04 — does a last-good snapshot exist to roll back to, and
 	// what is its target label? adminProcedure (matches the mutation's gate). NEVER
 	// throws (mirrors readDeployedSha's ENOENT discipline): the UI HIDES the button
@@ -1363,7 +1370,13 @@ export default router({
 	//   • snapshot + parseable manifest → {available: true, tag?, shortSha?, snapshottedAt?}
 	//   • snapshot but absent/corrupt manifest → {available: true} (no label)
 	canRollback: adminProcedure.query(
-		async (): Promise<{available: boolean; tag?: string; shortSha?: string; snapshottedAt?: string}> => {
+		async (): Promise<{
+			available: boolean
+			tag?: string
+			shortSha?: string
+			snapshottedAt?: string
+			dbSnapshot?: boolean
+		}> => {
 			const SNAPSHOT_DIR = '/opt/.livos-last-good'
 			try {
 				await fs.access(`${SNAPSHOT_DIR}/livinityd-source`)
@@ -1372,17 +1385,27 @@ export default router({
 			}
 			try {
 				const raw = await fs.readFile(`${SNAPSHOT_DIR}/manifest.json`, 'utf8')
-				// 311-02 manifest schema: {sha, tag, snapshotted_at, schema_hash} (snake_case).
-				const manifest = JSON.parse(raw) as {sha?: string; tag?: string; snapshotted_at?: string}
+				// 311-02 manifest schema: {sha, tag, snapshotted_at, schema_hash}
+				// (snake_case); 348 adds db_snapshot (boolean). Strict `=== true`
+				// so an absent/corrupt field fails CLOSED (UI hides the DB
+				// checkbox rather than offering a restore the script would refuse).
+				const manifest = JSON.parse(raw) as {
+					sha?: string
+					tag?: string
+					snapshotted_at?: string
+					db_snapshot?: boolean
+				}
 				return {
 					available: true,
 					tag: manifest.tag || undefined,
 					shortSha: manifest.sha ? manifest.sha.slice(0, 7) : undefined,
 					snapshottedAt: manifest.snapshotted_at || undefined,
+					dbSnapshot: manifest.db_snapshot === true,
 				}
 			} catch {
 				// Snapshot exists but the manifest is absent/corrupt — still
-				// rollback-able, just without a friendly target label.
+				// rollback-able, just without a friendly target label (and, per
+				// the fail-closed rule above, without the DB-restore option).
 				return {available: true}
 			}
 		},

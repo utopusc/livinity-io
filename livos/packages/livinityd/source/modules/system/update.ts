@@ -561,16 +561,44 @@ export async function performUpdate(livinityd: Livinityd): Promise<boolean> {
 // CODE + node_modules + systemd units and restarts services — it NEVER reverts the
 // Postgres schema (see the operator-locked warning in RollbackConfirmModal).
 //
-// Exit-code contract (311-02): 0 = restored + serving on :8080; 1 = restored but
-// :8080 did not come back; 2 = no last-good snapshot (refused); 3 = lock held (a
-// concurrent update/rollback). execa throws on any non-zero exit, so 1/2/3 land in
-// the catch and are mapped to an operator-legible message on updateStatus.error —
-// the mutation's onError toast is the feedback path. We deliberately do NOT fire a
-// NEW external notification here (avoids dragging in notifications.tsx/i18n; the
-// operator triggered this and is watching the modal) and do NOT reuse the
-// existing update-failure notification key (that would misattribute a manual
-// rollback to a forward-update failure in the alert-coalescing surface).
-export async function performRollback(livinityd: Livinityd): Promise<boolean> {
+// Exit-code contract (311-02, extended by 348): 0 = restored + serving on :8080;
+// 1 = restored but :8080 did not come back; 2 = no last-good snapshot / --with-db
+// without a DB dump (refused, nothing partially restored); 3 = lock held (a
+// concurrent update/rollback); 4 = code restored + serving but the opt-in DB
+// restore ABORTED (single-transaction: DB left untouched). execa throws on any
+// non-zero exit, so 1/2/3/4 land in the catch and are mapped to an
+// operator-legible message on updateStatus.error — the mutation's onError toast
+// is the feedback path. We deliberately do NOT fire a NEW external notification
+// here (avoids dragging in notifications.tsx/i18n; the operator triggered this
+// and is watching the modal) and do NOT reuse the existing update-failure
+// notification key (that would misattribute a manual rollback to a
+// forward-update failure in the alert-coalescing surface).
+
+// Phase 348 (ABUPD-02) — pure arg builder for the manual-rollback invocation.
+// The ONLY argument the script accepts is the literal `--with-db` opt-in flag
+// (it exits 2 on anything unknown); nothing user-influenced ever reaches argv.
+export function buildManualRollbackArgs(withDb: boolean): string[] {
+	return withDb ? ['--with-db'] : []
+}
+
+// Phase 348 — pure exit-code → operator-legible message mapper (unit-tested;
+// keep in lockstep with the script's exit contract documented above).
+export function rollbackErrorMessage(exitCode: number | undefined, fallback: string): string {
+	switch (exitCode) {
+		case 1:
+			return 'Rollback restored the previous version but LivOS did not come back on :8080. Check the box before retrying.'
+		case 2:
+			return 'No last-good snapshot (or no database snapshot for a database restore) exists to roll back to on this box.'
+		case 3:
+			return 'An update or rollback is already in progress. Wait for it to finish and retry.'
+		case 4:
+			return 'Code was rolled back and LivOS is serving again, but the requested database restore aborted — the database was left untouched (still on the post-update state).'
+		default:
+			return fallback
+	}
+}
+
+export async function performRollback(livinityd: Livinityd, options?: {withDb?: boolean}): Promise<boolean> {
 	setUpdateStatus({running: true, progress: 5, description: 'Rolling back...', error: false})
 
 	try {
@@ -579,7 +607,8 @@ export async function performRollback(livinityd: Livinityd): Promise<boolean> {
 		// kill this process (livinityd) mid-run; setsid() via detached puts it in its
 		// own process group so livinityd's restart doesn't propagate, and bruce's
 		// NOPASSWD sudoers entry makes the privileged invocation non-interactive.
-		const proc = $({cwd: '/opt/livos', detached: true})`sudo -n bash /opt/livos/livos-manual-rollback.sh`
+		const rollbackArgs = buildManualRollbackArgs(options?.withDb === true)
+		const proc = $({cwd: '/opt/livos', detached: true})`sudo -n bash /opt/livos/livos-manual-rollback.sh ${rollbackArgs}`
 
 		const handleOutput = (chunk: Buffer) => {
 			const text = stripAnsi(chunk.toString())
@@ -598,23 +627,9 @@ export async function performRollback(livinityd: Livinityd): Promise<boolean> {
 		proc.stderr?.on('data', handleOutput)
 		await proc
 	} catch (error) {
-		// Map the 311-02 exit-code contract to an operator-legible message.
+		// Map the 311-02 (+348) exit-code contract to an operator-legible message.
 		const exitCode = (error as {exitCode?: number}).exitCode
-		let errMessage: string
-		switch (exitCode) {
-			case 1:
-				errMessage =
-					'Rollback restored the previous version but LivOS did not come back on :8080. Check the box before retrying.'
-				break
-			case 2:
-				errMessage = 'No last-good snapshot exists to roll back to on this box.'
-				break
-			case 3:
-				errMessage = 'An update or rollback is already in progress. Wait for it to finish and retry.'
-				break
-			default:
-				errMessage = (error as Error).message ?? 'Rollback failed'
-		}
+		const errMessage = rollbackErrorMessage(exitCode, (error as Error).message ?? 'Rollback failed')
 		if (!updateStatus.error) setUpdateStatus({error: errMessage})
 		// Reset state but preserve the error so the UI toast can surface it.
 		const errorStatus = updateStatus.error
