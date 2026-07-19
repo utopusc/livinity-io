@@ -1,13 +1,17 @@
 import {Close, DialogDescription} from '@radix-ui/react-dialog'
 import {useMemo, useState} from 'react'
+import {TbAlertTriangle, TbArrowsExchange, TbDownload, TbLoader2, TbTrash} from 'react-icons/tb'
 import {arrayIncludes} from 'ts-extras'
 
 import {AppIcon} from '@/components/app-icon'
 import {appStateToString} from '@/components/cmdk'
+import {useCurrentUser} from '@/hooks/use-current-user'
 import {useQueryParams} from '@/hooks/use-query-params'
 import {useApps, useUserApp} from '@/providers/apps'
 import {useAllAvailableApps} from '@/providers/available-apps'
 import {Button} from '@/shadcn-components/ui/button'
+import {Progress} from '@/shadcn-components/ui/progress'
+import {formatBytes} from '@/utils/pretty-bytes'
 import {
 	Dialog,
 	DialogContent,
@@ -251,7 +255,15 @@ function AppSettingsDialogForApp({
 							/>
 						</div>
 					) : null}
-					{/* Auto-update Policy Section — 326-06 (APPS-02), only for non-native
+					{/* Move to another box (344-04 XFER-01) - non-native GLOBAL apps only (D-344-7).
+						    Export -> download bundle; warns about the brief stop, non-portable
+						    secrets and the plaintext bundle. */}
+						{!app.native ? (
+							<div className='border-t border-border-default pt-4 mt-4'>
+								<MoveToBoxSection appId={app.id} appName={app.name} />
+							</div>
+						) : null}
+						{/* Auto-update Policy Section — 326-06 (APPS-02), only for non-native
 					    (store/docker) apps. Toggles auto/manual policy + shows/clears the version pin (both adminProcedure). */}
 					{!app.native ? (
 						<div className='border-t border-border-default pt-4 mt-4'>
@@ -305,5 +317,176 @@ function AppSettingsDialogForApp({
 				</DialogContent>
 			</DialogPortal>
 		</Dialog>
+	)
+}
+
+/**
+ * Phase 344-04 (XFER-01 UI half) — "Move to another box" export card.
+ *
+ * Drives the 344-03 `appMigration` routes: exportApp (adminProcedure, stop -> tar ->
+ * start; non-destructive), migrationStatus (polled while a flight runs), listBundles +
+ * deleteBundle, and the raw admin download route GET /api/app-migration/download.
+ *
+ * Honest disclosure (D-344-3/5/6): the card warns the app stops briefly (and is only
+ * restarted if it WAS running), that box-local secrets can't move and must be re-entered
+ * on the new box (the export returns `strippedSecrets` to list them), and that the bundle
+ * is PLAINTEXT (contains the app's data unencrypted) — handle it with care.
+ *
+ * exportApp is adminProcedure server-side; non-admins see a disabled control + note
+ * (defense-in-depth over the server gate).
+ */
+function MoveToBoxSection({appId, appName}: {appId: string; appName: string}) {
+	const {isAdmin} = useCurrentUser()
+
+	// Poll the shared single-flight progress ONLY while a migration runs (export OR import).
+	const statusQ = trpcReact.appMigration.migrationStatus.useQuery(undefined, {
+		refetchInterval: (query) => (query.state.data?.running ? 1000 : false),
+	})
+	const running = statusQ.data?.running ?? false
+	const statusError = typeof statusQ.data?.error === 'string' ? statusQ.data.error : null
+
+	const bundlesQ = trpcReact.appMigration.listBundles.useQuery()
+	const [summary, setSummary] = useState<{
+		bundleFile: string
+		bytes: number
+		strippedSecrets: string[]
+	} | null>(null)
+
+	const exportMut = trpcReact.appMigration.exportApp.useMutation({
+		onSuccess(res) {
+			setSummary({bundleFile: res.bundleFile, bytes: res.bytes, strippedSecrets: res.strippedSecrets})
+			statusQ.refetch()
+			bundlesQ.refetch()
+		},
+		onSettled() {
+			statusQ.refetch()
+		},
+	})
+	const deleteMut = trpcReact.appMigration.deleteBundle.useMutation({
+		onSuccess() {
+			bundlesQ.refetch()
+		},
+	})
+
+	const busy = running || exportMut.isPending
+	const bundles = bundlesQ.data ?? []
+
+	return (
+		<div className='space-y-4'>
+			<div className='flex items-center gap-2'>
+				<TbArrowsExchange className='h-5 w-5 text-text-primary' />
+				<span className='text-body-sm font-medium text-text-primary'>{t('app-migration.title')}</span>
+			</div>
+
+			<p className='text-caption text-text-tertiary'>{t('app-migration.description', {app: appName})}</p>
+
+			{/* Honest warnings: brief stop (restart only if running), non-portable secrets,
+			    plaintext bundle. */}
+			<div className='space-y-2 rounded-radius-sm border border-border-default bg-surface-base p-3'>
+				<p className='text-caption text-text-tertiary'>{t('app-migration.stop-warning', {app: appName})}</p>
+				<p className='text-caption text-text-tertiary'>{t('app-migration.secrets-warning')}</p>
+				<div className='flex items-start gap-2'>
+					<TbAlertTriangle className='mt-0.5 h-4 w-4 shrink-0 text-amber-400' />
+					<p className='text-caption text-amber-400'>{t('app-migration.plaintext-warning')}</p>
+				</div>
+			</div>
+
+			<Button
+				size='sm'
+				variant='default'
+				onClick={() => {
+					setSummary(null)
+					exportMut.mutate({appId})
+				}}
+				disabled={!isAdmin || busy}
+			>
+				{busy ? <TbLoader2 className='mr-1 h-4 w-4 animate-spin' /> : null}
+				{busy ? t('app-migration.exporting') : t('app-migration.export-button')}
+			</Button>
+
+			{/* Live progress while the flight runs — description + bar. */}
+			{running ? (
+				<div className='space-y-2'>
+					<p className='text-caption text-text-tertiary'>{statusQ.data?.description || t('app-migration.exporting')}</p>
+					<Progress value={statusQ.data?.progress ?? 0} />
+				</div>
+			) : null}
+
+			{/* Export failure — either the mutation threw or the shared status carries an error. */}
+			{exportMut.isError ? (
+				<p role='alert' className='text-caption text-red-400'>
+					{exportMut.error?.message === '[migration-in-progress]'
+						? t('app-migration.in-progress')
+						: (exportMut.error?.message ?? t('app-migration.export-failed'))}
+				</p>
+			) : !running && statusError ? (
+				<p role='alert' className='text-caption text-red-400'>
+					{statusError}
+				</p>
+			) : null}
+
+			{/* Just-produced bundle — stripped-secrets list + download. */}
+			{summary ? (
+				<div className='space-y-3 rounded-radius-sm border border-border-default bg-surface-base p-3'>
+					{summary.strippedSecrets.length > 0 ? (
+						<div className='space-y-1'>
+							<p className='text-caption text-text-tertiary'>{t('app-migration.stripped-secrets')}</p>
+							<ul className='list-disc space-y-0.5 pl-5'>
+								{summary.strippedSecrets.map((s) => (
+									<li key={s} className='text-caption text-text-secondary'>
+										{s}
+									</li>
+								))}
+							</ul>
+						</div>
+					) : null}
+					<a
+						href={`/api/app-migration/download?file=${encodeURIComponent(summary.bundleFile)}`}
+						download={summary.bundleFile}
+						className='inline-flex items-center gap-1.5 text-body-sm font-medium text-brand hover:underline'
+					>
+						<TbDownload className='h-4 w-4' />
+						{t('app-migration.download-button')} · {formatBytes(summary.bytes)}
+					</a>
+				</div>
+			) : null}
+
+			{/* Previously produced bundles (newest-first) — download or delete. */}
+			{bundles.length > 0 ? (
+				<div className='space-y-2'>
+					<p className='text-caption text-text-tertiary'>{t('app-migration.bundles-title')}</p>
+					<ul className='space-y-1.5'>
+						{bundles.map((b) => (
+							<li
+								key={b.file}
+								className='flex items-center justify-between gap-2 rounded-radius-sm border border-border-default bg-surface-base px-3 py-2'
+							>
+								<div className='min-w-0'>
+									<a
+										href={`/api/app-migration/download?file=${encodeURIComponent(b.file)}`}
+										download={b.file}
+										className='block truncate text-caption text-text-secondary hover:text-brand hover:underline'
+									>
+										{b.file}
+									</a>
+									<span className='text-caption-sm text-text-tertiary'>{formatBytes(b.bytes)}</span>
+								</div>
+								<Button
+									size='sm'
+									variant='destructive'
+									onClick={() => deleteMut.mutate({file: b.file})}
+									disabled={!isAdmin || busy || deleteMut.isPending}
+									aria-label={t('app-migration.delete')}
+								>
+									<TbTrash className='h-4 w-4' />
+								</Button>
+							</li>
+						))}
+					</ul>
+				</div>
+			) : null}
+
+			{!isAdmin ? <p className='text-caption text-text-tertiary'>{t('app-migration.admin-only')}</p> : null}
+		</div>
 	)
 }
