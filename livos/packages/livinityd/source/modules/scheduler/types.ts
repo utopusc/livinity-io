@@ -26,6 +26,7 @@ export type JobType =
 	| 'recycle-purge' // Phase 338 (RECYCLE-01) — daily .Recycle.Bin age+free-floor purge
 	| 'folder-quota-scan' // Phase 339 (STORD-01) — per-folder du accounting → folder-quota-exceeded bell
 	| 'app-update-window' // Phase 342 APPD-01 — */15 windowed auto-update; disjoint from app-auto-update (processes ONLY apps WITH a window, inside it)
+	| 'oom-watch' // Phase 343 RESIL-02 — per-minute inspect-based OOM self-heal (restart + alert; 3/60min cap → critical crash-loop alert)
 
 export type JobRunStatus = 'success' | 'failure' | 'skipped' | 'running'
 

@@ -26,6 +26,7 @@ import {securityAdvisorScanHandler} from '../security-advisor/scheduler-job.js'
 import {connectivitySelfCheckHandler} from '../connectivity/scheduler-job.js'
 import {recyclePurgeHandler} from '../files/recycle-purge.js'
 import {folderQuotaScanHandler} from '../files/folder-quota-scan.js'
+import {oomWatchHandler} from '../apps/oom-watch.js'
 import {getBuiltinApp} from '../apps/builtin-apps.js'
 import * as snapraidCli from '../storage-pool/snapraid-cli.js'
 import {checkFreezeGate} from '../storage-pool/pool.js'
@@ -1207,6 +1208,7 @@ export const BUILT_IN_HANDLERS: Record<JobType, BuiltInJobHandler> = {
 	'connectivity-self-check': connectivitySelfCheckHandler, // Phase 333 DIAG-01/02 — hourly connectivity self-diagnosis
 	'recycle-purge': recyclePurgeHandler, // Phase 338 RECYCLE-01 — daily .Recycle.Bin age+free-floor purge
 	'folder-quota-scan': folderQuotaScanHandler, // Phase 339 STORD-01 — per-folder du accounting → folder-quota-exceeded bell
+	'oom-watch': oomWatchHandler, // Phase 343 RESIL-02 — per-minute OOM self-heal (restart + alert; 3/60min cap)
 }
 
 // =========================================================================
@@ -1307,4 +1309,10 @@ export const DEFAULT_JOB_DEFINITIONS: Array<{
 	// folder quota (empty `folderQuotas` → nothing to walk). ON CONFLICT (name) DO NOTHING
 	// re-seeds it on every box's next boot.
 	{name: 'folder-quota-scan', schedule: '*/30 * * * *', type: 'folder-quota-scan', enabled: true},
+	// Phase 343 RESIL-02 — per-minute OOM self-heal. enabled=true: an inspect read is free (no LLM
+	// spend, same cost class as ups-watch/resource-metrics-collect), and an OOM-killed app must
+	// self-heal + alert even with no Settings tab open. A NO-OP until an app is actually OOM-killed;
+	// the 3/60min process-scoped cap prevents restart thrash (breach → critical crash-loop alert
+	// instead). ON CONFLICT (name) DO NOTHING re-seeds it on every box's next boot.
+	{name: 'oom-watch', schedule: '* * * * *', type: 'oom-watch', enabled: true},
 ]
