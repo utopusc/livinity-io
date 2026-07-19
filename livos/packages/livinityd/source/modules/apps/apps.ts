@@ -333,6 +333,20 @@ export default class Apps {
 					return
 				}
 
+				// 343-01 RESIL-01 (B1): a daemon restart (routine on every box update) must NOT
+				// collapse a 'debug' app back to 'ready' — app.start() unconditionally lands 'ready'
+				// (app.ts:751 and the advisory-health catch at :755), which would let health-monitor
+				// re-judge the frozen container, oom-watch re-own it, and the icon menu re-enable
+				// Restart on a sleep-infinity container. Take the SAME shared debug-start path
+				// enterDebugMode uses (patch + start, skip health poll, land 'debug') so debug
+				// survives reboots.
+				if (await app.store.get('debugMode')) {
+					return app.startInDebugMode().catch((error) => {
+						app.state = 'unknown'
+						this.logger.error(`Failed to start app ${app.id} in debug mode`, error)
+					})
+				}
+
 				return app.start().catch((error) => {
 					// We handle individual errors here to prevent apps start from throwing
 					// if a single app fails.
@@ -1577,6 +1591,16 @@ export default class Apps {
 	// 342-01 APPD-01: set/clear the per-app maintenance window (plain store write; delete-to-clear).
 	async setUpdateWindow(appId: string, window: {start: string; end: string} | undefined) {
 		return this.getApp(appId).setUpdateWindow(window)
+	}
+
+	// 343-01 RESIL-01 (D-343-2): enter/exit debug mode (entrypoint-suppression recovery for a
+	// crash-looping app). Mirrors the setUpdateWindow delegator shape.
+	async enterDebugMode(appId: string) {
+		return this.getApp(appId).enterDebugMode()
+	}
+
+	async exitDebugMode(appId: string) {
+		return this.getApp(appId).exitDebugMode()
 	}
 
 	// 326-01 APPS-02 (D-05): pin/un-pin an exact ignored version (plain store write).

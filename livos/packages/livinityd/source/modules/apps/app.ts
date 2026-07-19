@@ -849,6 +849,68 @@ export default class App {
 		}
 	}
 
+	// 343-01 RESIL-01 (D-343-2, B1): the SHARED debug-start path. Used by enterDebugMode AND the
+	// boot-loop debug re-entry (apps.ts) — IDENTICAL code both ways so a daemon restart (routine on
+	// every box update) never collapses a 'debug' app to 'ready' (which would let health-monitor
+	// re-judge it + oom-watch re-own it + the icon menu re-enable Restart on a frozen container).
+	// Assumes debugMode is ALREADY persisted (the caller sets it) so patchComposeFile applies the
+	// suppression transform. Starts the container WITHOUT pollContainerHealth (nothing serves on
+	// sleep-infinity) and lands state='debug'. Mirrors restart()'s wedge guard (app.ts:801-807): if
+	// appScript throws before success, land a clickable 'ready' instead of wedging on the transient
+	// 'restarting' — the original error propagates (no catch swallows it).
+	async startInDebugMode() {
+		this.state = 'restarting'
+		try {
+			await this.patchComposeFile()
+			await appScript(this.#livinityd, 'stop', this.id)
+			await appScript(this.#livinityd, 'start', this.id)
+			this.state = 'debug'
+			return true
+		} finally {
+			if (this.state === 'restarting') {
+				this.state = 'ready'
+			}
+		}
+	}
+
+	// 343-01 RESIL-01 (D-343-2): put a crash-looping app into recovery/debug mode. Idempotent — a
+	// second enter (debugMode already set) is a no-op so the ORIGINAL stash is never overwritten
+	// with the sleep-infinity suppression values. Captures the main service's LIVE
+	// entrypoint/command/healthcheck into debugStash (null = "absent originally" → restore deletes
+	// vs sets), flips debugMode, then takes the shared debug-start path. Debug is an operator-driven
+	// transient repair, not a boot preference, so setAutoStart is deliberately left untouched.
+	async enterDebugMode() {
+		if (await this.store.get('debugMode')) return true
+		const compose = await this.readCompose()
+		// SAME main-service selection as patchComposeFile's limits/cpuset block.
+		const svcNames = Object.keys(compose.services ?? {})
+		const mainName =
+			svcNames.find((n) => n === this.id || n === 'server' || n === 'app' || n === 'web') ||
+			svcNames.find((n) => !['docker', 'dind', 'tor', 'proxy', 'sidecar', 'init'].includes(n)) ||
+			svcNames[0]
+		const mainService = compose.services![mainName]
+		await this.store.set('debugStash', {
+			entrypoint: mainService?.entrypoint ?? null,
+			command: mainService?.command ?? null,
+			healthcheck: mainService?.healthcheck ?? null,
+		})
+		await this.store.set('debugMode', true)
+		return this.startInDebugMode()
+	}
+
+	// 343-01 RESIL-01 (D-343-2): leave debug mode. Delete debugMode FIRST so the next patch takes
+	// patchComposeFile's RESTORE branch, re-patch (restores the original entrypoint/command/
+	// healthcheck to disk), THEN delete the now-consumed stash, then a normal restart recreates the
+	// container with the real entrypoint → the standard ready flow. Order matters (T-343-03): the
+	// stash is cleared only AFTER a successful re-patch, so a crash mid-exit still restores next
+	// start; an orphaned stash after exit is harmless residue (never re-read once debugMode=false).
+	async exitDebugMode() {
+		await this.store.delete('debugMode')
+		await this.patchComposeFile()
+		await this.store.delete('debugStash')
+		return this.restart()
+	}
+
 	async uninstall() {
 		// Phase 260-01 (SC1): wrap in try/finally so a throw mid-uninstall never
 		// leaves this.state wedged on 'uninstalling'. On success we set
