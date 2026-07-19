@@ -111,6 +111,15 @@ import mcpRouter from './mcp-router.js'
 // PRECONDITION_FAILED on every call (mirrors xaiAuth + mastra +
 // agents pattern).
 import {mcpConfigRouter, createMcpConfigRouter} from './mcp-config-router.js'
+// Phase 346-04 (MCP-01, D-346-6 / D-346-9) — the native MCP control-plane admin
+// router. A TOP-LEVEL sibling namespace `mcpControl.*` (getStatus/setEnabled/
+// mintKey/listKeys/revokeKey) — DISTINCT from the consumer-side `mcp.config.*`
+// (which installs external MCP servers into the chat agent). Factory-DI: the
+// default `mcpControlRouter` is an empty-injection stub throwing
+// PRECONDITION_FAILED until production boot wires the real
+// createMcpControlRouter({store, server, onEnabledChanged, logger}) via
+// setProductionAppRouter.
+import {mcpControlRouter, createMcpControlRouter} from '../../mcp-control/routes.js'
 // Phase 239-01 — cli-installer router. Whitelist-gated install + detect for
 // the 5 SUPPORTED_CLIS (Claude Code, OpenCode, Gemini, OpenClaw, Aion CLI).
 // Phase 240 extends this namespace with uninstall + auth-status probes;
@@ -313,6 +322,11 @@ export function createAppRouter(opts: {
 	// `mcp` namespace below as `mcp.config.*`. Optional with empty-injection
 	// fallback so the default appRouter still type-checks.
 	mcpConfig?: ReturnType<typeof createMcpConfigRouter>
+	// Phase 346-04 — MCP control-plane admin namespace slot. Mounts as a
+	// TOP-LEVEL `mcpControl.*` sibling (NOT merged into `mcp.*` — D-346-9).
+	// Default empty-injection stub keeps the appRouter type-stable until
+	// production boot wires the real router against the store + server handle.
+	mcpControl?: ReturnType<typeof createMcpControlRouter>
 	// Phase 239-01 — cli-installer namespace slot. Whitelist-gated install +
 	// detect for the 5 SUPPORTED_CLIS. Default empty-injection stub throws
 	// PRECONDITION_FAILED until production boot wires the real router.
@@ -415,6 +429,11 @@ export function createAppRouter(opts: {
 			mcpRouter,
 			router({config: opts.mcpConfig ?? mcpConfigRouter}),
 		),
+		// Phase 346-04 (MCP-01, D-346-9) — the native MCP control-plane admin
+		// namespace. A DISTINCT top-level sibling of `mcp` above (NOT merged into
+		// it): mcpControl.getStatus/setEnabled/mintKey/listKeys/revokeKey. The
+		// mcp.* / mcp.config.* surface is untouched.
+		mcpControl: opts.mcpControl ?? mcpControlRouter,
 		// v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01).
 		// Phase 93-11 — webapp.window.* sub-router added in webappRouter.
 		webapp: webappRouter,

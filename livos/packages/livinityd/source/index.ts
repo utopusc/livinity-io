@@ -214,6 +214,15 @@ import {OpenclawConfigStore} from './modules/openclawos/openclaw-config-store.js
 // real factory with `this.ai.redis` so the /settings → MCP tab can CRUD
 // the hash; McpBridge picks up changes at next livinityd boot.
 import {createMcpConfigRouter} from './modules/server/trpc/mcp-config-router.js'
+// Phase 346-04 (MCP-01, D-346-5/6) — the native MCP control-plane server handle
+// (loopback StreamableHTTP transport, default-off) + its `mcpControl.*` admin
+// router. Boot constructs the server once, wires isEnabled() to a synchronous
+// cache fed from the mcpServer store key, drives start/stop on the setEnabled
+// toggle, honors a persisted enable across restart, and tears the listener
+// down on shutdown. LIV_API_KEY is the INTERNAL loopback /trpc credential
+// (never exposed to the MCP agent); the agent boundary is the liv_mcp_* gate.
+import {createMcpControlServer, type McpControlServerHandle} from './modules/mcp-control/server.js'
+import {createMcpControlRouter} from './modules/mcp-control/routes.js'
 // Phase 239-01 — cli-installer router (whitelist-gated install + detect for
 // the 5 SUPPORTED_CLIS). Stateless — only dep is the boot logger; no Redis,
 // no config check. Production swap happens unconditionally at every boot.
@@ -728,6 +737,17 @@ export default class Livinityd {
 	private streamIdleReaperStop?: () => void
 	// Reliability C1 — continuous app-health monitor stop handle.
 	private appHealthMonitorStop?: () => void
+	// Phase 346-04 (MCP-01, D-346-5/6) — the native MCP control-plane server
+	// handle (loopback StreamableHTTP transport). Constructed once in start()
+	// after the webapp router wire-up; torn down in stop(). Undefined before
+	// that boot point (or when construction was skipped). The transport is
+	// default-off: it only listens once `mcpControlEnabled` is true.
+	private mcpControlServer?: McpControlServerHandle
+	// Synchronous mirror of the persisted `mcpServer.enabled` flag. The server's
+	// isEnabled() 404-gate reads this (store.get is async and cannot feed a
+	// synchronous getter); boot seeds it from the store, and the setEnabled
+	// toggle updates it via onEnabledChanged — no restart needed.
+	private mcpControlEnabled = false
 	// Phase 93 — Streaming subsystem (T93-05 StreamManager). Optional because
 	// T93-11 wires the lifecycle in start(); this field is declared up-front so
 	// the /ws/stream/:id upgrade handler in server/index.ts can typecheck.
@@ -2289,6 +2309,77 @@ export default class Livinityd {
 				)
 			}
 
+			// ── Phase 346-04 (MCP-01, D-346-5/6) — native MCP control-plane server ──
+			// Construct the loopback control-plane server handle ONCE. isEnabled()
+			// reads the synchronous `mcpControlEnabled` mirror (store.get is async,
+			// cannot feed the transport's 404-gate). apiKey = LIV_API_KEY is the
+			// INTERNAL loopback /trpc credential used by the tool handlers for
+			// AUTHENTICATION — never surfaced to the MCP agent (the agent boundary
+			// is the liv_mcp_* auth gate + procedure allowlist, Plan 02/03).
+			const mcpControlApiUrl =
+				process.env['LIVINITYD_API_URL'] ?? `http://127.0.0.1:${this.port}`
+			const mcpControlApiKey = process.env['LIV_API_KEY'] ?? ''
+			this.mcpControlServer = createMcpControlServer({
+				isEnabled: () => this.mcpControlEnabled,
+				apiUrl: mcpControlApiUrl,
+				apiKey: mcpControlApiKey,
+				logger: {
+					info: (...args: unknown[]) => webappLogger.info(args.map(String).join(' ')),
+					warn: (...args: unknown[]) => this.logger.error(args.map(String).join(' ')),
+					error: (...args: unknown[]) => this.logger.error(args.map(String).join(' ')),
+					debug: (...args: unknown[]) => webappLogger.info(args.map(String).join(' ')),
+				},
+			})
+
+			// The toggle DI seam: update the synchronous mirror FIRST, then start /
+			// stop the listener so a disable takes effect immediately (threat
+			// T-346-18) without a restart. Wrapped so a listen/close failure is
+			// logged, never thrown out of the admin mutation.
+			const onMcpControlEnabledChanged = async (enabled: boolean): Promise<void> => {
+				this.mcpControlEnabled = enabled
+				try {
+					if (enabled) await this.mcpControlServer?.start()
+					else await this.mcpControlServer?.stop()
+				} catch (toggleErr) {
+					this.logger.error(
+						`Phase 346-04 — failed to ${enabled ? 'start' : 'stop'} MCP control listener`,
+						toggleErr,
+					)
+				}
+			}
+
+			// Honor the persisted enable across restarts (T-346-19): default-off, so
+			// we start ONLY when mcpServer.enabled === true was persisted.
+			try {
+				const persistedMcpServer = await this.store.get('mcpServer')
+				this.mcpControlEnabled = persistedMcpServer?.enabled === true
+				if (this.mcpControlEnabled) {
+					await this.mcpControlServer.start()
+					webappLogger.info(
+						`Phase 346-04 — MCP control server STARTED on ${mcpControlApiUrl} loopback (mcpServer.enabled=true persisted; liv_mcp_* + allowlist gated)`,
+					)
+				} else {
+					webappLogger.info(
+						'Phase 346-04 — MCP control server wired, DEFAULT-OFF (mcpServer.enabled not set; enable via Settings)',
+					)
+				}
+			} catch (mcpBootErr) {
+				this.logger.error(
+					'Phase 346-04 — failed to read persisted mcpServer.enabled; MCP control server left OFF',
+					mcpBootErr,
+				)
+			}
+
+			const mcpControlRouterProductionInstance = createMcpControlRouter({
+				store: this.store,
+				server: this.mcpControlServer,
+				onEnabledChanged: onMcpControlEnabledChanged,
+				logger: {
+					info: (msg) => webappLogger.info(msg),
+					warn: (msg, err) => this.logger.error(msg, err),
+				},
+			})
+
 			// Phase 231 retirement — Phase 203-04 openclawosAppsRouterProductionInstance
 			// factory block removed (OpenUIAppsRepository import + Drizzle pool
 			// + createOpenclawosAppsRouter call all gone). The standalone
@@ -2670,6 +2761,10 @@ export default class Livinityd {
 				agents: agentsRouterProductionInstance,
 				agentTasks: agentTasksRouterProductionInstance,
 				mcpConfig: mcpConfigRouterProductionInstance,
+				// Phase 346-04 (MCP-01, D-346-6/9) — mcpControl.* admin namespace
+				// (getStatus/setEnabled/mintKey/listKeys/revokeKey). Distinct from
+				// mcpConfig above; drives the loopback control-plane transport.
+				mcpControl: mcpControlRouterProductionInstance,
 				// Phase 231 retirement — openclawosApps / openclawosGateway /
 				// openclawCli opts removed; factory blocks gone above.
 				providerConfig: providerConfigRouterProductionInstance,
@@ -2861,6 +2956,15 @@ export default class Livinityd {
 				this.appHealthMonitorStop?.()
 			} catch (err) {
 				this.logger.error('Failed to stop app health monitor', err)
+			}
+
+			// Phase 346-04 (MCP-01, D-346-5) — tear down the loopback MCP control
+			// listener (closes every open StreamableHTTP transport then the http
+			// server). Idempotent no-op when it was never started (default-off).
+			try {
+				await this.mcpControlServer?.stop()
+			} catch (err) {
+				this.logger.error('Phase 346-04 — failed to stop MCP control server', err)
 			}
 			await Promise.all([this.files.stop(), this.apps.stop(), this.appStore.stop(), this.dbus.stop(), this.ai.stop(), this.tunnelClient.stop(), this.scheduler.stop()])
 
