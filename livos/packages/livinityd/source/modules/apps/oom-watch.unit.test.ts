@@ -169,6 +169,33 @@ describe('oomWatchHandler — inspect-based OOM self-heal (restart + alert, 3/60
 		expect((result.output as {suspended: number}).suspended).toBe(1)
 	})
 
+	test('343-review INFO-03: a failed recovery restart raises app-oom-restart-failed AND still counts the window slot', async () => {
+		const restart = vi.fn().mockRejectedValue(new Error('compose up failed'))
+		const app = makeApp({id: 'gitea', state: 'ready', restart})
+		stubInspect({gitea_app_1: OOM})
+		const notifications = makeNotifications()
+		const ctx = {logger: fakeLogger, livinityd: daemonWith([app], notifications)}
+
+		const result = await oomWatchHandler(fakeJob, ctx)
+
+		// The tick never fails; the failed attempt surfaces as a warning (not the success alert).
+		expect(result.status).toBe('success')
+		expect(restart).toHaveBeenCalledTimes(1)
+		expect((result.output as {restarted: number}).restarted).toBe(0) // failed → not counted as restarted
+		expect(notifications.add).toHaveBeenCalledWith('app-oom-restart-failed:gitea', {severity: 'warning', external: true})
+		expect(notifications.add).not.toHaveBeenCalledWith('app-oom-restarted:gitea', expect.anything())
+
+		// The window timestamp was recorded BEFORE the failed attempt (no infinite retry): after 2
+		// more failures the 4th tick breaches the 3/60min cap and pages critical instead of thrashing.
+		notifications.add.mockClear()
+		await oomWatchHandler(fakeJob, ctx)
+		await oomWatchHandler(fakeJob, ctx)
+		const breach = await oomWatchHandler(fakeJob, ctx)
+		expect(restart).toHaveBeenCalledTimes(3) // no 4th restart attempt
+		expect((breach.output as {suspended: number}).suspended).toBe(1)
+		expect(notifications.add).toHaveBeenCalledWith('app-oom-loop:gitea', {severity: 'critical', external: true})
+	})
+
 	test('per-app isolation: one app whose inspect throws does not fail the tick (still success)', async () => {
 		const restartGood = vi.fn().mockResolvedValue(undefined)
 		const restartBad = vi.fn().mockResolvedValue(undefined)

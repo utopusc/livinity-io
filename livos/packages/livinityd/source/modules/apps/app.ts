@@ -527,9 +527,12 @@ export default class App {
 					}
 				}
 				// NOTE: debugStash is NOT cleared here — exitDebugMode owns clearing it AFTER this
-				// restore succeeds, so a livinityd restart mid-exit still restores next start. A
-				// stray debugStash left after exit is harmless residue (never re-read once
-				// debugMode is false).
+				// restore succeeds, so a livinityd restart mid-exit still restores next start. This
+				// restore branch runs on EVERY patch while debugMode is false AND a stash survives:
+				// the stash IS re-read each patch and idempotently re-restores the original
+				// entrypoint/command/healthcheck — that repeated, harmless re-restore is exactly the
+				// self-heal for a crash mid-exit (the stash only stops mattering once exitDebugMode
+				// deletes it after a clean restore).
 			}
 		}
 
@@ -831,10 +834,21 @@ export default class App {
 		// finally only resets a STILL-transient field; the success path already
 		// set 'ready'. The original error is re-thrown for the caller/logging.
 		this.state = 'restarting'
+		// 343-review WARN-02: a compose-mutating accessor (setResourceLimits/setGpuAccess/
+		// setEnvironmentOverrides/setSelectedDependencies/setOidcEnabled) patch-THEN-restarts. When
+		// the app is in debug, patchComposeFile re-applies the sleep-infinity suppression, so the
+		// recreated container is STILL frozen — landing 'ready' here would flip the app to a state
+		// that lies about a frozen container (health-monitor re-owns it, the icon menu re-enables
+		// Restart). Read the debugMode store key and land 'debug' instead so ALL current+future
+		// accessor callers stay honest without guarding each route. exitDebugMode deletes debugMode
+		// BEFORE it calls restart(), so the normal debug-EXIT path still lands 'ready' as before.
+		// The W1 route guards (restart/start routes reject in debug) are unaffected — they gate on
+		// the app state, and this only makes that state MORE accurate (stays 'debug', never 'ready').
+		const landState: AppState = (await this.store.get('debugMode')) ? 'debug' : 'ready'
 		try {
 			await appScript(this.#livinityd, 'stop', this.id)
 			await appScript(this.#livinityd, 'start', this.id)
-			this.state = 'ready'
+			this.state = landState
 
 			// Enable auto-start on boot
 			await this.setAutoStart(true)
@@ -844,7 +858,7 @@ export default class App {
 			if (this.state === 'restarting') {
 				// appScript threw before the success line — land on a stable,
 				// clickable state instead of wedging.
-				this.state = 'ready'
+				this.state = landState
 			}
 		}
 	}
@@ -889,11 +903,25 @@ export default class App {
 			svcNames.find((n) => !['docker', 'dind', 'tor', 'proxy', 'sidecar', 'init'].includes(n)) ||
 			svcNames[0]
 		const mainService = compose.services![mainName]
-		await this.store.set('debugStash', {
-			entrypoint: mainService?.entrypoint ?? null,
-			command: mainService?.command ?? null,
-			healthcheck: mainService?.healthcheck ?? null,
-		})
+		// 343-review WARN-01: NEVER re-capture an already-suppressed compose into the stash.
+		// exitDebugMode deletes debugMode THEN re-patches; if that patchComposeFile throws, the
+		// compose is left on sleep-infinity AND the stash is still present while debugMode is now
+		// absent. A naive re-enter (debugMode guard above passes) would overwrite the ORIGINAL
+		// stash with the ['sleep','infinity'] suppression literals — and the NEXT exit would then
+		// "restore" sleep-infinity permanently, wedging the app frozen forever. So skip the capture
+		// when a stash already survives OR the on-disk main entrypoint already IS the suppression
+		// literal; keep the surviving original stash, just re-flip debugMode + re-suppress.
+		const existingStash = await this.store.get('debugStash')
+		const ep = mainService?.entrypoint
+		const entrypointIsSuppressed =
+			Array.isArray(ep) && ep.length === 2 && ep[0] === 'sleep' && ep[1] === 'infinity'
+		if (!existingStash && !entrypointIsSuppressed) {
+			await this.store.set('debugStash', {
+				entrypoint: mainService?.entrypoint ?? null,
+				command: mainService?.command ?? null,
+				healthcheck: mainService?.healthcheck ?? null,
+			})
+		}
 		await this.store.set('debugMode', true)
 		return this.startInDebugMode()
 	}
@@ -903,7 +931,9 @@ export default class App {
 	// healthcheck to disk), THEN delete the now-consumed stash, then a normal restart recreates the
 	// container with the real entrypoint → the standard ready flow. Order matters (T-343-03): the
 	// stash is cleared only AFTER a successful re-patch, so a crash mid-exit still restores next
-	// start; an orphaned stash after exit is harmless residue (never re-read once debugMode=false).
+	// start — while debugMode is false the restore branch re-reads the stash on EVERY patch and
+	// idempotently re-restores the original entrypoint (the self-heal for a mid-exit crash), until
+	// this delete removes it after a clean restore.
 	async exitDebugMode() {
 		await this.store.delete('debugMode')
 		await this.patchComposeFile()

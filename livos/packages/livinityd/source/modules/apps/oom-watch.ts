@@ -177,18 +177,33 @@ export const oomWatchHandler: BuiltInJobHandler = async (job, ctx) => {
 
 				if (verdict === 'restart') {
 					// Record this restart, pruning entries that have rolled off the 60-min window.
+					// 343-review INFO-03: the timestamp is recorded BEFORE the restart attempt and is
+					// DELIBERATELY kept even when the restart throws — a permanently-failing restart still
+					// counts toward the 3/60min breach (no infinite retry), and the failure is surfaced
+					// (below) rather than silently swallowed.
 					const now = Date.now()
 					_oomRestartWindow.set(app.id, [...window.filter((ts) => now - ts < WINDOW_MS), now])
-					await app.restart()
-					restarted++
-					// Fire-and-forget: a dispatch failure must never fail the tick. The external
-					// DESCRIPTIONS copy (notification-descriptions) names the app + its memory limit;
-					// memoryLimit is read here so future per-alert copy can thread it (320 precedent —
-					// the generic id is the dispatch key, the human copy lives in the descriptions map).
-					await app.store.get('memoryLimit').catch(() => undefined)
-					await ctx.livinityd.notifications
-						.add(`app-oom-restarted:${app.id}`, {severity: 'warning', external: true})
-						.catch(() => {})
+					try {
+						await app.restart()
+						restarted++
+						// Fire-and-forget: a dispatch failure must never fail the tick. The external
+						// DESCRIPTIONS copy (notification-descriptions) names the app; the generic id is the
+						// dispatch key, the human copy lives in the descriptions map (320 precedent).
+						await ctx.livinityd.notifications
+							.add(`app-oom-restarted:${app.id}`, {severity: 'warning', external: true})
+							.catch(() => {})
+					} catch (restartErr) {
+						// 343-review INFO-03: a FAILED recovery restart must surface — otherwise the operator
+						// only learns of the broken app at the 4th-tick crash-loop critical. Emit a warning so
+						// the failed attempt is visible now; the window timestamp above stays counted (no
+						// infinite retry). Fire-and-forget alert; never fail the tick.
+						ctx.logger.error(
+							`[scheduler/oom-watch] ${app.id}: restart failed: ${restartErr instanceof Error ? restartErr.message : String(restartErr)}`,
+						)
+						await ctx.livinityd.notifications
+							.add(`app-oom-restart-failed:${app.id}`, {severity: 'warning', external: true})
+							.catch(() => {})
+					}
 				} else if (verdict === 'suspend-alert') {
 					// Breach: STOP restarting (do NOT touch the container) and page critical.
 					suspended++

@@ -239,8 +239,10 @@ export const AppSettingsSchema = z.object({
 	oomSelfHeal: z.boolean().optional(),
 	// 343-01 RESIL-01 (D-343-1): the main service's ORIGINAL entrypoint/command/healthcheck
 	// captured at enter-time; JSON `null` encodes "this key was absent originally" (restore = delete
-	// vs set). Restored to disk by patchComposeFile's clear branch, then cleared by exitDebugMode —
-	// so a livinityd restart mid-exit still restores. Not surfaced to the UI.
+	// vs set). While debugMode is false and this stash survives, patchComposeFile's restore branch
+	// re-reads it on EVERY patch and idempotently re-restores the original entrypoint (the self-heal
+	// for a crash mid-exit); exitDebugMode deletes it only AFTER a clean re-patch, so a livinityd
+	// restart mid-exit still restores. Not surfaced to the UI.
 	debugStash: z
 		.object({
 			entrypoint: z.any().optional(),

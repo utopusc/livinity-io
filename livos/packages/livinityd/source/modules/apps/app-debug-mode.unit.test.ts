@@ -173,3 +173,103 @@ describe('App.startInDebugMode (B1 shared boot-reentry path)', () => {
 		expect(app.state).toBe('ready')
 	})
 })
+
+// 343-review WARN-01: a failed exit (debugMode deleted, but patchComposeFile threw before the
+// stash was cleared → compose left on sleep-infinity, stash still present) must NOT let a re-enter
+// overwrite the ORIGINAL stash with the ['sleep','infinity'] suppression literal — otherwise the
+// next exit would "restore" sleep-infinity permanently and wedge the app frozen forever.
+describe('343-review WARN-01: enterDebugMode never re-captures a suppressed compose', () => {
+	test('failed-exit then re-enter keeps the ORIGINAL stash, so a later exit restores the real entrypoint (never sleep-infinity)', async () => {
+		const {app, backing} = makeApp({
+			compose: {
+				services: {
+					gitea: {image: 'gitea/gitea:latest', entrypoint: ['/usr/bin/entrypoint'], command: ['web'], healthcheck: {test: ['CMD', 'curl']}},
+				},
+			},
+		})
+
+		// 1. Enter debug: the ORIGINAL entrypoint is captured into the stash.
+		await app.enterDebugMode()
+		expect(backing.debugStash).toEqual({
+			entrypoint: ['/usr/bin/entrypoint'],
+			command: ['web'],
+			healthcheck: {test: ['CMD', 'curl']},
+		})
+
+		// 2. Simulate a FAILED exit: exitDebugMode deleted debugMode, then patchComposeFile threw
+		//    BEFORE the stash was cleared → debugMode absent, stash still present, and the on-disk
+		//    compose is left on the sleep-infinity suppression.
+		delete backing.debugMode
+		vi.spyOn(app, 'readCompose').mockResolvedValue({
+			services: {gitea: {image: 'gitea/gitea:latest', entrypoint: ['sleep', 'infinity'], command: [], healthcheck: {disable: true}}},
+		} as any)
+
+		// 3. Admin re-enters. The guard sees a surviving stash (AND a suppressed on-disk entrypoint)
+		//    → it must NOT re-capture; the ORIGINAL stash survives untouched.
+		await app.enterDebugMode()
+		expect(app.state).toBe('debug')
+		expect(backing.debugStash).toEqual({
+			entrypoint: ['/usr/bin/entrypoint'],
+			command: ['web'],
+			healthcheck: {test: ['CMD', 'curl']},
+		})
+		expect((backing.debugStash as {entrypoint: unknown}).entrypoint).not.toEqual(['sleep', 'infinity'])
+
+		// 4. A clean exit now restores the ORIGINAL entrypoint (the stash present at restore time is
+		//    the original), then clears it — never sleep-infinity permanently.
+		let stashAtRestore: unknown
+		vi.spyOn(app, 'patchComposeFile').mockImplementation(async () => {
+			stashAtRestore = backing.debugStash
+		})
+		await app.exitDebugMode()
+		expect(stashAtRestore).toEqual({
+			entrypoint: ['/usr/bin/entrypoint'],
+			command: ['web'],
+			healthcheck: {test: ['CMD', 'curl']},
+		})
+		expect(backing.debugStash).toBeUndefined()
+		expect(app.state).toBe('ready')
+	})
+
+	test('re-enter with the stash absent but the on-disk entrypoint already suppressed still does NOT capture sleep-infinity', async () => {
+		const {app, backing, set} = makeApp({
+			compose: {
+				services: {
+					gitea: {image: 'gitea/gitea:latest', entrypoint: ['sleep', 'infinity'], command: [], healthcheck: {disable: true}},
+				},
+			},
+		})
+
+		await app.enterDebugMode()
+
+		expect(app.state).toBe('debug')
+		// The suppression literal was NEVER mistaken for the original + captured.
+		expect(set).not.toHaveBeenCalledWith('debugStash', expect.anything())
+		expect(backing.debugStash).toBeUndefined()
+	})
+})
+
+// 343-review WARN-02: a compose-mutating accessor (setResourceLimits/setGpuAccess/…) patch-THEN-
+// restarts; patchComposeFile re-applies the sleep-infinity suppression, so the recreated container
+// is STILL frozen. The shared restart() path must land 'debug' (not 'ready') when the debugMode
+// store key is set, or the app's state would lie about a frozen container.
+describe('343-review WARN-02: restart preserves the debug state', () => {
+	test('restart() on a debug app lands state debug, not ready', async () => {
+		const {app} = makeApp({initialStore: {debugMode: true}})
+		app.state = 'debug'
+
+		const result = await app.restart()
+
+		expect(result).toBe(true)
+		expect(app.state).toBe('debug')
+	})
+
+	test('restart() with debugMode unset still lands ready (normal path unchanged)', async () => {
+		const {app} = makeApp()
+
+		const result = await app.restart()
+
+		expect(result).toBe(true)
+		expect(app.state).toBe('ready')
+	})
+})
