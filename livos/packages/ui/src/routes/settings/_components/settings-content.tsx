@@ -61,6 +61,7 @@ import {
 	TbArrowBackUp,
 	TbRouter,
 	TbBolt,
+	TbBroadcast,
 	TbPackageImport,
 	TbLayoutDashboard,
 	TbRobot,
@@ -123,6 +124,8 @@ import {NetworkSection} from './network-section'
 import {NetExposeSection} from './net-expose-section'
 // Phase 329-10 (HW-02) — power management (spin-down / schedule / WoL), WSL2-hidden.
 import {PowerManagementSection} from './power-management-section'
+// Phase 347-04 (LANDNS-01) — opt-in LAN DNS split-horizon + mDNS box discovery.
+import {LanDnsSection} from './lan-dns-section'
 import {VpnSection} from './vpn-section'
 import {UpsStatusSection} from './ups-status-section'
 import {PastDeploysTable} from './past-deploys-table'
@@ -227,6 +230,8 @@ type SettingsSection =
 	| 'net-expose'
 	// Phase 329-10 (HW-02) — power management (spin-down / schedule / WoL), WSL2-hidden.
 	| 'power-management'
+	// Phase 347-04 (LANDNS-01) — opt-in LAN DNS split-horizon + mDNS box discovery.
+	| 'lan-dns'
 	// Phase 325-10 (NET-02) — first-class VPN (guided Tailscale login + MagicDNS fix).
 	| 'vpn'
 	// Phase 310-04 — external alert channels (Telegram/Discord/Slack/webhook/ntfy).
@@ -289,6 +294,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'network', group: 'system', icon: TbNetwork, label: 'Network', description: 'Hostname, static IP & DNS', adminOnly: true},
 	{id: 'net-expose', group: 'system', icon: TbRouter, label: 'Ports', description: 'Managed TCP/UDP openings', adminOnly: true},
 	{id: 'power-management', group: 'system', icon: TbBolt, label: 'Power management', description: 'Spin-down, scheduled wake & WoL', adminOnly: true},
+	{id: 'lan-dns', group: 'system', icon: TbBroadcast, label: 'LAN DNS & mDNS', description: 'Reach the box by name on your LAN', adminOnly: true},
 	{id: 'vpn', group: 'system', icon: TbLock, label: 'VPN', description: 'Guided Tailscale VPN & MagicDNS', adminOnly: true},
 	{id: 'alert-channels', group: 'system', icon: TbBell, label: 'Alert Channels', description: 'Telegram, Discord, Slack, webhook & ntfy alerts', adminOnly: true},
 	{id: 'monitoring', group: 'system', icon: TbChartLine, label: 'Monitoring', description: 'Resource history & alert thresholds', adminOnly: true},
@@ -725,6 +731,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <NetExposeSection />
 		case 'power-management':
 			return <PowerManagementSection />
+		case 'lan-dns':
+			return <LanDnsSection />
 		case 'vpn':
 			return <VpnSection />
 		case 'alert-channels':

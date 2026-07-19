@@ -1,5 +1,5 @@
 import {useState} from 'react'
-import {TbBolt, TbLoader2, TbAlertTriangle, TbPlayerPlay, TbClockBolt} from 'react-icons/tb'
+import {TbBolt, TbLoader2, TbAlertTriangle, TbPlayerPlay, TbClockBolt, TbCpu, TbMoon} from 'react-icons/tb'
 
 import {
 	AlertDialog,
@@ -49,6 +49,8 @@ export function PowerManagementSection() {
 	const testWakeMut = trpcReact.system.powerTestWake.useMutation()
 	const wolEnableMut = trpcReact.system.powerWolEnable.useMutation({onSuccess: refetch})
 	const wolDisableMut = trpcReact.system.powerWolDisable.useMutation({onSuccess: refetch})
+	// PWR-01 (347-01, D-347-2) — power profiles are fully REVERSIBLE, so no lockout gate.
+	const profileSetMut = trpcReact.system.powerProfileSet.useMutation({onSuccess: refetch})
 
 	// HDD spin-down form.
 	const [device, setDevice] = useState('')
@@ -68,10 +70,30 @@ export function PowerManagementSection() {
 		scheduleClearMut.isPending ||
 		testWakeMut.isPending ||
 		wolEnableMut.isPending ||
-		wolDisableMut.isPending
+		wolDisableMut.isPending ||
+		profileSetMut.isPending
 
 	const status = statusQ.data?.status
 	const isWsl2 = statusQ.data?.isWsl2 === true
+
+	// PWR-01 (347-01) — parse the honest active-profile + hibernate-eligibility lines the
+	// wrapper's `status` action now emits (under `-- power profile --` / `-- hibernate
+	// eligibility --`). Tolerant of absence: an undeployed/older wrapper yields undefined.
+	const statusText = status && status.ok ? status.stdout : ''
+	const activeProfile = statusText.match(/active:\s*(.+)/)?.[1]?.trim()
+	const hibernateState = statusText.match(/hibernate:\s*(.+)/)?.[1]?.trim()
+	const knownProfiles = ['balanced', 'power-saver', 'performance'] as const
+	const activeProfileKnown = knownProfiles.includes(activeProfile as (typeof knownProfiles)[number])
+
+	// Map the wrapper's raw hibernate line to a localized honest sentence where practical,
+	// else fall back to the raw explanatory text. NEVER an arm affordance (D-347-1).
+	const hibernateHonest = (() => {
+		if (!hibernateState) return undefined
+		if (/WSL2/i.test(hibernateState)) return t('power-mgmt.hibernate.na-wsl2')
+		if (/needs persistent swap/i.test(hibernateState)) return t('power-mgmt.hibernate.needs-swap')
+		if (/no suspend-to-disk|lacks 'disk'/i.test(hibernateState)) return t('power-mgmt.hibernate.na-no-unit')
+		return hibernateState
+	})()
 
 	// Client-side guards mirror the server-side zod.
 	const deviceValid = /^sd[a-z]$/.test(device)
@@ -283,6 +305,55 @@ export function PowerManagementSection() {
 						</p>
 					</div>
 				) : null}
+			</div>
+
+			{/* Power profiles — reversible CPU/platform power profile (D-347-2). NO lockout. */}
+			<div className='space-y-2 border-t border-border-default pt-3'>
+				<div className='flex items-center gap-2'>
+					<TbCpu className='h-4 w-4 text-text-tertiary' />
+					<label className='text-caption font-medium text-text-secondary'>{t('power-mgmt.profile.heading')}</label>
+				</div>
+				<div className='flex flex-wrap items-center gap-2'>
+					{knownProfiles.map((p) => {
+						const isActive = activeProfileKnown && activeProfile === p
+						return (
+							<Button
+								key={p}
+								size='sm'
+								variant={isActive ? 'primary' : 'default'}
+								onClick={() => profileSetMut.mutate({profile: p})}
+								disabled={busy}
+							>
+								{profileSetMut.isPending && profileSetMut.variables?.profile === p ? (
+									<TbLoader2 className='mr-1 h-4 w-4 animate-spin' />
+								) : null}
+								{t(`power-mgmt.profile.${p}`)}
+							</Button>
+						)
+					})}
+				</div>
+				{activeProfileKnown ? (
+					<p className='text-caption-sm text-text-tertiary'>
+						{t('power-mgmt.profile.active')}: {t(`power-mgmt.profile.${activeProfile}`)}
+					</p>
+				) : (
+					<p className='text-caption-sm text-text-tertiary'>{t('power-mgmt.profile.unavailable')}</p>
+				)}
+				{profileSetMut.data && profileSetMut.data.ok === false ? (
+					<p role='alert' className='text-caption text-red-400'>
+						{profileSetMut.data.reason}
+					</p>
+				) : null}
+			</div>
+
+			{/* Hibernate — READ-ONLY honest state ONLY (D-347-1). NEVER an arm affordance. */}
+			<div className='space-y-2 border-t border-border-default pt-3'>
+				<div className='flex items-center gap-2'>
+					<TbMoon className='h-4 w-4 text-text-tertiary' />
+					<label className='text-caption font-medium text-text-secondary'>{t('power-mgmt.hibernate.heading')}</label>
+				</div>
+				<p className='text-caption text-text-tertiary'>{hibernateHonest ?? t('power-mgmt.hibernate.na-no-unit')}</p>
+				<p className='text-caption-sm text-text-tertiary'>{t('power-mgmt.hibernate.note')}</p>
 			</div>
 
 			{/* Wake-on-LAN — per interface. */}
