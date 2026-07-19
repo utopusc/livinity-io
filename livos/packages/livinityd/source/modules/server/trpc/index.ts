@@ -54,6 +54,9 @@ import announcements from '../../announcements/routes.js'
 // All 3 paths route via HTTP per common.ts httpOnlyPaths — local.activate does
 // systemctl reload + file I/O (1-5s) that must survive `systemctl restart livos`.
 import localDns from '../../local-dns/routes.js'
+// Phase 347-03 — landns.* opt-in LAN-DNS/mDNS namespace. DISJOINT from local-dns
+// (CF portal) by construction: own module, own store key, no shared imports (D-347-5).
+import landns from '../../landns/routes.js'
 import docker from '../../docker/routes.js'
 import scheduler from '../../scheduler/routes.js'
 import monitoring from '../../monitoring/routes.js'
@@ -401,6 +404,8 @@ export function createAppRouter(opts: {
 		announcements,
 		// Phase 104 plan 104-03 — local-lan mode namespace.
 		local: localDns,
+		// Phase 347-03 — opt-in LAN-DNS/mDNS namespace (disjoint from `local` above).
+		landns,
 		docker,
 		scheduler,
 		monitoring,
