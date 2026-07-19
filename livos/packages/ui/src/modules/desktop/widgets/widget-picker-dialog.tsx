@@ -1,7 +1,18 @@
-import {Dialog, DialogPortal, DialogContent, DialogHeader, DialogTitle} from '@/shadcn-components/ui/dialog'
+import {toast} from 'sonner'
 
-import {WIDGET_CATALOG, WIDGET_SIZES, WidgetType, createWidgetId} from './widget-types'
-import {addDesktopWidget} from '../desktop-content'
+import {Dialog, DialogPortal, DialogContent, DialogHeader, DialogTitle} from '@/shadcn-components/ui/dialog'
+import {trpcReact} from '@/trpc/trpc'
+import {t} from '@/utils/i18n'
+
+import {WIDGET_CATALOG, WIDGET_SIZES, WidgetType, createWidgetId, createAppWidgetMeta} from './widget-types'
+import {addDesktopWidget, useDesktopWidgets} from '../desktop-content'
+
+// Phase 345-02 (WIDG-01, D-345-3): the client-side UX cap on total desktop
+// widgets, mirroring System A's server-authoritative MAX_ALLOWED_WIDGETS (=3,
+// livinityd modules/widgets/routes.ts). This picker cap is UX-only — the backend
+// re-enforces it on widget.enable; the number here just avoids offering an add
+// the server will reject.
+const MAX_WIDGETS = 3
 
 function WidgetPreviewMini({type}: {type: string}) {
 	switch (type) {
@@ -68,6 +79,92 @@ function WidgetPreviewMini({type}: {type: string}) {
 	}
 }
 
+// Phase 345-02: the "App widgets" section — manifest-declared widgets sourced
+// from apps.list. Self-hides when zero apps declare a widget (no empty header).
+// The section respects System A's cap: once the total (built-in local widgets +
+// server-enabled app widgets) reaches MAX_WIDGETS the add buttons disable and a
+// max-reached hint shows. The built-in grid above is intentionally NOT capped —
+// it stays byte-identical to its pre-345 behaviour.
+function AppWidgetsSection({onOpenChange}: {onOpenChange: (v: boolean) => void}) {
+	const appsQ = trpcReact.apps.list.useQuery()
+	// System A store of enabled app-widget ids — authoritative count for app
+	// widgets (avoids double-counting the local app-widget mirror; see addendum).
+	const enabledQ = trpcReact.widget.enabled.useQuery()
+	const {widgets: localWidgets} = useDesktopWidgets()
+	const utils = trpcReact.useUtils()
+	const enableMut = trpcReact.widget.enable.useMutation({
+		onSuccess: () => utils.widget.enabled.invalidate(),
+	})
+
+	// Flat-map installed apps' manifest widgets into pickable rows. Native apps
+	// carry `widgets: undefined`; only real manifest widget arrays contribute.
+	const appWidgets = (appsQ.data ?? []).flatMap((app: any) =>
+		Array.isArray(app.widgets)
+			? app.widgets
+					.filter((w: any) => w && typeof w.id === 'string')
+					.map((w: any) => ({
+						appWidgetId: `${app.id}:${w.id}`,
+						appName: app.name as string,
+						icon: app.icon as string | undefined,
+						title: (w.title ?? w.label ?? w.id) as string,
+					}))
+			: [],
+	)
+
+	// Self-hide the whole section when there is nothing to offer.
+	if (appWidgets.length === 0) return null
+
+	// Cap formula (UX-only; server re-enforces): built-in local widgets are System
+	// B and were never in the System A store, so count them from localWidgets;
+	// app widgets are counted from the server `enabled` store to avoid
+	// double-counting the local app-widget mirror (W-cap addendum).
+	const builtinCount = localWidgets.filter((w) => w.type !== 'app-widget').length
+	const appWidgetCount = (enabledQ.data ?? []).length
+	const total = builtinCount + appWidgetCount
+	const capReached = total >= MAX_WIDGETS
+
+	return (
+		<div className='mt-1 flex flex-col gap-2 border-t border-white/10 pt-3'>
+			<div className='flex items-center justify-between px-0.5'>
+				<span className='text-xs font-medium text-white/80'>{t('desktop.widgets.picker.app-widgets')}</span>
+				{capReached ? <span className='text-[9px] text-amber-300/80'>{t('desktop.widgets.picker.max-reached')}</span> : null}
+			</div>
+			<div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
+				{appWidgets.map((aw) => (
+					<button
+						key={aw.appWidgetId}
+						disabled={capReached || enableMut.isPending}
+						onClick={async () => {
+							try {
+								// Backend cap + ownership gate re-enforce here (source of truth).
+								await enableMut.mutateAsync({widgetId: aw.appWidgetId})
+								addDesktopWidget(createAppWidgetMeta(aw.appWidgetId, aw.title))
+								onOpenChange(false)
+							} catch (err: any) {
+								// Never silently swallow — surface the tRPC message (cap/ownership).
+								toast.error(err?.message ?? t('desktop.widgets.app-widget.error'))
+							}
+						}}
+						className='group flex flex-col items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3 transition-all hover:border-white/25 hover:bg-white/10 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-white/5'
+					>
+						<div className='flex h-16 w-full items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/40 backdrop-blur-sm'>
+							{aw.icon ? (
+								<img src={aw.icon} alt='' className='h-8 w-8 rounded-lg object-cover' />
+							) : (
+								<span className='text-xl'>🧩</span>
+							)}
+						</div>
+						<div className='flex flex-col items-center gap-0.5'>
+							<span className='max-w-full truncate text-xs font-medium text-white/90'>{aw.title}</span>
+							<span className='max-w-full truncate text-[9px] text-white/40'>{aw.appName}</span>
+						</div>
+					</button>
+				))}
+			</div>
+		</div>
+	)
+}
+
 export function WidgetPickerDialog({open, onOpenChange}: {open: boolean; onOpenChange: (v: boolean) => void}) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -103,6 +200,8 @@ export function WidgetPickerDialog({open, onOpenChange}: {open: boolean; onOpenC
 							)
 						})}
 					</div>
+					{/* Phase 345-02: manifest-declared app widgets (self-hides when none). */}
+					<AppWidgetsSection onOpenChange={onOpenChange} />
 				</DialogContent>
 			</DialogPortal>
 		</Dialog>
