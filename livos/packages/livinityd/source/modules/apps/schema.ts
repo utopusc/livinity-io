@@ -241,6 +241,12 @@ export const AppSettingsSchema = z.object({
 	// OOM-killed container is strictly recovery); false = opt out of OOM auto-restart. Read by the
 	// oom-watch scheduler job's decideOomAction; never triggers a compose change or restart itself.
 	oomSelfHeal: z.boolean().optional(),
+	// 345-03 GUEST-01 (D-345-6): admin toggled this app onto the anonymous public dashboard.
+	// undefined/false = NOT shown (default OFF — public exposure is a box-security decision, admin-only,
+	// NOT per-user). Read by the publicDashboard.get curation (public-dashboard/curate.ts). A boolean
+	// write (never delete) captures the explicit off state. Exposing an app here shows only its NAME +
+	// ICON + a link to its subdomain — it does NOT bypass that app's own forward_auth (D-345-7).
+	showOnPublicDashboard: z.boolean().optional(),
 	// 343-01 RESIL-01 (D-343-1): the main service's ORIGINAL entrypoint/command/healthcheck
 	// captured at enter-time; JSON `null` encodes "this key was absent originally" (restore = delete
 	// vs set). While debugMode is false and this stash survives, patchComposeFile's restore branch

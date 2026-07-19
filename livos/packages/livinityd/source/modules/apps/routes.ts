@@ -53,6 +53,9 @@ import {BUILTIN_APPS, getBuiltinApp, searchBuiltinApps} from './builtin-apps.js'
 // Phase 341-02 (REPO-02) — source-namespaced id for the federated install grant.
 import {namespacedAppId} from './app-store-sources.js'
 import {isPublicForbidden, type PublicForbiddenSignals} from './public-forbidden.js'
+// Phase 345-03 (GUEST-01, D-345-6) — reject a per-user composite appId on the public-dashboard
+// toggle (only GLOBAL/admin-owned apps are eligible; a member's private instance can never publish).
+import {appIdOwner} from '../domain/caddy.js'
 import {resolvePublicAccess} from './public-access.js'
 import {
 	grantAppAccess,
@@ -251,6 +254,7 @@ export const apps = router({
 						cpuSet,
 						debugMode,
 						oomSelfHeal,
+						showOnPublicDashboard,
 						immichCardDismissed,
 						jellyfinCardDismissed,
 						oidcLastProvision,
@@ -272,6 +276,9 @@ export const apps = router({
 						app.store.get('debugMode'),
 						// 343-02 RESIL-02: per-app OOM self-heal flag → the UI Resilience switch (343-03).
 						app.store.get('oomSelfHeal'),
+						// 345-03 GUEST-01: per-app "show on public dashboard" flag (raw store value) →
+						// the admin Public-dashboard section (345-04). Non-secret boolean.
+						app.store.get('showOnPublicDashboard'),
 						app.store.get('immichCardDismissed'),
 						app.store.get('jellyfinCardDismissed'),
 						// 331-02 (FIX-02): last SSO provisioning outcome — reason is already
@@ -357,6 +364,9 @@ export const apps = router({
 						// 343-02 RESIL-02: OOM self-heal flag for the UI Resilience switch (343-03).
 						// undefined = default ON — the UI renders an unset switch as enabled.
 						oomSelfHeal,
+						// 345-03 GUEST-01: raw "show on public dashboard" flag for the admin section (345-04).
+						// undefined/false = not shown (default OFF). Non-secret boolean — not admin-gated.
+						showOnPublicDashboard,
 						immichCardDismissed,
 						jellyfinCardDismissed,
 						// 331-02 (FIX-02): honest SSO-activation state for the 322-07 section —
@@ -414,6 +424,8 @@ export const apps = router({
 					debugMode: undefined,
 					// 343-02 RESIL-02: union-shape uniformity — native builtins have no OOM self-heal store key.
 					oomSelfHeal: undefined,
+					// 345-03 GUEST-01: union-shape uniformity — native builtins are never public-dashboard eligible.
+					showOnPublicDashboard: undefined,
 					immichCardDismissed: undefined,
 					jellyfinCardDismissed: undefined,
 					// 331-02 (FIX-02): union-shape uniformity — native builtins never provision SSO.
@@ -899,6 +911,23 @@ export const apps = router({
 	setOomSelfHeal: adminProcedure
 		.input(z.object({appId: z.string(), enabled: z.boolean()}))
 		.mutation(async ({ctx, input}) => ctx.apps!.setOomSelfHeal(input.appId, input.enabled)),
+
+	// 345-03 GUEST-01 (D-345-6, T-345-07): toggle whether a GLOBAL app appears on the anonymous
+	// public dashboard. adminProcedure — public exposure is a box-security decision, NOT per-user
+	// (resolves the 258 owner-or-admin tension toward admin-only). Reject a per-user composite appId
+	// (appIdOwner != null): only global/admin-owned apps are eligible; a member's private per-user
+	// instance can NEVER be published to an anonymous page. Plain store write, no restart.
+	setShowOnPublicDashboard: adminProcedure
+		.input(z.object({appId: z.string(), enabled: z.boolean()}))
+		.mutation(async ({ctx, input}) => {
+			if (appIdOwner(input.appId) !== null) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'Only global apps can be shown on the public dashboard (a per-user instance cannot be published).',
+				})
+			}
+			return ctx.apps!.setShowOnPublicDashboard(input.appId, input.enabled)
+		}),
 
 	// 342-01 APPD-01 (D-342-1/D-342-2): set/clear the per-app maintenance window. adminProcedure —
 	// same shared-global-app update-governance class as setUpdatePolicy. Gates ONLY the automatic

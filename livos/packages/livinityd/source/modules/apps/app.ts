@@ -1238,6 +1238,21 @@ export default class App {
 		return this.store.set('oomSelfHeal', enabled)
 	}
 
+	// 345-03 GUEST-01 (D-345-6): read the per-app "show on public dashboard" flag.
+	// undefined = never toggled on (default OFF — NO manifest fallback). Read by the
+	// publicDashboard.get curation + surfaced (raw) in apps.list for the admin section.
+	async getShowOnPublicDashboard() {
+		return this.store.get('showOnPublicDashboard')
+	}
+
+	// 345-03 GUEST-01 (D-345-6): set the per-app "show on public dashboard" flag. Plain
+	// store write — NO compose change, NO restart (curation reads it at request time).
+	// Mirrors getOidcEnabled/setOidcEnabled but without the Vaultwarden compose-patch/restart.
+	// A boolean write (never delete) captures the explicit off state.
+	async setShowOnPublicDashboard(enabled: boolean) {
+		return this.store.set('showOnPublicDashboard', enabled)
+	}
+
 	// 342-01 APPD-01 (D-342-1): per-app maintenance window. delete-to-clear (FileStore.set throws
 	// on undefined). No restart — the app-update-window job reads it; the 4am app-auto-update job
 	// skips windowed apps (disjoint predicate → the two jobs never double-update the same app).

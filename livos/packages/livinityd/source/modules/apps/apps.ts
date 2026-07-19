@@ -1884,6 +1884,12 @@ export default class Apps {
 		return this.getApp(appId).setOomSelfHeal(enabled)
 	}
 
+	// 345-03 GUEST-01 (D-345-6): toggle whether this app appears on the anonymous public
+	// dashboard (plain store write; no restart). Admin-only at the route layer.
+	async setShowOnPublicDashboard(appId: string, enabled: boolean) {
+		return this.getApp(appId).setShowOnPublicDashboard(enabled)
+	}
+
 	// 342-01 APPD-01: set/clear the per-app maintenance window (plain store write; delete-to-clear).
 	async setUpdateWindow(appId: string, window: {start: string; end: string} | undefined) {
 		return this.getApp(appId).setUpdateWindow(window)
