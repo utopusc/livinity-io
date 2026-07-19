@@ -62,6 +62,7 @@ import {
 	TbRouter,
 	TbBolt,
 	TbPackageImport,
+	TbLayoutDashboard,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -175,6 +176,11 @@ const ConnectivitySectionLazy = React.lazy(() => import('./connectivity-section'
 const AppMigrationImportSectionLazy = React.lazy(() =>
 	import('@/modules/settings/app-migration-import').then((m) => ({default: m.AppMigrationImportSection})),
 )
+// Phase 345-04 (GUEST-01) — Settings → Public dashboard (admin curates the anonymous
+// /public page: enable toggle + per-app picker + free-form links + title). Admin-only.
+const PublicDashboardSectionLazy = React.lazy(() =>
+	import('@/modules/settings/public-dashboard-section').then((m) => ({default: m.PublicDashboardSection})),
+)
 // Phase 246-05 — Settings → System section (hosts the v44 "Active terminals"
 // admin panel). The panel self-gates via useTerminalPanelEnabled, so when the
 // v43 feature flag is OFF the section renders nothing — the surface vanishes
@@ -230,6 +236,8 @@ type SettingsSection =
 	| 'connectivity'
 	// Phase 344-04 (XFER-01) — import an app bundle exported from another box.
 	| 'app-import'
+	// Phase 345-04 (GUEST-01) — admin curation of the anonymous /public dashboard.
+	| 'public-dashboard'
 	// v29.4 Phase 47 Plan 05 — AI Diagnostics admin section.
 	| 'diagnostics'
 
@@ -282,6 +290,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'security-advisor', group: 'system', icon: TbShieldCheck, label: 'Security Advisor', description: 'Scan results & remediation guidance', adminOnly: true},
 	{id: 'connectivity', group: 'system', icon: TbActivityHeartbeat, label: 'Connectivity', description: 'DNS, ports, certificate & tunnel self-check', adminOnly: true},
 	{id: 'app-import', group: 'system', icon: TbPackageImport, label: 'App Import', description: 'Move an app here from another box', adminOnly: true},
+	{id: 'public-dashboard', group: 'system', icon: TbLayoutDashboard, label: 'Public dashboard', description: 'A login-free page listing apps you pick', adminOnly: true},
 	{id: 'software-update',  group: 'system', icon: TbDownload,        label: 'Software Update',   description: 'Apply updates & view deploy history',     adminOnly: true},
 	// ── FOOTER ────────────────────────────────────────────────────────
 	{id: 'troubleshoot',     group: 'system', icon: TbTool,            label: 'Troubleshoot',      description: 'Logs & diagnostics',                      adminOnly: true, footer: true},
@@ -722,6 +731,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><ConnectivitySectionLazy /></Suspense>
 		case 'app-import':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><AppMigrationImportSectionLazy /></Suspense>
+		case 'public-dashboard':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><PublicDashboardSectionLazy /></Suspense>
 		case 'diagnostics':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><DiagnosticsSectionLazy /></Suspense>
 		default:
