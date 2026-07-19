@@ -79,6 +79,11 @@ import fileApi from '../files/api.js'
 import nativeIconApi from '../apps/native-icon-api.js'
 // Phase 290-r6 — gated admin .deb upload → auto-install → native tile.
 import nativeDebUploadApi from '../apps/native-deb-upload-api.js'
+// Phase 344-03 (XFER-01) — cross-box migration transport routes (admin-gated
+// GET /download + POST /upload). Mounted via createApi on /api/app-migration so
+// it inherits the privateApi LIVINITY_PROXY_TOKEN gate; each route additionally
+// asserts role === 'admin' (D-344-2 admin-browser transport; no public surface).
+import migrationApi from '../apps/migration-api.js'
 import {mountUsageCaptureMiddleware} from '../usage-tracking/index.js'
 import {mountBearerAuthMiddleware} from '../api-keys/bearer-auth.js'
 // Phase 169-05 — Vault Graph routes mount. Reuses livinityd.server.verifyToken
@@ -2408,6 +2413,11 @@ class Server {
 		// additionally asserts the session user is an admin (a .deb runs root
 		// maintainer scripts).
 		this.app.use('/api/native', createApi(nativeDebUploadApi))
+		// Phase 344-03 (XFER-01) — cross-box migration transport. Dedicated
+		// /api/app-migration namespace → inherits the privateApi proxy-token gate;
+		// each route additionally asserts the session user is an admin (bundles
+		// carry the app's data + are consumed by the step-up-gated importBundle).
+		this.app.use('/api/app-migration', createApi(migrationApi))
 
 		// ── Usage Capture Middleware (Phase 44 — wraps /u/:userId/v1/* OUTSIDE broker) ──
 		// Per Phase 44 D-44-04..06: capture lives in usage-tracking/, NOT in livinity-broker.
