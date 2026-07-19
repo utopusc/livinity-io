@@ -241,6 +241,27 @@ if [[ -d "$LAST_GOOD_DIR/livinityd-source" ]]; then
         [[ -d "$LIV_DIR/packages/core/dist" ]] && chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIV_DIR/packages/core/dist" 2>/dev/null
     fi
     log "last-good restored"
+    # ── Phase 348 (ABUPD-02): restore the pre-update DB snapshot too ──
+    # Self-contained mirror of restore_db_last_good (keep all three restore
+    # bodies in sync — Phase 311 WR-01 discipline). Fires only when the dump
+    # exists (taken THIS deploy, minutes ago — data-loss window ≈ nil).
+    # --single-transaction = all-or-nothing: an aborted restore leaves the DB
+    # untouched and the additive-only schema invariant keeps old code running.
+    DB_RESTORED=""
+    if [[ -s "$LAST_GOOD_DIR/livos-db.dump" ]]; then
+        if command -v sudo >/dev/null 2>&1 && sudo -u postgres psql -d livos -c '\q' >/dev/null 2>&1; then
+            systemctl stop livos.service liv-core.service liv-worker.service liv-memory.service 2>/dev/null
+            sudo -u postgres psql -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='livos' AND pid<>pg_backend_pid();" >/dev/null 2>&1
+            if sudo -u postgres pg_restore --clean --if-exists --no-owner --no-acl --single-transaction --dbname=livos "$LAST_GOOD_DIR/livos-db.dump" >/dev/null 2>&1; then
+                DB_RESTORED="true"; log "DB restored to its pre-update snapshot"
+            else
+                DB_RESTORED="false"; log "pg_restore aborted (single-transaction: DB left untouched) — code-only rollback"
+            fi
+            systemctl start liv-core.service liv-worker.service liv-memory.service 2>/dev/null
+        else
+            DB_RESTORED="false"; log "Postgres not accessible — DB restore skipped (code-only rollback)"
+        fi
+    fi
 else
     log "no last-good snapshot — cannot restore (manual recovery needed)"
 fi
@@ -260,12 +281,13 @@ json_path="${HISTORY_DIR}/${ts_iso}-failed.json"
 from_field=""; [[ -n "$SENT_FROM" && "$SENT_FROM" != "unknown" ]] && from_field=", \"from_sha\": \"$SENT_FROM\""
 to_field="";   [[ -n "$SENT_TO" ]] && to_field=", \"to_sha\": \"$SENT_TO\""
 log_field="";  [[ -n "$SENT_LOG" ]] && log_field=", \"log_path\": \"$SENT_LOG\""
+db_field="";   [[ -n "${DB_RESTORED:-}" ]] && db_field=", \"db_restored\": ${DB_RESTORED}"
 reason="Layer-B guard rolled back a stranded/broken deploy (update.sh did not complete)"
 [[ "$rolled_ok" == "1" ]] || reason="Layer-B guard ran but rollback did not restore :8080 — manual recovery needed"
 cat > "$json_path" 2>/dev/null <<JSON
 {
   "timestamp": "${json_iso}",
-  "status": "failed"${from_field}${to_field},
+  "status": "failed"${from_field}${to_field}${db_field},
   "guard": "layer-b"${log_field},
   "reason": "${reason}"
 }
@@ -303,8 +325,15 @@ install_manual_rollback_script() {
 # single-flight, own restore body, own probe, own history JSON. Invoked as
 # `sudo -n bash /opt/livos/livos-manual-rollback.sh` from the admin-gated tRPC
 # mutation shipped in 311-03. Refuses (non-zero) if no snapshot exists. Restores
-# CODE + node_modules + systemd units only — it performs NO DB rollback (the
-# additive-only-schema invariant makes the live schema forward-compatible).
+# CODE + node_modules + systemd units; DB restore is an explicit OPT-IN via
+# `--with-db` (Phase 348 ABUPD-02): arbitrary time may have passed since the
+# snapshot, so an automatic DB restore here would silently destroy user data
+# written since the update — without the flag the additive-only-schema
+# invariant keeps the live (forward-migrated) schema compatible with old code.
+# Exit-code contract: 0 = restored + serving; 1 = restored but :8080 did not
+# come back; 2 = no snapshot (or --with-db without a DB dump — nothing is
+# partially restored); 3 = lock held; 4 = code restored + serving but the
+# opt-in DB restore aborted (single-transaction: DB left untouched).
 set -uo pipefail
 
 LAST_GOOD_DIR="/opt/.livos-last-good"
@@ -314,9 +343,24 @@ HISTORY_DIR="/opt/livos/data/update-history"
 LOCK="/run/lock/livos-update.lock"
 log() { echo "[livos-manual-rollback] $*"; }
 
-# 0. Refuse when there is no snapshot to roll back to.
+WITH_DB=0
+for _arg in "$@"; do
+    case "$_arg" in
+        --with-db) WITH_DB=1 ;;
+        *) log "ERROR: unknown argument: $_arg"; exit 2 ;;
+    esac
+done
+
+# 0. Refuse when there is no snapshot to roll back to. With --with-db, ALSO
+#    refuse up-front when the snapshot has no DB dump — the operator explicitly
+#    asked for a DB restore; partially honoring the request would be worse than
+#    refusing (nothing is restored on this path).
 if [[ ! -d "$LAST_GOOD_DIR/livinityd-source" ]]; then
     log "ERROR: no last-good snapshot at $LAST_GOOD_DIR — nothing to roll back to"
+    exit 2
+fi
+if [[ "$WITH_DB" == "1" && ! -s "$LAST_GOOD_DIR/livos-db.dump" ]]; then
+    log "ERROR: --with-db requested but the last-good snapshot has no DB dump (the pre-update pg_dump failed or predates Phase 348) — refusing; re-run without --with-db for a code-only rollback"
     exit 2
 fi
 
@@ -394,6 +438,28 @@ if id "$_LIVOS_RUN_USER" >/dev/null 2>&1; then
 fi
 log "last-good restored"
 
+# 2b. Phase 348 (ABUPD-02) — opt-in DB restore (self-contained mirror of
+#     restore_db_last_good; keep all three restore bodies in sync — Phase 311
+#     WR-01 discipline). Only reached when --with-db was passed AND the dump
+#     exists (step 0 refused otherwise). --single-transaction = all-or-nothing:
+#     an aborted restore leaves the DB exactly as it was (exit 4 reports it).
+DB_RESTORED=""
+if [[ "$WITH_DB" == "1" ]]; then
+    if command -v sudo >/dev/null 2>&1 && sudo -u postgres psql -d livos -c '\q' >/dev/null 2>&1; then
+        log "Restoring the DB to its pre-update snapshot (--with-db)..."
+        systemctl stop livos.service liv-core.service liv-worker.service liv-memory.service 2>/dev/null || true
+        sudo -u postgres psql -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='livos' AND pid<>pg_backend_pid();" >/dev/null 2>&1 || true
+        if sudo -u postgres pg_restore --clean --if-exists --no-owner --no-acl --single-transaction --dbname=livos "$LAST_GOOD_DIR/livos-db.dump" >/dev/null 2>&1; then
+            DB_RESTORED="true"; log "DB restored to its pre-update snapshot"
+        else
+            DB_RESTORED="false"; log "pg_restore aborted (single-transaction: DB left untouched) — continuing with the code-only rollback"
+        fi
+        systemctl start liv-core.service liv-worker.service liv-memory.service 2>/dev/null || true
+    else
+        DB_RESTORED="false"; log "Postgres not accessible — DB restore skipped; continuing with the code-only rollback"
+    fi
+fi
+
 # 3. Restart livinityd + probe :8080/ then :8080/healthz/full (same shape/budgets
 #    as health_probe_or_rollback). A non-200-but-non-503 /healthz/full is treated
 #    as "probe not applicable" (pre-A2 build) — never a rollback-loop trigger.
@@ -423,19 +489,28 @@ mkdir -p "$HISTORY_DIR" 2>/dev/null || true
 json_path="${HISTORY_DIR}/${START_ISO_FS}-rollback.json"
 from_field=""; [[ -n "$FROM_SHA" ]] && from_field=", \"from_sha\": \"$FROM_SHA\""
 to_field="";   [[ -n "$TO_SHA" ]] && to_field=", \"to_sha\": \"$TO_SHA\""
+db_field="";   [[ -n "${DB_RESTORED:-}" ]] && db_field=", \"db_restored\": ${DB_RESTORED}"
 reason="Operator manual rollback to last-good (code + deps + systemd units restored; DB schema NOT reverted)"
+[[ "${DB_RESTORED:-}" == "true" ]] && reason="Operator manual rollback to last-good (code + deps + systemd units + DB restored to the pre-update snapshot)"
+[[ "${DB_RESTORED:-}" == "false" ]] && reason="Operator manual rollback to last-good (code + deps + systemd units restored; the requested DB restore ABORTED — DB left untouched)"
 [[ "$rolled_ok" == "1" ]] || reason="Manual rollback ran but :8080 did not recover — manual recovery may be needed"
 cat > "$json_path" 2>/dev/null <<JSON
 {
   "timestamp": "${START_ISO_JSON}",
-  "status": "rolled-back"${from_field}${to_field},
+  "status": "rolled-back"${from_field}${to_field}${db_field},
   "trigger": "manual",
   "reason": "${reason}"
 }
 JSON
 chmod 644 "$json_path" 2>/dev/null || true
-log "manual rollback complete (rolled_ok=$rolled_ok) — wrote $json_path"
-[[ "$rolled_ok" == "1" ]] && exit 0 || exit 1
+log "manual rollback complete (rolled_ok=$rolled_ok, db_restored=${DB_RESTORED:-n/a}) — wrote $json_path"
+# Exit contract (348-extended): 0/1 unchanged; 4 = serving again but the opt-in
+# DB restore aborted (operator must know their explicit request was not honored).
+if [[ "$rolled_ok" == "1" ]]; then
+    [[ "${DB_RESTORED:-}" == "false" ]] && exit 4
+    exit 0
+fi
+exit 1
 ROLLBACK_EOF
     if [[ ! -f "$MANUAL_ROLLBACK_SCRIPT" ]] || ! cmp -s "$tmp" "$MANUAL_ROLLBACK_SCRIPT"; then
         mv "$tmp" "$MANUAL_ROLLBACK_SCRIPT" 2>/dev/null || { rm -f "$tmp"; return 0; }
@@ -597,11 +672,17 @@ phase33_finalize() {
         sigverify_field=", \"signature_verification\": {\"status\": \"${_LIVOS_SIGVERIFY_STATUS}\", \"source\": \"${_LIVOS_SIGVERIFY_SOURCE:-}\", \"expected\": \"${_LIVOS_SIGVERIFY_EXPECTED:-}\", \"actual\": \"${_LIVOS_SIGVERIFY_ACTUAL:-}\"}"
     fi
 
+    # Phase 348 (ABUPD-02): record whether the Layer-A rollback path also
+    # restored the DB snapshot (empty when no rollback / never attempted —
+    # the field is then simply absent, valid JSON; additive schema only).
+    local db_field=""
+    [[ -n "${LIVOS_DB_RESTORED:-}" ]] && db_field=", \"db_restored\": ${LIVOS_DB_RESTORED}"
+
     local json_path="${HISTORY_DIR}/${LIVOS_UPDATE_START_ISO_FS}-${status}.json"
     cat > "$json_path" <<JSON
 {
   "timestamp": "${LIVOS_UPDATE_START_ISO_JSON}",
-  "status": "${status}"${from_field}${to_field}${sigverify_field},
+  "status": "${status}"${from_field}${to_field}${sigverify_field}${db_field},
   "duration_ms": ${duration_ms},
   "log_path": "${final_log_file}"${reason_field}
 }
@@ -830,17 +911,52 @@ snapshot_last_good() {
         cp -al "$LIVOS_DIR/node_modules" "$LAST_GOOD_DIR/node_modules" 2>/dev/null \
             || warn "node_modules hardlink snapshot failed (rollback will re-run pnpm install)"
     fi
+    # ── Phase 348 (ABUPD-02): pre-update DB snapshot ─────────────────────────
+    # pg_dump the livos DB into the snapshot so a rollback can ALSO restore the
+    # DB to its exact pre-update state (UPDSAFE-04 restored code/deps/systemd
+    # only, leaning entirely on the additive-only schema invariant). The ROOT
+    # shell does the file redirect (postgres cannot write into this root-owned
+    # dir); the proven `--format=custom --no-owner --no-acl` flag set mirrors
+    # backups/system-state.ts. NEVER-FATAL: a failed dump records
+    # db_snapshot:false and the update proceeds unchanged — this step must
+    # never make the update path MORE fragile than it was pre-348. Because
+    # $LAST_GOOD_DIR is rm -rf'd at the top of this function, the dump can only
+    # ever be from THIS run's pre-update state (a stale dump is impossible).
+    # Operator kill-switch: delete the dump file — every restore path fires
+    # only on dump presence and degrades to the pre-348 code-only rollback.
+    local _lg_db=false
+    if command -v sudo >/dev/null 2>&1 && sudo -u postgres psql -d livos -c '\q' >/dev/null 2>&1; then
+        if sudo -u postgres pg_dump --format=custom --no-owner --no-acl livos > "$LAST_GOOD_DIR/livos-db.dump.tmp" 2>/dev/null \
+            && [[ -s "$LAST_GOOD_DIR/livos-db.dump.tmp" ]]; then
+            mv "$LAST_GOOD_DIR/livos-db.dump.tmp" "$LAST_GOOD_DIR/livos-db.dump" 2>/dev/null || true
+            # postgres-owned 0600: pg_restore (running as postgres) must read it
+            # directly, and the dump holds user data (credential hashes, key
+            # hashes) so it must NOT be world-readable inside this 0755 dir.
+            chown postgres:postgres "$LAST_GOOD_DIR/livos-db.dump" 2>/dev/null || true
+            chmod 600 "$LAST_GOOD_DIR/livos-db.dump" 2>/dev/null || true
+            [[ -f "$LAST_GOOD_DIR/livos-db.dump" ]] && _lg_db=true
+        fi
+        if [[ "$_lg_db" == "true" ]]; then
+            ok "Pre-update DB snapshot saved ($(du -h "$LAST_GOOD_DIR/livos-db.dump" 2>/dev/null | cut -f1))"
+        else
+            rm -f "$LAST_GOOD_DIR/livos-db.dump.tmp" 2>/dev/null || true
+            warn "pg_dump failed — a rollback this run will be code-only (pre-348 posture)"
+        fi
+    else
+        warn "Postgres not accessible — DB snapshot skipped (a rollback this run will be code-only)"
+    fi
     # manifest.json — lets the UI label the rollback target. Capture the CURRENTLY-
     # deployed sha/tag: these files still hold the OLD values at snapshot time
     # (.deployed-sha is advanced only on success, much later at "Recording deployed
     # SHA"), plus a schema fingerprint (sha256 digest, NOT schema content) for
-    # telemetry / the rollback-time schema-drift warning (311-03).
+    # telemetry / the rollback-time schema-drift warning (311-03), plus the 348
+    # db_snapshot flag (surfaced by system.canRollback for the UI checkbox).
     local _lg_sha _lg_tag _lg_schema
     _lg_sha=$(cat /opt/livos/.deployed-sha 2>/dev/null | tr -d '[:space:]')
     _lg_tag=$(cat /opt/livos/.deployed-release 2>/dev/null | tr -d '[:space:]')
     _lg_schema=$(sha256sum "$LIVOS_DIR/packages/livinityd/source/modules/database/schema.sql" 2>/dev/null | cut -d' ' -f1)
     cat > "$LAST_GOOD_DIR/manifest.json" <<MANIFEST 2>/dev/null || true
-{"sha": "${_lg_sha}", "tag": "${_lg_tag}", "snapshotted_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "schema_hash": "${_lg_schema}"}
+{"sha": "${_lg_sha}", "tag": "${_lg_tag}", "snapshotted_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "schema_hash": "${_lg_schema}", "db_snapshot": ${_lg_db}}
 MANIFEST
     if (( have_src == 1 )); then
         ok "Last-good snapshot saved to $LAST_GOOD_DIR"
@@ -954,6 +1070,52 @@ restore_last_good() {
     return 0
 }
 
+# ── Phase 348 (ABUPD-02): DB restore companion to restore_last_good ──────────
+# Restores the pre-update pg_dump taken by snapshot_last_good. Auto-invoked ONLY
+# on the Layer-A/Layer-B rollback paths — those fire minutes after the snapshot,
+# mid-update (daemon restarting), so the data-loss window is ≈ nil. The manual
+# Layer-C script requires an explicit --with-db opt-in instead (arbitrary time
+# may have passed; auto-restoring there would silently destroy post-update user
+# data). FAIL-OPEN to code-only rollback: `--single-transaction` makes the
+# restore all-or-nothing — an aborted restore leaves the DB EXACTLY as it was,
+# and the additive-only schema invariant (migrations/index.ts) keeps old code
+# compatible with the forward-migrated schema (the exact pre-348 posture). The
+# divergence from system-state.ts's warning-tolerant pg_restore is deliberate:
+# mid-rollback, a HALF-restored DB would be strictly worse than no restore.
+# Stops the PG-client units + terminates lingering backends so --clean can drop
+# objects without lock contention; restarts liv-core/worker/memory afterwards
+# (livos.service is restarted by the caller either way). Sets LIVOS_DB_RESTORED
+# ("true"/"false") for phase33_finalize telemetry; empty = never attempted.
+LIVOS_DB_RESTORED=""
+restore_db_last_good() {
+    local dump="$LAST_GOOD_DIR/livos-db.dump"
+    if [[ ! -s "$dump" ]]; then
+        info "No DB snapshot in last-good — code-only rollback (pre-348 posture)"
+        return 1
+    fi
+    if ! command -v sudo >/dev/null 2>&1 || ! sudo -u postgres psql -d livos -c '\q' >/dev/null 2>&1; then
+        warn "Postgres not accessible — skipping DB restore (code-only rollback)"
+        LIVOS_DB_RESTORED="false"
+        return 1
+    fi
+    warn "Restoring the DB to its pre-update snapshot..."
+    systemctl stop livos.service liv-core.service liv-worker.service liv-memory.service 2>/dev/null || true
+    sudo -u postgres psql -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='livos' AND pid<>pg_backend_pid();" >/dev/null 2>&1 || true
+    local _db_ok=0
+    if sudo -u postgres pg_restore --clean --if-exists --no-owner --no-acl --single-transaction --dbname=livos "$dump" >/dev/null 2>&1; then
+        _db_ok=1
+    fi
+    systemctl start liv-core.service liv-worker.service liv-memory.service 2>/dev/null || true
+    if (( _db_ok == 1 )); then
+        LIVOS_DB_RESTORED="true"
+        ok "DB restored to its pre-update snapshot"
+        return 0
+    fi
+    LIVOS_DB_RESTORED="false"
+    warn "pg_restore aborted (single-transaction: DB left untouched) — continuing with code-only rollback (additive-only schema keeps old code compatible)"
+    return 1
+}
+
 # livinityd serves the UI on :8080. ANY normal HTTP status (2xx/3xx, or the
 # 401/403 auth gates) means it bound and is serving; connection-refused/timeout
 # (curl → 000), 404, or 5xx mean it's down or the UI dist is broken.
@@ -1015,6 +1177,10 @@ health_probe_or_rollback() {
     if ! restore_last_good; then
         fail "Update failed AND there is no snapshot to roll back to — manual recovery needed (journalctl -u livos -n 50)"
     fi
+    # Phase 348 (ABUPD-02): also restore the pre-update DB snapshot (taken this
+    # run, minutes ago). Never blocks the code rollback — fail-open to the
+    # pre-348 code-only posture (see restore_db_last_good).
+    restore_db_last_good || true
     systemctl reset-failed livos.service 2>/dev/null || true
     systemctl restart livos.service 2>/dev/null || true
     # The rolled-back OLD code does the same slow pre-listen boot work — give it
