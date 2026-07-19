@@ -102,11 +102,17 @@ const IPV4_RE = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|
 const FQDN_RE = /^(?=.{1,253}$)([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$/
 
 const hostIpSchema = z.string().refine((v) => IPV4_RE.test(v), 'invalid IPv4')
+// Lowercase-normalize BEFORE the store/wrapper so route and wrapper agree: the route's
+// FQDN regex accepts mixed case ([a-zA-Z]) but the wrapper's _valid_domain accepts
+// [a-z0-9] only — a mixed-case domain would pass here yet be rejected by the wrapper with
+// a confusing exit-2. Transform to lowercase, THEN reject `.local` (so `Foo.LOCAL` →
+// `foo.local` is still rejected). Downstream input.domain is therefore always lowercase.
 const domainSchema = z
 	.string()
 	.min(1)
 	.max(253)
 	.refine((d) => FQDN_RE.test(d), 'invalid FQDN')
+	.transform((d) => d.toLowerCase())
 	.refine((d) => !d.endsWith('.local'), '.local is not allowed for LAN-DNS')
 
 // Display-only mirror shape (matches the `landns` StoreSchema key in index.ts).

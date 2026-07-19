@@ -184,6 +184,30 @@ describe('landnsEnable accepts a valid (hostIp, real-FQDN) pair + mirrors the st
 		expect(liv.__store.landns?.dnsmasqEnabled).toBeUndefined() // store write only happens on ok
 	})
 
+	test('a mixed-case domain is accepted and passed to the wrapper LOWERCASED (INFO-1)', async () => {
+		const liv = makeStubLivinityd({})
+		const res = await landns.createCaller(makeCtx({livinityd: liv})).landnsEnable({
+			hostIp: '192.168.1.10',
+			domain: 'Box.Example.COM',
+		})
+		expect(res.ok).toBe(true)
+		// Store mirror holds the lowercased form (route and wrapper _valid_domain now agree).
+		expect(liv.__store.landns.domain).toBe('box.example.com')
+		// The wrapper argv carries the lowercased domain — no mixed-case exit-2 mismatch.
+		expect(spawnMock).toHaveBeenCalledWith(
+			'sudo',
+			['-n', expect.stringContaining('livos-landns.sh'), 'enable', '192.168.1.10', 'box.example.com'],
+			expect.any(Object),
+		)
+	})
+
+	test('a mixed-case .LOCAL domain is still rejected AFTER lowercasing (INFO-1)', async () => {
+		await expect(
+			caller().landnsEnable({hostIp: '192.168.1.10', domain: 'Foo.LOCAL'}),
+		).rejects.toThrow()
+		expect(spawnMock).not.toHaveBeenCalled()
+	})
+
 	test('landnsMdnsEnable mirrors {mdnsEnabled:true} without clobbering dnsmasqEnabled', async () => {
 		const liv = makeStubLivinityd({dnsmasqEnabled: true, hostIp: '192.168.1.10'})
 		const res = await landns.createCaller(makeCtx({livinityd: liv})).landnsMdnsEnable()
@@ -207,6 +231,9 @@ describe('DISJOINTNESS from the CF/portal path (structural, source-level) — D-
 		'livos:domain',
 		'provisionPortalDnsRecord',
 		'caddy',
+		'cf-saas',
+		'provisionPortal',
+		'cf_api',
 	]
 
 	for (const needle of FORBIDDEN) {
