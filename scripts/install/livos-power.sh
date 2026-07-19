@@ -15,8 +15,8 @@
 # raw NOPASSWD grant on hdparm / ethtool / rtcwake / systemctl would let any process
 # that can call `sudo` inject arbitrary flags, device paths, or unit bodies. Instead
 # the sudoers grant is on THIS ONE binary path (no glob, no argument wildcard) and the
-# wrapper accepts ONLY a fixed 9-action enum. It regex-validates every device / iface /
-# time token BEFORE that value reaches a privileged command, and it builds every argv +
+# wrapper accepts ONLY a fixed closed action enum. It regex-validates every device / iface /
+# time / profile token BEFORE that value reaches a privileged command, and it builds every argv +
 # every /etc file body ITSELF — so no caller-supplied string can ever reach a privileged
 # command or a config file unvalidated. To change a permitted operation, EDIT THIS
 # WRAPPER — do NOT broaden the grant.
@@ -42,6 +42,18 @@
 #                                    pre-flight before real arming (D-18)
 #   wol-enable     <iface>           ethtool -s <iface> wol g + dedicated systemd oneshot unit (D-19)
 #   wol-disable    <iface>           ethtool -s <iface> wol d + disable/remove the unit
+#   profile-set    <balanced|power-saver|performance>
+#                                    powerprofilesctl set <profile> (347-01 PWR-01, D-347-2).
+#                                    REVERSIBLE (any profile can be re-selected instantly) → NO
+#                                    acknowledgment gate, unlike schedule-set. The profile arg is
+#                                    closed-enum-validated (_valid_profile) BEFORE it reaches
+#                                    powerprofilesctl; power-profiles-daemon persists the active
+#                                    profile natively across reboot, so no boot re-apply hook.
+#   profile-get                      powerprofilesctl get (read-only; absent daemon -> note, exit 0)
+#
+# The `status` action ALSO gained a READ-ONLY hibernate-eligibility probe (347-01, D-347-1):
+# WSL2 -> N/A, swap<RAM -> needs-swap, /sys/power/state lacking `disk` -> N/A. This is honest
+# REPORTING only — NO hibernate ARM / GRUB / initramfs / resume= is built anywhere (deferred).
 #
 # HIGHEST LOCKOUT RISK OF THE PHASE (D-18/D-24): a scheduled shutdown whose RTC wake
 # fails to fire leaves the box off with NO software revert — physical access is then
@@ -105,6 +117,11 @@ _valid_secs() { [[ "${1:-}" =~ ^[0-9]+$ ]] && (( 10#$1 >= 1 && 10#$1 <= 604800 )
 # Network interface name (same shape as livos-network.sh _valid_iface).
 _valid_iface() { [[ "${1:-}" =~ ^[A-Za-z0-9._-]{1,15}$ ]]; }
 
+# Power profile: closed enum, the ONLY control input for profile-set. This exact-match
+# is the sole gate the profile value passes before it reaches powerprofilesctl (347-01,
+# D-347-2) — no substring / prefix / injection can slip a shell metacharacter through.
+_valid_profile() { [[ "${1:-}" =~ ^(balanced|power-saver|performance)$ ]]; }
+
 # Resolve the parent kernel disk name backing a mountpoint (e.g. / -> sda), so the
 # spin-down path can REFUSE the boot/root disk as defense-in-depth over livinityd's
 # listDrives() candidate filtering (D-17). Empty on any failure (fail-safe: an
@@ -159,13 +176,16 @@ _next_wake_epoch() {
 # ── Actions ──────────────────────────────────────────────────────────────────
 case "$ACTION" in
 	install)
-		# hdparm (HDD spin-down control) + ethtool (WoL target enablement). The wrapper
-		# builds the exact apt argv itself — no caller string enters any command line.
+		# hdparm (HDD spin-down control) + ethtool (WoL target enablement) +
+		# power-profiles-daemon (CPU/platform power profile switching for profile-set/get,
+		# 347-01 PWR-01). The wrapper builds the exact apt argv itself — no caller string
+		# enters any command line. power-profiles-daemon persists the active profile natively
+		# across reboot via its systemd unit, so NO extra boot re-apply hook is needed.
 		# NO WoL magic-packet sender package is pulled: the box is the WoL TARGET, not a
 		# sender (sending is out of scope, D-16).
 		export DEBIAN_FRONTEND=noninteractive
 		apt-get update -qq
-		apt-get install -y -qq hdparm ethtool
+		apt-get install -y -qq hdparm ethtool power-profiles-daemon
 		echo "installed"
 		exit 0
 		;;
@@ -430,6 +450,33 @@ WOLSVC
 		exit 0
 		;;
 
+	profile-set)
+		# profile-set <balanced|power-saver|performance>: switch the active CPU/platform
+		# power profile via powerprofilesctl (347-01 PWR-01, D-347-2). The profile is
+		# closed-enum-validated BEFORE it reaches powerprofilesctl — the ONLY control input.
+		# REVERSIBLE (any profile can be re-selected instantly), so — unlike schedule-set —
+		# there is NO acknowledgment gate here. power-profiles-daemon persists the choice across
+		# reboot natively, so nothing extra is armed.
+		PROFILE="${2:-}"
+		_valid_profile "$PROFILE" || {
+			echo "[livos-power] invalid power profile (expected balanced|power-saver|performance): '${PROFILE}'" >&2; exit 2; }
+		command -v powerprofilesctl >/dev/null 2>&1 || {
+			echo "[livos-power] powerprofilesctl not installed (run install) — power profiles unavailable" >&2; exit 1; }
+		powerprofilesctl set "$PROFILE" || {
+			echo "[livos-power] powerprofilesctl could not set profile '${PROFILE}'" >&2; exit 1; }
+		echo "profile-set ${PROFILE}"
+		exit 0
+		;;
+
+	profile-get)
+		# profile-get: read the active power profile (read-only). An absent daemon degrades
+		# to a note + exit 0 (mirrors the status posture — never errors on a missing tool).
+		command -v powerprofilesctl >/dev/null 2>&1 || {
+			echo "profile-get unavailable (power-profiles-daemon not installed)"; exit 0; }
+		powerprofilesctl get 2>/dev/null | sed 's/^/active: /' || echo "active: unknown"
+		exit 0
+		;;
+
 	status)
 		# Read-only. `set -e` is on, so every probe is guarded with `|| true`.
 		echo "== livos-power status =="
@@ -448,11 +495,37 @@ WOLSVC
 		fi
 		echo "-- Wake-on-LAN units --"
 		systemctl list-units --type=service 'livos-power-wol@*.service' --no-legend 2>/dev/null | awk '{print "  "$1" "$4}' || true
+
+		# READ-ONLY hibernate-eligibility probe (347-01, D-347-1). Honest reporting ONLY —
+		# NO hibernate arm / GRUB / initramfs / resume= is built anywhere. Eligible IFF
+		# NOT WSL2 AND swap >= RAM AND the kernel advertises suspend-to-disk in
+		# /sys/power/state (WARN-2: the systemd-hibernate.service unit ships unconditionally,
+		# so its presence alone is a dead branch — the `disk` token is the true kernel-capability
+		# gate; some VM / secure-boot kernels have swap>=RAM but cannot hibernate).
+		echo "-- hibernate eligibility --"
+		if [[ -e /dev/dxg ]] || grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; then
+			echo "  hibernate: N/A (WSL2 — managed by the Windows host)"
+		elif ! grep -qw disk /sys/power/state 2>/dev/null; then
+			echo "  hibernate: N/A (kernel has no suspend-to-disk support — /sys/power/state lacks 'disk')"
+		else
+			mem_kb=$(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null || true)
+			swap_kb=$(awk '/^SwapTotal:/{print $2}' /proc/meminfo 2>/dev/null || true)
+			mem_kb=${mem_kb:-0}; swap_kb=${swap_kb:-0}
+			if (( ${swap_kb:-0} < ${mem_kb:-0} )); then
+				echo "  hibernate: needs persistent swap >= RAM (swap ${swap_kb}kB < RAM ${mem_kb}kB)"
+			else
+				echo "  hibernate: eligible (swap ${swap_kb}kB >= RAM ${mem_kb}kB) — arming is a documented future leg, not built in v1"
+			fi
+		fi
+
+		# Active power profile (347-01 PWR-01). Absent daemon -> honest N/A note.
+		echo "-- power profile --"
+		powerprofilesctl get 2>/dev/null | sed 's/^/  active: /' || echo "  active: unavailable (power-profiles-daemon not installed)"
 		exit 0
 		;;
 
 	*)
-		echo "[livos-power] invalid action: '${ACTION}' — expected one of: install status spindown-set spindown-clear schedule-set schedule-clear arm-wake test-wake wol-enable wol-disable" >&2
+		echo "[livos-power] invalid action: '${ACTION}' — expected one of: install status spindown-set spindown-clear schedule-set schedule-clear arm-wake test-wake wol-enable wol-disable profile-set profile-get" >&2
 		exit 2
 		;;
 esac
