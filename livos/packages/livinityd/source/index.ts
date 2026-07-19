@@ -660,6 +660,16 @@ type StoreSchema = {
 	// only {name,icon,url}. Default (missing/enabled!==true) → the endpoint returns
 	// {enabled:false} and leaks nothing.
 	publicDashboard: {enabled: boolean; title?: string; links: {label: string; url: string}[]}
+	// Phase 346-04 (MCP-01, D-346-6) — DEDICATED top-level key (dot-prop hazard:
+	// NOT nested under `mcp`/`apps`/any array or scalar — dot-prop path collisions
+	// silently drop the write, same convention as `publicDashboard`/`appStoreSources`/
+	// `usbImport` above). The native MCP control-plane server enable flag ONLY — the
+	// liv_mcp_* keys live in the mcp_control_keys PG table (never here; this holds no
+	// key material). Distinct from the consumer-side `mcp.config.*` Redis surface and
+	// NEVER added to SYSTEM_MCP_NAMES. Default (missing / enabled !== true) → the
+	// loopback transport is inert (404-gated) and boot never calls start(): the whole
+	// MCP-control surface is off until an admin deliberately opts in (default-off).
+	mcpServer: {enabled: boolean}
 }
 
 export type LivinitydOptions = {
