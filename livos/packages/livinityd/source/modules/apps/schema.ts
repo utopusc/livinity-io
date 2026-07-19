@@ -1,6 +1,8 @@
 import {z} from 'zod'
 import semver from 'semver'
 
+import {WidgetManifestEntrySchema} from './widget-manifest.js'
+
 // TODO: this is used outside of the apps module, move it somewhere more appropriate
 export type ProgressStatus = {
 	running: boolean
@@ -142,8 +144,10 @@ export const AppManifestSchema = z.object({
 		.optional(),
 	// In bytes
 	installSize: z.number().int().optional(),
-	// TODO: Define this type
-	widgets: z.array(z.any()).optional(),
+	// Phase 345-01 (WIDG-01, D-345-1) — typed author-declared widget entries
+	// (was z.array(z.any())). See apps/widget-manifest.ts for the runtime data
+	// contract (WidgetDataSchema) the widget.data procedure validates against.
+	widgets: z.array(WidgetManifestEntrySchema).optional(),
 	defaultShell: z.string().optional(),
 	implements: z.array(z.string()).optional(),
 	backupIgnore: z.array(z.string()).optional(),
