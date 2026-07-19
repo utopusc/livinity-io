@@ -1201,6 +1201,13 @@ export default class App {
 		return this.store.set('autoUpdatePolicy', policy)
 	}
 
+	// 343-02 RESIL-02 (D-343-5): toggle this app's OOM self-heal. Plain store write — no compose
+	// change, no restart (consumed by the oom-watch scheduler job). undefined = default ON; a stored
+	// `false` is the opt-out, so a boolean write (never delete) captures both explicit states.
+	async setOomSelfHeal(enabled: boolean) {
+		return this.store.set('oomSelfHeal', enabled)
+	}
+
 	// 342-01 APPD-01 (D-342-1): per-app maintenance window. delete-to-clear (FileStore.set throws
 	// on undefined). No restart — the app-update-window job reads it; the 4am app-auto-update job
 	// skips windowed apps (disjoint predicate → the two jobs never double-update the same app).

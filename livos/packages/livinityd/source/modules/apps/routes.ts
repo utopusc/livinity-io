@@ -250,6 +250,7 @@ export const apps = router({
 						updateWindow,
 						cpuSet,
 						debugMode,
+						oomSelfHeal,
 						immichCardDismissed,
 						jellyfinCardDismissed,
 						oidcLastProvision,
@@ -269,6 +270,8 @@ export const apps = router({
 						app.store.get('cpuSet'),
 						// 343-01 RESIL-01: per-app debug-mode flag → the UI debug badge (343-03).
 						app.store.get('debugMode'),
+						// 343-02 RESIL-02: per-app OOM self-heal flag → the UI Resilience switch (343-03).
+						app.store.get('oomSelfHeal'),
 						app.store.get('immichCardDismissed'),
 						app.store.get('jellyfinCardDismissed'),
 						// 331-02 (FIX-02): last SSO provisioning outcome — reason is already
@@ -351,6 +354,9 @@ export const apps = router({
 						cpuSet,
 						// 343-01 RESIL-01: debug-mode flag for the UI badge (343-03).
 						debugMode,
+						// 343-02 RESIL-02: OOM self-heal flag for the UI Resilience switch (343-03).
+						// undefined = default ON — the UI renders an unset switch as enabled.
+						oomSelfHeal,
 						immichCardDismissed,
 						jellyfinCardDismissed,
 						// 331-02 (FIX-02): honest SSO-activation state for the 322-07 section —
@@ -406,6 +412,8 @@ export const apps = router({
 					cpuSet: undefined,
 					// 343-01 RESIL-01: union-shape uniformity — native builtins never enter debug mode.
 					debugMode: undefined,
+					// 343-02 RESIL-02: union-shape uniformity — native builtins have no OOM self-heal store key.
+					oomSelfHeal: undefined,
 					immichCardDismissed: undefined,
 					jellyfinCardDismissed: undefined,
 					// 331-02 (FIX-02): union-shape uniformity — native builtins never provision SSO.
@@ -884,6 +892,13 @@ export const apps = router({
 	setUpdatePolicy: adminProcedure
 		.input(z.object({appId: z.string(), policy: z.enum(['auto', 'manual'])}))
 		.mutation(async ({ctx, input}) => ctx.apps!.setUpdatePolicy(input.appId, input.policy)),
+
+	// 343-02 RESIL-02 (D-343-5, T-343-08): toggle OOM self-heal for a shared global app.
+	// adminProcedure — a host-affecting recovery policy on a shared app, same class as
+	// setUpdatePolicy. appId is a plain id; enabled is a boolean (false = opt-out, undefined = ON).
+	setOomSelfHeal: adminProcedure
+		.input(z.object({appId: z.string(), enabled: z.boolean()}))
+		.mutation(async ({ctx, input}) => ctx.apps!.setOomSelfHeal(input.appId, input.enabled)),
 
 	// 342-01 APPD-01 (D-342-1/D-342-2): set/clear the per-app maintenance window. adminProcedure —
 	// same shared-global-app update-governance class as setUpdatePolicy. Gates ONLY the automatic

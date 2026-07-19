@@ -1588,6 +1588,11 @@ export default class Apps {
 		return this.getApp(appId).setUpdatePolicy(policy)
 	}
 
+	// 343-02 RESIL-02 (D-343-5): toggle the per-app OOM self-heal (plain store write; no restart).
+	async setOomSelfHeal(appId: string, enabled: boolean) {
+		return this.getApp(appId).setOomSelfHeal(enabled)
+	}
+
 	// 342-01 APPD-01: set/clear the per-app maintenance window (plain store write; delete-to-clear).
 	async setUpdateWindow(appId: string, window: {start: string; end: string} | undefined) {
 		return this.getApp(appId).setUpdateWindow(window)

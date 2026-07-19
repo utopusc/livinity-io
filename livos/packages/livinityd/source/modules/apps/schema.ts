@@ -233,6 +233,10 @@ export const AppSettingsSchema = z.object({
 	// 343-01 RESIL-01 (D-343-1): when true, patchComposeFile suppresses the MAIN service's
 	// entrypoint (sleep-infinity) so a crash-looping app sits idle + writable for terminal repair.
 	debugMode: z.boolean().optional(),
+	// 343-02 RESIL-02 (D-343-5): per-app OOM self-heal opt-out. undefined = ON (auto-restart an
+	// OOM-killed container is strictly recovery); false = opt out of OOM auto-restart. Read by the
+	// oom-watch scheduler job's decideOomAction; never triggers a compose change or restart itself.
+	oomSelfHeal: z.boolean().optional(),
 	// 343-01 RESIL-01 (D-343-1): the main service's ORIGINAL entrypoint/command/healthcheck
 	// captured at enter-time; JSON `null` encodes "this key was absent originally" (restore = delete
 	// vs set). Restored to disk by patchComposeFile's clear branch, then cleared by exitDebugMode —
