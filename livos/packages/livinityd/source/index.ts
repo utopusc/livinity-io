@@ -561,6 +561,19 @@ type StoreSchema = {
 		profiles?: {active: string}
 		lastAppliedAt?: number
 	}
+	// Phase 347-03 LANDNS-01 (D-347-5/7) — UI-DISPLAY-ONLY mirror of the opt-in
+	// LAN-DNS/mDNS state. Written AFTER a successful livos-landns.sh wrapper action.
+	// Dedicated TOP-LEVEL key (dot-prop path collisions silently drop nested writes).
+	// Source of truth is the wrapper-owned /etc/dnsmasq.d/livos-landns.conf + avahi
+	// unit — NEVER the CF/portal path (this key + the landns router are disjoint from
+	// local-dns/hybrid/cf-local by construction).
+	landns: {
+		dnsmasqEnabled?: boolean
+		mdnsEnabled?: boolean
+		hostIp?: string
+		domain?: string
+		lastAppliedAt?: number
+	}
 	backups: {
 		repositories: {
 			id: string
