@@ -5,11 +5,20 @@ import type {CurrentUser} from '../../database/index.js'
 export const createContextExpress = ({req, res}: CreateExpressContextOptions) => {
 	const livinityd = req.app.get('livinityd') as Livinityd
 	const logger = req.app.get('logger') as Livinityd['logger']
+	// Phase 346-02 (D-346-7) — MCP attribution. Purely attributive, NOT authz:
+	// this header is only meaningful on the loopback /trpc call an MCP tool
+	// handler makes (Plan 03), which ALSO carries LIV_API_KEY for authentication.
+	// A direct external caller cannot reach /trpc without LIV_API_KEY
+	// (loopback-trust), so spoofing this header requires already being full-admin
+	// (T-346-10 accept). It surfaces mcpKeyId into the audit row so MCP-initiated
+	// actions are distinguishable from a human admin.
+	const mcpKeyIdHeader = req.headers['x-mcp-key-id']
 	return {
 		...createContext({livinityd, logger}),
 		transport: 'express' as const,
 		request: req,
 		response: res,
+		mcpKeyId: typeof mcpKeyIdHeader === 'string' ? mcpKeyIdHeader : undefined,
 	}
 }
 
@@ -90,6 +99,11 @@ const createContext = ({livinityd, logger}: {livinityd: Livinityd; logger: Livin
 		// admits an absent currentUser ONLY when this flag is true — it never
 		// infers admin from a merely unresolved currentUser.
 		legacySingleUser: undefined as boolean | undefined,
+		// Phase 346-02 (D-346-7): MCP-key attribution. Defaults undefined so the
+		// type flows to BOTH express + ws contexts and non-MCP traffic is
+		// byte-identical; createContextExpress overrides it from the
+		// x-mcp-key-id header when present.
+		mcpKeyId: undefined as string | undefined,
 	}
 }
 

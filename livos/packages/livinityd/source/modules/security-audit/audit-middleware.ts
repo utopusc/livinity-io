@@ -33,6 +33,9 @@ export const auditAdminAction = async (opts: {
 	if (type !== 'mutation') return next()
 
 	const userId = ctx.currentUser?.id ?? NIL_UUID
+	// Phase 346-02 (D-346-7): thread the MCP-key attribution through to the audit
+	// row. Undefined for a human admin action (non-MCP rows unchanged).
+	const mcpKeyId = ctx.mcpKeyId
 
 	// Read + redact the raw input BEFORE either sink (Pitfall 3 / T-328-01).
 	// getRawInput() is the v11 API for a base-procedure middleware (opts.input
@@ -47,10 +50,10 @@ export const auditAdminAction = async (opts: {
 
 	try {
 		const result = await next()
-		void recordAdminActionEvent({userId, action: path, redactedInput, success: true})
+		void recordAdminActionEvent({userId, action: path, redactedInput, success: true, mcpKeyId})
 		return result
 	} catch (err) {
-		void recordAdminActionEvent({userId, action: path, redactedInput, success: false, error: String(err)})
+		void recordAdminActionEvent({userId, action: path, redactedInput, success: false, error: String(err), mcpKeyId})
 		throw err
 	}
 }

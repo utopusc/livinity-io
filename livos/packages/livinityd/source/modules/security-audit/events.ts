@@ -48,6 +48,12 @@ export interface AdminActionAuditEvent {
 	redactedInput?: unknown
 	success: boolean
 	error?: string
+	// Phase 346-02 (D-346-7): the MCP control key id when this admin action was
+	// initiated by an MCP agent (undefined for a human admin). Rides the existing
+	// JSON forensics payload + params_digest — NO new column. `action` already
+	// records the tRPC path, so an MCP-initiated act tool is distinguishable by
+	// (path + present mcpKeyId).
+	mcpKeyId?: string
 }
 
 export interface AuthLoginAuditEvent {
@@ -155,6 +161,9 @@ export async function recordAdminActionEvent(
 			redactedInput: event.redactedInput,
 			success: event.success,
 			error: event.error,
+			// Phase 346-02 (D-346-7): attribution rides the JSON payload; undefined
+			// for non-MCP actions so the forensics row is byte-identical.
+			mcpKeyId: event.mcpKeyId,
 		},
 		event.success,
 		event.error,
