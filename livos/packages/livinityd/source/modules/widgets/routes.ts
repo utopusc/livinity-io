@@ -1,20 +1,45 @@
 import z from 'zod'
 import ms from 'ms'
+import {TRPCError} from '@trpc/server'
 
 import {router, privateProcedure} from '../server/trpc/trpc.js'
 import {systemWidgets} from '../system/system-widgets.js'
 import {filesWidgets} from '../files/widgets.js'
+import {appIdOwner} from '../domain/caddy.js'
+import {getEffectiveAppAccess} from '../apps/app-access.js'
+import {WidgetDataSchema} from '../apps/widget-manifest.js'
+// Phase 345-01 (WIDG-01, D-345-2) — the pure, unit-tested widget multi-user
+// safety core. splitWidgetId now rsplits on the LAST colon (composite per-user
+// id fix); decideWidgetAccess is the fail-closed ownership allow-list.
+import {splitWidgetId, baseAppId, decideWidgetAccess} from './widget-access.js'
 
 const MAX_ALLOWED_WIDGETS = 3
 
 const livinityWidgets = {...systemWidgets, ...filesWidgets}
 
-// Splits a widgetId into appId and widgetName
-// e.g., "transmission:status" => { appId: "transmission", widgetName: "status" }
-function splitWidgetId(widgetId: string) {
-	const [appId, widgetName] = widgetId.split(':')
+// Minimal ctx shape assertWidgetAccess needs (structurally compatible with the
+// full tRPC context — keeps the helper testable and decoupled).
+type WidgetAccessCtx = {
+	currentUser?: {id: string; role: string}
+	legacySingleUser?: boolean
+}
 
-	return {appId, widgetName}
+// Phase 345-01 (WIDG-01, D-345-2) — the fail-closed ownership gate shared by
+// enable + data. Built-in `livinity` system/files widgets have NO owner and are
+// box-global → ungated (never-break). A per-user composite appId
+// (`${base}:user:${uid}`) is gated: only the owner, an admin, or a user with an
+// explicit full/readonly share grant may enable/read it.
+async function assertWidgetAccess(ctx: WidgetAccessCtx, appId: string): Promise<void> {
+	if (appId === 'livinity') return // built-in system/files widgets — ownerless, unchanged
+
+	const owner = appIdOwner(appId)
+	const isAdmin = ctx.currentUser ? ctx.currentUser.role === 'admin' : ctx.legacySingleUser === true
+	const effectiveAccessLevel =
+		owner && ctx.currentUser ? await getEffectiveAppAccess(baseAppId(appId), ctx.currentUser.id) : undefined
+
+	if (!decideWidgetAccess({owner, currentUserId: ctx.currentUser?.id, isAdmin, effectiveAccessLevel})) {
+		throw new TRPCError({code: 'FORBIDDEN', message: 'You do not have access to this app widget'})
+	}
 }
 
 export default router({
@@ -34,6 +59,9 @@ export default router({
 		)
 		.mutation(async ({ctx, input}) => {
 			const {appId, widgetName} = splitWidgetId(input.widgetId)
+
+			// Phase 345-01 — fail-closed ownership gate BEFORE any metadata read.
+			await assertWidgetAccess(ctx, appId)
 
 			// Validate widget
 			if (appId === 'livinity') {
@@ -97,14 +125,26 @@ export default router({
 			const {appId, widgetName} = splitWidgetId(input.widgetId)
 			let widgetData: {[key: string]: any}
 
+			// Phase 345-01 — fail-closed ownership gate BEFORE any data fetch.
+			await assertWidgetAccess(ctx, appId)
+
 			if (appId === 'livinity') {
-				// This is an Livinity widget
+				// This is an Livinity widget — FIRST-PARTY, trusted; its shape
+				// (text-with-progress / three-stats / files-list / files-grid) is
+				// returned byte-identically and NOT run through WidgetDataSchema
+				// (the built-in files shapes deliberately bypass the app union).
 				if (!(widgetName in livinityWidgets)) throw new Error(`No widget named ${widgetName} found in Livinity widgets`)
 
 				widgetData = await livinityWidgets[widgetName as keyof typeof livinityWidgets](ctx.livinityd)
 			} else {
-				// This is an app widget
-				widgetData = await ctx.apps.getApp(appId).getWidgetData(widgetName)
+				// This is an app widget — the payload comes from the app's OWN
+				// container. Phase 345-01 (W-DataContract): validate it against the
+				// four renderable templates and DEGRADE (never throw) on a
+				// malformed payload, so a misbehaving container cannot push a shape
+				// that throws in the UI render.
+				const raw = await ctx.apps.getApp(appId).getWidgetData(widgetName)
+				const parsed = WidgetDataSchema.safeParse(raw)
+				widgetData = parsed.success ? raw : {type: 'unknown', refresh: raw?.refresh ?? '30s'}
 			}
 
 			// Parse refresh time from human-readable string to milliseconds
