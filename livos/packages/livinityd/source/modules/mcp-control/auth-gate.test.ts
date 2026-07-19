@@ -139,7 +139,12 @@ describe('mcp-control auth-gate (Phase 346-02)', () => {
 	})
 
 	test('valid active key (Bearer) → sets req.mcpKeyId/mcpKeyPrefix, calls next()', async () => {
-		findMcpControlKeyByHashMock.mockResolvedValue(VALID_ROW)
+		// The real DAO by-hash lookup carries key_hash internally (WARN-01); the row
+		// found by `key_hash = $1` always has keyHash == the hash we searched by, so
+		// mirror that here → the fail-closed constant-time compare passes.
+		findMcpControlKeyByHashMock.mockImplementation((hash: string) =>
+			Promise.resolve({...VALID_ROW, keyHash: hash}),
+		)
 		const mw = createMcpControlAuthMiddleware({logger})
 		const plaintext = 'liv_mcp_' + 'Z'.repeat(32)
 		const req = makeReq(`Bearer ${plaintext}`)
@@ -156,7 +161,12 @@ describe('mcp-control auth-gate (Phase 346-02)', () => {
 	})
 
 	test('valid active key via x-api-key header (no Authorization) → next()', async () => {
-		findMcpControlKeyByHashMock.mockResolvedValue(VALID_ROW)
+		// The real DAO by-hash lookup carries key_hash internally (WARN-01); the row
+		// found by `key_hash = $1` always has keyHash == the hash we searched by, so
+		// mirror that here → the fail-closed constant-time compare passes.
+		findMcpControlKeyByHashMock.mockImplementation((hash: string) =>
+			Promise.resolve({...VALID_ROW, keyHash: hash}),
+		)
 		const mw = createMcpControlAuthMiddleware({logger})
 		const plaintext = 'liv_mcp_' + 'A'.repeat(32)
 		const expectedHash = createHash('sha256').update(plaintext, 'utf-8').digest('hex')
@@ -173,7 +183,12 @@ describe('mcp-control auth-gate (Phase 346-02)', () => {
 
 	test('T8 — constant-time compare via crypto.timingSafeEqual on a valid key', async () => {
 		const spy = vi.spyOn(crypto, 'timingSafeEqual')
-		findMcpControlKeyByHashMock.mockResolvedValue(VALID_ROW)
+		// The real DAO by-hash lookup carries key_hash internally (WARN-01); the row
+		// found by `key_hash = $1` always has keyHash == the hash we searched by, so
+		// mirror that here → the fail-closed constant-time compare passes.
+		findMcpControlKeyByHashMock.mockImplementation((hash: string) =>
+			Promise.resolve({...VALID_ROW, keyHash: hash}),
+		)
 		const mw = createMcpControlAuthMiddleware({logger})
 		const plaintext = 'liv_mcp_' + 'S'.repeat(32)
 		const req = makeReq(`Bearer ${plaintext}`)
@@ -203,7 +218,12 @@ describe('mcp-control auth-gate (Phase 346-02)', () => {
 	})
 
 	test('never logs the plaintext token (only keyPrefix at debug)', async () => {
-		findMcpControlKeyByHashMock.mockResolvedValue(VALID_ROW)
+		// The real DAO by-hash lookup carries key_hash internally (WARN-01); the row
+		// found by `key_hash = $1` always has keyHash == the hash we searched by, so
+		// mirror that here → the fail-closed constant-time compare passes.
+		findMcpControlKeyByHashMock.mockImplementation((hash: string) =>
+			Promise.resolve({...VALID_ROW, keyHash: hash}),
+		)
 		const mw = createMcpControlAuthMiddleware({logger})
 		const plaintext = 'liv_mcp_' + 'T'.repeat(32)
 		const req = makeReq(`Bearer ${plaintext}`)
@@ -221,5 +241,41 @@ describe('mcp-control auth-gate (Phase 346-02)', () => {
 			.join(' ')
 		expect(allLogged).not.toContain(plaintext)
 		expect(allLogged).not.toContain('T'.repeat(32))
+	})
+
+	test('WARN-01 — row whose keyHash != presentedHash is REJECTED (real fail-closed compare, not a self-compare)', async () => {
+		// A row surfaced with a NON-matching hash (e.g. a future refactor fetching
+		// by a non-hash column) must NOT authenticate — the constant-time compare is
+		// a genuine gate, not a tautology.
+		findMcpControlKeyByHashMock.mockResolvedValue({
+			...VALID_ROW,
+			keyHash: 'f'.repeat(64), // deliberately != sha256(presented)
+		})
+		const mw = createMcpControlAuthMiddleware({logger})
+		const plaintext = 'liv_mcp_' + 'M'.repeat(32)
+		const req = makeReq(`Bearer ${plaintext}`)
+		const res = makeRes()
+		const next = vi.fn() as unknown as NextFunction
+
+		await mw(req, res as unknown as Response, next)
+
+		expect(next).not.toHaveBeenCalled()
+		expect(res.statusCode).toBe(401)
+	})
+
+	test('WARN-01 — row with NO keyHash fails CLOSED (missing hash → 401, never authenticates)', async () => {
+		// Guards the future-refactor footgun: a row that carries no key_hash must be
+		// rejected, not fall back to comparing the presented hash against itself.
+		findMcpControlKeyByHashMock.mockResolvedValue({...VALID_ROW}) // no keyHash field
+		const mw = createMcpControlAuthMiddleware({logger})
+		const plaintext = 'liv_mcp_' + 'N'.repeat(32)
+		const req = makeReq(`Bearer ${plaintext}`)
+		const res = makeRes()
+		const next = vi.fn() as unknown as NextFunction
+
+		await mw(req, res as unknown as Response, next)
+
+		expect(next).not.toHaveBeenCalled()
+		expect(res.statusCode).toBe(401)
 	})
 })

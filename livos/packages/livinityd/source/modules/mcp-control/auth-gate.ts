@@ -164,13 +164,17 @@ export function createMcpControlAuthMiddleware(deps: {
 			return
 		}
 
-		// T8 — defense-in-depth constant-time compare. The row was found by SQL
-		// WHERE key_hash = $1 so identity is already established; SELECT_COLS
-		// excludes key_hash, so the row exposes no hash → self-compare pins the
-		// code path to the constant-time primitive (belt-and-suspenders against a
-		// future refactor that bypasses the index).
-		const rowKeyHash = (row as {keyHash?: string}).keyHash ?? presentedHash
-		if (!constantTimeHashEqual(presentedHash, rowKeyHash)) {
+		// T8 — defense-in-depth constant-time compare. The row was already found by
+		// SQL WHERE key_hash = $1 (identity established); this compare is the
+		// belt-and-suspenders second gate.
+		// WARN-01 — REAL fail-closed compare. The by-hash DAO lookup carries
+		// key_hash INTERNALLY (never surfaced to any route/UI), so this is a genuine
+		// hash-vs-hash compare, not a self-compare tautology. A row with NO hash
+		// fails CLOSED: under a future refactor that fetches by a non-hash column
+		// without projecting key_hash, this rejects instead of silently
+		// authenticating anything matching a row's prefix.
+		const rowKeyHash = row.keyHash
+		if (!rowKeyHash || !constantTimeHashEqual(presentedHash, rowKeyHash)) {
 			send401(res)
 			return
 		}

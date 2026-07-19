@@ -48,15 +48,28 @@ export interface McpControlKeyRow {
 	createdAt: Date
 	lastUsedAt: Date | null
 	revokedAt: Date | null
+	/**
+	 * SHA-256 hex hash. Populated ONLY by findMcpControlKeyByHash (the internal
+	 * auth-lookup path) so the transport auth gate can run a REAL fail-closed
+	 * constant-time compare (WARN-01). DELIBERATELY absent on listMcpControlKeys /
+	 * createMcpControlKey rows — key_hash is NEVER surfaced to any route/UI.
+	 */
+	keyHash?: string
 }
 
-// SELECT cols deliberately EXCLUDE key_hash — callers never need the hash after
-// creation (the hash is the lookup key, not a payload). Mirrors the api-keys
-// discipline; defends against accidentally exposing the hash to API clients.
+// SELECT cols deliberately EXCLUDE key_hash — list/create callers never need the
+// hash (the hash is the lookup key, not a payload). Mirrors the api-keys
+// discipline; defends against accidentally exposing the hash to API clients. The
+// ONLY reader of key_hash is the internal by-hash auth lookup (SELECT_COLS_WITH_HASH).
 const SELECT_COLS = `id, key_prefix, name, created_by, created_at, last_used_at, revoked_at`
 
+// The by-hash auth lookup ALSO carries key_hash so the transport auth gate can
+// run a REAL fail-closed constant-time compare (WARN-01). key_hash stays INTERNAL
+// to this one lookup — list/create still project SELECT_COLS (hash excluded).
+const SELECT_COLS_WITH_HASH = `${SELECT_COLS}, key_hash`
+
 function rowToKey(row: any): McpControlKeyRow {
-	return {
+	const mapped: McpControlKeyRow = {
 		id: row.id,
 		keyPrefix: row.key_prefix,
 		name: row.name,
@@ -64,6 +77,33 @@ function rowToKey(row: any): McpControlKeyRow {
 		createdAt: row.created_at,
 		lastUsedAt: row.last_used_at,
 		revokedAt: row.revoked_at,
+	}
+	// key_hash is carried ONLY when the query selected it (the internal by-hash
+	// auth lookup). list/create SELECTs exclude it, so it stays absent here —
+	// never surfaced to any route/UI.
+	if (row.key_hash != null) mapped.keyHash = row.key_hash as string
+	return mapped
+}
+
+/**
+ * Fire-and-forget bump of last_used_at on a successful auth lookup (INFO-03) so
+ * the admin UI "last used" reflects reality instead of always "never". This is a
+ * best-effort, NON-BLOCKING write: a failure is swallowed and NEVER propagated —
+ * an operational-visibility write must never block or fail an auth decision. A
+ * direct UPDATE is sufficient at loopback v1 scale (no batched flush needed).
+ */
+function touchMcpControlKeyLastUsed(
+	pool: NonNullable<ReturnType<typeof getPool>>,
+	id: string,
+): void {
+	try {
+		const result = pool.query(
+			`UPDATE mcp_control_keys SET last_used_at = NOW() WHERE id = $1`,
+			[id],
+		) as unknown as {catch?: (onRejected: () => void) => unknown} | undefined
+		if (result && typeof result.catch === 'function') result.catch(() => {})
+	} catch {
+		// best-effort: last_used_at visibility must never break auth.
 	}
 }
 
@@ -122,11 +162,14 @@ export async function findMcpControlKeyByHash(
 	const pool = getPool()
 	if (!pool) return null
 	const {rows} = await pool.query(
-		`SELECT ${SELECT_COLS} FROM mcp_control_keys WHERE key_hash = $1 AND revoked_at IS NULL`,
+		`SELECT ${SELECT_COLS_WITH_HASH} FROM mcp_control_keys WHERE key_hash = $1 AND revoked_at IS NULL`,
 		[keyHash],
 	)
 	if (rows.length === 0) return null
-	return rowToKey(rows[0])
+	const row = rowToKey(rows[0])
+	// INFO-03 — record that this key was just used (fire-and-forget, non-blocking).
+	touchMcpControlKeyLastUsed(pool, row.id)
+	return row
 }
 
 /**

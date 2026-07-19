@@ -141,22 +141,51 @@ describe('mcp-control keys-database DAO (346-01 MCP-01)', () => {
 	})
 
 	// ── findMcpControlKeyByHash — active-only; unknown == revoked → null ───────
-	test('findMcpControlKeyByHash SELECTs with key_hash + revoked_at IS NULL filter; null on miss', async () => {
-		queryMock.mockResolvedValueOnce({rows: [fakeRow()]})
+	test('findMcpControlKeyByHash SELECTs (incl. key_hash) with revoked_at IS NULL filter; carries keyHash INTERNALLY; null on miss', async () => {
+		queryMock.mockResolvedValueOnce({rows: [fakeRow({key_hash: 'a'.repeat(64)})]})
 		const hit = await findMcpControlKeyByHash('a'.repeat(64))
-		expect(queryMock).toHaveBeenCalledTimes(1)
+		// The SELECT is the FIRST query; a fire-and-forget last_used_at UPDATE
+		// (INFO-03) may follow, so assert on calls[0] rather than an exact count.
 		const [sql, params] = queryMock.mock.calls[0] as [string, unknown[]]
 		expect(sql).toMatch(/SELECT/)
 		expect(sql).toMatch(/FROM mcp_control_keys/)
 		expect(sql).toMatch(/WHERE key_hash = \$1/)
 		expect(sql).toMatch(/revoked_at IS NULL/)
+		// WARN-01 — the by-hash lookup MUST project key_hash so the gate can run a
+		// REAL fail-closed compare.
+		expect(sql).toMatch(/key_hash/)
 		expect(params).toEqual(['a'.repeat(64)])
 		expect(hit).not.toBeNull()
 		expect(hit?.id).toBe('uuid-1')
+		// The row carries keyHash for the auth gate's constant-time compare.
+		expect(hit?.keyHash).toBe('a'.repeat(64))
 
 		queryMock.mockResolvedValueOnce({rows: []})
 		const miss = await findMcpControlKeyByHash('b'.repeat(64))
 		expect(miss).toBeNull()
+	})
+
+	// ── INFO-03 — last_used_at operational visibility ─────────────────────────
+	test('INFO-03 — findMcpControlKeyByHash bumps last_used_at (fire-and-forget UPDATE) after a successful lookup', async () => {
+		queryMock.mockResolvedValueOnce({rows: [fakeRow({key_hash: 'd'.repeat(64)})]})
+		queryMock.mockResolvedValueOnce({rowCount: 1}) // the non-blocking UPDATE
+		await findMcpControlKeyByHash('d'.repeat(64))
+		const updateCall = queryMock.mock.calls.find(([sql]) =>
+			/UPDATE mcp_control_keys/.test(sql as string),
+		)
+		expect(updateCall).toBeDefined()
+		const [updSql, updParams] = updateCall as [string, unknown[]]
+		expect(updSql).toMatch(/SET last_used_at = NOW\(\)/)
+		expect(updSql).toMatch(/WHERE id = \$1/)
+		expect(updParams).toEqual(['uuid-1'])
+	})
+
+	test('INFO-03 — a last_used_at write failure NEVER blocks/rejects auth (best-effort, swallowed)', async () => {
+		queryMock.mockResolvedValueOnce({rows: [fakeRow({key_hash: 'e'.repeat(64)})]})
+		queryMock.mockRejectedValueOnce(new Error('write failed')) // UPDATE rejects
+		const hit = await findMcpControlKeyByHash('e'.repeat(64))
+		// The lookup still resolves to the row — the rejection is swallowed.
+		expect(hit?.id).toBe('uuid-1')
 	})
 
 	test('findMcpControlKeyByHash returns null when the pool is absent (fail-open, no PG query)', async () => {
