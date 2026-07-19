@@ -95,9 +95,15 @@ export const BundleVolumeSchema = z.object({
 	bytes: z.number(),
 })
 
+// 344-02 PLAN-CHECK B1 (BLOCKER): appId is the SOLE string that flows into every
+// path join / fse.copy / namedVolumeRuntimeName / Binds on the IMPORT side, so it is
+// pinned to the EXACT App-constructor charset (`/^[a-zA-Z0-9-_]+$/`, app.ts:122) HERE
+// at schema-parse time — the earliest possible gate, BEFORE the manifest is trusted for
+// anything. A crafted appId with `../`, an absolute path, a colon, or an empty string
+// fails this refinement and rejects the whole bundle as '[bundle-manifest-invalid]'.
 export const BundleManifestSchema = z.object({
 	schemaVersion: z.number().int(),
-	appId: z.string(),
+	appId: z.string().regex(/^[a-zA-Z0-9-_]+$/, 'appId must match /^[a-zA-Z0-9-_]+$/'),
 	appVersion: z.string(),
 	boxRelease: z.string(),
 	createdAt: z.number(),
