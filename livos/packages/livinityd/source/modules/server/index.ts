@@ -186,7 +186,15 @@ const APEX_PUBLIC_PREFIXES = [
 // route.
 //   /files/share/:token — public file-share landing (public-share-page.tsx)
 //   /invite/:token      — pre-existing invite-accept landing (same allowlist gap)
-const APEX_PUBLIC_GET_PREFIXES = ['/files/share/', '/invite/']
+//   /public             — Phase 345-03 (GUEST-01) anonymous public-dashboard landing
+//                         (345-04 GradientLayout page). GET-only SPA shell that serves
+//                         NO authenticated data and calls ONLY the publicDashboard.get
+//                         publicProcedure (default-OFF → an honest "not enabled" page,
+//                         leaks nothing). This is the ONE and ONLY apex change for
+//                         GUEST-01 — APEX_PUBLIC_PREFIXES (any-method) is NOT touched,
+//                         caddy.ts / forward_auth are NOT touched. Everything not on
+//                         this curated list stays fail-closed (302 /login).
+const APEX_PUBLIC_GET_PREFIXES = ['/files/share/', '/invite/', '/public']
 
 // Pre-auth static assets (login wallpaper, hashed bundle chunks, fonts the
 // regexless prefixes above don't cover). GET-only — see apexSessionGate.
