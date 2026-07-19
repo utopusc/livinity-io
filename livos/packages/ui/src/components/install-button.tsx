@@ -96,6 +96,11 @@ function ButtonContentForState({
 		// flips it back to ready.
 		case 'unhealthy':
 			return t('app.offline')
+		// 343-03 RESIL-01 — entrypoint-suppressed for repair. Distinct label; NOT in
+		// the openable ready/running branch and NOT in the enabled set, so the button
+		// stays non-clickable (an app is repaired via the terminal, not this button).
+		case 'debug':
+			return t('app.debug')
 		case 'loading':
 		case undefined:
 			return <TbLoader className='white h-3 w-3 animate-spin opacity-50 shadow-sm' />

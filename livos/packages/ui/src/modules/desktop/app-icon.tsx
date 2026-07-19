@@ -154,6 +154,11 @@ export function AppLabel({state, label = ''}: {state: AppStateOrLoading; label?:
 		// (no new i18n key), self-corrects via the health monitor.
 		case 'unhealthy':
 			return t('app.offline')
+		// 343-03 RESIL-01 — entrypoint-suppressed for repair; distinct debug label.
+		// NOT in progressStates → no spinner/dim; NOT in the start/restart/stop/
+		// troubleshoot allow-lists (below) → those actions stay disabled in debug.
+		case 'debug':
+			return t('app.debug')
 	}
 	return assertUnreachable(state)
 }

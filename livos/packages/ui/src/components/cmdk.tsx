@@ -433,6 +433,8 @@ export function appStateToString(appState: AppState) {
 		uninstalling: t('app.uninstalling'),
 		unknown: t('app.offline'),
 		stopped: t('app.offline'),
+		// 343-03 RESIL-01 — entrypoint-suppressed for repair; distinct label.
+		debug: t('app.debug'),
 		loading: t('loading'),
 	}[appState]
 }

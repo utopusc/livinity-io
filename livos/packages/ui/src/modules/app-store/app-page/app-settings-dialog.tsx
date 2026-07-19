@@ -29,6 +29,7 @@ import {OidcSsoSection} from './oidc-sso-section'
 import {AppProtectionSection} from './app-protection-section'
 import {PublicAccessSection} from './public-access-section'
 import {ResourceLimitsSection} from './resource-limits-section'
+import {ResilienceSection} from './resilience-section'
 import {UpdatePolicySection} from './update-policy-section'
 
 export function AppSettingsDialog() {
@@ -234,6 +235,19 @@ function AppSettingsDialogForApp({
 								initialCpuLimit={app.cpuLimit}
 								initialMemoryLimit={app.memoryLimit}
 								initialCpuSet={app.cpuSet}
+							/>
+						</div>
+					) : null}
+					{/* Resilience Section — 343-03 (RESIL-01/02), only for non-native
+					    (store/docker) apps — native apps have no container to self-heal/debug.
+					    OOM self-heal switch (default ON) + debug-mode enter/exit. */}
+					{!app.native ? (
+						<div className='border-t border-border-default pt-4 mt-4'>
+							<ResilienceSection
+								appId={app.id}
+								appName={app.name}
+								initialOomSelfHeal={app.oomSelfHeal}
+								debugMode={app.debugMode}
 							/>
 						</div>
 					) : null}

@@ -109,13 +109,19 @@ export const appStates = [
 	// state landed by the install health gate; self-corrects to 'ready' via the
 	// continuous health monitor once the container comes good.
 	'unhealthy',
+	// 343-03 RESIL-01 — STABLE "entrypoint-suppressed for repair" state landed by
+	// apps.enterDebugMode. NOT a transient/progress state (excluded from progressStates);
+	// self-corrects to 'ready' only via apps.exitDebugMode.
+	'debug',
 ] satisfies AppState[]
 
 export const installStates = ['installing', 'uninstalling', 'updating'] satisfies AppState[]
 export type InstallState = (typeof installStates)[number]
 // 'unhealthy' IS an installed state — omitting it here would flip a degraded
 // app's store page back to a bare Install button.
-export const installedStates = ['running', 'stopped', 'ready', 'restarting', 'starting', 'unhealthy'] satisfies AppState[]
+// 'debug' IS an installed state (343-03) — omitting it would flip a debug-mode
+// app's store page back to a bare Install button.
+export const installedStates = ['running', 'stopped', 'ready', 'restarting', 'starting', 'unhealthy', 'debug'] satisfies AppState[]
 export type InstalledState = (typeof installedStates)[number]
 
 export const progressStates = [
