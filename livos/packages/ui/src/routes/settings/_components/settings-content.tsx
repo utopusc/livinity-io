@@ -63,6 +63,7 @@ import {
 	TbBolt,
 	TbPackageImport,
 	TbLayoutDashboard,
+	TbRobot,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -171,6 +172,8 @@ const MonitoringSectionLazy = React.lazy(() => import('./monitoring-section').th
 const SecurityAdvisorSectionLazy = React.lazy(() => import('./security-advisor-section').then((m) => ({default: m.SecurityAdvisorSection})))
 // Phase 333-03 (DIAG-01/02) — Settings → Connectivity (scheduled DNS/port/cert/tunnel/mail self-diagnosis).
 const ConnectivitySectionLazy = React.lazy(() => import('./connectivity-section').then((m) => ({default: m.ConnectivitySection})))
+// Phase 346-05 (MCP-01, D-346-6) — MCP control server admin section (enable + liv_mcp_* key mgmt).
+const McpControlSectionLazy = React.lazy(() => import('./mcp-control-section').then((m) => ({default: m.McpControlSection})))
 // Phase 344-04 (XFER-01) — Settings → App Import (cross-box single-app migration:
 // upload a .livbundle exported on another box, then step-up-confirm the rebuild).
 const AppMigrationImportSectionLazy = React.lazy(() =>
@@ -234,6 +237,8 @@ type SettingsSection =
 	| 'security-advisor'
 	// Phase 333-03 (DIAG-01/02) — connectivity self-diagnosis (DNS/port/cert/tunnel/mail).
 	| 'connectivity'
+	// Phase 346-05 (MCP-01) — MCP control server (loopback agent control-plane), admin-only.
+	| 'mcp-control'
 	// Phase 344-04 (XFER-01) — import an app bundle exported from another box.
 	| 'app-import'
 	// Phase 345-04 (GUEST-01) — admin curation of the anonymous /public dashboard.
@@ -289,6 +294,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'monitoring', group: 'system', icon: TbChartLine, label: 'Monitoring', description: 'Resource history & alert thresholds', adminOnly: true},
 	{id: 'security-advisor', group: 'system', icon: TbShieldCheck, label: 'Security Advisor', description: 'Scan results & remediation guidance', adminOnly: true},
 	{id: 'connectivity', group: 'system', icon: TbActivityHeartbeat, label: 'Connectivity', description: 'DNS, ports, certificate & tunnel self-check', adminOnly: true},
+	{id: 'mcp-control', group: 'system', icon: TbRobot, label: 'MCP control server', description: 'Agent-native box controls (inspect + safe act)', adminOnly: true},
 	{id: 'app-import', group: 'system', icon: TbPackageImport, label: 'App Import', description: 'Move an app here from another box', adminOnly: true},
 	{id: 'public-dashboard', group: 'system', icon: TbLayoutDashboard, label: 'Public dashboard', description: 'A login-free page listing apps you pick', adminOnly: true},
 	{id: 'software-update',  group: 'system', icon: TbDownload,        label: 'Software Update',   description: 'Apply updates & view deploy history',     adminOnly: true},
@@ -729,6 +735,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><SecurityAdvisorSectionLazy /></Suspense>
 		case 'connectivity':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><ConnectivitySectionLazy /></Suspense>
+		case 'mcp-control':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><McpControlSectionLazy /></Suspense>
 		case 'app-import':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><AppMigrationImportSectionLazy /></Suspense>
 		case 'public-dashboard':
