@@ -5,6 +5,7 @@ import {SystemInfoDetailedWidget} from './system-info-detailed-widget'
 import {QuickNotesWidget} from './quick-notes-widget'
 import {AppStatusWidget} from './app-status-widget'
 import {TopAppsWidget} from './top-apps-widget'
+import {AppWidget} from './app-widget'
 import {WidgetContainer} from './widget-container'
 
 export function WidgetRenderer({widget}: {widget: WidgetMeta}) {
@@ -21,6 +22,10 @@ export function WidgetRenderer({widget}: {widget: WidgetMeta}) {
 			return <AppStatusWidget />
 		case 'top-apps':
 			return <TopAppsWidget />
+		// Phase 345-02 (WIDG-01, D-345-3): manifest-declared app widget → typed
+		// template renderer (self-contained: polls widget.data, degrades safely).
+		case 'app-widget':
+			return <AppWidget widget={widget} />
 		default:
 			return (
 				<WidgetContainer>
