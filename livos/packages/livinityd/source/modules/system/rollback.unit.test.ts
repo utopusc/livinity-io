@@ -33,9 +33,9 @@ describe('rollbackErrorMessage (311-02 contract + 348 exit 4)', () => {
 		expect(rollbackErrorMessage(3, 'fb')).toMatch(/already in progress/)
 	})
 
-	test('exit 4 → code rolled back but DB restore aborted (DB left untouched)', () => {
+	test('exit 4 → code rolled back but DB restore did not complete (DB left untouched)', () => {
 		const msg = rollbackErrorMessage(4, 'fb')
-		expect(msg).toMatch(/database restore aborted/i)
+		expect(msg).toMatch(/database restore did not complete/i)
 		expect(msg).toMatch(/left untouched/)
 	})
 

@@ -592,7 +592,13 @@ export function rollbackErrorMessage(exitCode: number | undefined, fallback: str
 		case 3:
 			return 'An update or rollback is already in progress. Wait for it to finish and retry.'
 		case 4:
-			return 'Code was rolled back and LivOS is serving again, but the requested database restore aborted — the database was left untouched (still on the post-update state).'
+			// Covers both an aborted single-transaction restore AND a
+			// Postgres-not-accessible skip — either way the DB was untouched.
+			// NOTE (348 review INFO-1): with --with-db the script stops
+			// livos.service mid-run, so this process usually dies before the
+			// exit lands here — the authoritative record is the rollback.json
+			// reason in Past Deploys; this mapping covers the early-exit paths.
+			return 'Code was rolled back and LivOS is serving again, but the requested database restore did not complete — the database was left untouched (still on the post-update state). See Past Deploys for detail.'
 		default:
 			return fallback
 	}

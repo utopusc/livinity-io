@@ -21,12 +21,15 @@ import {describe, expect, test} from 'vitest'
 const SCHEMA_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'schema.sql')
 
 /** Strip -- line comments, C-style block comments, and single-quoted SQL string
- * literals ('' escapes included) so only executable statement text remains. */
+ * literals ('' escapes included) so only executable statement text remains.
+ * ONE leftmost-first alternation pass (348 review WARN-3): sequential passes
+ * let an apostrophe INSIDE a comment ("can't") open a bogus string literal
+ * that swallows executable SQL up to the next real quote — a demonstrated
+ * false-negative for the destructive-DDL scan. With a single pass, whichever
+ * construct starts first wins, so comments cannot be entered from inside a
+ * literal and vice-versa (matching how the SQL lexer actually tokenizes). */
 export function stripSqlNoise(sql: string): string {
-	return sql
-		.replace(/'(?:[^']|'')*'/g, "''") // string literals (keeps statement shape)
-		.replace(/--[^\n]*/g, '')
-		.replace(/\/\*[\s\S]*?\*\//g, '')
+	return sql.replace(/('(?:[^']|'')*')|(--[^\n]*)|(\/\*[\s\S]*?\*\/)/g, (m) => (m.startsWith("'") ? "''" : ''))
 }
 
 const DESTRUCTIVE_PATTERNS: Array<{name: string; re: RegExp}> = [
@@ -61,6 +64,14 @@ describe('schema.sql additive-only invariant (348 enforcement of 311 UPDSAFE-04)
 			).toBeNull()
 		})
 	}
+
+	test('WARN-3 regression: an apostrophe inside a -- comment cannot swallow executable SQL', () => {
+		// Sequential-pass stripping treated the comment's "can't" apostrophe as
+		// a string-literal opener, deleting the DELETE up to the next real
+		// quote — leftmost-first must keep the destructive statement visible.
+		const attack = "-- users can't do this\nDELETE FROM sessions;\nCREATE TABLE t (v TEXT DEFAULT 'x');"
+		expect(stripSqlNoise(attack)).toMatch(/DELETE\s+FROM/i)
+	})
 
 	test('stripSqlNoise removes comments and literals but keeps DDL (self-check)', () => {
 		const sample = "-- DROP TABLE in a comment\nCREATE TABLE x (note TEXT DEFAULT 'DELETE FROM y');\n/* TRUNCATE too */"

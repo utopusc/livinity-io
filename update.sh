@@ -104,9 +104,12 @@ DEPLOY_GUARD_UNIT="livos-deploy-guard"
 # Invariant: the delay MUST exceed update.sh's own worst-case runtime from arm to
 # exit, so a slow-but-surviving deploy disarms BEFORE the guard fires. Layer-A's
 # rollback path is the worst case: restart (≤25s) + probe (≤120s) + restore +
-# restart (≤25s) + re-probe (≤120s) + tail ≈ 320s. 420s gives ~100s margin. (Even
-# if it fires early, the shared flock makes it bail while update.sh is alive.)
-DEPLOY_GUARD_DELAY=420
+# 348 DB restore (timeout-bounded ≤300s) + restart (≤25s) + re-probe (≤120s) +
+# tail ≈ 620s. 720s gives ~100s margin. (Even if it fires early, the shared
+# flock makes it bail while update.sh is alive.) Trade-off accepted in 348: the
+# stranded-deploy (SIGKILL) recovery moves from ~7 to ~12 minutes, in exchange
+# for the guard's one-shot never being spent early against a live Layer-A run.
+DEPLOY_GUARD_DELAY=720
 
 # Heredoc-install the standalone guard (idempotent; mirrors ensure_*_dropin). The
 # guard runs AFTER update.sh is dead, so it is fully self-contained (own flock,
@@ -252,7 +255,7 @@ if [[ -d "$LAST_GOOD_DIR/livinityd-source" ]]; then
         if command -v sudo >/dev/null 2>&1 && sudo -u postgres psql -d livos -c '\q' >/dev/null 2>&1; then
             systemctl stop livos.service liv-core.service liv-worker.service liv-memory.service 2>/dev/null
             sudo -u postgres psql -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='livos' AND pid<>pg_backend_pid();" >/dev/null 2>&1
-            if sudo -u postgres pg_restore --clean --if-exists --no-owner --no-acl --single-transaction --dbname=livos "$LAST_GOOD_DIR/livos-db.dump" >/dev/null 2>&1; then
+            if timeout 300 sudo -u postgres pg_restore --clean --if-exists --no-owner --no-acl --single-transaction --dbname=livos "$LAST_GOOD_DIR/livos-db.dump" >/dev/null 2>&1; then
                 DB_RESTORED="true"; log "DB restored to its pre-update snapshot"
             else
                 DB_RESTORED="false"; log "pg_restore aborted (single-transaction: DB left untouched) — code-only rollback"
@@ -449,7 +452,7 @@ if [[ "$WITH_DB" == "1" ]]; then
         log "Restoring the DB to its pre-update snapshot (--with-db)..."
         systemctl stop livos.service liv-core.service liv-worker.service liv-memory.service 2>/dev/null || true
         sudo -u postgres psql -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='livos' AND pid<>pg_backend_pid();" >/dev/null 2>&1 || true
-        if sudo -u postgres pg_restore --clean --if-exists --no-owner --no-acl --single-transaction --dbname=livos "$LAST_GOOD_DIR/livos-db.dump" >/dev/null 2>&1; then
+        if timeout 300 sudo -u postgres pg_restore --clean --if-exists --no-owner --no-acl --single-transaction --dbname=livos "$LAST_GOOD_DIR/livos-db.dump" >/dev/null 2>&1; then
             DB_RESTORED="true"; log "DB restored to its pre-update snapshot"
         else
             DB_RESTORED="false"; log "pg_restore aborted (single-transaction: DB left untouched) — continuing with the code-only rollback"
@@ -911,52 +914,21 @@ snapshot_last_good() {
         cp -al "$LIVOS_DIR/node_modules" "$LAST_GOOD_DIR/node_modules" 2>/dev/null \
             || warn "node_modules hardlink snapshot failed (rollback will re-run pnpm install)"
     fi
-    # ── Phase 348 (ABUPD-02): pre-update DB snapshot ─────────────────────────
-    # pg_dump the livos DB into the snapshot so a rollback can ALSO restore the
-    # DB to its exact pre-update state (UPDSAFE-04 restored code/deps/systemd
-    # only, leaning entirely on the additive-only schema invariant). The ROOT
-    # shell does the file redirect (postgres cannot write into this root-owned
-    # dir); the proven `--format=custom --no-owner --no-acl` flag set mirrors
-    # backups/system-state.ts. NEVER-FATAL: a failed dump records
-    # db_snapshot:false and the update proceeds unchanged — this step must
-    # never make the update path MORE fragile than it was pre-348. Because
-    # $LAST_GOOD_DIR is rm -rf'd at the top of this function, the dump can only
-    # ever be from THIS run's pre-update state (a stale dump is impossible).
-    # Operator kill-switch: delete the dump file — every restore path fires
-    # only on dump presence and degrades to the pre-348 code-only rollback.
-    local _lg_db=false
-    if command -v sudo >/dev/null 2>&1 && sudo -u postgres psql -d livos -c '\q' >/dev/null 2>&1; then
-        if sudo -u postgres pg_dump --format=custom --no-owner --no-acl livos > "$LAST_GOOD_DIR/livos-db.dump.tmp" 2>/dev/null \
-            && [[ -s "$LAST_GOOD_DIR/livos-db.dump.tmp" ]]; then
-            mv "$LAST_GOOD_DIR/livos-db.dump.tmp" "$LAST_GOOD_DIR/livos-db.dump" 2>/dev/null || true
-            # postgres-owned 0600: pg_restore (running as postgres) must read it
-            # directly, and the dump holds user data (credential hashes, key
-            # hashes) so it must NOT be world-readable inside this 0755 dir.
-            chown postgres:postgres "$LAST_GOOD_DIR/livos-db.dump" 2>/dev/null || true
-            chmod 600 "$LAST_GOOD_DIR/livos-db.dump" 2>/dev/null || true
-            [[ -f "$LAST_GOOD_DIR/livos-db.dump" ]] && _lg_db=true
-        fi
-        if [[ "$_lg_db" == "true" ]]; then
-            ok "Pre-update DB snapshot saved ($(du -h "$LAST_GOOD_DIR/livos-db.dump" 2>/dev/null | cut -f1))"
-        else
-            rm -f "$LAST_GOOD_DIR/livos-db.dump.tmp" 2>/dev/null || true
-            warn "pg_dump failed — a rollback this run will be code-only (pre-348 posture)"
-        fi
-    else
-        warn "Postgres not accessible — DB snapshot skipped (a rollback this run will be code-only)"
-    fi
     # manifest.json — lets the UI label the rollback target. Capture the CURRENTLY-
     # deployed sha/tag: these files still hold the OLD values at snapshot time
     # (.deployed-sha is advanced only on success, much later at "Recording deployed
     # SHA"), plus a schema fingerprint (sha256 digest, NOT schema content) for
     # telemetry / the rollback-time schema-drift warning (311-03), plus the 348
-    # db_snapshot flag (surfaced by system.canRollback for the UI checkbox).
+    # db_snapshot flag (surfaced by system.canRollback for the UI checkbox) —
+    # written false here and flipped to true by snapshot_db_last_good, which runs
+    # much LATER (just before the risky restart) to shrink the user-write-loss
+    # window of an automatic DB restore (348 review WARN-5).
     local _lg_sha _lg_tag _lg_schema
     _lg_sha=$(cat /opt/livos/.deployed-sha 2>/dev/null | tr -d '[:space:]')
     _lg_tag=$(cat /opt/livos/.deployed-release 2>/dev/null | tr -d '[:space:]')
     _lg_schema=$(sha256sum "$LIVOS_DIR/packages/livinityd/source/modules/database/schema.sql" 2>/dev/null | cut -d' ' -f1)
     cat > "$LAST_GOOD_DIR/manifest.json" <<MANIFEST 2>/dev/null || true
-{"sha": "${_lg_sha}", "tag": "${_lg_tag}", "snapshotted_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "schema_hash": "${_lg_schema}", "db_snapshot": ${_lg_db}}
+{"sha": "${_lg_sha}", "tag": "${_lg_tag}", "snapshotted_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "schema_hash": "${_lg_schema}", "db_snapshot": false}
 MANIFEST
     if (( have_src == 1 )); then
         ok "Last-good snapshot saved to $LAST_GOOD_DIR"
@@ -1070,18 +1042,75 @@ restore_last_good() {
     return 0
 }
 
+# ── Phase 348 (ABUPD-02): pre-restart DB snapshot ────────────────────────────
+# pg_dump the livos DB into the last-good snapshot so a rollback can ALSO
+# restore the DB to its pre-update state (UPDSAFE-04 restored code/deps/systemd
+# only, leaning entirely on the additive-only schema invariant). Called just
+# BEFORE arm_deploy_guard/restart — NOT in snapshot_last_good (Step 2): the DB's
+# pre-update state persists until the NEW code first boots (schema.sql applies
+# at livinityd startup), and the OLD daemon keeps serving user writes all
+# through pnpm install/builds — dumping late keeps those writes inside the
+# snapshot and shrinks the automatic-restore data-loss window from minutes to
+# the restart+probe window (348 review WARN-5). The ROOT shell does the file
+# redirect (postgres cannot write into this root-owned dir); the tmp file is
+# pre-created 0600 so the dump is never world-readable, even mid-write (348
+# review WARN-2). Proven `--format=custom --no-owner --no-acl` flag set mirrors
+# backups/system-state.ts; `timeout 300` bounds a hung dump. NEVER-FATAL: a
+# failed dump leaves manifest db_snapshot:false and the update proceeds — this
+# step must never make the update path MORE fragile than it was pre-348.
+# Because $LAST_GOOD_DIR is rebuilt every run, the dump can only ever be from
+# THIS run (stale dumps impossible). Operator kill-switch: delete the dump file
+# — the AUTO restore paths fire only on dump presence and degrade to the
+# pre-348 code-only rollback (the manual `--with-db` opt-in instead REFUSES
+# up-front, exit 2, so an explicit operator request is never silently ignored).
+snapshot_db_last_good() {
+    local _tmp="$LAST_GOOD_DIR/livos-db.dump.tmp" _lg_db=false
+    if command -v sudo >/dev/null 2>&1 && sudo -u postgres psql -d livos -c '\q' >/dev/null 2>&1; then
+        rm -f "$_tmp" 2>/dev/null || true
+        # Pre-create 0600 root — bash's `>` truncates without changing mode.
+        install -m 600 /dev/null "$_tmp" 2>/dev/null || true
+        if timeout 300 sudo -u postgres pg_dump --format=custom --no-owner --no-acl livos > "$_tmp" 2>/dev/null \
+            && [[ -s "$_tmp" ]]; then
+            mv "$_tmp" "$LAST_GOOD_DIR/livos-db.dump" 2>/dev/null || true
+            # postgres-owned 0600: pg_restore (running as postgres) must read it
+            # directly, and the dump holds user data (credential hashes, key
+            # hashes) so it must NOT be world-readable inside this 0755 dir.
+            chown postgres:postgres "$LAST_GOOD_DIR/livos-db.dump" 2>/dev/null || true
+            chmod 600 "$LAST_GOOD_DIR/livos-db.dump" 2>/dev/null || true
+            [[ -f "$LAST_GOOD_DIR/livos-db.dump" ]] && _lg_db=true
+        fi
+        if [[ "$_lg_db" == "true" ]]; then
+            # Flip the manifest flag written false by snapshot_last_good. The
+            # manifest is a single-line format this script itself emits, so the
+            # fixed-string replace is safe; sed failure just leaves the flag
+            # false (UI hides the checkbox — fail-closed, never fail-broken).
+            sed -i 's/"db_snapshot": false/"db_snapshot": true/' "$LAST_GOOD_DIR/manifest.json" 2>/dev/null || true
+            ok "Pre-update DB snapshot saved ($(du -h "$LAST_GOOD_DIR/livos-db.dump" 2>/dev/null | cut -f1))"
+        else
+            rm -f "$_tmp" 2>/dev/null || true
+            warn "pg_dump failed — a rollback this run will be code-only (pre-348 posture)"
+        fi
+    else
+        warn "Postgres not accessible — DB snapshot skipped (a rollback this run will be code-only)"
+    fi
+}
+
 # ── Phase 348 (ABUPD-02): DB restore companion to restore_last_good ──────────
-# Restores the pre-update pg_dump taken by snapshot_last_good. Auto-invoked ONLY
-# on the Layer-A/Layer-B rollback paths — those fire minutes after the snapshot,
-# mid-update (daemon restarting), so the data-loss window is ≈ nil. The manual
-# Layer-C script requires an explicit --with-db opt-in instead (arbitrary time
-# may have passed; auto-restoring there would silently destroy post-update user
-# data). FAIL-OPEN to code-only rollback: `--single-transaction` makes the
+# Restores the pre-restart pg_dump taken by snapshot_db_last_good. Auto-invoked
+# ONLY on the Layer-A/Layer-B rollback paths — those fire within the
+# restart+probe window of the snapshot (the dump is taken seconds before the
+# risky restart), so the data-loss window is the failed-boot window itself. The
+# manual Layer-C script requires an explicit --with-db opt-in instead (arbitrary
+# time may have passed; auto-restoring there would silently destroy post-update
+# user data). FAIL-OPEN to code-only rollback: `--single-transaction` makes the
 # restore all-or-nothing — an aborted restore leaves the DB EXACTLY as it was,
 # and the additive-only schema invariant (migrations/index.ts) keeps old code
 # compatible with the forward-migrated schema (the exact pre-348 posture). The
 # divergence from system-state.ts's warning-tolerant pg_restore is deliberate:
 # mid-rollback, a HALF-restored DB would be strictly worse than no restore.
+# `timeout 300` bounds a lock-blocked restore (348 review WARN-1): without it a
+# stuck ACCESS EXCLUSIVE wait would leave the box down indefinitely — on
+# timeout the single transaction aborts, DB untouched, code-only fallback.
 # Stops the PG-client units + terminates lingering backends so --clean can drop
 # objects without lock contention; restarts liv-core/worker/memory afterwards
 # (livos.service is restarted by the caller either way). Sets LIVOS_DB_RESTORED
@@ -1102,7 +1131,7 @@ restore_db_last_good() {
     systemctl stop livos.service liv-core.service liv-worker.service liv-memory.service 2>/dev/null || true
     sudo -u postgres psql -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='livos' AND pid<>pg_backend_pid();" >/dev/null 2>&1 || true
     local _db_ok=0
-    if sudo -u postgres pg_restore --clean --if-exists --no-owner --no-acl --single-transaction --dbname=livos "$dump" >/dev/null 2>&1; then
+    if timeout 300 sudo -u postgres pg_restore --clean --if-exists --no-owner --no-acl --single-transaction --dbname=livos "$dump" >/dev/null 2>&1; then
         _db_ok=1
     fi
     systemctl start liv-core.service liv-worker.service liv-memory.service 2>/dev/null || true
@@ -4505,6 +4534,9 @@ info "Restarting livos..."
 # own. The EXIT trap disarms it on any clean exit, so it only fires on a SIGKILL.
 # `|| true` keeps arming fail-open: a sentinel-write/systemd-run hiccup must never
 # abort the deploy itself (Layer-A still protects).
+# Phase 348 (ABUPD-02): take the DB snapshot NOW — as late as possible, just
+# before the risky restart (see snapshot_db_last_good for why not at Step 2).
+snapshot_db_last_good || true
 arm_deploy_guard || true
 # Clear any latched failed-state FIRST — a box already crash-looping from a prior
 # bad deploy (the exact case this rescues) can refuse a plain `restart` with
