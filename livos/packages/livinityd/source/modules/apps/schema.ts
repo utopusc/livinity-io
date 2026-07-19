@@ -230,6 +230,20 @@ export const AppSettingsSchema = z.object({
 	// 342-01 APPD-02 (D-342-4): per-app CPU pinning (cpuset). Regex-shaped + semantic-validated
 	// at the route (validateCpuSet) before persist; applied on the main service in patchComposeFile.
 	cpuSet: z.string().optional(),
+	// 343-01 RESIL-01 (D-343-1): when true, patchComposeFile suppresses the MAIN service's
+	// entrypoint (sleep-infinity) so a crash-looping app sits idle + writable for terminal repair.
+	debugMode: z.boolean().optional(),
+	// 343-01 RESIL-01 (D-343-1): the main service's ORIGINAL entrypoint/command/healthcheck
+	// captured at enter-time; JSON `null` encodes "this key was absent originally" (restore = delete
+	// vs set). Restored to disk by patchComposeFile's clear branch, then cleared by exitDebugMode —
+	// so a livinityd restart mid-exit still restores. Not surfaced to the UI.
+	debugStash: z
+		.object({
+			entrypoint: z.any().optional(),
+			command: z.any().optional(),
+			healthcheck: z.any().optional(),
+		})
+		.optional(),
 	// 326-01 MEDIA-01 (D-19/D-23): Immich onboarding QR card dismissal flag (UI-only).
 	immichCardDismissed: z.boolean().optional(),
 	// 329-11 MEDIA-02 (D-23): Jellyfin setup onboarding card dismissal flag (UI-only).

@@ -96,6 +96,12 @@ type AppState =
 	// container comes good, so a slow-boot app self-corrects instead of
 	// wedging (what made the old v44.45 hard-fail unsafe).
 	| 'unhealthy'
+	// 343-01 RESIL-01: STABLE recovery state — container up on sleep-infinity,
+	// entrypoint suppressed; NOT transient (never auto-reconciled) and never
+	// health-judged (health-monitor owns only ready/unhealthy). Set by
+	// enterDebugMode + the boot loop's debug re-entry path (B1); cleared by
+	// exitDebugMode restoring the original entrypoint → normal ready flow.
+	| 'debug'
 // TODO: Change ready to running.
 // Also note that we don't currently handle failing events to update the app state into a failed state.
 // That should be ok for now since apps rarely fail, but there will be the potential for state bugs here
@@ -241,6 +247,11 @@ export default class App {
 		const memoryLimit = await this.store.get('memoryLimit')
 		// 342-01 APPD-02 (D-342-4): per-app CPU pinning (cpuset), authoritative from the store.
 		const cpuSet = await this.store.get('cpuSet')
+		// 343-01 RESIL-01 (D-343-1): debug-mode suppression + restore inputs, authoritative from
+		// the store. debugMode true ⇒ suppress the main entrypoint; else debugStash (if present)
+		// restores the captured original.
+		const debugMode = await this.store.get('debugMode')
+		const debugStash = await this.store.get('debugStash')
 
 		const compose = await this.readCompose()
 
@@ -489,6 +500,37 @@ export default class App {
 			// whitespace-laden corrupt store value can never reach the compose cpuset field.
 			if (hasCpuSet) limitMainService.cpuset = (cpuSet as string).trim()
 			else if ('cpuset' in limitMainService) delete (limitMainService as {cpuset?: string}).cpuset
+		}
+
+		// 343-01 RESIL-01 (D-343-1): debug-mode entrypoint suppression on the SAME main service as
+		// the limits/cpuset blocks above. patchComposeFile re-patches its OWN on-disk output
+		// (readCompose app.ts:130 → writeCompose app.ts:604), so a debug CLEAR can NOT blind-delete
+		// entrypoint/command/healthcheck — many apps ship their own, and deleting would strand them
+		// on the image defaults. The original values are captured into debugStash at enter-time and
+		// RESTORED here (delete when the stash records `null` = "absent originally", else set). The
+		// suppression literals are FIXED (T-343-02) — no caller/manifest string reaches the compose.
+		// entrypoint/command/healthcheck are natively modeled by compose-spec-schema (no `as any`).
+		if (limitMainService) {
+			if (debugMode === true) {
+				// command:[] so images whose ENTRYPOINT script consumes CMD don't re-trigger.
+				limitMainService.entrypoint = ['sleep', 'infinity']
+				limitMainService.command = []
+				limitMainService.healthcheck = {disable: true}
+			} else if (debugStash) {
+				// Restore the captured original. W3/W4: an absent-original (null) and an explicit
+				// delete collapse to the same "key not present" compose — functionally identical.
+				for (const k of ['entrypoint', 'command', 'healthcheck'] as const) {
+					if (debugStash[k] == null) {
+						if (k in limitMainService) delete (limitMainService as Record<string, unknown>)[k]
+					} else {
+						;(limitMainService as Record<string, unknown>)[k] = debugStash[k]
+					}
+				}
+				// NOTE: debugStash is NOT cleared here — exitDebugMode owns clearing it AFTER this
+				// restore succeeds, so a livinityd restart mid-exit still restores next start. A
+				// stray debugStash left after exit is harmless residue (never re-read once
+				// debugMode is false).
+			}
 		}
 
 		// For apps that need CSRF origin whitelisting (e.g. Portainer behind reverse proxy)

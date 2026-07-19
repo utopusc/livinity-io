@@ -247,3 +247,99 @@ describe('patchComposeFile — cpuset (342-01 APPD-02)', () => {
 		expect(written.services.ollama.cpuset).toBeUndefined()
 	})
 })
+
+// ── 343-01 RESIL-01 — debug-mode entrypoint suppression + null-aware restore ──
+// Reuses the per-key store mock so debugMode/debugStash are read independently.
+// Proves: suppress-when-debugMode (overwriting any pre-existing entrypoint), restore
+// from a captured stash, delete when the stash records `null` (absent-originally), and
+// byte-identical when neither key is set.
+describe('patchComposeFile — debug mode (343-01 RESIL-01)', () => {
+	async function runLimitPatch(
+		store: {debugMode?: boolean; debugStash?: {entrypoint?: unknown; command?: unknown; healthcheck?: unknown}},
+		existingCompose?: any,
+	) {
+		vi.mocked(detectGpu).mockResolvedValue({
+			vendor: 'none',
+			wsl2: false,
+			toolkitConfigured: false,
+			present: false,
+			driverSource: 'none',
+		} as any)
+		vi.mocked(isNvidiaToolkitConfigured).mockResolvedValue(false)
+		vi.spyOn(fse, 'exists').mockResolvedValue(false as any)
+		const app = new App(fakeLivinityd, 'ollama')
+		vi.spyOn(app, 'readManifest').mockResolvedValue({permissions: []} as any)
+		vi.spyOn(app.store, 'get').mockImplementation(async (key: any) => (store as any)[key])
+		vi.spyOn(app, 'readCompose').mockResolvedValue(
+			(existingCompose ?? {services: {ollama: {image: 'ollama/ollama:latest'}}}) as any,
+		)
+		let written: any
+		vi.spyOn(app, 'writeCompose').mockImplementation(async (c: any) => {
+			written = c
+		})
+		await app.patchComposeFile()
+		return written
+	}
+
+	test('debugMode true → main service suppressed (sleep-infinity, empty command, healthcheck disabled)', async () => {
+		const written = await runLimitPatch({debugMode: true})
+		expect(written.services.ollama.entrypoint).toEqual(['sleep', 'infinity'])
+		expect(written.services.ollama.command).toEqual([])
+		expect(written.services.ollama.healthcheck).toEqual({disable: true})
+	})
+
+	test('debugMode true OVERWRITES an app that shipped its own entrypoint/command/healthcheck', async () => {
+		const written = await runLimitPatch(
+			{debugMode: true},
+			{
+				services: {
+					ollama: {
+						image: 'ollama/ollama:latest',
+						entrypoint: ['/app/run'],
+						command: ['--serve'],
+						healthcheck: {test: ['CMD', 'curl', 'localhost']},
+					},
+				},
+			},
+		)
+		expect(written.services.ollama.entrypoint).toEqual(['sleep', 'infinity'])
+		expect(written.services.ollama.command).toEqual([])
+		expect(written.services.ollama.healthcheck).toEqual({disable: true})
+	})
+
+	test('debugMode cleared + stash of real originals → the stashed values are RESTORED', async () => {
+		const written = await runLimitPatch(
+			{debugStash: {entrypoint: ['/app/run'], command: ['--flag'], healthcheck: {test: ['CMD', 'x']}}},
+			{
+				services: {
+					ollama: {image: 'ollama/ollama:latest', entrypoint: ['sleep', 'infinity'], command: [], healthcheck: {disable: true}},
+				},
+			},
+		)
+		expect(written.services.ollama.entrypoint).toEqual(['/app/run'])
+		expect(written.services.ollama.command).toEqual(['--flag'])
+		expect(written.services.ollama.healthcheck).toEqual({test: ['CMD', 'x']})
+	})
+
+	test('debugMode cleared + stash of nulls (absent-originally) → all three keys DELETED', async () => {
+		const written = await runLimitPatch(
+			{debugStash: {entrypoint: null, command: null, healthcheck: null}},
+			{
+				services: {
+					ollama: {image: 'ollama/ollama:latest', entrypoint: ['sleep', 'infinity'], command: [], healthcheck: {disable: true}},
+				},
+			},
+		)
+		expect('entrypoint' in written.services.ollama).toBe(false)
+		expect('command' in written.services.ollama).toBe(false)
+		expect('healthcheck' in written.services.ollama).toBe(false)
+	})
+
+	test('neither key set → entrypoint/command/healthcheck untouched (byte-identical)', async () => {
+		const written = await runLimitPatch({})
+		expect(written.services.ollama.entrypoint).toBeUndefined()
+		expect(written.services.ollama.command).toBeUndefined()
+		expect(written.services.ollama.healthcheck).toBeUndefined()
+		expect(written.services.ollama.deploy).toBeUndefined()
+	})
+})
