@@ -2978,6 +2978,26 @@ elif [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
         || warn "cryptsetup install failed (non-fatal — disk encryption unavailable until fixed)"
 fi
 
+# --- (f) Phase 347 (LANDNS-01): dnsmasq + avahi-daemon — day-2 presence-ensure so
+# ALREADY-DEPLOYED boxes get the LAN-DNS split-horizon resolver (dnsmasq) + mDNS box
+# discovery (avahi-daemon) that livos-landns.sh drives. Same idempotent apt idiom as
+# (b)/(c)/(d)/(e); both are distro packages (no sha256 pin, sacred-sha N/A). Each is
+# ensured INDEPENDENTLY and NON-FATALLY — a failure leaves that leg reporting
+# "unavailable" (the wrapper's honest status) but never aborts the Update, and LAN-DNS
+# stays OPT-IN default-off regardless (this only installs binaries, never enables them). ---
+if command -v dnsmasq >/dev/null 2>&1; then
+    info "update.sh: dnsmasq already present — skipping install"
+elif [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq dnsmasq 2>&1 | tail -3 \
+        || warn "dnsmasq install failed (non-fatal — LAN-DNS split-horizon unavailable until fixed)"
+fi
+if command -v avahi-daemon >/dev/null 2>&1; then
+    info "update.sh: avahi-daemon already present — skipping install"
+elif [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq avahi-daemon 2>&1 | tail -3 \
+        || warn "avahi-daemon install failed (non-fatal — mDNS box discovery unavailable until fixed)"
+fi
+
 # ── Step 7.10c: Phase 316 (GPU-01) — NVIDIA install provisioning (sudoers.d/livos-gpu + wrapper) ──
 # The livos-gpu NOPASSWD grant + the root-owned install wrapper must reach
 # ALREADY-DEPLOYED boxes on Update, not just fresh installs. Mirrors Step 7.10b
@@ -3638,6 +3658,77 @@ if [[ -f "$_POWER_SUDOERS_SRC" ]]; then
     rm -f "$_POWER_SUDOERS_TMP"
 else
     info "sudoers.d/livos-power source not found — skipping (power management unavailable)"
+fi
+
+# ── Step 7.10z: Phase 347 (LANDNS-01) — LAN-DNS/mDNS provisioning (sudoers.d/livos-landns + wrapper) ──
+# The livos-landns NOPASSWD grant + the root-owned LAN-DNS wrapper (validates every
+# ip/domain token, REJECTS .local for split-horizon, keeps LAN-DNS DEFAULT OFF / never the
+# sole resolver, and builds every dnsmasq/avahi/systemctl argv + /etc/dnsmasq.d file body
+# itself) must reach ALREADY-DEPLOYED boxes on Update, not just fresh installs. Mirrors
+# Step 7.10k (livos-power) VERBATIM (content-diff + visudo validate-or-remove), retargeted
+# to livos-landns. livinityd invokes
+# `sudo -n /usr/local/lib/livos/livos-landns.sh <action> [args...]`, so the wrapper + grant
+# must exist on day-2 boxes too. Missing this is the "looks wired, silently no-ops" failure class.
+# Disjoint from the CF/portal path by construction (own /etc/dnsmasq.d/livos-landns.conf namespace).
+# Fully fail-tolerant: a missing source or a visudo rejection never aborts the Update.
+step "Phase 347 (LANDNS-01): LAN-DNS/mDNS provisioning (sudoers.d/livos-landns + install wrapper)"
+
+_set_desktop_identity   # Phase 277.1 — self-derive the desktop user (no literal bruce)
+
+# --- (a0) livos-landns.sh wrapper — install BEFORE the grant ---
+# The livos-landns grant (a) is on this ONE root-owned binary; the wrapper validates a fixed
+# 6-action enum and builds every privileged argv + /etc/dnsmasq.d file body itself.
+_LANDNS_WRAP_SRC="$LIVOS_DIR/scripts/install/livos-landns.sh"
+if [[ ! -f "$_LANDNS_WRAP_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _LANDNS_WRAP_SRC="$TEMP_DIR/scripts/install/livos-landns.sh"
+fi
+_LANDNS_WRAP_DST="/usr/local/lib/livos/livos-landns.sh"
+if [[ -f "$_LANDNS_WRAP_SRC" ]]; then
+    mkdir -p /usr/local/lib/livos
+    if [[ ! -f "$_LANDNS_WRAP_DST" ]] || ! cmp -s "$_LANDNS_WRAP_SRC" "$_LANDNS_WRAP_DST"; then
+        if install -m 0755 -o root -g root "$_LANDNS_WRAP_SRC" "$_LANDNS_WRAP_DST"; then
+            ok "livos-landns.sh installed at $_LANDNS_WRAP_DST"
+        else
+            warn "Failed to install livos-landns.sh (non-fatal — LAN-DNS/mDNS unavailable until fixed)"
+        fi
+    else
+        info "livos-landns.sh already current"
+    fi
+else
+    info "livos-landns.sh source not found — skipping (LAN-DNS/mDNS unavailable)"
+fi
+
+# --- (a) sudoers.d/livos-landns — install + template the subject to the desktop user ---
+_LANDNS_SUDOERS_SRC="$LIVOS_DIR/scripts/install/sudoers.d/livos-landns"
+if [[ ! -f "$_LANDNS_SUDOERS_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _LANDNS_SUDOERS_SRC="$TEMP_DIR/scripts/install/sudoers.d/livos-landns"
+fi
+_LANDNS_SUDOERS_DST="/etc/sudoers.d/livos-landns"
+if [[ -f "$_LANDNS_SUDOERS_SRC" ]]; then
+    _LANDNS_SUDOERS_TMP=$(mktemp)
+    if [[ "$_DESKTOP_USER" != "bruce" ]]; then
+        sed -E "s/^bruce([[:space:]]+ALL=)/${_DESKTOP_USER}\1/; s/=\(bruce\)/=(${_DESKTOP_USER})/g" \
+            "$_LANDNS_SUDOERS_SRC" > "$_LANDNS_SUDOERS_TMP"
+    else
+        cp -f "$_LANDNS_SUDOERS_SRC" "$_LANDNS_SUDOERS_TMP"
+    fi
+    if [[ ! -f "$_LANDNS_SUDOERS_DST" ]] || ! cmp -s "$_LANDNS_SUDOERS_TMP" "$_LANDNS_SUDOERS_DST"; then
+        install -m 0440 -o root -g root "$_LANDNS_SUDOERS_TMP" "$_LANDNS_SUDOERS_DST"
+        # SAFETY-CRITICAL: a malformed sudoers file can break sudo system-wide.
+        # Validate the INSTALLED file; if visudo rejects it, REMOVE it (LAN-DNS/mDNS
+        # stays denied — the prior state — rather than risk broken sudo).
+        if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$_LANDNS_SUDOERS_DST" >/dev/null 2>&1; then
+            warn "visudo rejected $_LANDNS_SUDOERS_DST — removing (LAN-DNS/mDNS stays denied until fixed)"
+            rm -f "$_LANDNS_SUDOERS_DST"
+        else
+            ok "sudoers.d/livos-landns installed (subject: ${_DESKTOP_USER})"
+        fi
+    else
+        info "sudoers.d/livos-landns already current (subject: ${_DESKTOP_USER})"
+    fi
+    rm -f "$_LANDNS_SUDOERS_TMP"
+else
+    info "sudoers.d/livos-landns source not found — skipping (LAN-DNS/mDNS unavailable)"
 fi
 
 # ── Step 7.10m: Phase 324 (FILES-03) — rclone (cloud-drive) provisioning (sudoers.d/livos-rclone + wrapper) ──
