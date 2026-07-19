@@ -535,6 +535,10 @@ export async function runWindowedAutoUpdatePass(opts: {
 			const policy = await app.store.get('autoUpdatePolicy')
 			// Opt-in only: 'manual' (the default) and undefined are left untouched.
 			if (policy !== 'auto') continue
+			// 343-01 RESIL-01 (D-343-3, T-343-04): never auto-update an app that is in debug mode —
+			// update() would re-derive the compose and fight the entrypoint-suppression transform.
+			// Both the 4am (app-auto-update) and windowed (app-update-window) passes share this guard.
+			if (await app.store.get('debugMode')) continue
 			// Disjoint predicate — 4am owns window===undefined, the */15 job owns window!==undefined AND inside.
 			const window = await app.store.get('updateWindow')
 			// WARN-01: surface a defined-but-invalid window from the window job's pass so a corrupt

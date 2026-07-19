@@ -249,6 +249,7 @@ export const apps = router({
 						memoryLimit,
 						updateWindow,
 						cpuSet,
+						debugMode,
 						immichCardDismissed,
 						jellyfinCardDismissed,
 						oidcLastProvision,
@@ -266,6 +267,8 @@ export const apps = router({
 						// 342-01 APPD-01/02: per-app maintenance window + CPU pinning (raw store values).
 						app.store.get('updateWindow'),
 						app.store.get('cpuSet'),
+						// 343-01 RESIL-01: per-app debug-mode flag → the UI debug badge (343-03).
+						app.store.get('debugMode'),
 						app.store.get('immichCardDismissed'),
 						app.store.get('jellyfinCardDismissed'),
 						// 331-02 (FIX-02): last SSO provisioning outcome — reason is already
@@ -346,6 +349,8 @@ export const apps = router({
 						// 342-01 APPD-01/02: per-app maintenance window + CPU pinning (raw store values).
 						updateWindow,
 						cpuSet,
+						// 343-01 RESIL-01: debug-mode flag for the UI badge (343-03).
+						debugMode,
 						immichCardDismissed,
 						jellyfinCardDismissed,
 						// 331-02 (FIX-02): honest SSO-activation state for the 322-07 section —
@@ -399,6 +404,8 @@ export const apps = router({
 					// 342-01 APPD-01/02: union-shape uniformity — native builtins carry no per-app window/cpuset.
 					updateWindow: undefined,
 					cpuSet: undefined,
+					// 343-01 RESIL-01: union-shape uniformity — native builtins never enter debug mode.
+					debugMode: undefined,
 					immichCardDismissed: undefined,
 					jellyfinCardDismissed: undefined,
 					// 331-02 (FIX-02): union-shape uniformity — native builtins never provision SSO.
@@ -637,6 +644,13 @@ export const apps = router({
 			}
 			// Phase 335 (ROLE-02): global restart = admin / operator / effective-full.
 			await assertAppLifecycleAccess(ctx, input.appId)
+			// 343-01 RESIL-01 (W1): reject restart while in debug mode — restarting would run the
+			// normal ready-landing start path on a suppressed compose (or, post-B1-corruption, re-judge
+			// the frozen container). The admin must exitDebugMode (which restores the real entrypoint)
+			// first. Mirrors the update guard; stop stays allowed (see the stop route).
+			if (await ctx.apps!.getApp(input.appId).store.get('debugMode')) {
+				throw new TRPCError({code: 'CONFLICT', message: 'Exit debug mode before restarting this app.'})
+			}
 			return ctx.apps.restart(input.appId)
 		}),
 
@@ -666,6 +680,11 @@ export const apps = router({
 			// Phase 335 (ROLE-02): starting a stopped shared app is USAGE — readonly
 			// grantees stay able to bring the app up to use it.
 			await assertAppLifecycleAccess(ctx, input.appId, {allowReadonly: true})
+			// 343-01 RESIL-01 (W1): reject start while in debug mode — start() lands 'ready' on the
+			// suppressed compose, silently un-marking the debug state. Exit debug first.
+			if (await ctx.apps!.getApp(input.appId).store.get('debugMode')) {
+				throw new TRPCError({code: 'CONFLICT', message: 'Exit debug mode before starting this app.'})
+			}
 			return ctx.apps.getApp(input.appId).start()
 		}),
 
@@ -694,6 +713,10 @@ export const apps = router({
 			}
 			// Phase 335 (ROLE-02): global stop = admin / operator / effective-full.
 			await assertAppLifecycleAccess(ctx, input.appId)
+			// 343-01 RESIL-01 (W1): stop is DELIBERATELY NOT debug-guarded — stopping a frozen
+			// sleep-infinity container is safe and useful (an admin may want the debug container down
+			// without exiting debug), and stop does not re-derive the compose or re-judge health. The
+			// debugMode key persists across the stop, so a later start-path re-entry still restores it.
 			return ctx.apps.getApp(input.appId).stop({persistState: true})
 		}),
 
@@ -708,6 +731,12 @@ export const apps = router({
 			// Phase 335 (ROLE-02): update = admin / operator / effective-full
 			// (pre-335 this was open to ANY authenticated user — unintended).
 			await assertAppLifecycleAccess(ctx, input.appId)
+			// 343-01 RESIL-01 (D-343-3, T-343-04): refuse a manual update while in debug — update()
+			// re-derives + re-patches the compose, which would fight the suppression transform. Reject
+			// with a clear error so the admin exits debug first (uninstall stays allowed).
+			if (await ctx.apps!.getApp(input.appId).store.get('debugMode')) {
+				throw new TRPCError({code: 'CONFLICT', message: 'Exit debug mode before updating this app.'})
+			}
 			return ctx.apps.update(input.appId)
 		}),
 
@@ -868,6 +897,19 @@ export const apps = router({
 			}
 			return ctx.apps!.setUpdateWindow(input.appId, input.window)
 		}),
+
+	// 343-01 RESIL-01 (D-343-2, T-343-01): enter/exit debug mode for a crash-looping app.
+	// adminProcedure — suppressing an app's entrypoint on a shared global app is deeper than
+	// operator lifecycle (v1 admin-only, flippable later); same host-affecting class as
+	// setResourceLimits. appId is a plain id — no shell reaches it; the suppression literals are
+	// fixed server-side (T-343-02).
+	enterDebugMode: adminProcedure
+		.input(z.object({appId: z.string()}))
+		.mutation(async ({ctx, input}) => ctx.apps!.enterDebugMode(input.appId)),
+
+	exitDebugMode: adminProcedure
+		.input(z.object({appId: z.string()}))
+		.mutation(async ({ctx, input}) => ctx.apps!.exitDebugMode(input.appId)),
 
 	// 326-01 APPS-02 (D-05/D-21): pin/un-pin an exact ignored version. adminProcedure —
 	// same shared-global-app update-governance class as setUpdatePolicy.

@@ -40,6 +40,7 @@ function makeApp(opts: {
 	installed: string
 	ignored?: string
 	window?: {start: string; end: string}
+	debugMode?: boolean
 	update: ReturnType<typeof vi.fn>
 }) {
 	return {
@@ -51,6 +52,8 @@ function makeApp(opts: {
 				if (key === 'autoUpdatePolicy') return opts.policy
 				if (key === 'ignoredVersion') return opts.ignored
 				if (key === 'updateWindow') return opts.window
+				// 343-01 RESIL-01: debug apps are skipped by the shared auto-update pass.
+				if (key === 'debugMode') return opts.debugMode
 				return undefined
 			}),
 		},
@@ -134,6 +137,21 @@ describe('appAutoUpdateHandler — opt-in, pin-aware true auto-update', () => {
 		mockGetBuiltinApp.mockReturnValue({version: '2.0.0'})
 		const update = vi.fn().mockResolvedValue(undefined)
 		const app = makeApp({id: 'gitea', policy: 'auto', installed: '1.0.0', window: {start: '09:00', end: '17:00'}, update})
+
+		const result = await appAutoUpdateHandler(fakeJob, {logger: fakeLogger, livinityd: daemonWith(app)})
+
+		expect(result.status).toBe('success')
+		expect(update).not.toHaveBeenCalled()
+		expect((result.output as {updated: string[]}).updated).toEqual([])
+	})
+
+	// 343-01 RESIL-01 (D-343-3): an app in debug mode is LEFT ALONE by the shared auto-update pass —
+	// update() would re-derive the compose and fight the entrypoint-suppression transform.
+	test('policy auto + newer + debugMode true: update() NOT called (debug app left alone)', async () => {
+		mockGetBuiltinApp.mockReset()
+		mockGetBuiltinApp.mockReturnValue({version: '2.0.0'})
+		const update = vi.fn().mockResolvedValue(undefined)
+		const app = makeApp({id: 'gitea', policy: 'auto', installed: '1.0.0', debugMode: true, update})
 
 		const result = await appAutoUpdateHandler(fakeJob, {logger: fakeLogger, livinityd: daemonWith(app)})
 
