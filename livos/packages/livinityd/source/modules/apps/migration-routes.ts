@@ -158,11 +158,15 @@ export async function runGuardedImport(
 	livinityd: MigrationLivinityd,
 	file: string,
 ): Promise<{ok: true; appId: string} | {ok: false; reason: string}> {
-	const exportsDir = migrationExportsDir(livinityd)
-	const bundlePath = resolveBundleInDir(exportsDir, file)
+	// I3 (344-review): uploaded import bundles live in the incoming/ subdir (the dedicated
+	// upload route leaves them there so an export's keepLast prune — which scans only the
+	// top-level produced-exports dir — can never delete a bundle awaiting import). Resolve
+	// the bundle strictly inside incoming/.
+	const incomingDir = migrationIncomingDir(livinityd)
+	const bundlePath = resolveBundleInDir(incomingDir, file)
 	if (!beginMigrationFlight('import')) throw new Error('[migration-in-progress]')
 	try {
-		await fse.ensureDir(exportsDir)
+		await fse.ensureDir(incomingDir)
 		if (!(await fse.pathExists(bundlePath))) {
 			endMigrationFlight({error: '[bundle-not-found]'})
 			return {ok: false, reason: '[bundle-not-found]'}

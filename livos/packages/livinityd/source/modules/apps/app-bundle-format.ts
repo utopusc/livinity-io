@@ -89,7 +89,12 @@ export const BundleEntrySchema = z.object({
 })
 
 export const BundleVolumeSchema = z.object({
-	key: z.string(),
+	// W3 (344-review): the volume `key` is concatenated into the runtime volume name
+	// (`${project}_${key}` via namedVolumeRuntimeName) which reaches a docker Bind on the
+	// import side. Pin it to the SAME charset the appId uses (plus `.`) at Zod parse time so
+	// a `:`-injecting / metachar key (e.g. `data:/etc`) rejects the whole bundle here — the
+	// earliest possible gate, BEFORE any field is trusted for a volume/bind name.
+	key: z.string().regex(/^[a-zA-Z0-9_.-]+$/, 'volume key must match /^[a-zA-Z0-9_.-]+$/'),
 	entryPath: z.string(),
 	sha256: z.string(),
 	bytes: z.number(),

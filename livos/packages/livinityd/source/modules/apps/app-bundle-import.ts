@@ -45,6 +45,12 @@ const APP_ID_RE = /^[a-zA-Z0-9-_]+$/
 const MAX_ENTRIES = 5000
 const BYTE_CEILING_FACTOR = 1.1
 
+// W1 (344-review): an ABSOLUTE cap on the buffered manifest.json. The manifest is read
+// fully into memory (chunks → Buffer.concat → JSON.parse) so an attacker-declared
+// multi-GB manifest entry would OOM the box BEFORE any of the schema/size gates run.
+// Reject the moment the streamed manifest bytes cross this cap.
+const MAX_MANIFEST_BYTES = 8 * 1024 * 1024
+
 // The known top-level entry prefixes a valid bundle can carry (untrusted-extraction
 // policy: an entry whose name is under NONE of these is rejected).
 const EXACT_ENTRIES = new Set<string>([MANIFEST_ENTRY, APP_MANIFEST_ENTRY])
@@ -126,6 +132,7 @@ function assertContained(stagingRoot: string, target: string): void {
 export async function safeExtractBundle(
 	bundlePath: string,
 	stagingRoot: string,
+	opts?: {hardCeiling?: number},
 ): Promise<{manifest: BundleManifest; total: number}> {
 	await fse.ensureDir(stagingRoot)
 
@@ -137,7 +144,13 @@ export async function safeExtractBundle(
 	// directly comparable to manifest.totalBytes (which excludes manifest.json). The ceiling
 	// is manifest.totalBytes × 1.1 (T-344-08 zip-bomb guard).
 	let dataBytes = 0
-	let ceiling = Infinity
+	// W2 (344-review): an ABSOLUTE extraction ceiling threaded by the caller from real free
+	// space (available − floor), INDEPENDENT of the attacker-controlled manifest.totalBytes.
+	// It bounds extraction from the FIRST byte (before the manifest is even parsed); once the
+	// manifest arrives the effective ceiling becomes min(manifest-derived, hardCeiling) so a
+	// bundle can never fill the disk even if it under-declares totalBytes.
+	const hardCeiling = opts?.hardCeiling ?? Infinity
+	let ceiling = hardCeiling
 
 	await new Promise<void>((resolve, reject) => {
 		const extract = tarStream.extract()
@@ -182,17 +195,30 @@ export async function safeExtractBundle(
 				// manifest.json — buffer it, parse+validate, keep in memory for the post-pass.
 				if (norm === MANIFEST_ENTRY) {
 					const chunks: Buffer[] = []
+					let manifestBytes = 0
 					stream.on('data', (c: Buffer) => {
+						if (aborted) return
+						// W1 (344-review): enforce the absolute manifest cap on the STREAM, BEFORE
+						// Buffer.concat / JSON.parse — a pathological multi-GB manifest is rejected
+						// here rather than buffered whole into memory.
+						manifestBytes += c.length
+						if (manifestBytes > MAX_MANIFEST_BYTES) {
+							abort(new Error('[bundle-manifest-invalid] manifest.json exceeds size cap'))
+							return
+						}
 						chunks.push(c)
 					})
 					stream.on('error', abort)
 					stream.on('end', () => {
+						if (aborted) return
 						try {
 							const buf = Buffer.concat(chunks)
 							const parsed = BundleManifestSchema.safeParse(JSON.parse(buf.toString('utf8')))
 							if (!parsed.success) throw new Error('[bundle-manifest-invalid]')
 							manifest = parsed.data
-							ceiling = manifest.totalBytes * BYTE_CEILING_FACTOR
+							// W2 (344-review): tighten the running ceiling to the LESSER of the
+							// manifest-derived headroom and the caller's real-free-space hard ceiling.
+							ceiling = Math.min(manifest.totalBytes * BYTE_CEILING_FACTOR, hardCeiling)
 							recorded.set(norm, {sha256: sha256Hex(buf), bytes: buf.length})
 							next()
 						} catch (e) {

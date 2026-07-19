@@ -212,6 +212,12 @@ export async function listBundleFiles(
 	const names = (await fse.readdir(exportsDir)) as string[]
 	const out: {path: string; bytes: number; mtimeMs: number}[] = []
 	for (const name of names) {
+		// I3 (344-review): never descend into the incoming/ upload staging subdir. listBundleFiles
+		// backs BOTH the produced-exports listing AND pruneBundles(keepLast); an uploaded import
+		// bundle waiting there must never be listed for download nor pruned by an export. (The
+		// readdir is non-recursive + the isFile check below already exclude the subdir; this is an
+		// explicit, documented belt-and-suspenders guard.)
+		if (name === 'incoming') continue
 		if (!name.endsWith(BUNDLE_EXT)) continue
 		const full = path.join(exportsDir, name)
 		try {

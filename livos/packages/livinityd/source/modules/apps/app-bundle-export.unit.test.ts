@@ -182,6 +182,31 @@ describe('listBundleFiles + pruneBundles', () => {
 	test('listBundleFiles on a missing dir returns [] (no throw)', async () => {
 		await expect(listBundleFiles(path.join(tmp, 'does-not-exist'))).resolves.toEqual([])
 	})
+
+	// I3 (344-review): an uploaded import bundle lives in the incoming/ subdir; neither
+	// listBundleFiles nor pruneBundles(keepLast) must ever see or delete it.
+	test('prune + list never descend into the incoming/ upload subdir (I3)', async () => {
+		writeBundle('a-1000.livbundle', 1_000_000)
+		writeBundle('b-2000.livbundle', 2_000_000)
+		writeBundle('c-3000.livbundle', 3_000_000)
+		// An uploaded import bundle waiting to be imported, staged in incoming/.
+		const incoming = path.join(tmp, 'incoming')
+		fs.mkdirSync(incoming)
+		const uploaded = path.join(incoming, 'imported-9999.livbundle')
+		fs.writeFileSync(uploaded, 'uploaded-bundle')
+
+		// listBundleFiles reports ONLY the top-level produced exports (never the incoming one).
+		const listed = await listBundleFiles(tmp)
+		expect(listed.map((f) => path.basename(f.path)).sort()).toEqual([
+			'a-1000.livbundle',
+			'b-2000.livbundle',
+			'c-3000.livbundle',
+		])
+
+		// A keepLast:1 prune deletes the 2 oldest TOP-LEVEL bundles but leaves the uploaded one.
+		await pruneBundles(tmp, {keepLast: 1})
+		expect(fs.existsSync(uploaded)).toBe(true)
+	})
 })
 
 describe('exportAppBundle — stop → pack → start orchestration', () => {

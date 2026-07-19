@@ -2,6 +2,7 @@ import {fileURLToPath} from 'node:url'
 import {dirname, join} from 'node:path'
 import os from 'node:os'
 import path from 'node:path'
+import {randomUUID} from 'node:crypto'
 
 import fse from 'fs-extra'
 import {$} from 'execa'
@@ -123,6 +124,18 @@ const REDIS_PLATFORM_URL = 'livos:platform:url'
 // Env override (LIVINITY_PLATFORM_URL) is honored for staging / mainserver
 // testing where the platform lives at a different host.
 const LIVINITY_PLATFORM_URL = process.env.LIVINITY_PLATFORM_URL || 'https://livinity.io'
+
+// W2 (344-review): a free-space floor an import extraction must leave UNUSED. The absolute
+// extraction hard-ceiling passed to safeExtractBundle is (available − this floor), so a
+// bundle can never fill the data disk to 0 (leaving no room for docker/app runtime).
+const IMPORT_SPACE_FLOOR_BYTES = 512 * 1024 * 1024
+
+// W4 (344-review): local mirror of the (NON-exported) SUBDOMAIN_RE at domain/caddy.ts:94.
+// A subdomain STRING replayed from an imported bundle (attacker-influenced meta/subdomain.json)
+// MUST match this exact Caddy charset before it reaches registerAppSubdomain / is persisted
+// as a SubdomainConfig — otherwise a crafted label could corrupt the generated Caddyfile.
+// Keep in sync with caddy.ts:94.
+const IMPORT_SUBDOMAIN_RE = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$/
 
 /**
  * Phase 218 follow-up — detect whether cloudflared.service is running.
@@ -1345,17 +1358,33 @@ export default class Apps {
 		bundlePath: string
 	}): Promise<{ok: true; appId: string} | {ok: false; reason: string}> {
 		const {bundlePath} = input
-		const staging = path.join(os.tmpdir(), `livos-import-${Date.now()}`)
+		// W2 (344-review): stage under the DATA directory (the same filesystem the free-space
+		// check measures + where the app-data/volumes ultimately land), NOT os.tmpdir() (which
+		// is frequently a separate/small tmpfs). The `.`-prefixed name can never collide with a
+		// real appId (charset excludes `.`) and is skipped by app enumeration.
+		const staging = path.join(
+			this.#livinityd.dataDirectory,
+			'app-data',
+			`.import-staging-${randomUUID()}`,
+		)
 		const ledger = newLedger()
 		let manifest: BundleManifest | undefined
 		let appDataDirectory: string | undefined
 
 		try {
+			// W2: measure real free space at the data root BEFORE extraction and derive an
+			// ABSOLUTE extraction hard-ceiling (available − floor), INDEPENDENT of the
+			// attacker-declared manifest.totalBytes. safeExtractBundle enforces
+			// min(manifest-derived, hardCeiling) from the first byte, so a bundle that
+			// under-declares its size can never fill the data disk during extraction.
+			const availableBytes = (await getDiskUsageByPath(this.#livinityd.dataDirectory)).available
+			const hardCeiling = Math.max(0, availableBytes - IMPORT_SPACE_FLOOR_BYTES)
+
 			// 1. Extract into a fresh staging dir. safeExtractBundle validates every tar
 			// entry BEFORE writing and verifies every manifest sha256 AFTER — so nothing
 			// past this point trusts an unverified byte. Staging is always cleaned (success
 			// removes it; failure pushes it onto the ledger for the catch-block rollback).
-			const extracted = await safeExtractBundle(bundlePath, staging)
+			const extracted = await safeExtractBundle(bundlePath, staging, {hardCeiling})
 			manifest = extracted.manifest
 
 			// 2a. B1 (BLOCKER, belt-and-suspenders): the appId is the SOLE manifest string
@@ -1368,9 +1397,9 @@ export default class Apps {
 			}
 
 			// 2b. Prechecks (schema / version-floor / collision / free-space). Run against
-			// the LIVE instance list + real free space at the data root. Nothing applied yet.
+			// the LIVE instance list + the real free space measured above (secondary gate —
+			// the extraction hard-ceiling already bounded actual disk use). Nothing applied yet.
 			const installedAppIds = this.instances.map((a) => a.id)
-			const availableBytes = (await getDiskUsageByPath(this.#livinityd.dataDirectory)).available
 			const pre = runImportPrechecks(manifest, {installedAppIds, availableBytes})
 			if (!pre.ok) {
 				await fse.remove(staging).catch(() => {})
@@ -1475,18 +1504,30 @@ export default class Apps {
 					} | null
 					const desiredSub = (captured?.subdomain ?? '').toLowerCase()
 					if (desiredSub && desiredSub !== manifest.appId.toLowerCase()) {
-						const all = await this.getAllSubdomains()
-						const conflict = all.find(
-							(s) => (s.subdomain ?? '').toLowerCase() === desiredSub && s.appId !== manifest!.appId,
-						)
-						if (conflict) {
+						if (!IMPORT_SUBDOMAIN_RE.test(desiredSub)) {
+							// W4 (344-review): the replay string is attacker-influenced (it rides in
+							// the bundle's meta/subdomain.json). A label that fails Caddy's charset is
+							// SKIPPED — never handed to registerAppSubdomain, never persisted as a
+							// SubdomainConfig — so it cannot corrupt the generated Caddyfile. The app
+							// stays functional on its appId-derived default subdomain.
 							this.logger.error(
-								`344-02: imported subdomain '${desiredSub}' is already used by app '${conflict.appId}' on this box — ` +
-									`skipping replay; imported app '${manifest.appId}' stays on its default appId-derived subdomain (v1: no auto-rename).`,
+								`344-02: imported subdomain '${desiredSub}' fails the Caddy subdomain charset — ` +
+									`skipping replay; imported app '${manifest.appId}' stays on its default appId-derived subdomain.`,
 							)
 						} else {
-							await this.registerAppSubdomain(manifest.appId, appManifest.port, desiredSub)
-							this.logger.log(`344-02: replayed subdomain '${desiredSub}' for imported app ${manifest.appId}`)
+							const all = await this.getAllSubdomains()
+							const conflict = all.find(
+								(s) => (s.subdomain ?? '').toLowerCase() === desiredSub && s.appId !== manifest!.appId,
+							)
+							if (conflict) {
+								this.logger.error(
+									`344-02: imported subdomain '${desiredSub}' is already used by app '${conflict.appId}' on this box — ` +
+										`skipping replay; imported app '${manifest.appId}' stays on its default appId-derived subdomain (v1: no auto-rename).`,
+								)
+							} else {
+								await this.registerAppSubdomain(manifest.appId, appManifest.port, desiredSub)
+								this.logger.log(`344-02: replayed subdomain '${desiredSub}' for imported app ${manifest.appId}`)
+							}
 						}
 					}
 				}
@@ -1528,6 +1569,22 @@ export default class Apps {
 					})
 				} catch (revertErr) {
 					this.logger.error(`344-02: failed to revert persisted apps array for ${doomedId}`, revertErr)
+				}
+			}
+			// W5 (344-review): if #finishInstall/app.install() partially created containers (or
+			// the compose network) before throwing, tear them down BEFORE the ledger force-removes
+			// the volumes those containers still reference — otherwise a `volume rm -f` orphans the
+			// running containers and leaves the compose network dangling. Best-effort: gated on the
+			// app-data dir existing (so it's a no-op when we failed before staging the compose),
+			// caught + logged (never swallowed), and it never masks the original import error.
+			if (manifest && appDataDirectory && (await fse.pathExists(appDataDirectory))) {
+				try {
+					await new App(this.#livinityd, manifest.appId).stop()
+				} catch (teardownErr) {
+					this.logger.error(
+						`344-02: best-effort container/network teardown for ${manifest.appId} during rollback failed`,
+						teardownErr,
+					)
 				}
 			}
 			// Volumes + app-data dir + staging (add staging so rollback cleans it too).

@@ -7,6 +7,7 @@ import {describe, expect, test} from 'vitest'
 import {
 	BUNDLE_SCHEMA_VERSION,
 	BundleManifestSchema,
+	BundleVolumeSchema,
 	isDekEncryptedKey,
 	sha256Hex,
 	stripDekSecrets,
@@ -81,5 +82,27 @@ describe('BundleManifestSchema', () => {
 	test('rejects a manifest missing entries', () => {
 		const {entries, ...noEntries} = valid
 		expect(() => BundleManifestSchema.parse(noEntries)).toThrow()
+	})
+
+	// W3 (344-review): the volume `key` flows into the runtime volume name / docker Bind, so
+	// a `:`-injecting or metachar key must reject at Zod parse time (mirrors the appId gate).
+	test('rejects a manifest whose volume key carries a metachar (W3)', () => {
+		for (const badKey of ['data:/etc/passwd', 'a/b', 'a b', '../x', 'a$b', '']) {
+			const m = {...valid, volumes: [{key: badKey, entryPath: 'volumes/x.tar.gz', sha256: 'a', bytes: 1}]}
+			expect(() => BundleManifestSchema.parse(m)).toThrow()
+		}
+	})
+})
+
+describe('BundleVolumeSchema — W3 volume key charset', () => {
+	test('accepts a clean key ([a-zA-Z0-9_.-])', () => {
+		for (const ok of ['data', 'db_main', 'cache-1', 'v1.2', 'A_B-c.d']) {
+			expect(BundleVolumeSchema.safeParse({key: ok, entryPath: 'volumes/x.tar.gz', sha256: 'a', bytes: 1}).success).toBe(true)
+		}
+	})
+	test('rejects a `:`-injecting / metachar / empty key', () => {
+		for (const bad of ['data:/etc', 'a/b', 'a b', 'a:b', '../evil', 'x`y', '']) {
+			expect(BundleVolumeSchema.safeParse({key: bad, entryPath: 'volumes/x.tar.gz', sha256: 'a', bytes: 1}).success).toBe(false)
+		}
 	})
 })

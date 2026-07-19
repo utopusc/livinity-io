@@ -266,6 +266,45 @@ describe('safeExtractBundle', () => {
 		const staging = path.join(tmp, 'staging')
 		await expect(safeExtractBundle(bundlePath, staging)).rejects.toThrow('[bundle-too-large]')
 	})
+
+	// W2 (344-review): an absolute hardCeiling passed by the caller bounds extraction even
+	// when the manifest HONESTLY declares its (large) size. A bundle whose data exceeds the
+	// caller's real free-space ceiling is rejected mid-stream, independent of totalBytes.
+	test('hardCeiling bounds extraction independent of an honest manifest (W2)', async () => {
+		const bigContent = Buffer.alloc(40_000, 0x42)
+		// Honest manifest: totalBytes matches the real payload (no zip-bomb lie).
+		const manifest = buildManifest({files: [{path: 'app-data/big', content: bigContent}]})
+		const bundlePath = path.join(tmp, 'honest-big.livbundle')
+		await packGoodBundle(bundlePath, manifest, [{path: 'app-data/big', content: bigContent}])
+		const staging = path.join(tmp, 'staging')
+		// A tiny hard ceiling (available − floor) rejects even though totalBytes*1.1 would pass.
+		await expect(safeExtractBundle(bundlePath, staging, {hardCeiling: 1000})).rejects.toThrow(
+			'[bundle-too-large]',
+		)
+	})
+
+	test('a generous hardCeiling still round-trips a good bundle (W2)', async () => {
+		const files = [{path: 'app-data/ok.txt', content: Buffer.from('hello')}]
+		const manifest = buildManifest({files})
+		const bundlePath = path.join(tmp, 'ceil-ok.livbundle')
+		await packGoodBundle(bundlePath, manifest, files)
+		const staging = path.join(tmp, 'staging')
+		const {manifest: got} = await safeExtractBundle(bundlePath, staging, {hardCeiling: 10_000_000})
+		expect(got.appId).toBe('immich')
+		expect(fs.readFileSync(path.join(staging, 'app-data', 'ok.txt'), 'utf8')).toBe('hello')
+	})
+
+	// W1 (344-review): a manifest.json larger than MAX_MANIFEST_BYTES (8 MiB) is rejected on
+	// the stream BEFORE Buffer.concat / JSON.parse — an oversized manifest can never OOM the box.
+	test('an oversized manifest.json is rejected before buffering (W1)', async () => {
+		// A syntactically-JSON but > 8 MiB manifest entry (padded so it crosses the cap).
+		const huge = Buffer.alloc(9 * 1024 * 1024, 0x20) // 9 MiB of spaces
+		const manifestJson = Buffer.concat([Buffer.from('{"x":"'), huge, Buffer.from('"}')])
+		const bundlePath = path.join(tmp, 'huge-manifest.livbundle')
+		await writeTarGz(bundlePath, [{name: 'manifest.json', content: manifestJson}])
+		const staging = path.join(tmp, 'staging')
+		await expect(safeExtractBundle(bundlePath, staging)).rejects.toThrow('[bundle-manifest-invalid]')
+	})
 })
 
 // ---------------------------------------------------------------------------

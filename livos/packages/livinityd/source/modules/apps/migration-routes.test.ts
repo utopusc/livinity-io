@@ -6,8 +6,11 @@
 // exported functions with plain stub livinityd objects. The full HTTP/adminProcedure/
 // step-up wiring is asserted structurally (grep) + deferred to 344-HUMAN-UAT.
 
+import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 
+import fse from 'fs-extra'
 import {afterEach, beforeEach, describe, expect, test} from 'vitest'
 
 import {
@@ -20,6 +23,7 @@ import {
 import {
 	bundleFileNameSchema,
 	migrationExportsDir,
+	migrationIncomingDir,
 	resolveBundleInDir,
 	resolveGlobalAppForExport,
 	runGuardedExport,
@@ -134,5 +138,43 @@ describe('guarded runners', () => {
 		// The original export flight is untouched by the refused import.
 		expect(getMigrationProgress().running).toBe(true)
 		expect(getMigrationKind()).toBe('export')
+	})
+
+	// Test 6 (I3, 344-review) — runGuardedImport resolves the uploaded bundle from the
+	// incoming/ subdir (where the upload route leaves it, safe from an export's prune), NOT
+	// the top-level produced-exports dir.
+	test('runGuardedImport resolves the bundle from the incoming/ subdir (I3)', async () => {
+		const dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'livmig-i3-'))
+		try {
+			let importedFrom: string | null = null
+			const livinityd = stubLivinityd({
+				dataDirectory,
+				apps: {
+					instances: [],
+					getAllSubdomains: async () => [],
+					importAppBundle: async ({bundlePath}) => {
+						importedFrom = bundlePath
+						return {ok: true as const, appId: 'immich'}
+					},
+				},
+			})
+
+			// A bundle placed ONLY in the top-level exports dir is NOT found (import reads incoming/).
+			await fse.ensureDir(migrationExportsDir(livinityd))
+			fs.writeFileSync(path.join(migrationExportsDir(livinityd), 'top-1.livbundle'), 'x')
+			const miss = await runGuardedImport(livinityd, 'top-1.livbundle')
+			expect(miss).toEqual({ok: false, reason: '[bundle-not-found]'})
+
+			// The SAME name staged in incoming/ IS resolved + imported from there.
+			const incoming = migrationIncomingDir(livinityd)
+			await fse.ensureDir(incoming)
+			const uploaded = path.join(incoming, 'top-1.livbundle')
+			fs.writeFileSync(uploaded, 'bundle-bytes')
+			const hit = await runGuardedImport(livinityd, 'top-1.livbundle')
+			expect(hit).toEqual({ok: true, appId: 'immich'})
+			expect(importedFrom).toBe(uploaded)
+		} finally {
+			fse.removeSync(dataDirectory)
+		}
 	})
 })

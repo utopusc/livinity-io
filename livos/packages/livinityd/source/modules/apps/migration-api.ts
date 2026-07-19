@@ -95,18 +95,21 @@ export default function migrationApi({privateApi, livinityd}: ApiOptions) {
 			return response.status(400).json({error: 'invalid file'})
 		}
 
-		const exportsDir = migrationExportsDir(livinityd)
+		// I3 (344-review): an uploaded import bundle lands AND STAYS in the incoming/ subdir —
+		// never the top-level produced-exports dir. An export's keepLast prune scans only the
+		// top level, so it can never delete an uploaded bundle awaiting import; runGuardedImport
+		// resolves the bundle from this same incoming/ dir.
+		const incomingDir = migrationIncomingDir(livinityd)
 		let finalPath: string
 		try {
-			finalPath = resolveBundleInDir(exportsDir, file) // final lands strictly inside exportsDir
+			finalPath = resolveBundleInDir(incomingDir, file) // final lands strictly inside incoming/
 		} catch {
 			response.setHeader('Connection', 'close')
 			return response.status(400).json({error: 'invalid file'})
 		}
 
 		// Stream to a random temp in the incoming staging dir; a partial upload never
-		// appears as a valid `.livbundle` in the listed exports dir (temp+rename discipline).
-		const incomingDir = migrationIncomingDir(livinityd)
+		// appears as a valid `.livbundle` (temp+rename discipline).
 		await fse.ensureDir(incomingDir)
 		const tmp = path.join(incomingDir, `${randomUUID()}.part`)
 		let bytes = 0
@@ -121,9 +124,24 @@ export default function migrationApi({privateApi, livinityd}: ApiOptions) {
 		try {
 			await new Promise<void>((resolve, reject) => {
 				const out = createWriteStream(tmp)
+				let settled = false
+				const settle = (fn: () => void) => {
+					if (settled) return
+					settled = true
+					fn()
+				}
 				const onError = (err: unknown) => {
 					if (overCap) return // teardown after cap is expected — ignore
-					reject(err)
+					settle(() => reject(err))
+				}
+				// I1 (344-review): a client that aborts mid-upload (browser navigates away /
+				// connection drops) must NOT leave the handler awaiting a Promise that never
+				// settles nor leak the `.part`. Stop writing, and settle so the outer catch +
+				// finally clean the temp and close the socket.
+				const onAborted = () => {
+					request.unpipe(out)
+					out.destroy()
+					settle(() => reject(new Error('[upload-aborted] client closed the connection mid-upload')))
 				}
 				request.on('data', (chunk: Buffer) => {
 					bytes += chunk.length
@@ -135,12 +153,18 @@ export default function migrationApi({privateApi, livinityd}: ApiOptions) {
 						request.unpipe(out)
 						out.destroy()
 						request.pause()
-						resolve()
+						settle(() => resolve())
 					}
 				})
+				request.on('aborted', onAborted)
 				request.on('error', onError)
 				out.on('error', onError)
-				out.on('finish', () => resolve())
+				out.on('finish', () => settle(() => resolve()))
+				// A 'close' BEFORE the write finishes (and not the expected over-cap teardown)
+				// is an abort — normal completion emits 'finish' first (already settled).
+				request.on('close', () => {
+					if (!settled && !overCap) onAborted()
+				})
 				request.pipe(out)
 			})
 
@@ -150,8 +174,8 @@ export default function migrationApi({privateApi, livinityd}: ApiOptions) {
 				return response.status(413).json({error: 'upload exceeds the bundle size limit'})
 			}
 
-			// Move the COMPLETED temp up into the exports dir under the validated name.
-			await fse.ensureDir(exportsDir)
+			// Move the COMPLETED temp into the incoming dir under the validated name.
+			await fse.ensureDir(incomingDir)
 			await fse.move(tmp, finalPath, {overwrite: true})
 			cleaned = true // moved — nothing left to clean
 			return response.status(200).json({ok: true, file: path.basename(finalPath), bytes})
