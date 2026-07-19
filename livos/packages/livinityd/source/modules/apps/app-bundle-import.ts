@@ -269,5 +269,161 @@ export async function safeExtractBundle(
 	return {manifest: m, total: dataBytes}
 }
 
+// ---------------------------------------------------------------------------
+// 3. Volume restore — docker volume create + alpine-tar extract behind a MUTABLE
+//    seam (the export volumeTarAdapter / oom-watch oomInspector idiom). Offline tests
+//    overwrite the seam so NO real docker socket is touched. The image tag + Cmd are
+//    FIXED literals (T-344-04/10) — no manifest string ever reaches Image/Cmd/Binds
+//    except the runtimeName, which is `${appId}_${key}` where appId already passed the
+//    B1 charset gate and key comes from the compose-derived volume enumeration.
+// ---------------------------------------------------------------------------
+
+// Local socket only (same as scheduler/backup.ts + app-bundle-export.ts). Never used in
+// offline tests — the volumeRestoreAdapter seam is overwritten there.
+const docker = new Dockerode({socketPath: '/var/run/docker.sock'})
+
+async function ensureAlpineImage(): Promise<void> {
+	try {
+		await docker.getImage('alpine:latest').inspect()
+		return
+	} catch (err: any) {
+		if (err?.statusCode !== 404 && err?.reason !== 'no such image') throw err
+	}
+	await new Promise<void>((resolve, reject) => {
+		docker.pull('alpine:latest', (err: any, stream: any) => {
+			if (err) return reject(err)
+			docker.modem.followProgress(stream, (e: any) => (e ? reject(e) : resolve()))
+		})
+	})
+}
+
+/**
+ * Create `runtimeName` (idempotent) and extract `tarGzPath` into it via an ephemeral
+ * alpine sidecar running `tar xzf - -C /data` with the tar.gz piped to its stdin. Mirror
+ * of the export sidecar shape. Fixed literal Image/Cmd; the volume is the ONLY dynamic bind.
+ */
+async function runVolumeRestore(runtimeName: string, tarGzPath: string): Promise<void> {
+	await ensureAlpineImage()
+	// docker volume create is idempotent — an existing volume is returned, not re-created.
+	await docker.createVolume({Name: runtimeName})
+	const container = await docker.createContainer({
+		Image: 'alpine:latest',
+		Cmd: ['sh', '-c', 'tar xzf - -C /data'],
+		AttachStdin: true,
+		OpenStdin: true,
+		StdinOnce: true,
+		AttachStdout: true,
+		AttachStderr: true,
+		Tty: false,
+		HostConfig: {
+			Binds: [`${runtimeName}:/data`],
+			AutoRemove: true,
+		},
+	})
+	const stream = await container.attach({
+		stream: true,
+		hijack: true,
+		stdin: true,
+		stdout: true,
+		stderr: true,
+	})
+	await container.start()
+	await new Promise<void>((resolve, reject) => {
+		const rs = fs.createReadStream(tarGzPath)
+		rs.on('error', reject)
+		stream.on('error', reject)
+		stream.on('finish', () => resolve())
+		rs.pipe(stream)
+	})
+	const res: any = await container.wait()
+	if (res?.StatusCode !== 0) {
+		throw new Error(`[volume-restore-failed] alpine tar-extract exit ${res?.StatusCode} for ${runtimeName}`)
+	}
+}
+
+/** Remove a named volume (rollback). `-f` so a still-referenced volume is force-removed. */
+async function runVolumeRemove(runtimeName: string): Promise<void> {
+	await docker.getVolume(runtimeName).remove({force: true})
+}
+
+/**
+ * Mutable docker seam. Offline tests overwrite `.restoreVolume` / `.removeVolume` with
+ * spies so NO real docker is touched. ESM internal calls bind to this module-local ref.
+ */
+export const volumeRestoreAdapter: {
+	restoreVolume: (runtimeName: string, tarGzPath: string) => Promise<void>
+	removeVolume: (runtimeName: string) => Promise<void>
+} = {
+	restoreVolume: runVolumeRestore,
+	removeVolume: runVolumeRemove,
+}
+
+// ---------------------------------------------------------------------------
+// RollbackLedger — records every artifact importAppBundle() creates so a failure at
+// ANY stage can leave the box as-if-never-imported (D-344-4). rollback() removes them
+// all, swallowing individual failures but REPORTING them (never a silent rollback).
+// ---------------------------------------------------------------------------
+
+export interface RollbackLedger {
+	/** runtime names of docker volumes created during restore. */
+	volumes: string[]
+	/** absolute dirs created during staging (app-data dir, the staging tmpdir). */
+	dirs: string[]
+}
+
+export function newLedger(): RollbackLedger {
+	return {volumes: [], dirs: []}
+}
+
+/**
+ * Undo every ledger-recorded artifact. Never throws — an individual failure is collected
+ * into `failed` (and logged if a logger is supplied) so a partial rollback is honest.
+ */
+export async function rollback(
+	ledger: RollbackLedger,
+	deps?: {logger?: {log: (m: string) => void; error: (m: string, e?: unknown) => void}},
+): Promise<{removed: string[]; failed: string[]}> {
+	const removed: string[] = []
+	const failed: string[] = []
+	for (const v of ledger.volumes) {
+		try {
+			await volumeRestoreAdapter.removeVolume(v)
+			removed.push(`volume:${v}`)
+		} catch (e) {
+			failed.push(`volume:${v}`)
+			deps?.logger?.error(`[344-02 rollback] failed to remove volume ${v}`, e)
+		}
+	}
+	for (const d of ledger.dirs) {
+		try {
+			await fse.remove(d)
+			removed.push(`dir:${d}`)
+		} catch (e) {
+			failed.push(`dir:${d}`)
+			deps?.logger?.error(`[344-02 rollback] failed to remove dir ${d}`, e)
+		}
+	}
+	return {removed, failed}
+}
+
+/**
+ * Restore every named volume declared in the manifest under its runtime name
+ * (`${projectName}_${key}`), recording each in the ledger so a later-stage failure rolls
+ * them back. The tar.gz for each volume lives at `stagingRoot/<entryPath>` (already
+ * sha256-verified by safeExtractBundle before this runs).
+ */
+export async function restoreVolumes(
+	manifest: BundleManifest,
+	opts: {projectName: string; stagingRoot: string},
+	ledger: RollbackLedger,
+): Promise<void> {
+	for (const v of manifest.volumes) {
+		const runtimeName = namedVolumeRuntimeName(opts.projectName, v.key)
+		const tarGzPath = path.join(opts.stagingRoot, v.entryPath)
+		await volumeRestoreAdapter.restoreVolume(runtimeName, tarGzPath)
+		ledger.volumes.push(runtimeName)
+	}
+}
+
 // The known entry constant re-export for apps.ts staging (compose entry path).
 export {COMPOSE_ENTRY}

@@ -15,14 +15,28 @@ import tar from 'tar-stream'
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest'
 
 import {BUNDLE_SCHEMA_VERSION, sha256Hex, type BundleManifest} from './app-bundle-format.js'
-import {runImportPrechecks, safeExtractBundle} from './app-bundle-import.js'
+import {
+	newLedger,
+	restoreVolumes,
+	rollback,
+	runImportPrechecks,
+	safeExtractBundle,
+	volumeRestoreAdapter,
+} from './app-bundle-import.js'
 
 let tmp: string
+// Save/restore the module-level docker seam so overriding it in a test never leaks.
+let seamRestore: typeof volumeRestoreAdapter.restoreVolume
+let seamRemove: typeof volumeRestoreAdapter.removeVolume
 
 beforeEach(() => {
 	tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'livimport-test-'))
+	seamRestore = volumeRestoreAdapter.restoreVolume
+	seamRemove = volumeRestoreAdapter.removeVolume
 })
 afterEach(() => {
+	volumeRestoreAdapter.restoreVolume = seamRestore
+	volumeRestoreAdapter.removeVolume = seamRemove
 	fse.removeSync(tmp)
 })
 
@@ -252,6 +266,55 @@ describe('safeExtractBundle', () => {
 	})
 })
 
-// buildManifest/packGoodBundle/writeTarGz + vi are reused by the Task 2/3 suites below.
-void vi
+// ---------------------------------------------------------------------------
+// Test 8 & 9 — restoreVolumes (seam-mocked) + rollback
+// ---------------------------------------------------------------------------
+
+describe('restoreVolumes + rollback (seam-mocked, no docker)', () => {
+	test('restoreVolumes calls the seam per volume and records the ledger', async () => {
+		const calls: {runtimeName: string; tarGzPath: string}[] = []
+		volumeRestoreAdapter.restoreVolume = async (runtimeName, tarGzPath) => {
+			calls.push({runtimeName, tarGzPath})
+		}
+		const manifest = buildManifest({
+			files: [{path: 'app-data/ok', content: Buffer.from('x')}],
+			volumes: [
+				{key: 'data', entryPath: 'volumes/data.tar.gz', content: Buffer.from('v1')},
+				{key: 'db', entryPath: 'volumes/db.tar.gz', content: Buffer.from('v2')},
+			],
+		})
+		const ledger = newLedger()
+		await restoreVolumes(manifest, {projectName: 'immich', stagingRoot: '/stage'}, ledger)
+
+		expect(calls.map((c) => c.runtimeName)).toEqual(['immich_data', 'immich_db'])
+		expect(calls[0].tarGzPath).toBe(path.join('/stage', 'volumes/data.tar.gz'))
+		expect(ledger.volumes).toEqual(['immich_data', 'immich_db'])
+	})
+
+	test('rollback removes ledger volumes + dirs; a failing removeVolume is reported not thrown', async () => {
+		const removeSpy = vi.fn(async (name: string) => {
+			if (name === 'boom_vol') throw new Error('cannot remove')
+		})
+		volumeRestoreAdapter.removeVolume = removeSpy
+
+		const doomedDir = path.join(tmp, 'app-data-victim')
+		fse.ensureDirSync(doomedDir)
+		fs.writeFileSync(path.join(doomedDir, 'f'), 'data')
+
+		const ledger = newLedger()
+		ledger.volumes.push('ok_vol', 'boom_vol')
+		ledger.dirs.push(doomedDir)
+
+		const result = await rollback(ledger)
+
+		expect(removeSpy).toHaveBeenCalledWith('ok_vol')
+		expect(removeSpy).toHaveBeenCalledWith('boom_vol')
+		expect(fs.existsSync(doomedDir)).toBe(false)
+		expect(result.removed).toContain('volume:ok_vol')
+		expect(result.removed).toContain(`dir:${doomedDir}`)
+		expect(result.failed).toEqual(['volume:boom_vol'])
+	})
+})
+
+// buildManifest/packGoodBundle/writeTarGz + vi are reused by the Task 3 suite below.
 void packGoodBundle
