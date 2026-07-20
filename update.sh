@@ -101,15 +101,18 @@ exec > >(tee --output-error=warn-nopipe -a "$LIVOS_UPDATE_LOG_FILE") 2>&1
 DEPLOY_GUARD_SCRIPT="/opt/livos/livos-deploy-guard.sh"
 DEPLOY_GUARD_SENTINEL="/opt/livos/data/update/deploy-inflight"
 DEPLOY_GUARD_UNIT="livos-deploy-guard"
-# Invariant: the delay MUST exceed update.sh's own worst-case runtime from arm to
-# exit, so a slow-but-surviving deploy disarms BEFORE the guard fires. Layer-A's
-# rollback path is the worst case: restart (≤25s) + probe (≤120s) + restore +
-# 348 DB restore (timeout-bounded ≤300s) + restart (≤25s) + re-probe (≤120s) +
-# tail ≈ 620s. 720s gives ~100s margin. (Even if it fires early, the shared
-# flock makes it bail while update.sh is alive.) Trade-off accepted in 348: the
-# stranded-deploy (SIGKILL) recovery moves from ~7 to ~12 minutes, in exchange
-# for the guard's one-shot never being spent early against a live Layer-A run.
-DEPLOY_GUARD_DELAY=720
+# Delay derivation (BF-4 rederived): the delay should exceed the COMMON
+# arm→exit paths so the guard's one-shot is not spent early against a live run
+# (an early fire bails on the shared flock, but that spends the one-shot).
+# Success path ≈ restart 25 + liveness ≤240 + functional ≤120 ≈ 385s. Common
+# Layer-A code-only-rollback path adds restore ~15 + restart 25 + re-probe
+# ≤240 ≈ 665s. The DEEP last-resort tail (DB restore ≤300 + restart 25 + final
+# probe ≤240) would need ~1230s — NOT fully covered by choice: every fail()
+# exit disarms via the EXIT trap anyway, so the uncovered tail only matters for
+# a SIGKILL landing after an early no-op fire (rare-squared; accepted).
+# 1020s covers success + code-only-rollback with ~350s margin, and keeps
+# stranded-SIGKILL recovery at ~17 min (trade-off documented in 348/BF-4).
+DEPLOY_GUARD_DELAY=1020
 
 # Heredoc-install the standalone guard (idempotent; mirrors ensure_*_dropin). The
 # guard runs AFTER update.sh is dead, so it is fully self-contained (own flock,
@@ -250,19 +253,23 @@ if [[ -d "$LAST_GOOD_DIR/livinityd-source" ]]; then
     # exists (taken THIS deploy, minutes ago — data-loss window ≈ nil).
     # --single-transaction = all-or-nothing: an aborted restore leaves the DB
     # untouched and the additive-only schema invariant keeps old code running.
+    # BF-5: pg_restore runs AS THE APP ROLE (DATABASE_URL) — a superuser restore
+    # leaves recreated objects postgres-owned and locks the app out of its own
+    # tables (live incident 2026-07-20). URL never logged (embeds the password).
     DB_RESTORED=""
+    DBURL=$(grep -oP '^DATABASE_URL=\K.*' /opt/livos/.env 2>/dev/null | head -1 | tr -d '"' | tr -d "'")
     if [[ -s "$LAST_GOOD_DIR/livos-db.dump" ]]; then
-        if command -v sudo >/dev/null 2>&1 && sudo -u postgres psql -d livos -c '\q' >/dev/null 2>&1; then
+        if [[ -n "$DBURL" ]] && psql "$DBURL" -c '\q' >/dev/null 2>&1; then
             systemctl stop livos.service liv-core.service liv-worker.service liv-memory.service 2>/dev/null
-            sudo -u postgres psql -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='livos' AND pid<>pg_backend_pid();" >/dev/null 2>&1
-            if timeout 300 sudo -u postgres pg_restore --clean --if-exists --no-owner --no-acl --single-transaction --dbname=livos "$LAST_GOOD_DIR/livos-db.dump" >/dev/null 2>&1; then
+            psql "$DBURL" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=current_database() AND usename=current_user AND pid<>pg_backend_pid();" >/dev/null 2>&1
+            if timeout 300 pg_restore --clean --if-exists --no-owner --no-acl --single-transaction --dbname="$DBURL" "$LAST_GOOD_DIR/livos-db.dump" >/dev/null 2>&1; then
                 DB_RESTORED="true"; log "DB restored to its pre-update snapshot"
             else
                 DB_RESTORED="false"; log "pg_restore aborted (single-transaction: DB left untouched) — code-only rollback"
             fi
             systemctl start liv-core.service liv-worker.service liv-memory.service 2>/dev/null
         else
-            DB_RESTORED="false"; log "Postgres not accessible — DB restore skipped (code-only rollback)"
+            DB_RESTORED="false"; log "Postgres not accessible as the app role — DB restore skipped (code-only rollback)"
         fi
     fi
 else
@@ -448,18 +455,22 @@ log "last-good restored"
 #     an aborted restore leaves the DB exactly as it was (exit 4 reports it).
 DB_RESTORED=""
 if [[ "$WITH_DB" == "1" ]]; then
-    if command -v sudo >/dev/null 2>&1 && sudo -u postgres psql -d livos -c '\q' >/dev/null 2>&1; then
+    # BF-5: restore AS THE APP ROLE (DATABASE_URL) — a superuser restore leaves
+    # recreated objects postgres-owned and locks the app out of its own tables
+    # (live incident 2026-07-20). URL never logged (embeds the password).
+    DBURL=$(grep -oP '^DATABASE_URL=\K.*' /opt/livos/.env 2>/dev/null | head -1 | tr -d '"' | tr -d "'")
+    if [[ -n "$DBURL" ]] && psql "$DBURL" -c '\q' >/dev/null 2>&1; then
         log "Restoring the DB to its pre-update snapshot (--with-db)..."
         systemctl stop livos.service liv-core.service liv-worker.service liv-memory.service 2>/dev/null || true
-        sudo -u postgres psql -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='livos' AND pid<>pg_backend_pid();" >/dev/null 2>&1 || true
-        if timeout 300 sudo -u postgres pg_restore --clean --if-exists --no-owner --no-acl --single-transaction --dbname=livos "$LAST_GOOD_DIR/livos-db.dump" >/dev/null 2>&1; then
+        psql "$DBURL" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=current_database() AND usename=current_user AND pid<>pg_backend_pid();" >/dev/null 2>&1 || true
+        if timeout 300 pg_restore --clean --if-exists --no-owner --no-acl --single-transaction --dbname="$DBURL" "$LAST_GOOD_DIR/livos-db.dump" >/dev/null 2>&1; then
             DB_RESTORED="true"; log "DB restored to its pre-update snapshot"
         else
             DB_RESTORED="false"; log "pg_restore aborted (single-transaction: DB left untouched) — continuing with the code-only rollback"
         fi
         systemctl start liv-core.service liv-worker.service liv-memory.service 2>/dev/null || true
     else
-        DB_RESTORED="false"; log "Postgres not accessible — DB restore skipped; continuing with the code-only rollback"
+        DB_RESTORED="false"; log "Postgres not accessible as the app role — DB restore skipped; continuing with the code-only rollback"
     fi
 fi
 
@@ -1063,19 +1074,31 @@ restore_last_good() {
 # — the AUTO restore paths fire only on dump presence and degrade to the
 # pre-348 code-only rollback (the manual `--with-db` opt-in instead REFUSES
 # up-front, exit 2, so an explicit operator request is never silently ignored).
+# ── Phase 348 BF-5 (live-incident fix): ALWAYS talk to Postgres as the APP
+# ROLE (DATABASE_URL from /opt/livos/.env), NEVER as the postgres superuser.
+# The first live Layer-A DB restore ran `sudo -u postgres pg_restore --no-owner`
+# — every recreated object came out OWNED BY postgres, the `livos` app role
+# lost access to its own tables, and the whole box went 401 ("User inactive or
+# not found") until ownership was repaired by hand. Restoring AS livos makes
+# recreated objects livos-owned by construction (this is also exactly the
+# proven backups/system-state.ts idiom). The URL is used only as argv to
+# psql/pg_dump/pg_restore — never echoed/logged (it embeds the DB password).
+livos_db_url() {
+    grep -oP '^DATABASE_URL=\K.*' /opt/livos/.env 2>/dev/null | head -1 | tr -d '"' | tr -d "'"
+}
+
 snapshot_db_last_good() {
-    local _tmp="$LAST_GOOD_DIR/livos-db.dump.tmp" _lg_db=false
-    if command -v sudo >/dev/null 2>&1 && sudo -u postgres psql -d livos -c '\q' >/dev/null 2>&1; then
+    local _tmp="$LAST_GOOD_DIR/livos-db.dump.tmp" _lg_db=false _dburl
+    _dburl=$(livos_db_url)
+    if [[ -n "$_dburl" ]] && psql "$_dburl" -c '\q' >/dev/null 2>&1; then
         rm -f "$_tmp" 2>/dev/null || true
-        # Pre-create 0600 root — bash's `>` truncates without changing mode.
+        # Pre-create 0600 root — pg_dump --file truncates without changing mode,
+        # so the dump (credential/key hashes) is never world-readable, even
+        # mid-write. root-owned: the restore side also runs the client as root.
         install -m 600 /dev/null "$_tmp" 2>/dev/null || true
-        if timeout 300 sudo -u postgres pg_dump --format=custom --no-owner --no-acl livos > "$_tmp" 2>/dev/null \
+        if timeout 300 pg_dump --format=custom --no-owner --no-acl --file="$_tmp" "$_dburl" 2>/dev/null \
             && [[ -s "$_tmp" ]]; then
             mv "$_tmp" "$LAST_GOOD_DIR/livos-db.dump" 2>/dev/null || true
-            # postgres-owned 0600: pg_restore (running as postgres) must read it
-            # directly, and the dump holds user data (credential hashes, key
-            # hashes) so it must NOT be world-readable inside this 0755 dir.
-            chown postgres:postgres "$LAST_GOOD_DIR/livos-db.dump" 2>/dev/null || true
             chmod 600 "$LAST_GOOD_DIR/livos-db.dump" 2>/dev/null || true
             [[ -f "$LAST_GOOD_DIR/livos-db.dump" ]] && _lg_db=true
         fi
@@ -1117,21 +1140,24 @@ snapshot_db_last_good() {
 # ("true"/"false") for phase33_finalize telemetry; empty = never attempted.
 LIVOS_DB_RESTORED=""
 restore_db_last_good() {
-    local dump="$LAST_GOOD_DIR/livos-db.dump"
+    local dump="$LAST_GOOD_DIR/livos-db.dump" _dburl
     if [[ ! -s "$dump" ]]; then
         info "No DB snapshot in last-good — code-only rollback (pre-348 posture)"
         return 1
     fi
-    if ! command -v sudo >/dev/null 2>&1 || ! sudo -u postgres psql -d livos -c '\q' >/dev/null 2>&1; then
-        warn "Postgres not accessible — skipping DB restore (code-only rollback)"
+    _dburl=$(livos_db_url)
+    if [[ -z "$_dburl" ]] || ! psql "$_dburl" -c '\q' >/dev/null 2>&1; then
+        warn "Postgres not accessible as the app role — skipping DB restore (code-only rollback)"
         LIVOS_DB_RESTORED="false"
         return 1
     fi
     warn "Restoring the DB to its pre-update snapshot..."
     systemctl stop livos.service liv-core.service liv-worker.service liv-memory.service 2>/dev/null || true
-    sudo -u postgres psql -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='livos' AND pid<>pg_backend_pid();" >/dev/null 2>&1 || true
+    # BF-5: terminate only OUR OWN role's lingering backends (the app role may
+    # not signal other roles' sessions; every LivOS client connects as livos).
+    psql "$_dburl" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=current_database() AND usename=current_user AND pid<>pg_backend_pid();" >/dev/null 2>&1 || true
     local _db_ok=0
-    if timeout 300 sudo -u postgres pg_restore --clean --if-exists --no-owner --no-acl --single-transaction --dbname=livos "$dump" >/dev/null 2>&1; then
+    if timeout 300 pg_restore --clean --if-exists --no-owner --no-acl --single-transaction --dbname="$_dburl" "$dump" >/dev/null 2>&1; then
         _db_ok=1
     fi
     systemctl start liv-core.service liv-worker.service liv-memory.service 2>/dev/null || true
@@ -1165,7 +1191,11 @@ livinityd_responding() {
 # it's still on the previous version) — the UI is restored either way.
 health_probe_or_rollback() {
     local i live=0
-    for i in $(seq 1 40); do
+    # BF-4 (348 live lesson): 40×3s=120s was SHORTER than a real healthy boot on
+    # an app-heavy box (~130s+ of docker-state churn before :8080 binds) — the
+    # first live beta run false-negatived a healthy deploy into a full rollback.
+    # 80×3s=240s aligns the budget with observed boot reality.
+    for i in $(seq 1 80); do
         if livinityd_responding; then
             live=1
             break
@@ -1206,18 +1236,34 @@ health_probe_or_rollback() {
     if ! restore_last_good; then
         fail "Update failed AND there is no snapshot to roll back to — manual recovery needed (journalctl -u livos -n 50)"
     fi
-    # Phase 348 (ABUPD-02): also restore the pre-update DB snapshot (taken this
-    # run, minutes ago). Never blocks the code rollback — fail-open to the
-    # pre-348 code-only posture (see restore_db_last_good).
-    restore_db_last_good || true
+    # BF-4 (348 live lesson, reordered): roll back CODE ONLY first and re-probe.
+    # The DB restore is a LAST RESORT, not a companion step — on a probe
+    # false-negative (healthy-but-slow boot) the old order rewound the DB and
+    # destroyed the probe-window's user writes for nothing. Additive-only schema
+    # means old code runs fine against the forward-migrated DB, so a code-only
+    # rollback that comes back healthy needs NO DB rewind at all.
     systemctl reset-failed livos.service 2>/dev/null || true
     systemctl restart livos.service 2>/dev/null || true
     # The rolled-back OLD code does the same slow pre-listen boot work — give it
-    # the same generous budget before declaring the box unrecoverable.
-    for i in $(seq 1 40); do
+    # the same generous budget before escalating.
+    for i in $(seq 1 80); do
         if livinityd_responding; then
-            warn "Rolled back to the previous working version — the UI is reachable again. This update did NOT apply; review the log and retry."
+            warn "Rolled back to the previous working version — the UI is reachable again. This update did NOT apply; review the log and retry. (DB was NOT rewound: the code-only rollback sufficed.)"
             fail "Update failed and was ROLLED BACK to the last-good version (UI restored, box NOT bricked)"
+        fi
+        sleep 3
+    done
+    # Code-only rollback did not bring the box back — a forward migration may
+    # have poisoned boot. LAST RESORT (Phase 348 ABUPD-02): rewind the DB to the
+    # pre-update snapshot too (fail-open, see restore_db_last_good), restart,
+    # and give one final probe budget.
+    restore_db_last_good || true
+    systemctl reset-failed livos.service 2>/dev/null || true
+    systemctl restart livos.service 2>/dev/null || true
+    for i in $(seq 1 80); do
+        if livinityd_responding; then
+            warn "Rolled back code AND restored the pre-update DB snapshot — the UI is reachable again. This update did NOT apply; review the log and retry."
+            fail "Update failed and was ROLLED BACK (code + DB restored, box NOT bricked)"
         fi
         sleep 3
     done
