@@ -214,4 +214,31 @@ describe('oomWatchHandler — inspect-based OOM self-heal (restart + alert, 3/60
 		expect(fakeLogger.error).toHaveBeenCalled() // the bad app's error was logged, not rethrown
 		expect(fakeLogger.error.mock.calls[0][0]).toContain('immich')
 	})
+
+	test('BF-1: a continuously-failing app logs its error ONCE per streak, and a recovered tick re-arms it', async () => {
+		const restart = vi.fn().mockResolvedValue(undefined)
+		const app = makeApp({id: 'open-webui', state: 'ready', restart})
+		const notifications = makeNotifications()
+		const ctx = {logger: fakeLogger, livinityd: daemonWith([app], notifications)}
+
+		// Streak 1: three consecutive failing ticks (broken install — compose ENOENT class).
+		stubInspect({'open-webui_app_1': new Error('ENOENT: no such file or directory')})
+		await oomWatchHandler(fakeJob, ctx)
+		await oomWatchHandler(fakeJob, ctx)
+		await oomWatchHandler(fakeJob, ctx)
+		const streak1 = fakeLogger.error.mock.calls.filter((c) => String(c[0]).includes('open-webui'))
+		expect(streak1).toHaveLength(1) // logged once, repeats suppressed
+		expect(String(streak1[0][0])).toContain('suppressing repeats')
+
+		// Recovery tick: app passes → marker cleared.
+		stubInspect({'open-webui_app_1': HEALTHY})
+		await oomWatchHandler(fakeJob, ctx)
+
+		// Streak 2: failure returns → logged again (exactly one new line).
+		stubInspect({'open-webui_app_1': new Error('ENOENT: no such file or directory')})
+		await oomWatchHandler(fakeJob, ctx)
+		await oomWatchHandler(fakeJob, ctx)
+		const streak2 = fakeLogger.error.mock.calls.filter((c) => String(c[0]).includes('open-webui'))
+		expect(streak2).toHaveLength(2)
+	})
 })

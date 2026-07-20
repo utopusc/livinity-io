@@ -130,9 +130,17 @@ export const oomInspector: {read: (name: string) => Promise<OomInspectSnapshot>}
 // Map<appId, epoch-ms timestamps of auto-restarts>. Resets on daemon restart (benign, D-343-6).
 const _oomRestartWindow = new Map<string, number[]>()
 
+// BF-1 (v45.31-beta.1 live finding): a broken-but-registered app (compose /
+// manifest files missing on disk) fails EVERY minute tick and emitted ~1440
+// identical error lines/day. Log a given app's failure ONCE per continuous
+// failure streak; a successful pass clears the marker so a NEW failure logs
+// again. Module-scoped → resets on daemon restart (one line per boot is fine).
+const _appErrorLogged = new Set<string>()
+
 /** Test-only helper to reset the window between handler invocations. */
 export function _resetOomWindowForTests(): void {
 	_oomRestartWindow.clear()
+	_appErrorLogged.clear()
 }
 
 // ---------------------------------------------------------------------------
@@ -212,10 +220,18 @@ export const oomWatchHandler: BuiltInJobHandler = async (job, ctx) => {
 						.catch(() => {})
 				}
 				// verdict === 'skip' → nothing.
+				// This app completed a full pass — clear any suppressed-error
+				// marker so a FUTURE failure logs again (BF-1).
+				_appErrorLogged.delete(app.id)
 			} catch (appErr) {
-				ctx.logger.error(
-					`[scheduler/oom-watch] ${app.id}: ${appErr instanceof Error ? appErr.message : String(appErr)}`,
-				)
+				// BF-1: log once per continuous failure streak, then stay silent
+				// until the app passes a tick again (broken-install ENOENT spam).
+				if (!_appErrorLogged.has(app.id)) {
+					_appErrorLogged.add(app.id)
+					ctx.logger.error(
+						`[scheduler/oom-watch] ${app.id}: ${appErr instanceof Error ? appErr.message : String(appErr)} — suppressing repeats until this app passes a tick`,
+					)
+				}
 			}
 		}
 
