@@ -9,6 +9,15 @@
 # Cut a release:
 #   git tag v44.1 && git push origin v44.1     # this workflow publishes it
 #
+# Cut a BETA (beta-channel boxes only — Phase 311 UPDSAFE-01):
+#   git tag v44.2-beta.1 && git push origin v44.2-beta.1
+#   Any '-' in the tag name ⇒ published as prerelease + NOT latest, so stable
+#   boxes (default channel, /releases/latest) never see it; only boxes whose
+#   operator set Settings → releaseChannel=beta resolve it (semver-max incl.
+#   prereleases). The later stable tag (v44.2 > v44.2-beta.1) naturally
+#   returns beta boxes to stable. EXPECTED_RELEASE pre-tag bump applies to
+#   beta tags exactly like stable ones.
+#
 # Manual fallback (no workflow run, e.g. retro-releasing an existing tag):
 #   gh release create v44.1 --generate-notes --latest
 name: Publish Release on tag
@@ -56,12 +65,32 @@ jobs:
           fi
           echo "EXPECTED_RELEASE self-consistency OK: $pin == $expected"
 
+      # ── Phase 348-era beta-channel support ──────────────────────────────────
+      # A '-' in the tag name (v45.31-beta.1) marks a PRERELEASE: published but
+      # NOT latest, so /releases/latest (stable boxes + stable checkUpdate) is
+      # untouched and only beta-channel boxes (semver-max over the full list,
+      # prerelease-precedence-aware on both the TS and bash sides) pick it up.
+      # Plain vX.Y tags behave exactly as before (non-prerelease + latest).
+      - name: Determine release channel from tag name
+        id: chan
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            echo "prerelease=true"  >> "$GITHUB_OUTPUT"
+            echo "make_latest=false" >> "$GITHUB_OUTPUT"
+            echo "Beta tag detected: publishing as prerelease (stable /releases/latest untouched)"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "make_latest=true"  >> "$GITHUB_OUTPUT"
+            echo "Stable tag: publishing as latest"
+          fi
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           generate_release_notes: true
-          # Non-prerelease + latest so api.github.com/.../releases/latest returns it.
-          prerelease: false
-          make_latest: true
+          # Stable: non-prerelease + latest so /releases/latest returns it.
+          # Beta (-suffixed tag): prerelease + NOT latest (beta channel only).
+          prerelease: ${{ steps.chan.outputs.prerelease }}
+          make_latest: ${{ steps.chan.outputs.make_latest }}
