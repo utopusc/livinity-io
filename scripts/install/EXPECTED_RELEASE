@@ -22,7 +22,7 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v45.31-beta.2 (pinned for this release cut — v48 BETA, beta-channel boxes only)
+# CURRENT VALUE = refs/tags/v45.31-beta.3 (pinned for this release cut — v48 BETA, beta-channel boxes only)
 #   The pin line below names the exact tag being cut in this commit (pre-tag-prep
 #   flow, step 1). release.yml verifies pin == tag and publishes. On a box the
 #   warn-only path resolves it to the tag's commit and records a self-consistent
@@ -41,4 +41,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v45.31-beta.2
+refs/tags/v45.31-beta.3
