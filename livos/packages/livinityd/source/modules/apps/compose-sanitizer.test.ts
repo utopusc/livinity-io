@@ -42,6 +42,19 @@ test('strips network_mode:host, pid:host, cap_add and reports them', () => {
 	assert.ok(removed.some((r) => r.includes('cap_add')), 'reports cap_add')
 })
 
+// Phase 349 (VM-01 security review, CRITICAL): `devices` maps a HOST device
+// node into a NON-builtin (deployCustom/marketplace) container — raw host block
+// device / /dev/mem / /dev/kvm access from an unprivileged multi-user account.
+// It must be stripped by the marketplace sanitizer (the federated gate already
+// hard-rejects it). Regression pin for the deployCustom device-smuggling gap.
+test('strips devices (host-device smuggling) and reports it', () => {
+	const compose = baseCompose()
+	compose.services.web.devices = ['/dev/sda:/dev/sda:rwm', '/dev/kvm']
+	const {compose: out, removed} = sanitizeNonBuiltinCompose(compose, APP_DATA_DIR)
+	assert.equal('devices' in out.services.web, false, 'devices must be deleted')
+	assert.ok(removed.some((r) => r.includes('devices')), 'reports devices')
+})
+
 // Test 2b — network_mode that is NOT host (e.g. a custom network) is preserved
 test('preserves network_mode when value is not host', () => {
 	const compose = baseCompose()

@@ -14,6 +14,27 @@ test('member can install a builtin app with no cred flag', () => {
 	)
 })
 
+// Phase 349 (VM-01): requiresKvm + non-admin → forbidden (VM = /dev/kvm+NET_ADMIN).
+test('non-admin blocked from requiresKvm (VM) install', () => {
+	assert.throws(
+		() =>
+			assertInstallAllowed({
+				isAdmin: false,
+				isGeneratedTemplate: true,
+				manifest: {},
+				requiresKvm: true,
+			}),
+		(err: any) => err instanceof InstallForbidden,
+	)
+})
+
+// Phase 349: admin CAN install a requiresKvm app.
+test('admin can install a requiresKvm (VM) app', () => {
+	assert.doesNotThrow(() =>
+		assertInstallAllowed({isAdmin: true, isGeneratedTemplate: true, manifest: {}, requiresKvm: true}),
+	)
+})
+
 // requiresLocalAiClis + non-admin → forbidden.
 test('non-admin blocked from requiresLocalAiClis install (cred-bearing)', () => {
 	assert.throws(

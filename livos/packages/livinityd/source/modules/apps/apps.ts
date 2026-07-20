@@ -55,6 +55,7 @@ import {
 	type LocalCfConfig,
 } from './cf-local.js'
 import {assertInstallAllowed, InstallForbidden} from './install-admin-gate.js'
+import {assertKvmAvailable, assertVmResourcesSane} from './vm-preflight.js'
 import {effectivePublicAccess, isPublicForbidden, type PublicForbiddenSignals} from './public-forbidden.js'
 import type {PublicAccessConfig, PublicAccessInstallSetting} from './public-access.js'
 import {
@@ -654,7 +655,19 @@ export default class Apps {
 		// non-builtin community-repo app (!isGeneratedTemplate). Builtin +
 		// platform-DB apps remain installable by members. Legacy single-user
 		// (no currentUser at the route) passes isAdmin=true. Throws InstallForbidden.
-		assertInstallAllowed({isAdmin, isGeneratedTemplate, manifest})
+		const requiresKvm = getBuiltinApp(appId)?.requiresKvm === true
+		assertInstallAllowed({isAdmin, isGeneratedTemplate, manifest, requiresKvm})
+
+		// Phase 349 (VM-01): hardware-virtualization preflight. A VM app declares
+		// requiresKvm; refuse the install up front when /dev/kvm is absent
+		// rather than letting QEMU fall back to unusable TCG software emulation
+		// ("running" but 5% speed). Resolved from the builtin manifest (the
+		// trust-tier source), not the on-disk manifest.
+		if (requiresKvm) {
+			await assertKvmAvailable()
+			// #6 foot-gun guard: reject absurd guest RAM/CPU vs this box's capacity.
+			assertVmResourcesSane(environmentOverrides ?? {})
+		}
 
 		this.logger.log(`Setting up data directory for ${appId}`)
 		const appDataDirectory = `${this.#livinityd.dataDirectory}/app-data/${appId}`
@@ -3260,6 +3273,18 @@ export default class Apps {
 			manifest = await readManifestInDirectory(appTemplatePath)
 		} catch {
 			throw new Error('App template not found')
+		}
+
+		// Phase 349 (VM-01 security review): VM apps are ADMIN-ONLY. installForUser
+		// is the per-user (non-admin member) install path (routes.ts install → the
+		// role!=='admin' branch), which bypasses assertInstallAllowed entirely — so
+		// a member must not be able to get a per-user VM with /dev/kvm+NET_ADMIN
+		// here. Refuse regardless of caller (v1 VMs are global admin-installed
+		// shared apps, never per-user instances).
+		if (getBuiltinApp(appId)?.requiresKvm) {
+			throw new InstallForbidden(
+				'This app requires admin privileges to install (runs a virtual machine with hardware device access) — per-user VM instances are not supported',
+			)
 		}
 
 		// Allocate a unique port

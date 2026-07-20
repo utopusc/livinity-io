@@ -29,14 +29,19 @@ type GateInput = {
 	isAdmin: boolean
 	isGeneratedTemplate: boolean
 	manifest: {requiresLocalAiClis?: boolean; requiresAiProvider?: boolean} | null | undefined
+	// Phase 349 (VM-01 security review): the app runs a KVM VM (devices:/dev/kvm
+	// + cap_add:NET_ADMIN). Kernel-facing device access → admin-only, even though
+	// it's a builtin (isGeneratedTemplate=true) and carries no AI creds.
+	requiresKvm?: boolean
 }
 
 /**
  * Throws `InstallForbidden` when a non-admin caller attempts a privileged
- * install (cred-bearing app or a new non-builtin community app). No-op for
- * admins and for member installs of plain builtin/platform apps.
+ * install (cred-bearing app, a new non-builtin community app, or a VM app with
+ * kernel-facing device access). No-op for admins and for member installs of
+ * plain builtin/platform apps.
  */
-export function assertInstallAllowed({isAdmin, isGeneratedTemplate, manifest}: GateInput): void {
+export function assertInstallAllowed({isAdmin, isGeneratedTemplate, manifest, requiresKvm}: GateInput): void {
 	if (isAdmin) return
 
 	const usesOperatorCreds =
@@ -44,6 +49,13 @@ export function assertInstallAllowed({isAdmin, isGeneratedTemplate, manifest}: G
 	if (usesOperatorCreds) {
 		throw new InstallForbidden(
 			'This app requires admin privileges to install (uses operator AI credentials)',
+		)
+	}
+
+	// Phase 349 (VM-01): VM apps grant /dev/kvm + NET_ADMIN — admin-only.
+	if (requiresKvm === true) {
+		throw new InstallForbidden(
+			'This app requires admin privileges to install (runs a virtual machine with hardware device access)',
 		)
 	}
 

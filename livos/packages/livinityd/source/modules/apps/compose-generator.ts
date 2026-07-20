@@ -62,6 +62,15 @@ export async function generateAppTemplate(appId: string): Promise<string | null>
 		if (serviceDef.devices && serviceDef.devices.length > 0) {
 			service.devices = [...serviceDef.devices]
 		}
+		// Phase 349 (VM-01): cap_add + stop_grace_period passthrough. Only
+		// builtin/official composes reach this generator, so these survive the
+		// trust gate (marketplace/federated composes never generate through here).
+		if (serviceDef.cap_add && serviceDef.cap_add.length > 0) {
+			service.cap_add = [...serviceDef.cap_add]
+		}
+		if (serviceDef.stop_grace_period) {
+			service.stop_grace_period = serviceDef.stop_grace_period
+		}
 		if (serviceDef.depends_on && serviceDef.depends_on.length > 0) {
 			service.depends_on = [...serviceDef.depends_on]
 		}

@@ -20,6 +20,16 @@ export interface ComposeServiceDef {
   network_mode?: string
   privileged?: boolean
   devices?: string[]
+  // Phase 349 (VM-01): added Linux capabilities. ONLY meaningful on the
+  // builtin/official trust tier (compose-sanitizer strips cap_add for
+  // marketplace apps and assertFederatedComposeSafe HARD-REJECTS it) — the
+  // sanctioned use is the VM app category needing NET_ADMIN for its tap/tun
+  // guest network. Do NOT read this as precedent for other builtin apps.
+  cap_add?: string[]
+  // Phase 349 (VM-01): grace period before SIGKILL on `docker compose stop`.
+  // dockur/qemus VMs need ~2m to shut the guest OS down cleanly (an abrupt
+  // kill risks guest-disk corruption). compose-spec-schema models this natively.
+  stop_grace_period?: string
   depends_on?: string[]
   command?: string[]
   // ENTRYPOINT override (vs `command:` which only overrides CMD). Useful for
@@ -95,6 +105,17 @@ export interface BuiltinAppManifest {
   deterministicPassword?: boolean
   native?: boolean          // true = managed via systemd, not Docker
   nativePort?: number       // the noVNC/streaming port (for Caddy proxy)
+  // Phase 349 (VM-01): this app runs a hardware-accelerated VM and REQUIRES
+  // /dev/kvm. install() preflights kvmAvailable() and refuses when absent —
+  // without KVM, QEMU silently falls back to TCG software emulation (an order
+  // of magnitude slower: "installed and running" but unusable). Refuse loudly
+  // rather than let a user install a VM that appears to work at 5% speed.
+  requiresKvm?: boolean
+  // Phase 349 (VM-01): never auto-eligible for the public dashboard / public
+  // exposure. The public-forbidden defense-in-depth scan only flags
+  // docker.sock/privileged/host-net — a VM compose uses devices+cap_add which
+  // it does NOT catch, so this must be declared explicitly.
+  neverPublic?: boolean
 }
 
 export const BUILTIN_APPS: BuiltinAppManifest[] = [
@@ -183,6 +204,125 @@ export const BUILTIN_APPS: BuiltinAppManifest[] = [
           restart: 'unless-stopped',
           volumes: ['${APP_DATA_DIR}/data:/data', '/var/run/docker.sock:/var/run/docker.sock'],
           ports: ['127.0.0.1:9000:9000'],
+        },
+      },
+    },
+  },
+  {
+    // ── Phase 349 (VM-01): Windows VM via dockur/windows (MIT, ~52k★) ──────────
+    // Runs a full KVM-accelerated Windows guest inside a container with an
+    // unattended install; the guest screen streams in the browser over noVNC on
+    // port 8006. Elevated compose (devices:/dev/kvm+/dev/net/tun + cap_add:
+    // NET_ADMIN) survives ONLY because this is a builtin/official entry (the
+    // sanitizer skips isGeneratedTemplate=true composes). requiresKvm gates
+    // install on real hardware virtualization. BRING-YOUR-OWN Windows license:
+    // LivOS/dockur neither provide nor imply a Windows license or activation.
+    id: 'windows',
+    name: 'Windows',
+    tagline: 'Run Windows in a VM — bring your own license',
+    version: '4.00',
+    category: 'developer-tools',
+    port: 8006,
+    requiresKvm: true,
+    neverPublic: true,
+    defaultUsername: 'Docker',
+    description:
+      'Run a full Windows desktop in a hardware-accelerated virtual machine, streamed to your browser. Windows installs automatically; you interact with it in a web viewer (or connect over RDP on port 3389 for a full-fidelity session). Requires a CPU with hardware virtualization (KVM). You must supply your own valid Windows license — LivOS does not provide Windows or an activation key.',
+    website: 'https://github.com/dockur/windows',
+    developer: 'dockur (MIT)',
+    icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/windows-11.svg',
+    docker: {
+      image: 'dockurr/windows:latest',
+      volumes: ['/storage'],
+    },
+    installOptions: {
+      subdomain: 'windows',
+      environmentOverrides: [
+        { name: 'VERSION', label: 'Windows edition (e.g. 11, 10, 2022)', type: 'string', default: '11', required: true },
+        { name: 'RAM_SIZE', label: 'RAM (e.g. 4G, 8G)', type: 'string', default: '4G', required: true },
+        { name: 'CPU_CORES', label: 'CPU cores', type: 'string', default: '2', required: true },
+        { name: 'DISK_SIZE', label: 'Disk size (e.g. 64G)', type: 'string', default: '64G', required: true },
+        { name: 'USERNAME', label: 'Windows account username', type: 'string', default: 'Docker', required: true },
+        { name: 'PASSWORD', label: 'Windows account password', type: 'password', required: true },
+      ],
+    },
+    compose: {
+      mainService: 'windows',
+      services: {
+        windows: {
+          image: 'dockurr/windows:latest',
+          restart: 'on-failure',
+          // SANCTIONED elevated directives for the VM app category (VM-01):
+          // /dev/kvm = hardware acceleration; /dev/net/tun + NET_ADMIN = the
+          // guest's user-mode tap network. NOTHING ELSE elevated (no privileged,
+          // no docker.sock, no host bind outside the app data dir).
+          devices: ['/dev/kvm', '/dev/net/tun'],
+          cap_add: ['NET_ADMIN'],
+          stop_grace_period: '2m',
+          environment: {
+            VERSION: '11',
+            RAM_SIZE: '4G',
+            CPU_CORES: '2',
+            DISK_SIZE: '64G',
+          },
+          volumes: ['${APP_DATA_DIR}/storage:/storage'],
+          // noVNC web viewer (8006) is proxied to the subdomain behind
+          // forward_auth; RDP (3389) is published loopback-only for users who
+          // want a full-fidelity local session via an SSH/VPN tunnel.
+          ports: ['127.0.0.1:8006:8006', '127.0.0.1:3389:3389/tcp', '127.0.0.1:3389:3389/udp'],
+        },
+      },
+    },
+  },
+  {
+    // ── Phase 349 (VM-01): any-OS VM via qemus/qemu (MIT, ~2k★) ────────────────
+    // The generalized sibling of dockur/windows: boots ANY guest OS (Ubuntu,
+    // Debian, Fedora, Arch, Alpine, … or a custom ISO/qcow2/img URL) via the
+    // BOOT env var, KVM-accelerated, browser noVNC on 8006. Same sanctioned
+    // elevated compose + requiresKvm gate as the Windows entry.
+    id: 'vm',
+    name: 'Virtual Machine',
+    tagline: 'Run any OS in a VM — Linux, BSD, or a custom image',
+    version: '8.00',
+    category: 'developer-tools',
+    port: 8006,
+    requiresKvm: true,
+    neverPublic: true,
+    description:
+      'Run any operating system in a hardware-accelerated virtual machine, streamed to your browser. Pick a Linux/BSD distribution by name or point it at a custom ISO/qcow2/img (local file or URL). Requires a CPU with hardware virtualization (KVM).',
+    website: 'https://github.com/qemus/qemu',
+    developer: 'qemus (MIT)',
+    icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/qemu.svg',
+    docker: {
+      image: 'qemux/qemu:latest',
+      volumes: ['/storage'],
+    },
+    installOptions: {
+      subdomain: 'vm',
+      environmentOverrides: [
+        { name: 'BOOT', label: 'OS name or image URL (e.g. ubuntu, debian, alpine, or an ISO/qcow2 URL)', type: 'string', default: 'ubuntu', required: true },
+        { name: 'RAM_SIZE', label: 'RAM (e.g. 2G, 4G)', type: 'string', default: '2G', required: true },
+        { name: 'CPU_CORES', label: 'CPU cores', type: 'string', default: '2', required: true },
+        { name: 'DISK_SIZE', label: 'Disk size (e.g. 16G)', type: 'string', default: '16G', required: true },
+      ],
+    },
+    compose: {
+      mainService: 'qemu',
+      services: {
+        qemu: {
+          image: 'qemux/qemu:latest',
+          restart: 'on-failure',
+          devices: ['/dev/kvm', '/dev/net/tun'],
+          cap_add: ['NET_ADMIN'],
+          stop_grace_period: '2m',
+          environment: {
+            BOOT: 'ubuntu',
+            RAM_SIZE: '2G',
+            CPU_CORES: '2',
+            DISK_SIZE: '16G',
+          },
+          volumes: ['${APP_DATA_DIR}/storage:/storage'],
+          ports: ['127.0.0.1:8006:8006'],
         },
       },
     },

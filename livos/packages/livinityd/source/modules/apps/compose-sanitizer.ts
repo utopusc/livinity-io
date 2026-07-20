@@ -165,6 +165,20 @@ export function sanitizeNonBuiltinCompose(
 			removed.push(`${serviceName}.cap_add`)
 		}
 
+		// Phase 349 (VM-01 security review, CRITICAL): devices (any).
+		// `devices` maps a HOST device node into the container (e.g.
+		// `/dev/sda:/dev/sda:rwm` = raw host block-device access, `/dev/mem`,
+		// `/dev/kvm`). It became a modeled, load-bearing field only with the VM
+		// app category — which is builtin/official-tier and never reaches this
+		// sanitizer. Any NON-builtin compose (deployCustom / marketplace) that
+		// declares `devices` is smuggling host-device access from an unprivileged
+		// multi-user account, so strip it unconditionally here (the federated gate
+		// already HARD-REJECTS it; this is the marketplace/deployCustom twin).
+		if ('devices' in service) {
+			delete service.devices
+			removed.push(`${serviceName}.devices`)
+		}
+
 		// security_opt: strip *unconfined entries
 		if (Array.isArray(service.security_opt)) {
 			const before = service.security_opt.length
