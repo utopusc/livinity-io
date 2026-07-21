@@ -13,8 +13,10 @@
 import {useState} from 'react'
 
 import {Loading} from '@/components/ui/loading'
+import {Button} from '@/shadcn-components/ui/button'
 import {t} from '@/utils/i18n'
 
+import {CreateVmDialog} from './components/create-vm-dialog'
 import {VmEmptyState} from './components/vm-empty-state'
 import {VmList} from './components/vm-list'
 import {decideVmVisibility} from './decide-vm-visibility'
@@ -22,7 +24,7 @@ import {useVmList} from './hooks/use-vm-list'
 
 export default function VmApp() {
 	const {isAdmin, isLoading, error, vms} = useVmList()
-	const [, setCreateOpen] = useState(false)
+	const [createOpen, setCreateOpen] = useState(false)
 	const visibility = decideVmVisibility({isLoading, isAdmin})
 
 	if (visibility === 'loading') {
@@ -51,11 +53,18 @@ export default function VmApp() {
 			) : vms.length === 0 ? (
 				<VmEmptyState onCreate={() => setCreateOpen(true)} />
 			) : (
-				<div className='min-h-0 flex-1 overflow-y-auto'>
-					<VmList vms={vms} />
-				</div>
+				<>
+					<div className='flex shrink-0 items-center justify-end border-b border-border-default p-3'>
+						<Button size='sm' variant='primary' onClick={() => setCreateOpen(true)}>
+							{t('vm.create.button')}
+						</Button>
+					</div>
+					<div className='min-h-0 flex-1 overflow-y-auto'>
+						<VmList vms={vms} />
+					</div>
+				</>
 			)}
-			{/* CreateVmDialog wired in 352-03 into the setCreateOpen placeholder */}
+			{createOpen && <CreateVmDialog open={createOpen} onOpenChange={setCreateOpen} />}
 		</div>
 	)
 }
