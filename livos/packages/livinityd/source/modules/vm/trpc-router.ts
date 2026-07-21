@@ -33,15 +33,66 @@ import {TRPCError} from '@trpc/server'
 
 import {router, adminProcedure} from '../server/trpc/trpc.js'
 import {KvmUnavailable, VmResourceInvalid} from '../apps/vm-preflight.js'
+import {WINDOWS_EDITION_KEYS, LINUX_DISTRO_KEYS} from './vm-os-catalog.js'
+import type {CreateVmInput} from './vm-manager.js'
 
-// ── Input schemas (forward-compatible with 351's GPU/host-capacity bounds) ────
-const kindSchema = z.enum(['windows', 'linux'])
+// ── Input schemas ─────────────────────────────────────────────────────────────
 const resourcesSchema = z.object({
 	cpus: z.number().int().positive(),
 	ramMiB: z.number().int().positive(),
 	diskGiB: z.number().int().positive(),
 })
-const createInput = z.object({name: z.string().min(1), kind: kindSchema, resources: resourcesSchema})
+const nameSchema = z.string().min(1)
+
+/**
+ * Phase 351 (VMCREATE-01): a custom guest-image source. Only http/https URLs are
+ * accepted — a `file://`/`ftp://`/etc. scheme is refused HERE, imitating
+ * webapps/url-validator.ts's ALLOWED_SCHEMES allowlist. `z.string().url()` alone
+ * accepts `file://` (a valid URL), so the `.refine` protocol check is the actual
+ * gate; `.max(2048)` bounds it (shortcut-schema.ts:38 precedent).
+ */
+const customImageSchema = z.object({
+	customImage: z.object({
+		url: z
+			.string()
+			.url()
+			.max(2048)
+			.refine(
+				(v) => {
+					try {
+						return ['http:', 'https:'].includes(new URL(v).protocol)
+					} catch {
+						return false
+					}
+				},
+				{message: 'Only http/https custom-image URLs are allowed'},
+			),
+	}),
+})
+
+/**
+ * The create input, discriminated by `kind` so a Windows edition and a Linux
+ * distro/custom-image are mutually exclusive by construction. macOS absence
+ * (VMCREATE-01) is enforced BY CONSTRUCTION — `kind` is a two-literal union and
+ * the edition/distro enums simply never contain a macOS value, so an unlisted
+ * value is a zod parse failure with no explicit rejection branch. This schema is
+ * the cheap first gate (defense-in-depth); the manager-level checks are
+ * load-bearing.
+ */
+const createInput = z.discriminatedUnion('kind', [
+	z.object({
+		kind: z.literal('windows'),
+		name: nameSchema,
+		resources: resourcesSchema,
+		os: z.object({edition: z.enum(WINDOWS_EDITION_KEYS)}),
+	}),
+	z.object({
+		kind: z.literal('linux'),
+		name: nameSchema,
+		resources: resourcesSchema,
+		os: z.union([z.object({distro: z.enum(LINUX_DISTRO_KEYS)}), customImageSchema]),
+	}),
+])
 const idInput = z.object({id: z.string().uuid()})
 // delete requires an explicit destruction acknowledgement — z.literal(true) means
 // a missing/false `confirm` is refused at the zod boundary, before the manager.
@@ -62,7 +113,7 @@ function requireVm(ctx: {livinityd?: {vm?: unknown}}) {
 interface VmManagerSurface {
 	list(): Promise<unknown>
 	get(id: string): Promise<unknown>
-	create(input: {name: string; kind: 'windows' | 'linux'; resources: {cpus: number; ramMiB: number; diskGiB: number}}): Promise<{id: string}>
+	create(input: CreateVmInput): Promise<{id: string}>
 	start(id: string): Promise<void>
 	stop(id: string): Promise<void>
 	restart(id: string): Promise<void>

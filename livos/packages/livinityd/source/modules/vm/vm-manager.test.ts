@@ -26,7 +26,7 @@ vi.mock('../apps/vm-preflight.js', () => ({
 // Mock fs-extra so delete()'s rm -rf never touches a real disk (Task 2).
 vi.mock('fs-extra', () => ({default: {remove: vi.fn(async () => {})}}))
 
-const {composeUp, composeStop, composeRestart, composeDownVolumes, dockerInspectStatus} =
+const {composeUp, composeStop, composeRestart, composeDownVolumes, dockerInspectStatus, renderVmCompose} =
 	await import('./vm-docker.js')
 const {assertKvmAvailable, assertVmResourcesSane} = await import('../apps/vm-preflight.js')
 const fse = (await import('fs-extra')).default
@@ -57,8 +57,20 @@ function makeManager() {
 	return {vm: new VmManager(livinityd), store, logger}
 }
 
-const WIN = {name: 'my-win', kind: 'windows' as const, resources: {cpus: 2, ramMiB: 4096, diskGiB: 64}}
-const LINUX = {name: 'my-linux', kind: 'linux' as const, resources: {cpus: 2, ramMiB: 2048, diskGiB: 16}}
+// Phase 351 (VMCREATE-01): CreateVmInput now carries a discriminated `os`
+// selection — a Windows edition or a Linux distro/custom-image.
+const WIN = {
+	name: 'my-win',
+	kind: 'windows' as const,
+	resources: {cpus: 2, ramMiB: 4096, diskGiB: 64},
+	os: {edition: '11' as const},
+}
+const LINUX = {
+	name: 'my-linux',
+	kind: 'linux' as const,
+	resources: {cpus: 2, ramMiB: 2048, diskGiB: 16},
+	os: {distro: 'ubuntu' as const},
+}
 
 async function records(store: ReturnType<typeof makeFakeStore>): Promise<VmInstanceRecord[]> {
 	return ((await store.get('vmInstances')) as VmInstanceRecord[] | undefined) ?? []
@@ -121,6 +133,35 @@ describe('create — preflight-gated + detached', () => {
 		await vm.create(LINUX)
 		const [rec] = await records(store)
 		expect(rec.rdpPort).toBeUndefined()
+	})
+
+	// VMCREATE-01: the OS selection must ACTUALLY reach the compose render (not a
+	// no-op) — assert osEnv is threaded into renderVmCompose as VERSION / BOOT.
+	test('windows: threads VERSION into renderVmCompose osEnv', async () => {
+		const {vm} = makeManager()
+		await vm.create({...WIN, os: {edition: '10'}})
+		expect(renderVmCompose).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({osEnv: {VERSION: '10'}}),
+		)
+	})
+
+	test('linux distro: threads BOOT into renderVmCompose osEnv', async () => {
+		const {vm} = makeManager()
+		await vm.create({...LINUX, os: {distro: 'debian'}})
+		expect(renderVmCompose).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({osEnv: {BOOT: 'debian'}}),
+		)
+	})
+
+	test('linux custom image: threads the URL into BOOT', async () => {
+		const {vm} = makeManager()
+		await vm.create({...LINUX, os: {customImage: {url: 'https://cdn.example/boot.iso'}}})
+		expect(renderVmCompose).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({osEnv: {BOOT: 'https://cdn.example/boot.iso'}}),
+		)
 	})
 
 	test('KVM absent: rejects BEFORE any registry write or compose-up (registry stays empty)', async () => {

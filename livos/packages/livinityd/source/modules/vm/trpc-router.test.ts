@@ -55,8 +55,16 @@ function makeCtx(opts: {role?: string; vmMock?: ReturnType<typeof makeVmMock>} =
 const caller = (opts?: Parameters<typeof makeCtx>[0]) => vm.createCaller(makeCtx(opts))
 
 // A valid uuid + a valid create payload reused across the happy-path assertions.
+// Phase 351 (VMCREATE-01): create now carries a discriminated `os` selection —
+// a linux distro here (the manager delegate must receive the whole payload incl.
+// `os`, so it is part of the reused fixture).
 const UUID = '11111111-1111-4111-8111-111111111111'
-const VALID_CREATE = {name: 'My VM', kind: 'linux', resources: {cpus: 2, ramMiB: 4096, diskGiB: 40}}
+const VALID_CREATE = {
+	name: 'My VM',
+	kind: 'linux',
+	resources: {cpus: 2, ramMiB: 4096, diskGiB: 40},
+	os: {distro: 'ubuntu'},
+}
 
 describe('vm router — namespace shape', () => {
 	test('exposes list / get / create / start / stop / restart / delete', () => {
@@ -189,6 +197,71 @@ describe('zod validation rejects bad input BEFORE the manager (T-350-15)', () =>
 		const vmMock = makeVmMock()
 		await expect(caller({vmMock}).delete({id: UUID, confirm: false} as any)).rejects.toThrow()
 		expect(vmMock.delete).not.toHaveBeenCalled()
+	})
+})
+
+describe('OS selection discriminated union (VMCREATE-01) — schema is the cheap first gate', () => {
+	test('windows + a valid edition is accepted and delegated with the os field', async () => {
+		const vmMock = makeVmMock()
+		const payload = {name: 'Win VM', kind: 'windows', resources: {cpus: 2, ramMiB: 4096, diskGiB: 64}, os: {edition: '11'}}
+		await caller({vmMock}).create(payload)
+		expect(vmMock.create).toHaveBeenCalledWith(payload)
+	})
+
+	test('linux + a valid distro is accepted and delegated', async () => {
+		const vmMock = makeVmMock()
+		await caller({vmMock}).create(VALID_CREATE)
+		expect(vmMock.create).toHaveBeenCalledWith(VALID_CREATE)
+	})
+
+	test('linux + a custom https image URL is accepted', async () => {
+		const vmMock = makeVmMock()
+		const payload = {
+			name: 'Custom VM',
+			kind: 'linux',
+			resources: {cpus: 2, ramMiB: 4096, diskGiB: 40},
+			os: {customImage: {url: 'https://cdn.example/boot.iso'}},
+		}
+		await caller({vmMock}).create(payload)
+		expect(vmMock.create).toHaveBeenCalledWith(payload)
+	})
+
+	test('windows + a macOS/unlisted edition is refused at the boundary (never reaches the manager)', async () => {
+		const vmMock = makeVmMock()
+		await expect(
+			caller({vmMock}).create({name: 'x', kind: 'windows', resources: {cpus: 2, ramMiB: 4096, diskGiB: 64}, os: {edition: 'macos'}}),
+		).rejects.toThrow()
+		expect(vmMock.create).not.toHaveBeenCalled()
+	})
+
+	test('linux + an unlisted distro is refused at the boundary', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).create({...VALID_CREATE, os: {distro: 'plan9'}})).rejects.toThrow()
+		expect(vmMock.create).not.toHaveBeenCalled()
+	})
+
+	test('linux + a custom file:// image URL is refused (http/https only)', async () => {
+		const vmMock = makeVmMock()
+		await expect(
+			caller({vmMock}).create({...VALID_CREATE, os: {customImage: {url: 'file:///etc/passwd'}}}),
+		).rejects.toThrow()
+		expect(vmMock.create).not.toHaveBeenCalled()
+	})
+
+	test('linux + a custom ftp:// image URL is refused (http/https only)', async () => {
+		const vmMock = makeVmMock()
+		await expect(
+			caller({vmMock}).create({...VALID_CREATE, os: {customImage: {url: 'ftp://example.com/boot.iso'}}}),
+		).rejects.toThrow()
+		expect(vmMock.create).not.toHaveBeenCalled()
+	})
+
+	test('a create with the os field entirely missing is refused', async () => {
+		const vmMock = makeVmMock()
+		await expect(
+			caller({vmMock}).create({name: 'x', kind: 'linux', resources: {cpus: 2, ramMiB: 4096, diskGiB: 40}}),
+		).rejects.toThrow()
+		expect(vmMock.create).not.toHaveBeenCalled()
 	})
 })
 

@@ -40,6 +40,7 @@ import {
 import {vmPortAllocator, vmRdpPortAllocator} from './vm-ports.js'
 import {getVmTemplate} from './vm-template.js'
 import {VmRegistry, type VmInstanceRecord} from './vm-registry.js'
+import type {WindowsEdition, LinuxDistro} from './vm-os-catalog.js'
 
 /** The reported live-state enum (VMLIFE-02). Superset of the app state enum. */
 export type VmState = 'creating' | 'installing-os' | 'running' | 'stopped' | 'error'
@@ -57,10 +58,26 @@ export interface VmView {
 	createdAt: number
 }
 
-export interface CreateVmInput {
-	name: string
-	kind: 'windows' | 'linux'
-	resources: {cpus: number; ramMiB: number; diskGiB: number}
+export type VmResources = {cpus: number; ramMiB: number; diskGiB: number}
+
+/** Phase 351 (VMCREATE-01): the guest-OS selection, discriminated by `kind`. */
+export type WindowsOsSelection = {edition: WindowsEdition}
+export type LinuxOsSelection = {distro: LinuxDistro} | {customImage: {url: string}}
+
+/**
+ * The create payload. `os` is discriminated by `kind` so a Windows edition and a
+ * Linux distro/custom-image are mutually exclusive by construction (mirrors the
+ * trpc-router discriminated-union schema — the router is the cheap first gate,
+ * this type is the manager-level contract). macOS is unrepresentable: no OS
+ * selection literal admits it.
+ */
+export type CreateVmInput =
+	| {name: string; kind: 'windows'; resources: VmResources; os: WindowsOsSelection}
+	| {name: string; kind: 'linux'; resources: VmResources; os: LinuxOsSelection}
+
+/** Resolve a Linux `BOOT` env value: a distro name, or a custom-image URL. */
+function resolveLinuxBootValue(os: LinuxOsSelection): string {
+	return 'customImage' in os ? os.customImage.url : os.distro
 }
 
 // ── Per-VM keyed single-flight (module scope) ────────────────────────────────
@@ -112,13 +129,22 @@ export class VmManager {
 	async create(input: CreateVmInput): Promise<{id: string}> {
 		const {name, kind, resources} = input
 
+		// Phase 351 (VMCREATE-01): resolve the guest-OS selection into its env value
+		// — VERSION for a Windows edition, BOOT for a Linux distro or custom-image
+		// URL. `input.kind` (not the destructured `kind`) drives the narrowing so TS
+		// resolves `input.os` to the correct branch.
+		const osEnv: Record<string, string> =
+			input.kind === 'windows' ? {VERSION: input.os.edition} : {BOOT: resolveLinuxBootValue(input.os)}
+
 		// (1) Preflights BEFORE any provisioning (T-350-07). A throw propagates and
 		//     leaves the registry EMPTY — no /dev/kvm ⇒ clean refusal, never a
 		//     silent TCG-emulation trap; an insane RAM/CPU request is refused here.
+		//     The OS selection rides the SAME env object literal as CPU/RAM/DISK.
 		const env = {
 			CPU_CORES: String(resources.cpus),
 			RAM_SIZE: `${resources.ramMiB}M`,
 			DISK_SIZE: `${resources.diskGiB}G`,
+			...osEnv,
 		}
 		await assertKvmAvailable()
 		assertVmResourcesSane(env)
@@ -129,8 +155,10 @@ export class VmManager {
 		const novncPort = vmPortAllocator.allocate()
 		const rdpPort = kind === 'windows' ? vmRdpPortAllocator.allocate() : undefined
 
-		// (3) Render the 349 template → compose file on disk.
-		const rendered = renderVmCompose(getVmTemplate(kind), {id, dataDir, novncPort, rdpPort, resources})
+		// (3) Render the 349 template → compose file on disk. The OS selection
+		//     (osEnv) is threaded through so the container actually boots the chosen
+		//     guest OS — renderVmCompose escapes any user-supplied '$' before merge.
+		const rendered = renderVmCompose(getVmTemplate(kind), {id, dataDir, novncPort, rdpPort, resources, osEnv})
 		const composePath = await writeVmCompose(dataDir, rendered)
 
 		// (4) Persist the registry record (lastIntent:'running' so reconcileOnBoot

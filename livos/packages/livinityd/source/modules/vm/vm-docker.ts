@@ -69,6 +69,13 @@ export interface RenderVmComposeOpts {
 	novncPort: number
 	rdpPort?: number
 	resources: {cpus: number; ramMiB: number; diskGiB: number}
+	/**
+	 * Phase 351 (VMCREATE-01): the guest-OS selection env override — `VERSION`
+	 * (windows edition) or `BOOT` (linux distro / custom-image URL). Merged into
+	 * `environment` the same way CPU/RAM/DISK are. Values may be user-supplied
+	 * (a custom-image URL), so they are `$`-escaped before the merge (see below).
+	 */
+	osEnv?: Record<string, string>
 }
 
 /**
@@ -91,6 +98,10 @@ export function renderVmCompose(template: VmTemplate, opts: RenderVmComposeOpts)
 		CPU_CORES: String(opts.resources.cpus),
 		RAM_SIZE: `${opts.resources.ramMiB}M`,
 		DISK_SIZE: `${opts.resources.diskGiB}G`,
+		// Phase 351 (VMCREATE-01): layer the guest-OS selection (VERSION/BOOT) over
+		// the template default, exactly where CPU/RAM/DISK are merged. Any '$' in a
+		// user-supplied value (a custom-image URL) is escaped just before this merge.
+		...(opts.osEnv ?? {}),
 	}
 
 	// Host side rendered loopback-only; container side stays as the template's
