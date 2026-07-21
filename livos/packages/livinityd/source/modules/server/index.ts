@@ -200,6 +200,12 @@ const APEX_PUBLIC_GET_PREFIXES = ['/files/share/', '/invite/', '/public']
 // regexless prefixes above don't cover). GET-only — see apexSessionGate.
 const APEX_STATIC_ASSET_RE = /\.(js|css|map|svg|png|jpg|ico|woff2?|webmanifest)$/
 
+// Phase 353-01 (T-353-02) — VM id must be UUID-shaped before ANY registry
+// lookup (mirrors the z.string().uuid() every vm.* procedure enforces). A
+// non-UUID id is rejected with 404 (never 500) on both the /vm/:id HTTP proxy
+// and the /vm/:id/websockify upgrade branch — path-traversal/SSRF discipline.
+const VM_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 // Iterate over all routes and wrap them in an async handler
 const wrapHandlersWithAsyncHandler = (router: express.Router) => {
 	// Loop over each layer of the router stack
@@ -928,6 +934,77 @@ class Server {
 				return proxy(request, response, next)
 			} catch (error) {
 				this.logger.error(`App proxy error for ${appId}:`, error)
+				return next(error)
+			}
+		})
+
+		// ── VM noVNC screen proxy (Phase 353-01, VMVIEW-01) ─────────────────
+		// Routes /vm/<id>/* to the VM's loopback noVNC port (container 8006 →
+		// host novncPort in [16100,16200), 350 compose invariant). Mirrors the
+		// /app/:appId proxy above. The HTTP/asset leg is forward_auth-gated at
+		// Caddy (@vm_screen) AND defense-in-depth by the apex session gate; the
+		// WS leg (/vm/:id/websockify) is handled MANUALLY in the upgrade handler
+		// (Caddy routes it unconditionally — @vm_screen_ws — so Express is its
+		// sole auth gate). WS is DISABLED on this middleware, exactly like /app.
+		//
+		// SSRF/port-confusion discipline (T-353-02): `:id` is UUID-validated
+		// BEFORE any lookup (404, never 500, on a non-UUID); the target port
+		// comes ONLY from the range-checked registry, never from client input.
+		const vmProxyCache = new Map<string, ReturnType<typeof createProxyMiddleware>>()
+
+		this.app.use('/vm/:id', async (request, response, next) => {
+			const id = request.params.id
+
+			try {
+				// Validate UUID shape BEFORE the registry lookup (mirrors the
+				// z.string().uuid() discipline every vm.* procedure uses). A
+				// non-UUID id → 404 (NOT 500): path-traversal/SSRF via the id.
+				if (!VM_ID_RE.test(id)) {
+					this.logger.verbose(`VM proxy: non-UUID id rejected: ${id}`)
+					return response.status(404).json({error: 'not found'})
+				}
+
+				const vm = await this.livinityd.vm.get(id)
+				if (!vm) {
+					this.logger.verbose(`VM proxy: VM ${id} not found`)
+					return response.status(404).json({error: 'not found'})
+				}
+
+				// Known but not running → honest 409 the UI can map to a start
+				// affordance (VMVIEW-02: never a wrong-port proxy, never a blank
+				// success). novncPort is always allocated; readiness is the state.
+				if (vm.state !== 'running') {
+					this.logger.verbose(`VM proxy: VM ${id} not running (state=${vm.state})`)
+					return response.status(409).json({error: 'vm-not-running', state: vm.state})
+				}
+
+				// Cache the proxy per id (port is stable per VM: allocated at
+				// create, released at delete). The target port is registry-sourced.
+				let proxy = vmProxyCache.get(id)
+				if (!proxy) {
+					this.logger.log(`VM proxy: Creating proxy for ${id} -> 127.0.0.1:${vm.novncPort}`)
+					proxy = createProxyMiddleware({
+						target: `http://127.0.0.1:${vm.novncPort}`,
+						changeOrigin: true,
+						// ws disabled — WS upgrades handled manually in upgrade handler.
+						// pathRewrite MUST strip the full /vm/<id> prefix or the noVNC
+						// page's root-relative assets 404 → blank frame (VMVIEW-02 forbids).
+						pathRewrite: (path) => path.replace(`/vm/${id}`, '') || '/',
+						logProvider: () => ({
+							log: this.logger.verbose,
+							debug: this.logger.verbose,
+							info: this.logger.verbose,
+							warn: this.logger.verbose,
+							error: this.logger.error,
+						}),
+					})
+					vmProxyCache.set(id, proxy)
+				}
+
+				this.logger.verbose(`VM proxy: Routing /vm/${id} to 127.0.0.1:${vm.novncPort}`)
+				return proxy(request, response, next)
+			} catch (error) {
+				this.logger.error(`VM proxy error for ${id}:`, error)
 				return next(error)
 			}
 		})
