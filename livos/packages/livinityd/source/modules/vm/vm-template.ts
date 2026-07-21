@@ -138,7 +138,69 @@ export type VmTemplateKind = 'windows' | 'linux'
 
 /**
  * Pure lookup — no I/O. Returns the immutable template for the given guest kind.
+ *
+ * WR-01 (349 review): exhaustive `switch` + `never` guard. This is a
+ * security-ground-truth lookup that decides which elevated compose gets
+ * materialized, so the day a third `VmTemplateKind` is added the compiler MUST
+ * fail here rather than silently aliasing the unknown kind to the Linux
+ * template (wrong image/ports/env). Fail-to-compile beats silent mis-map.
  */
 export function getVmTemplate(kind: VmTemplateKind): VmTemplate {
-	return kind === 'windows' ? WINDOWS_VM_TEMPLATE : LINUX_VM_TEMPLATE
+	switch (kind) {
+		case 'windows':
+			return WINDOWS_VM_TEMPLATE
+		case 'linux':
+			return LINUX_VM_TEMPLATE
+		default: {
+			const _exhaustive: never = kind
+			throw new Error(`unknown VM kind: ${String(_exhaustive)}`)
+		}
+	}
+}
+
+/**
+ * CR-01 (349 review): the canonical set of VM app-ids that MUST be treated as
+ * KVM/privileged regardless of which resolution tier (builtin, platform
+ * catalog, future vm-module) produced the compose. Belt-and-suspenders for the
+ * install admin-gate + KVM preflight now that the `windows`/`vm` builtins are
+ * gone (their `getBuiltinApp(id)?.requiresKvm` flag is permanently `undefined`).
+ *   - `windows` + `vm` — legacy builtin ids / any existing install or catalog row.
+ *   - `linux` — the re-homed qemus template id (349 IN-03: thread all three).
+ */
+export const VM_APP_IDS: ReadonlySet<string> = new Set(['windows', 'vm', 'linux'])
+
+/**
+ * CR-01 fail-closed detector: does this RESOLVED compose grant KVM device
+ * access? Pure string scan (no I/O). Any reference to the kernel-facing
+ * `/dev/kvm` device means the container is a hardware VM and must clear the
+ * admin gate + KVM preflight — no matter what provenance flag the template
+ * carries (a "trusted" catalog row must not mint a privileged VM on flag alone).
+ */
+export function composeRequiresKvm(composeText: string): boolean {
+	return composeText.includes('/dev/kvm')
+}
+
+/**
+ * CR-01 defense-in-depth: strip the `/dev/kvm` device from every service of a
+ * parsed compose object (mutates + returns it). Used by the platform-catalog
+ * fetch to de-fang a NON-VM catalog row that carries the kernel-facing KVM
+ * device — no non-VM app has any legitimate use for `/dev/kvm`. Deliberately
+ * leaves `/dev/dri` (GPU transcode) and `/dev/net/tun` + `NET_ADMIN` (VPN) devices
+ * intact — those are legitimately used by non-VM catalog apps and are not the
+ * VM privilege-escalation vector. Returns whether anything was stripped.
+ */
+export function stripKvmDeviceFromCompose(compose: unknown): {compose: unknown; stripped: boolean} {
+	let stripped = false
+	const services = (compose as {services?: Record<string, {devices?: unknown[]}>} | null)?.services
+	if (services && typeof services === 'object') {
+		for (const svc of Object.values(services)) {
+			if (svc && Array.isArray(svc.devices)) {
+				const before = svc.devices.length
+				svc.devices = svc.devices.filter((d) => !String(d).includes('/dev/kvm'))
+				if (svc.devices.length !== before) stripped = true
+				if (svc.devices.length === 0) delete svc.devices
+			}
+		}
+	}
+	return {compose, stripped}
 }

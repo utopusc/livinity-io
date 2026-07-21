@@ -56,6 +56,7 @@ import {
 } from './cf-local.js'
 import {assertInstallAllowed, InstallForbidden} from './install-admin-gate.js'
 import {assertKvmAvailable, assertVmResourcesSane} from './vm-preflight.js'
+import {VM_APP_IDS, composeRequiresKvm, stripKvmDeviceFromCompose} from '../vm/vm-template.js'
 import {effectivePublicAccess, isPublicForbidden, type PublicForbiddenSignals} from './public-forbidden.js'
 import type {PublicAccessConfig, PublicAccessInstallSetting} from './public-access.js'
 import {
@@ -655,14 +656,31 @@ export default class Apps {
 		// non-builtin community-repo app (!isGeneratedTemplate). Builtin +
 		// platform-DB apps remain installable by members. Legacy single-user
 		// (no currentUser at the route) passes isAdmin=true. Throws InstallForbidden.
-		const requiresKvm = getBuiltinApp(appId)?.requiresKvm === true
+		// Phase 349 (CR-01): derive requiresKvm from the RESOLVED compose that will
+		// actually run — NOT from getBuiltinApp alone. 349 emptied the windows/vm
+		// builtins, so `getBuiltinApp(id)?.requiresKvm` is now permanently undefined
+		// for a VM; a catalog-served (isGeneratedTemplate=true, sanitizer-skipped)
+		// VM compose would otherwise slip the admin gate + KVM preflight and hand a
+		// non-admin member a /dev/kvm+NET_ADMIN container. Fail-closed OR: builtin
+		// flag, catalog manifest flag, the hardcoded VM id set, and a scan of the
+		// resolved compose for the kernel-facing /dev/kvm device — the gate fires
+		// regardless of which tier produced the compose, never on provenance alone.
+		let resolvedComposeText = ''
+		try {
+			resolvedComposeText = await fse.readFile(`${appTemplatePath}/docker-compose.yml`, 'utf8')
+		} catch {}
+		const requiresKvm =
+			getBuiltinApp(appId)?.requiresKvm === true ||
+			(manifest as {requiresKvm?: boolean}).requiresKvm === true ||
+			VM_APP_IDS.has(appId) ||
+			composeRequiresKvm(resolvedComposeText)
 		assertInstallAllowed({isAdmin, isGeneratedTemplate, manifest, requiresKvm})
 
 		// Phase 349 (VM-01): hardware-virtualization preflight. A VM app declares
 		// requiresKvm; refuse the install up front when /dev/kvm is absent
 		// rather than letting QEMU fall back to unusable TCG software emulation
-		// ("running" but 5% speed). Resolved from the builtin manifest (the
-		// trust-tier source), not the on-disk manifest.
+		// ("running" but 5% speed). requiresKvm is now derived from the resolved
+		// compose (CR-01), so this fires for a catalog/module VM too, not just a builtin.
 		if (requiresKvm) {
 			await assertKvmAvailable()
 			// #6 foot-gun guard: reject absurd guest RAM/CPU vs this box's capacity.
@@ -2059,8 +2077,35 @@ export default class Apps {
 			const tmpDir = path.join(os.tmpdir(), `livos-platform-${appId}-${Date.now()}`)
 			await fse.mkdirp(tmpDir)
 
-			// Write the docker-compose.yml from platform DB
-			await fse.writeFile(path.join(tmpDir, 'docker-compose.yml'), data.docker_compose)
+			// Write the docker-compose.yml from platform DB.
+			// Phase 349 (CR-01 defense-in-depth): the platform catalog is NOT the
+			// sanctioned VM source — VMs are backend-owned templates (modules/vm)
+			// consumed programmatically, never the app-install path. A catalog row is
+			// TRUSTED (isGeneratedTemplate=true → skips the non-builtin sanitizer), so a
+			// row carrying the kernel-facing /dev/kvm device would mint a privileged VM
+			// container purely on catalog provenance. Strip /dev/kvm from any catalog app
+			// that is NOT a known VM id — fail-closed; no non-VM app has any legitimate
+			// use for the KVM device. (GPU /dev/dri and VPN /dev/net/tun + NET_ADMIN are
+			// left intact — legitimately used by transcoder/VPN catalog apps.) Known VM
+			// ids keep it but are admin-gated + KVM-preflighted at the install call site.
+			let composeToWrite: string = data.docker_compose
+			if (!VM_APP_IDS.has(appId) && typeof data.docker_compose === 'string' && data.docker_compose.includes('/dev/kvm')) {
+				try {
+					const yaml = (await import('js-yaml')).default
+					const parsed = yaml.load(data.docker_compose)
+					const {compose, stripped} = stripKvmDeviceFromCompose(parsed)
+					if (stripped) {
+						composeToWrite = yaml.dump(compose, {lineWidth: -1, noRefs: true})
+						this.logger.log(`Phase 349 CR-01: stripped /dev/kvm from non-VM catalog compose for ${appId}`)
+					}
+				} catch {
+					// Could not parse to strip → refuse rather than write an un-de-fanged
+					// KVM compose for a non-VM id (fail-closed).
+					this.logger.error(`Phase 349 CR-01: refusing unparseable catalog compose carrying /dev/kvm for ${appId}`)
+					return null
+				}
+			}
+			await fse.writeFile(path.join(tmpDir, 'docker-compose.yml'), composeToWrite)
 
 			// Build manifest from API response data
 			const manifest = {
@@ -3275,13 +3320,25 @@ export default class Apps {
 			throw new Error('App template not found')
 		}
 
-		// Phase 349 (VM-01 security review): VM apps are ADMIN-ONLY. installForUser
-		// is the per-user (non-admin member) install path (routes.ts install → the
-		// role!=='admin' branch), which bypasses assertInstallAllowed entirely — so
-		// a member must not be able to get a per-user VM with /dev/kvm+NET_ADMIN
-		// here. Refuse regardless of caller (v1 VMs are global admin-installed
-		// shared apps, never per-user instances).
-		if (getBuiltinApp(appId)?.requiresKvm) {
+		// Phase 349 (VM-01 security review + CR-01): VM apps are ADMIN-ONLY.
+		// installForUser is the per-user (non-admin member) install path (routes.ts
+		// install → the role!=='admin' branch), which bypasses assertInstallAllowed
+		// entirely — so a member must not be able to get a per-user VM with
+		// /dev/kvm+NET_ADMIN here. Refuse regardless of caller (v1 VMs are global
+		// admin-installed shared apps, never per-user instances). CR-01: key the
+		// refusal off the RESOLVED compose (+ VM id set / manifest flag), not
+		// getBuiltinApp alone — the windows/vm builtins are gone, so a catalog-served
+		// VM compose would otherwise pass this gate for a member.
+		let perUserComposeText = ''
+		try {
+			perUserComposeText = await fse.readFile(`${appTemplatePath}/docker-compose.yml`, 'utf8')
+		} catch {}
+		const perUserRequiresKvm =
+			getBuiltinApp(appId)?.requiresKvm === true ||
+			(manifest as {requiresKvm?: boolean}).requiresKvm === true ||
+			VM_APP_IDS.has(appId) ||
+			composeRequiresKvm(perUserComposeText)
+		if (perUserRequiresKvm) {
 			throw new InstallForbidden(
 				'This app requires admin privileges to install (runs a virtual machine with hardware device access) — per-user VM instances are not supported',
 			)
