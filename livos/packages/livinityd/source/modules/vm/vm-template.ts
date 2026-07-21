@@ -134,6 +134,18 @@ export const LINUX_VM_TEMPLATE: VmTemplate = {
 	},
 }
 
+/**
+ * Phase 351 (VMCREATE-01): the bring-your-own-license notice, SINGLE-SOURCED.
+ * This is the exact verbatim sentence already embedded in
+ * `WINDOWS_VM_TEMPLATE.description` (line 67) — exported as its own const so the
+ * OS catalog + the future `vm.createOptions` surface (plan 03) can carry it to
+ * the UI WITHOUT restating the copy (a `vm-os-catalog.test.ts` drift-guard
+ * asserts it stays a substring of the description). Additive const only — the
+ * `description` string, `devices`/`cap_add`, and `getVmTemplate` are untouched.
+ */
+export const WINDOWS_BYO_LICENSE_NOTICE =
+	'You must supply your own valid Windows license — LivOS does not provide Windows or an activation key.'
+
 export type VmTemplateKind = 'windows' | 'linux'
 
 /**
