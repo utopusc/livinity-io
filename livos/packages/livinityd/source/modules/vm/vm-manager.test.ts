@@ -160,6 +160,57 @@ describe('create — preflight-gated + detached', () => {
 			expect(logger.error).toHaveBeenCalled()
 		})
 	})
+
+	// IN-02: a failed detached create must release its ports and flip to
+	// stopped-intent so reconcileOnBoot never re-attempts a known-broken VM and
+	// the allocator does not leak the slots until an explicit delete().
+	test('a failed detached create releases its ports and marks stopped-intent (IN-02)', async () => {
+		const {vm, store} = makeManager()
+		const novncRel = vi.spyOn(vmPortAllocator, 'release')
+		const rdpRel = vi.spyOn(vmRdpPortAllocator, 'release')
+		vi.mocked(composeUp).mockRejectedValueOnce(new Error('bind fail'))
+
+		const {id} = await vm.create(WIN)
+
+		await vi.waitFor(async () => {
+			const rec = (await records(store)).find((r) => r.id === id)
+			expect(rec?.lastIntent).toBe('stopped')
+			expect(rec?.lastError).toContain('bind fail')
+		})
+
+		const rec = (await records(store)).find((r) => r.id === id)!
+		expect(novncRel).toHaveBeenCalledWith(rec.novncPort)
+		expect(rdpRel).toHaveBeenCalledWith(rec.rdpPort)
+
+		novncRel.mockRestore()
+		rdpRel.mockRestore()
+	})
+
+	// IN-03: if the registry.patch inside the failure handler itself throws, the
+	// handler must swallow-and-log — never surface as an unhandledRejection and
+	// never break the already-returned create().
+	test('the detached failure handler swallows a patch error (IN-03: no unhandledRejection)', async () => {
+		const {vm, logger} = makeManager()
+		vi.mocked(composeUp).mockRejectedValueOnce(new Error('up fail'))
+		const patchSpy = vi
+			.spyOn(VmRegistry.prototype, 'patch')
+			.mockRejectedValueOnce(new Error('store down'))
+
+		// create() itself resolves — the detached failure never reaches the caller.
+		const {id} = await vm.create(LINUX)
+		expect(id).toBeTruthy()
+
+		// The handler logged the patch failure (and the create failure) rather than
+		// rejecting; if it had escaped, the terminal .catch(()=>{}) still absorbs it.
+		await vi.waitFor(() => {
+			expect(logger.error).toHaveBeenCalledWith(
+				expect.stringContaining('failure-handler patch failed'),
+				expect.anything(),
+			)
+		})
+
+		patchSpy.mockRestore()
+	})
 })
 
 describe('list/get — live state derivation (never the stored flag)', () => {

@@ -158,9 +158,28 @@ export class VmManager {
 			.then(() => endVmFlight(id))
 			.catch(async (err) => {
 				endVmFlight(id)
-				await this.#registry.patch(id, {lastError: String(err?.message ?? err)})
+				// (IN-02) A permanently-failed create must not keep holding its ports
+				// nor keep a running-intent record that reconcileOnBoot re-attempts on
+				// every boot. Release the allocated ports (idempotent — delete() may
+				// release them again harmlessly) and flip to honest stopped-intent so
+				// the known-broken VM stops being auto-retried.
+				vmPortAllocator.release(novncPort)
+				if (rdpPort !== undefined) vmRdpPortAllocator.release(rdpPort)
+				try {
+					await this.#registry.patch(id, {
+						lastIntent: 'stopped',
+						lastError: String(err?.message ?? err),
+					})
+				} catch (patchErr) {
+					// (IN-03) A store write inside the failure handler must never itself
+					// become an unhandledRejection — swallow-and-log.
+					this.#livinityd.logger.error(`[vm] create ${id} failure-handler patch failed`, patchErr)
+				}
 				this.#livinityd.logger.error(`[vm] create ${id} failed`, err)
 			})
+			// (IN-03) Terminal guard: the async handler above can never reject
+			// unhandled even if a logger/patch path throws unexpectedly.
+			.catch(() => {})
 
 		return {id}
 	}
