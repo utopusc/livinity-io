@@ -15,6 +15,8 @@
 import {access, constants} from 'node:fs/promises'
 import os from 'node:os'
 
+import {getDiskUsageByPath} from '../system/system.js'
+
 export class KvmUnavailable extends Error {
 	constructor(message: string) {
 		super(message)
@@ -104,12 +106,16 @@ export function parseSizeToBytes(v: string | undefined): number | null {
 	return n * mult
 }
 
-export type HostCapacity = {totalMemBytes: number; cpuCount: number}
+// Phase 351 (VMCREATE-02): `diskFreeBytes` widens the injected host fact so the
+// guest DISK_SIZE is bounded against the data-dir filesystem's REAL free space
+// alongside RAM/CPU. It is injected (never read inline) so the verdict stays pure.
+export type HostCapacity = {totalMemBytes: number; cpuCount: number; diskFreeBytes: number}
 
 /**
  * Returns a refusal reason (or null to allow). Rejects a guest RAM request that
  * exceeds `ramFraction` of host RAM (default 0.9 — leave headroom for the host +
- * QEMU overhead) or a CPU_CORES request above the host core count.
+ * QEMU overhead), a CPU_CORES request above the host core count, or a DISK_SIZE
+ * request above the data-dir's free space. Stays PURE (no I/O — host is injected).
  */
 export function vmResourceVerdict(
 	env: Record<string, string | undefined>,
@@ -125,11 +131,59 @@ export function vmResourceVerdict(
 	if (cores !== null && Number.isFinite(cores) && cores > host.cpuCount) {
 		return `Requested VM CPU cores (${env.CPU_CORES}) exceeds this box's ${host.cpuCount} cores.`
 	}
+	const disk = parseSizeToBytes(env.DISK_SIZE)
+	if (disk !== null && disk > host.diskFreeBytes) {
+		return `Requested VM disk (${env.DISK_SIZE}) exceeds free space (${(host.diskFreeBytes / 1024 ** 3).toFixed(1)}G available).`
+	}
 	return null
 }
 
-/** Throws VmResourceInvalid when the requested guest RAM/CPU is unreasonable for this host. */
-export function assertVmResourcesSane(env: Record<string, string | undefined>): void {
-	const reason = vmResourceVerdict(env, {totalMemBytes: os.totalmem(), cpuCount: os.cpus().length})
+/**
+ * Live host-capacity probe reused by the create gate. RAM/CPU are node-native
+ * (never throw); disk free space is read via the shared `getDiskUsageByPath` df
+ * seam against the VM data-dir filesystem. FAIL-CLOSED: a df probe failure yields
+ * `diskFreeBytes: 0` so any positive DISK_SIZE is REFUSED rather than silently
+ * allowed (the never-throws-degrades-safely contract — a broken probe must not
+ * open the OOM foot-gun). Do NOT reimplement disk-free — reuse the system seam.
+ */
+export async function probeHostCapacity(dataDir: string): Promise<HostCapacity> {
+	const totalMemBytes = os.totalmem()
+	const cpuCount = os.cpus().length
+	let diskFreeBytes = 0
+	try {
+		diskFreeBytes = (await getDiskUsageByPath(dataDir)).available
+	} catch (error) {
+		// Fail closed — refuse, don't silently allow an over-large VM (T-351-09).
+		console.error('[vm-preflight] probeHostCapacity: disk-free probe failed; failing closed (diskFreeBytes=0)', error)
+	}
+	return {totalMemBytes, cpuCount, diskFreeBytes}
+}
+
+/**
+ * Throws VmResourceInvalid when the requested guest RAM/CPU/DISK is unreasonable
+ * for this host. STAYS SYNCHRONOUS ON PURPOSE — it does no I/O of its own (the
+ * verdict is pure). The live disk-free probe is the CALLER'S job: the VM create
+ * gate does `assertVmResourcesSane(env, await probeHostCapacity(dataDir))`, so the
+ * `await` sits on `probeHostCapacity` (a `Promise<HostCapacity>`) — a DROPPED await
+ * there is a TYPE ERROR tsc catches (Promise<HostCapacity> ≠ HostCapacity), which
+ * is strictly safer than an async assert whose dropped `Promise<void>` await tsc
+ * cannot catch (Pitfall 2 / T-351-07).
+ *
+ * `host` is optional so the ORIGINAL 349 app-install caller (apps.ts, which calls
+ * this synchronously with one arg and MUST keep throwing to abort a bad install)
+ * is unaffected: the default self-probes RAM/CPU and leaves disk UNBOUNDED
+ * (Infinity) — exactly its prior RAM/CPU-only behavior, no new disk gate on the
+ * app path. Keeps throwing VmResourceInvalid so callVm()'s BAD_REQUEST mapping
+ * still applies.
+ */
+export function assertVmResourcesSane(
+	env: Record<string, string | undefined>,
+	host: HostCapacity = {
+		totalMemBytes: os.totalmem(),
+		cpuCount: os.cpus().length,
+		diskFreeBytes: Number.POSITIVE_INFINITY,
+	},
+): void {
+	const reason = vmResourceVerdict(env, host)
 	if (reason) throw new VmResourceInvalid(reason)
 }

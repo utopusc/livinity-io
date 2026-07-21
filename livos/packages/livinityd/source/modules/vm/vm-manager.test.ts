@@ -17,18 +17,41 @@ vi.mock('./vm-docker.js', () => ({
 	writeVmCompose: vi.fn(async (dataDir: string) => `${dataDir}/docker-compose.yml`),
 }))
 
-// Mock the 349 preflights so tests toggle KVM-present/absent + resource sanity.
-vi.mock('../apps/vm-preflight.js', () => ({
-	assertKvmAvailable: vi.fn(async () => {}),
-	assertVmResourcesSane: vi.fn(() => {}),
-}))
+// Mock the 349/351 preflights so tests toggle KVM-present/absent + resource sanity.
+// Phase 351: assertVmResourcesSane stays SYNC (pure verdict; the async lives in the
+// disk probe) and takes an injected host; probeHostCapacity is the live disk-free
+// probe create() awaits to build that host. The mock returns a roomy capacity by
+// default so the happy path clears the gate.
+vi.mock('../apps/vm-preflight.js', () => {
+	// Local stand-in for the real error class (vi.mock is hoisted — can't close over
+	// the real import). vm-manager maps nothing off it directly; the negative test
+	// asserts create() rejects with THIS instance, mirroring the real throw.
+	class VmResourceInvalid extends Error {
+		constructor(message: string) {
+			super(message)
+			this.name = 'VmResourceInvalid'
+		}
+	}
+	return {
+		assertKvmAvailable: vi.fn(async () => {}),
+		assertVmResourcesSane: vi.fn(() => {}),
+		probeHostCapacity: vi.fn(async () => ({
+			totalMemBytes: 64 * 1024 ** 3,
+			cpuCount: 32,
+			diskFreeBytes: 4096 * 1024 ** 3,
+		})),
+		VmResourceInvalid,
+	}
+})
 
 // Mock fs-extra so delete()'s rm -rf never touches a real disk (Task 2).
 vi.mock('fs-extra', () => ({default: {remove: vi.fn(async () => {})}}))
 
 const {composeUp, composeStop, composeRestart, composeDownVolumes, dockerInspectStatus, renderVmCompose} =
 	await import('./vm-docker.js')
-const {assertKvmAvailable, assertVmResourcesSane} = await import('../apps/vm-preflight.js')
+const {assertKvmAvailable, assertVmResourcesSane, probeHostCapacity, VmResourceInvalid} = await import(
+	'../apps/vm-preflight.js'
+)
 const fse = (await import('fs-extra')).default
 const {vmPortAllocator, vmRdpPortAllocator} = await import('./vm-ports.js')
 const {VmRegistry} = await import('./vm-registry.js')
@@ -110,6 +133,14 @@ describe('create — preflight-gated + detached', () => {
 		expect(id).toBeTruthy()
 		expect(assertKvmAvailable).toHaveBeenCalledOnce()
 		expect(assertVmResourcesSane).toHaveBeenCalledOnce()
+		// Phase 351: the disk free space is probed LIVE against the data-dir, and the
+		// freshly-probed capacity (never a cached value) is injected into the async
+		// resource gate alongside the env.
+		expect(probeHostCapacity).toHaveBeenCalledWith('/fake/data')
+		expect(assertVmResourcesSane).toHaveBeenCalledWith(
+			expect.objectContaining({DISK_SIZE: '64G'}),
+			expect.objectContaining({diskFreeBytes: expect.any(Number)}),
+		)
 
 		const all = await records(store)
 		expect(all).toHaveLength(1)
@@ -184,6 +215,37 @@ describe('create — preflight-gated + detached', () => {
 
 		expect(await records(store)).toHaveLength(0)
 		expect(composeUp).not.toHaveBeenCalled()
+	})
+
+	// VMCREATE-02 / T-351-07 (the assertion tsc CANNOT give): an over-large DISK
+	// request must be REFUSED before ANY provisioning. The live probe reports a
+	// nearly-full data-dir filesystem, so the (async) resource gate rejects — and
+	// because the call site is properly `await`ed, that rejection propagates and the
+	// docker/compose seam is NEVER reached. A dropped await would silently no-op the
+	// disk check and let composeUp fire; this proves the await is load-bearing.
+	test('too-big disk: rejects BEFORE provisioning — docker seam called 0 times (T-351-07 dropped-await guard)', async () => {
+		const {vm, store} = makeManager()
+		// The data-dir filesystem is almost full (1G free)...
+		vi.mocked(probeHostCapacity).mockResolvedValueOnce({
+			totalMemBytes: 64 * 1024 ** 3,
+			cpuCount: 32,
+			diskFreeBytes: 1 * 1024 ** 3,
+		})
+		// ...so the (sync) resource assert refuses the 512G disk request.
+		vi.mocked(assertVmResourcesSane).mockImplementationOnce(() => {
+			throw new VmResourceInvalid('Requested VM disk (512G) exceeds free space (1.0G available).')
+		})
+
+		await expect(
+			vm.create({...WIN, resources: {cpus: 2, ramMiB: 4096, diskGiB: 512}}),
+		).rejects.toBeInstanceOf(VmResourceInvalid)
+
+		// The gate fired BEFORE provisioning: no registry write, no compose-up. This
+		// is exactly the failure `tsc` cannot catch (a dropped Promise<void> await).
+		expect(await records(store)).toHaveLength(0)
+		expect(composeUp).toHaveBeenCalledTimes(0)
+		// And the free space was probed LIVE against the data-dir (never cached).
+		expect(probeHostCapacity).toHaveBeenCalledWith('/fake/data')
 	})
 
 	test('a failed detached compose-up writes lastError to the registry (never crashes create)', async () => {

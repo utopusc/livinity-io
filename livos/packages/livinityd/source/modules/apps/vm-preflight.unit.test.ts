@@ -3,13 +3,17 @@ import {access} from 'node:fs/promises'
 
 import {afterEach, describe, expect, test, vi} from 'vitest'
 
+import {getDiskUsageByPath} from '../system/system.js'
 import {
 	kvmVerdict,
 	probeKvm,
 	assertKvmAvailable,
 	KvmUnavailable,
+	VmResourceInvalid,
 	parseSizeToBytes,
 	vmResourceVerdict,
+	probeHostCapacity,
+	assertVmResourcesSane,
 } from './vm-preflight.js'
 
 vi.mock('node:fs/promises', () => ({
@@ -17,7 +21,13 @@ vi.mock('node:fs/promises', () => ({
 	constants: {F_OK: 0, R_OK: 4, W_OK: 2},
 }))
 
+// Phase 351 (VMCREATE-02): mock the shared df seam so probeHostCapacity is offline.
+vi.mock('../system/system.js', () => ({
+	getDiskUsageByPath: vi.fn(),
+}))
+
 const mockAccess = vi.mocked(access)
+const mockDiskUsage = vi.mocked(getDiskUsageByPath)
 
 afterEach(() => vi.clearAllMocks())
 
@@ -79,9 +89,10 @@ describe('parseSizeToBytes', () => {
 })
 
 describe('vmResourceVerdict (#6 foot-gun guard)', () => {
-	const host = {totalMemBytes: 16 * 1024 ** 3, cpuCount: 8}
+	// Phase 351: HostCapacity now carries diskFreeBytes (100G free here).
+	const host = {totalMemBytes: 16 * 1024 ** 3, cpuCount: 8, diskFreeBytes: 100 * 1024 ** 3}
 	test('reasonable request → allow', () => {
-		expect(vmResourceVerdict({RAM_SIZE: '4G', CPU_CORES: '2'}, host)).toBeNull()
+		expect(vmResourceVerdict({RAM_SIZE: '4G', CPU_CORES: '2', DISK_SIZE: '64G'}, host)).toBeNull()
 	})
 	test('RAM over 90% of host → refuse', () => {
 		const r = vmResourceVerdict({RAM_SIZE: '999G'}, host)
@@ -92,5 +103,55 @@ describe('vmResourceVerdict (#6 foot-gun guard)', () => {
 	})
 	test('missing/blank env → allow (defaults applied later)', () => {
 		expect(vmResourceVerdict({}, host)).toBeNull()
+	})
+
+	// Phase 351 (VMCREATE-02): the disk bound.
+	test('disk over free space → refuse, naming the resource + requested vs available', () => {
+		const r = vmResourceVerdict({DISK_SIZE: '256G'}, {...host, diskFreeBytes: 30 * 1024 ** 3})
+		expect(r).toMatch(/disk/i)
+		expect(r).toContain('256G') // requested named
+		expect(r).toContain('30.0G available') // available named
+	})
+	test('disk fits free space → allow (null)', () => {
+		expect(vmResourceVerdict({DISK_SIZE: '20G'}, {...host, diskFreeBytes: 30 * 1024 ** 3})).toBeNull()
+	})
+	test('fail-closed: zero free space refuses any positive disk request', () => {
+		expect(vmResourceVerdict({DISK_SIZE: '1G'}, {...host, diskFreeBytes: 0})).toMatch(/disk/i)
+	})
+})
+
+describe('probeHostCapacity (live probe — disk via getDiskUsageByPath, fail-closed)', () => {
+	test('df success → diskFreeBytes = available; RAM/CPU from os', async () => {
+		mockDiskUsage.mockResolvedValueOnce({size: 500 * 1024 ** 3, totalUsed: 200 * 1024 ** 3, available: 300 * 1024 ** 3})
+		const cap = await probeHostCapacity('/fake/data')
+		expect(cap.diskFreeBytes).toBe(300 * 1024 ** 3)
+		expect(cap.totalMemBytes).toBeGreaterThan(0)
+		expect(cap.cpuCount).toBeGreaterThan(0)
+		expect(mockDiskUsage).toHaveBeenCalledWith('/fake/data')
+	})
+	test('df throws → fails CLOSED with diskFreeBytes 0 (never throws)', async () => {
+		mockDiskUsage.mockRejectedValueOnce(new Error('df: no such path'))
+		const cap = await probeHostCapacity('/fake/data')
+		expect(cap.diskFreeBytes).toBe(0)
+		expect(cap.totalMemBytes).toBeGreaterThan(0)
+	})
+})
+
+describe('assertVmResourcesSane (sync — throws VmResourceInvalid; disk injected via host)', () => {
+	const host = {totalMemBytes: 16 * 1024 ** 3, cpuCount: 8, diskFreeBytes: 100 * 1024 ** 3}
+	test('sane request → no throw', () => {
+		expect(() => assertVmResourcesSane({RAM_SIZE: '4G', CPU_CORES: '2', DISK_SIZE: '32G'}, host)).not.toThrow()
+	})
+	test('over-large disk → throws VmResourceInvalid (propagates synchronously to the caller)', () => {
+		expect(() =>
+			assertVmResourcesSane({DISK_SIZE: '999G'}, {...host, diskFreeBytes: 10 * 1024 ** 3}),
+		).toThrow(VmResourceInvalid)
+	})
+	// The legacy app-install caller (apps.ts) passes NO host: the default self-probes
+	// RAM/CPU and leaves disk UNBOUNDED, so a bare DISK_SIZE never trips a false
+	// refusal on the app path (only RAM/CPU are guarded there, exactly as in 349).
+	test('default host (no host arg): RAM/CPU still guarded, disk unbounded', () => {
+		expect(() => assertVmResourcesSane({DISK_SIZE: '999999G'})).not.toThrow()
+		expect(() => assertVmResourcesSane({CPU_CORES: '999999'})).toThrow(VmResourceInvalid)
 	})
 })

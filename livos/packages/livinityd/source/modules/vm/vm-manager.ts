@@ -26,7 +26,7 @@ import crypto from 'node:crypto'
 
 import fse from 'fs-extra'
 
-import {assertKvmAvailable, assertVmResourcesSane} from '../apps/vm-preflight.js'
+import {assertKvmAvailable, assertVmResourcesSane, probeHostCapacity} from '../apps/vm-preflight.js'
 import type Livinityd from '../../index.js'
 import {
 	composeDownVolumes,
@@ -147,7 +147,14 @@ export class VmManager {
 			...osEnv,
 		}
 		await assertKvmAvailable()
-		assertVmResourcesSane(env)
+		// Phase 351 (VMCREATE-02): sanity-bound RAM/CPU/DISK against the host's REAL
+		// capacity BEFORE provisioning. The disk free space is re-probed LIVE every
+		// create (never a cached value — it drifts mid-session, T-351-08); the probe
+		// reads the SAME data-dir the VM's vm-data/<id> root lives under so the bound
+		// reflects the real target filesystem. The `await` sits on probeHostCapacity
+		// (Promise<HostCapacity>) — dropping it is a tsc TYPE error, not a silent
+		// Promise<void> no-op (the assert itself is pure/sync; Pitfall 2 / T-351-07).
+		assertVmResourcesSane(env, await probeHostCapacity(this.#livinityd.dataDirectory))
 
 		// (2) Allocate identity + the VM's OWN data dir (VMSEC-02) + loopback ports.
 		const id = crypto.randomUUID()
