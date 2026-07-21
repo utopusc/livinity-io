@@ -1,0 +1,131 @@
+/**
+ * Phase 350 (VMLIFE-01) — VM docker orchestration seam.
+ *
+ * The ONLY new file that shells to docker. Mirrors the apps.ts:425 compose
+ * idiom (`docker compose --file … --project-name … up -d`) and the
+ * app-state-reconcile.ts:59-63 dynamic-`import('execa')` inspect shape so the
+ * whole seam is offline-testable via `vi.mock('execa')`. NO dockerode (that is
+ * the unrelated remote multi-host subsystem), NO appScript wrapper.
+ *
+ * renderVmCompose materializes the Phase-349 template's elevated set VERBATIM
+ * into a compose-file object: `${APP_DATA_DIR}` substituted for the VM's OWN
+ * `vm-data/<id>` dir (VMSEC-02 — no host bind outside it) and host-side ports
+ * rendered loopback-only (`127.0.0.1:`). The elevated devices/cap_add/
+ * stop_grace_period are copied straight from the template, never re-declared
+ * here — the template's compile-time literal types remain the VMSEC-02 backstop.
+ */
+
+import {$} from 'execa'
+import fse from 'fs-extra'
+import yaml from 'js-yaml'
+
+import type {VmTemplate} from './vm-template.js'
+
+/**
+ * Bring a VM container up. Throws on failure — the caller (350-02 vm-manager)
+ * decides fatal vs. writing `lastError` to the registry.
+ */
+export async function composeUp(composePath: string, projectName: string): Promise<void> {
+	await $`docker compose --file ${composePath} --project-name ${projectName} up -d`
+}
+
+/**
+ * Gracefully stop a VM container — `stop` honors the template's
+ * `stop_grace_period: '2m'` (no guest disk corruption).
+ */
+export async function composeStop(composePath: string, projectName: string): Promise<void> {
+	await $`docker compose --file ${composePath} --project-name ${projectName} stop`
+}
+
+/** Restart a VM container (compose restart — honors stop_grace_period on the stop half). */
+export async function composeRestart(composePath: string, projectName: string): Promise<void> {
+	await $`docker compose --file ${composePath} --project-name ${projectName} restart`
+}
+
+/**
+ * Tear a VM container down AND remove its volumes — the delete path. Callers on
+ * the cleanup path `.catch()` this into a logger (mirrors apps.ts cleanup),
+ * never blocking the delete.
+ */
+export async function composeDownVolumes(composePath: string, projectName: string): Promise<void> {
+	await $`docker compose --file ${composePath} --project-name ${projectName} down --volumes`
+}
+
+/**
+ * Live container status via `docker inspect`. Dynamic `import('execa')` INSIDE
+ * the function (not a top-level import) so `vi.mock('execa')` intercepts it in
+ * offline tests — the exact shape app-state-reconcile.ts:59-63 uses. The
+ * container name is server-derived (`vm-<id>`), never request input.
+ */
+export async function dockerInspectStatus(containerName: string): Promise<string> {
+	const {$: exec} = await import('execa')
+	const result = await exec`docker inspect --format={{.State.Status}} ${containerName}`
+	return result.stdout.trim()
+}
+
+export interface RenderVmComposeOpts {
+	id: string
+	dataDir: string
+	novncPort: number
+	rdpPort?: number
+	resources: {cpus: number; ramMiB: number; diskGiB: number}
+}
+
+/**
+ * Render a full compose-FILE object (`{services: {vm: {...}}}`) from a 349
+ * template. Deep-clone + `${APP_DATA_DIR}` replaceAll to the VM's OWN dir, then
+ * layer on the requested resources (guest env) and the allocated loopback host
+ * ports. container_name is set EXPLICITLY to `vm-<id>` so dockerInspectStatus
+ * targets a deterministic name (compose's default `<project>-<service>-1` would
+ * be non-deterministic).
+ */
+export function renderVmCompose(template: VmTemplate, opts: RenderVmComposeOpts): object {
+	// Deep-clone the immutable template compose + substitute the token BEFORE we
+	// read any field off it (Pitfall 2 — no host bind outside the VM's own dir).
+	const svc = JSON.parse(
+		JSON.stringify(template.compose).replaceAll('${APP_DATA_DIR}', opts.dataDir),
+	)
+
+	const environment = {
+		...svc.environment,
+		CPU_CORES: String(opts.resources.cpus),
+		RAM_SIZE: `${opts.resources.ramMiB}M`,
+		DISK_SIZE: `${opts.resources.diskGiB}G`,
+	}
+
+	// Host side rendered loopback-only; container side stays as the template's
+	// fixed 8006 (noVNC) / 3389 (RDP). RDP is windows-only (opts.rdpPort present).
+	const ports = [`127.0.0.1:${opts.novncPort}:8006`]
+	if (opts.rdpPort !== undefined) {
+		ports.push(`127.0.0.1:${opts.rdpPort}:3389/tcp`, `127.0.0.1:${opts.rdpPort}:3389/udp`)
+	}
+
+	return {
+		services: {
+			vm: {
+				container_name: `vm-${opts.id}`,
+				image: svc.image,
+				restart: svc.restart,
+				// Elevated set copied VERBATIM from the template — never re-declared here.
+				devices: svc.devices,
+				cap_add: svc.cap_add,
+				stop_grace_period: svc.stop_grace_period,
+				environment,
+				volumes: svc.volumes,
+				ports,
+			},
+		},
+	}
+}
+
+/**
+ * Write a rendered compose object to `${dataDir}/docker-compose.yml` (mirrors
+ * App#writeCompose, app.ts:159-161). Ensures the dir exists first. Returns the
+ * written path.
+ */
+export async function writeVmCompose(dataDir: string, rendered: object): Promise<string> {
+	const composePath = `${dataDir}/docker-compose.yml`
+	await fse.ensureDir(dataDir)
+	await fse.writeFile(composePath, yaml.dump(rendered))
+	return composePath
+}
