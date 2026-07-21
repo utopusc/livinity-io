@@ -391,4 +391,42 @@ describe('reconcileOnBoot — boot durability (closes the cleanDockerState wipe)
 		expect(composeUp).toHaveBeenCalledWith('/p/f2.yml', 'vm-f2')
 		expect(logger.error).toHaveBeenCalled()
 	})
+
+	// WR-01: the in-memory allocators reset to empty on every daemon restart, but
+	// the ports on-disk are still bound by the re-upped containers. reconcileOnBoot
+	// MUST re-prime the allocators from EVERY persisted record (running AND stopped)
+	// before any subsequent create() can re-hand-out a live port and collide on bind.
+	test('reconcileOnBoot re-primes the port allocators from every persisted record (running AND stopped)', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {id: 'p1', containerName: 'vm-p1', composePath: '/p/p1.yml', kind: 'windows', lastIntent: 'running', novncPort: 16100, rdpPort: 16200})
+		await seed(store, {id: 'p2', containerName: 'vm-p2', composePath: '/p/p2.yml', lastIntent: 'stopped', novncPort: 16101}) // stopped still owns its port
+
+		const novncReserve = vi.spyOn(vmPortAllocator, 'reserve')
+		const rdpReserve = vi.spyOn(vmRdpPortAllocator, 'reserve')
+
+		await vm.reconcileOnBoot()
+
+		// Every persisted noVNC port is reserved — including the STOPPED VM's.
+		expect(novncReserve).toHaveBeenCalledWith(16100)
+		expect(novncReserve).toHaveBeenCalledWith(16101)
+		// The windows RDP port is reserved too; the linux VM has no RDP port to reserve.
+		expect(rdpReserve).toHaveBeenCalledWith(16200)
+		expect(rdpReserve).toHaveBeenCalledTimes(1)
+
+		novncReserve.mockRestore()
+		rdpReserve.mockRestore()
+	})
+
+	// WR-01 end-to-end: after priming, a fresh allocate() on the same (module
+	// singleton) allocator must never return a reserved port. Uses a fresh
+	// PortAllocator to stay isolated from cumulative cross-test state.
+	test('reserve()+allocate() interaction: a primed port is never re-handed-out', async () => {
+		const {PortAllocator} = await import('../streaming/port-allocator.js')
+		const a = new PortAllocator({min: 16100, max: 16103})
+		a.reserve(16100)
+		a.reserve(16101)
+		// Only 16102 is free — allocate must pick it, never a reserved port.
+		expect(a.allocate()).toBe(16102)
+		expect(() => a.allocate()).toThrow(/exhausted/)
+	})
 })

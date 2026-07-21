@@ -113,4 +113,31 @@ describe('PortAllocator', () => {
 		a.release(15901)
 		expect(a.allocate()).toBe(15901)
 	})
+
+	it('Test 10: reserve(p) marks a port in-use so a later allocate() skips it (boot-priming)', () => {
+		const a = new PortAllocator({min: 15900, max: 15903})
+		// Pre-declare 15900 (as reconcileOnBoot does for a persisted VM port) —
+		// no cursor move, so the cursor is still at min.
+		a.reserve(15900)
+		expect(a.inUseCount).toBe(1)
+		// A fresh allocate() must NOT re-hand-out the reserved port.
+		expect(a.allocate()).toBe(15901)
+		expect(a.allocate()).toBe(15902)
+		// Range is now full (15900 reserved + 15901/15902 allocated).
+		expect(() => a.allocate()).toThrow(PortRangeExhaustedError)
+	})
+
+	it('Test 11: reserve() is idempotent + ignores out-of-range values; reserved ports recycle after release()', () => {
+		const a = new PortAllocator({min: 15900, max: 15903})
+		a.reserve(15901)
+		a.reserve(15901) // idempotent — still one slot
+		a.reserve(80) // below range — no-op
+		a.reserve(15903) // exclusive upper bound — no-op
+		a.reserve(-1) // no-op
+		expect(a.inUseCount).toBe(1)
+		// A reserved port is a normal in-use slot: releasing it returns it to the pool.
+		a.release(15901)
+		expect(a.inUseCount).toBe(0)
+		expect(a.allocate()).toBe(15900)
+	})
 })

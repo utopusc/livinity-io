@@ -81,6 +81,20 @@ export class PortAllocator {
 	}
 
 	/**
+	 * Mark an already-known port as in-use WITHOUT advancing the cursor — the
+	 * boot-priming primitive. Used to re-declare ports that were persisted before
+	 * this (in-memory) allocator was constructed (e.g. VM registry records after a
+	 * daemon restart), so a subsequent allocate() never re-hands-out a port that a
+	 * live container already binds. Idempotent; out-of-range values are ignored
+	 * (defensive — callers can reserve() unconditionally while priming).
+	 */
+	reserve(port: number): void {
+		if (!Number.isInteger(port)) return
+		if (port < this.min || port >= this.max) return
+		this.inUse.add(port)
+	}
+
+	/**
 	 * Release a port back to the available pool. Idempotent — double-release
 	 * is a no-op. Ports outside the allocator's [min, max) range are silently
 	 * ignored (defensive — callers can release() unconditionally on cleanup

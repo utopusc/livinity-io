@@ -311,7 +311,22 @@ export class VmManager {
 	 * the template's `stop_grace_period: '2m'`.
 	 */
 	async reconcileOnBoot(): Promise<void> {
-		for (const inst of await this.#registry.list()) {
+		const all = await this.#registry.list()
+
+		// (WR-01) Re-prime the IN-MEMORY allocators from every persisted record
+		// BEFORE any subsequent create() can run. The allocators reset to empty on
+		// a daemon restart, but the ports on-disk are still bound by the re-upped
+		// containers below — without this, the next create() deterministically
+		// re-hands-out an existing VM's port and its composeUp fails on a bind
+		// collision. Prime BOTH running and stopped records: a stopped VM still
+		// owns its port for when it is later started. reserve() is a no-cursor-move
+		// mark, so ports freed by a later delete() still recycle normally.
+		for (const inst of all) {
+			vmPortAllocator.reserve(inst.novncPort)
+			if (inst.rdpPort !== undefined) vmRdpPortAllocator.reserve(inst.rdpPort)
+		}
+
+		for (const inst of all) {
 			if (inst.lastIntent !== 'running') continue
 			try {
 				await composeUp(inst.composePath, `vm-${inst.id}`)
