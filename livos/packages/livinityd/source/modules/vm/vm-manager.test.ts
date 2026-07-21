@@ -37,12 +37,17 @@ const {VmManager} = await import('./vm-manager.js')
 // ── In-memory fake store + manager harness ───────────────────────────────────
 function makeFakeStore() {
 	const data: Record<string, unknown> = {}
-	return {
-		get: async (key: string) => data[key],
-		set: async (key: string, value: unknown) => {
-			data[key] = value
-		},
+	const get = async (key: string) => data[key]
+	const set = async (key: string, value: unknown) => {
+		data[key] = value
 	}
+	// Mirrors FileStore.getWriteLock: runs the job with the same get/set. These
+	// vm-manager tests are single-flow (never fire concurrent registry mutations),
+	// so an inline runner is faithful; the real PQueue serialization that WR-02
+	// depends on is exercised against a REAL FileStore in vm-registry.test.ts.
+	const getWriteLock = async (job: (m: {get: typeof get; set: typeof set}) => Promise<void>) =>
+		job({get, set})
+	return {get, set, getWriteLock}
 }
 
 function makeManager() {
@@ -146,11 +151,14 @@ describe('create — preflight-gated + detached', () => {
 
 		const {id} = await vm.create(LINUX)
 
+		// Wait for BOTH detached effects — the registry write and the log — since
+		// they settle across separate microtask hops (the getWriteLock-serialized
+		// patch adds one) and racing the assertion between them would be flaky.
 		await vi.waitFor(async () => {
 			const rec = (await records(store)).find((r) => r.id === id)
 			expect(rec?.lastError).toContain('boom')
+			expect(logger.error).toHaveBeenCalled()
 		})
-		expect(logger.error).toHaveBeenCalled()
 	})
 })
 

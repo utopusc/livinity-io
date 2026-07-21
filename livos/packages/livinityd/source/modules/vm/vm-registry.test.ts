@@ -1,11 +1,19 @@
-import {expect, test} from 'vitest'
+import {randomUUID} from 'node:crypto'
+import {mkdtemp, rm} from 'node:fs/promises'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+
+import {afterEach, expect, test} from 'vitest'
 
 import FileStore from '../utilities/file-store.js'
 import {VmRegistry, type VmInstanceRecord} from './vm-registry.js'
 
-// A plain in-memory fake store — no real FileStore, no I/O. Only the two
-// accessors VmRegistry uses (`get`/`set`) are implemented; cast to the
-// FileStore type so the registry's constructor signature is satisfied.
+// A plain in-memory fake store — no real FileStore, no I/O. Only the accessors
+// VmRegistry uses (`get`/`set`/`getWriteLock`) are implemented; cast to the
+// FileStore type so the registry's constructor signature is satisfied. These
+// single-flow tests never fire concurrent mutations, so an inline getWriteLock
+// runner is faithful; the real PQueue serialization WR-02 depends on is
+// exercised against a REAL FileStore in the concurrency test below.
 function makeFakeStore() {
 	return {
 		_d: {} as Record<string, unknown>,
@@ -15,6 +23,11 @@ function makeFakeStore() {
 		async set(key: string, value: unknown) {
 			this._d[key] = value
 			return true
+		},
+		async getWriteLock(
+			job: (m: {get: (k: string) => Promise<unknown>; set: (k: string, v: unknown) => Promise<unknown>}) => Promise<void>,
+		) {
+			return job({get: this.get.bind(this), set: this.set.bind(this)})
 		},
 	}
 }
@@ -115,4 +128,55 @@ test('lastIntent can be patched (boot-reconciliation hint)', async () => {
 	await registry.upsert(makeRecord('a', {lastIntent: 'stopped'}))
 	await registry.patch('a', {lastIntent: 'running'})
 	expect((await registry.get('a'))?.lastIntent).toBe('running')
+})
+
+// ── WR-02 concurrency regression (against a REAL FileStore) ───────────────────
+// The lost-update defect only manifests with the real FileStore's read-bypasses-
+// the-write-queue model, so this test uses an on-disk FileStore (not the inline
+// fake). Two concurrent upserts each did a read-modify-write; before the fix the
+// second `set` clobbered the first and one record was lost, orphaning a
+// privileged container. Routing through getWriteLock serializes them.
+const tempFiles: string[] = []
+afterEach(async () => {
+	while (tempFiles.length > 0) {
+		const dir = tempFiles.pop()!
+		await rm(dir, {recursive: true, force: true})
+	}
+})
+
+async function makeRealStore(): Promise<FileStore<any>> {
+	const dir = await mkdtemp(join(tmpdir(), 'vm-registry-'))
+	tempFiles.push(dir)
+	return new FileStore<any>({filePath: join(dir, `store-${randomUUID()}.yml`)})
+}
+
+test('WR-02: two concurrent upserts both survive (no lost update) on a real FileStore', async () => {
+	const registry = new VmRegistry(await makeRealStore())
+
+	// Fire both without awaiting between them — they race on the shared array.
+	await Promise.all([registry.upsert(makeRecord('A')), registry.upsert(makeRecord('B'))])
+
+	const list = await registry.list()
+	const ids = list.map((r) => r.id).sort()
+	expect(ids).toEqual(['A', 'B'])
+})
+
+test('WR-02: a concurrent upsert + delete + patch storm keeps the store consistent', async () => {
+	const registry = new VmRegistry(await makeRealStore())
+	await registry.upsert(makeRecord('keep'))
+
+	// Concurrent: add two, delete the pre-existing one, patch a fresh add.
+	await Promise.all([
+		registry.upsert(makeRecord('x')),
+		registry.upsert(makeRecord('y')),
+		registry.delete('keep'),
+		registry.upsert(makeRecord('z')),
+	])
+	await registry.patch('x', {lastError: 'noted'})
+
+	const list = await registry.list()
+	const ids = list.map((r) => r.id).sort()
+	expect(ids).toEqual(['x', 'y', 'z'])
+	expect((await registry.get('x'))?.lastError).toBe('noted')
+	expect(await registry.get('keep')).toBeUndefined()
 })

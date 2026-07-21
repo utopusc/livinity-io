@@ -98,7 +98,8 @@ export class VmManager {
 	constructor(livinityd: Livinityd) {
 		this.#livinityd = livinityd
 		// A real FileStore<StoreSchema> (livinityd.store) satisfies the registry's
-		// structural Pick<...,'get'|'set'> constructor (350-01 decision).
+		// structural Pick<...,'get'|'set'|'getWriteLock'> constructor (350-01
+		// decision); getWriteLock serializes registry read-modify-writes (WR-02).
 		this.#registry = new VmRegistry(livinityd.store)
 	}
 

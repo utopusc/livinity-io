@@ -44,12 +44,17 @@ export type VmInstanceRecord = {
  * adapted for an array).
  */
 export class VmRegistry {
-	// Typed structurally against just the two accessors this registry uses, so a
-	// real `FileStore<StoreSchema>` (index.ts) or a plain fake store both satisfy
-	// it without pulling the huge StoreSchema type across a module boundary.
-	readonly #store: Pick<FileStore<any>, 'get' | 'set'>
+	// Typed structurally against just the accessors this registry uses, so a real
+	// `FileStore<StoreSchema>` (index.ts) or a plain fake store both satisfy it
+	// without pulling the huge StoreSchema type across a module boundary.
+	// `getWriteLock` is REQUIRED (WR-02): every read-modify-write mutation runs
+	// INSIDE FileStore's write PQueue so two concurrent mutations cannot each read
+	// the pre-mutation array and clobber each other (a lost record would orphan a
+	// privileged /dev/kvm container with no registry entry). Plain reads (list/get)
+	// stay outside the lock — a stale read is harmless; a lost write is not.
+	readonly #store: Pick<FileStore<any>, 'get' | 'set' | 'getWriteLock'>
 
-	constructor(store: Pick<FileStore<any>, 'get' | 'set'>) {
+	constructor(store: Pick<FileStore<any>, 'get' | 'set' | 'getWriteLock'>) {
 		this.#store = store
 	}
 
@@ -63,28 +68,34 @@ export class VmRegistry {
 	}
 
 	async upsert(record: VmInstanceRecord): Promise<void> {
-		const all = await this.list()
-		const index = all.findIndex((r) => r.id === record.id)
-		if (index === -1) {
-			all.push(record)
-		} else {
-			all[index] = record
-		}
-		await this.#store.set('vmInstances', all as any)
+		await this.#store.getWriteLock(async ({get, set}) => {
+			const all = ((await get('vmInstances')) as VmInstanceRecord[] | undefined) ?? []
+			const index = all.findIndex((r) => r.id === record.id)
+			if (index === -1) {
+				all.push(record)
+			} else {
+				all[index] = record
+			}
+			await set('vmInstances', all as any)
+		})
 	}
 
 	async patch(id: string, patch: Partial<VmInstanceRecord>): Promise<void> {
-		const all = await this.list()
-		const index = all.findIndex((r) => r.id === id)
-		if (index === -1) return // unknown id — no-op (never throws)
-		all[index] = {...all[index], ...patch}
-		await this.#store.set('vmInstances', all as any)
+		await this.#store.getWriteLock(async ({get, set}) => {
+			const all = ((await get('vmInstances')) as VmInstanceRecord[] | undefined) ?? []
+			const index = all.findIndex((r) => r.id === id)
+			if (index === -1) return // unknown id — no-op (never throws)
+			all[index] = {...all[index], ...patch}
+			await set('vmInstances', all as any)
+		})
 	}
 
 	async delete(id: string): Promise<void> {
-		const all = await this.list()
-		const next = all.filter((r) => r.id !== id)
-		if (next.length === all.length) return // unknown id — no-op (never throws)
-		await this.#store.set('vmInstances', next as any)
+		await this.#store.getWriteLock(async ({get, set}) => {
+			const all = ((await get('vmInstances')) as VmInstanceRecord[] | undefined) ?? []
+			const next = all.filter((r) => r.id !== id)
+			if (next.length === all.length) return // unknown id — no-op (never throws)
+			await set('vmInstances', next as any)
+		})
 	}
 }
