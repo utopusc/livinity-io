@@ -44,11 +44,14 @@ describe('errored VM surfaces its reason and never renders as healthy (T-352-05)
 	})
 })
 
-describe('open-screen is honestly disabled-with-reason (T-352-07 — no false affordance)', () => {
-	it('vm-list-item.tsx references the 353 handoff key and never navigates', () => {
+describe('open-screen opens the state-aware screen view (353-02 — no dead placeholder)', () => {
+	it('vm-list-item.tsx wires open-screen to onOpenScreen(vm), retiring the coming-353 placeholder', () => {
 		const src = read(LIST_ITEM)
-		expect(src).toMatch(/vm\.open-screen\.coming-353/)
-		// No router navigation from the row (no live screen yet).
+		// The dishonest disabled placeholder is gone; the button now calls back up.
+		expect(src).not.toMatch(/vm\.open-screen\.coming-353/)
+		expect(src).toMatch(/onOpenScreen/)
+		expect(src).toMatch(/onClick=\{\(\) => onOpenScreen\(vm\)\}/)
+		// Still no router navigation from the row — the screen is a view within the app window.
 		expect(src).not.toMatch(/navigate\(|useNavigate|<Link/)
 	})
 })

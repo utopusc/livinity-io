@@ -12,8 +12,8 @@
 // Honesty invariants (T-352-05): the badge switches on vm.state; an 'error' VM
 // renders a destructive badge AND its raw lastError, and is NEVER shown as
 // running. 'creating'/'installing-os' show a spinner and gate the controls.
-// "Open screen" is present but disabled-with-reason — Phase 353 wires the real
-// noVNC screen; this row never navigates or implies it works.
+// "Open screen" (353-02) calls onOpenScreen(vm) to open the state-aware VmScreen
+// view; the honesty of that view (never a blank frame as working) lives there.
 import {useState} from 'react'
 import {TbDeviceDesktop, TbLoader2, TbPencil, TbPlayerPlay, TbPlayerStop, TbRefresh, TbTrash} from 'react-icons/tb'
 import {toast} from 'sonner'
@@ -72,7 +72,15 @@ function StateBadge({state}: {state: VmView['state']}) {
 	}
 }
 
-export function VmListItem({vm, onDelete}: {vm: VmView; onDelete: () => void}) {
+export function VmListItem({
+	vm,
+	onDelete,
+	onOpenScreen,
+}: {
+	vm: VmView
+	onDelete: () => void
+	onOpenScreen: (vm: VmView) => void
+}) {
 	const utils = trpcReact.useUtils()
 
 	const startMut = trpcReact.vm.start.useMutation({
@@ -180,14 +188,8 @@ export function VmListItem({vm, onDelete}: {vm: VmView; onDelete: () => void}) {
 						</Button>
 					)}
 
-					{/* Open screen — PRESENT but honestly disabled-with-reason (353 handoff). */}
-					<Button
-						size='sm'
-						variant='ghost'
-						disabled
-						title={t('vm.open-screen.coming-353')}
-						aria-label={t('vm.open-screen.coming-353')}
-					>
+					{/* Open screen — 353 wires the real state-aware noVNC screen view. */}
+					<Button size='sm' variant='ghost' onClick={() => onOpenScreen(vm)}>
 						<TbDeviceDesktop className='h-4 w-4' />
 						{t('vm.controls.open-screen')}
 					</Button>
