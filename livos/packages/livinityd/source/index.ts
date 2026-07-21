@@ -332,6 +332,10 @@ import type {UsbImportRule} from './modules/files/usb-import.js'
 // dedicated top-level `appStoreSources` StoreSchema key below. Type-only import
 // (app-store-sources.ts is a pure module — only node:crypto — no cycle).
 import type {AppStoreSource} from './modules/apps/app-store-sources.js'
+// Phase 350 (VMLIFE-01) — VM-instance record shape for the dedicated top-level
+// vmInstances StoreSchema key below. Type-only import (erased at runtime —
+// vm-registry.ts is a pure module, no cycle).
+import type {VmInstanceRecord} from './modules/vm/vm-registry.js'
 
 type StoreSchema = {
 	version: string
@@ -574,6 +578,11 @@ type StoreSchema = {
 		domain?: string
 		lastAppliedAt?: number
 	}
+	// Phase 350 (VMLIFE-01) — VM-instance registry. Dedicated TOP-LEVEL key
+	// (dot-prop path collisions silently drop nested writes). Live state is
+	// ALWAYS derived from docker inspect (VMLIFE-02); this stores intent/
+	// bookkeeping only.
+	vmInstances?: VmInstanceRecord[]
 	backups: {
 		repositories: {
 			id: string
