@@ -103,6 +103,18 @@ export const systemApps = [
 		systemApp: true,
 		systemAppTo: '/my-devices',
 	},
+	// Phase 352-01 (VMAPP-01) — native "Virtual Machine" app. Opens as a
+	// WINDOW (not a navigate) via the same 6-touchpoint registry mechanism as
+	// Settings/Files; admin-gated surface, empty raster fallback icon (the
+	// actual dock/Launchpad glyph is the cast Monitor in dock-item DOCK_ICONS).
+	// name is a PLAIN string — systemApps[].name is never t()-wrapped here.
+	{
+		id: 'LIVINITY_vm',
+		name: 'Virtual Machine',
+		icon: '/figma-exports/dock-settings-new.svg?v=352',
+		systemApp: true,
+		systemAppTo: '/vm',
+	},
 	// LIVINITY_subagents removed — Phase 182-01 (D-V38-M). Sidebar Settings absorbs agents.
 	{
 		id: 'LIVINITY_schedules',

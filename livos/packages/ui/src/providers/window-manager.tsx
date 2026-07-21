@@ -165,6 +165,8 @@ export const DEFAULT_WINDOW_SIZES: Record<string, Size> = {
 	'LIVINITY_ai-chat': {width: 1300, height: 850},
 	'LIVINITY_docker': {width: 1400, height: 900},
 	'LIVINITY_my-devices': {width: 900, height: 650},
+	// Phase 352-01 — wider than My-devices to fit an OS/resources column layout.
+	'LIVINITY_vm': {width: 1100, height: 750},
 	'LIVINITY_subagents': {width: 950, height: 650},
 	'LIVINITY_schedules': {width: 950, height: 650},
 	'LIVINITY_terminal': {width: 900, height: 600},

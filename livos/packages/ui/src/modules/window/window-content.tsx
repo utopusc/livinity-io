@@ -20,6 +20,8 @@ const PersistentTerminalPanel = React.lazy(
 	() => import('@/features/v43-terminal/PersistentTerminalPanel'),
 )
 const MyDevicesWindowContent = React.lazy(() => import('./app-contents/my-devices-content'))
+// Phase 352-01 (VMAPP-01) — native Virtual Machine app window content.
+const VmWindowContent = React.lazy(() => import('./app-contents/vm-content'))
 // Phase 234-02 — Phase 197-06 LivAiWindowContent (legacy assistant-ui chat
 // iframe over /liv-ai-app) was removed here as the deferred Phase 231 cleanup
 // per 234-01-INVESTIGATION.md Section G.1. LIVINITY_liv-assistant
@@ -137,7 +139,7 @@ type WindowContentProps = {
 // Phase 234-02 — LIVINITY_liv-ai removed from the fullHeightApps set as part
 // of the Section G.1 cleanup (entry no longer reachable; switch-case + lazy
 // import + apps.tsx registry entry all deleted in the same commit).
-const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', LIV_ASSISTANT_APP_ID])
+const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_vm', LIV_ASSISTANT_APP_ID])
 
 /**
  * Phase 243-03 / Phase 290 REQ5 — Terminal route shell. Mounts the persistent
@@ -281,6 +283,9 @@ export function WindowAppContent({appId, initialRoute, windowId}: {appId: string
 
 		case 'LIVINITY_my-devices':
 			return <MyDevicesWindowContent />
+
+		case 'LIVINITY_vm':
+			return <VmWindowContent />
 
 
 		case 'LIVINITY_terminal':

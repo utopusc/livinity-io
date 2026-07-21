@@ -11,4 +11,7 @@ export const WINDOWED_SYSTEM_ROUTES: Record<string, string> = {
 	'LIVINITY_my-devices': '/my-devices',
 	'LIVINITY_terminal': '/terminal',
 	'LIVINITY_liv-assistant': '/liv-assistant',
+	// Phase 352-01 (VMAPP-01) — windowed route so the VM tile opens a window
+	// instead of navigating to a dead route.
+	'LIVINITY_vm': '/vm',
 }

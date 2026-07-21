@@ -3,6 +3,7 @@ import {useEffect, useRef, useState} from 'react'
 import {createPortal} from 'react-dom'
 import {Link, LinkProps} from 'react-router-dom'
 import type {SVGProps} from 'react'
+import {Monitor} from 'lucide-react'
 import {
 	TbHome2,
 	TbApps,
@@ -56,6 +57,7 @@ const DOCK_LABELS: Record<string, string> = {
 	'LIVINITY_docker': 'Docker',
 	'LIVINITY_server-control': 'Server Management',
 	'LIVINITY_my-devices': 'Devices',
+	'LIVINITY_vm': 'Virtual Machine',
 	'LIVINITY_subagents': 'Agents',
 	'LIVINITY_schedules': 'Schedules',
 	'LIVINITY_terminal': 'Terminal',
@@ -82,6 +84,9 @@ const DOCK_ICONS: Record<string, DockGlyph> = {
 	'LIVINITY_docker': IconServer,
 	'LIVINITY_server-control': IconServer,
 	'LIVINITY_my-devices': IconDevices,
+	// Phase 352-01 — lucide Monitor cast to DockGlyph (same cast pattern as
+	// LIVINITY_subagents below; zero new asset/dependency).
+	'LIVINITY_vm': Monitor as unknown as DockGlyph,
 	'LIVINITY_subagents': TbRobot as unknown as DockGlyph,
 	'LIVINITY_schedules': TbCalendarTime as unknown as DockGlyph,
 	'LIVINITY_terminal': IconTerminal,
@@ -104,6 +109,7 @@ const DOCK_TINTS: Record<string, string> = {
 	'LIVINITY_liv-assistant': 'rgba(122, 162, 255, 0.35)',
 	'LIVINITY_server-control': 'rgba(255, 186, 110, 0.30)',
 	'LIVINITY_my-devices': 'rgba(195, 156, 255, 0.30)',
+	'LIVINITY_vm': 'rgba(94, 234, 212, 0.30)',
 	'LIVINITY_terminal': 'rgba(74, 222, 128, 0.30)',
 	// Phase 231 retirement — legacy Liv/Chat dock-tile tint entries removed.
 }

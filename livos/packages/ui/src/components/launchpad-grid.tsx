@@ -70,6 +70,11 @@ const SYSTEM_GRID_IDS = [
 	'LIVINITY_server-control',
 	'LIVINITY_terminal',
 	'LIVINITY_my-devices',
+	// Phase 352-01 (VMAPP-01) — safe to add here because the windowed route
+	// (system-windowed-routes.ts) AND the window-content switch arm both exist
+	// (added in the same task); without both a click would land on NotFound
+	// and unmount the desktop (see the LIVINITY_schedules exclusion note above).
+	'LIVINITY_vm',
 ]
 
 const TILE_SIZE = 72
