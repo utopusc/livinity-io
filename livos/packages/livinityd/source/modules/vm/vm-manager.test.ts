@@ -195,6 +195,22 @@ describe('create — preflight-gated + detached', () => {
 		)
 	})
 
+	// WR-01: the http/https scheme is re-asserted at the MANAGER (not only the
+	// router zod refine). A direct manager.create with a file:// custom-image URL
+	// must reject at the manager before any provisioning — the docker seam is never
+	// reached — so a non-router caller cannot reintroduce a file:// boot source.
+	test('linux custom image with a non-http(s) scheme: rejected at the manager, docker seam 0 calls (WR-01)', async () => {
+		const {vm, store} = makeManager()
+
+		await expect(
+			vm.create({...LINUX, os: {customImage: {url: 'file:///etc/passwd'}}}),
+		).rejects.toBeInstanceOf(VmResourceInvalid)
+
+		// Rejected BEFORE provisioning: no registry write, no compose-up.
+		expect(await records(store)).toHaveLength(0)
+		expect(composeUp).toHaveBeenCalledTimes(0)
+	})
+
 	test('KVM absent: rejects BEFORE any registry write or compose-up (registry stays empty)', async () => {
 		const {vm, store} = makeManager()
 		vi.mocked(assertKvmAvailable).mockRejectedValueOnce(new Error('no /dev/kvm'))

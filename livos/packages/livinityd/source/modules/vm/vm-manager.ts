@@ -26,7 +26,7 @@ import crypto from 'node:crypto'
 
 import fse from 'fs-extra'
 
-import {assertKvmAvailable, assertVmResourcesSane, probeHostCapacity} from '../apps/vm-preflight.js'
+import {assertKvmAvailable, assertVmResourcesSane, probeHostCapacity, VmResourceInvalid} from '../apps/vm-preflight.js'
 import type Livinityd from '../../index.js'
 import {
 	composeDownVolumes,
@@ -75,9 +75,26 @@ export type CreateVmInput =
 	| {name: string; kind: 'windows'; resources: VmResources; os: WindowsOsSelection}
 	| {name: string; kind: 'linux'; resources: VmResources; os: LinuxOsSelection}
 
-/** Resolve a Linux `BOOT` env value: a distro name, or a custom-image URL. */
+/**
+ * Resolve a Linux `BOOT` env value: a distro name, or a custom-image URL.
+ *
+ * (WR-01) The http/https scheme is RE-ASSERTED here — where the value is
+ * actually consumed into the container's fetch target — not only at the router
+ * zod refine. The router is the cheap first gate; this is the load-bearing one,
+ * so a future non-router caller (352's create UI, a test, a refactor) cannot
+ * reintroduce a `file://`/`gopher://`/etc. boot source. A garbage URL throws in
+ * `new URL(...)` and is caught by create()'s error path; a valid-but-forbidden
+ * scheme throws VmResourceInvalid (→ the existing callVm → BAD_REQUEST mapping).
+ */
 function resolveLinuxBootValue(os: LinuxOsSelection): string {
-	return 'customImage' in os ? os.customImage.url : os.distro
+	if ('customImage' in os) {
+		const {protocol} = new URL(os.customImage.url)
+		if (protocol !== 'http:' && protocol !== 'https:') {
+			throw new VmResourceInvalid(`Custom-image URL scheme ${protocol} is not allowed (http/https only).`)
+		}
+		return os.customImage.url
+	}
+	return os.distro
 }
 
 // ── Per-VM keyed single-flight (module scope) ────────────────────────────────
