@@ -1303,6 +1303,125 @@ class Server {
 					return
 				}
 
+				// ── VM noVNC WebSocket-to-WebSocket bridge (Phase 353-01, VMVIEW-01) ──
+				// /vm/<id>/websockify bridges the browser to the dockur/qemus
+				// container's OWN /websockify WS server on the VM's loopback
+				// novncPort (WS-to-WS, unlike /ws/desktop's WS-to-TCP variant).
+				//
+				// THIS BRANCH IS THE AUTH GATE for the VM screen WS leg: Caddy
+				// routes /vm/*/websockify UNCONDITIONALLY (@vm_screen_ws carries NO
+				// forward_auth — that would hijack the Upgrade subrequest → 502,
+				// the documented e336afdd regression), so Express is the SOLE gate
+				// here (T-353-01). Steps 1-2 mirror /ws/desktop verbatim; step 3
+				// is the VmRegistry lookup. No new auth mechanism.
+				const vmWsMatch = pathname.match(/^\/vm\/([^/]+)\/websockify$/)
+				if (vmWsMatch) {
+					const vmId = vmWsMatch[1]
+
+					// 1. Origin validation (Spoofing mitigation) — BEFORE the token
+					//    check, identical to /ws/desktop.
+					const vmOrigin = request.headers.origin
+					if (vmOrigin) {
+						const domainCfgRaw = await this.livinityd.ai.redis.get('livos:domain:config').catch(() => null)
+						let allowedDomain = ''
+						if (domainCfgRaw) {
+							const dc = JSON.parse(domainCfgRaw)
+							if (dc.active && dc.domain) allowedDomain = dc.domain
+						}
+						if (allowedDomain) {
+							const originHost = new URL(vmOrigin).hostname
+							if (originHost !== allowedDomain && !originHost.endsWith('.' + allowedDomain)) {
+								this.logger.verbose(`WS vm rejected: origin mismatch ${vmOrigin}`)
+								socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+								socket.destroy()
+								return
+							}
+						}
+					}
+
+					// 2. Auth gate — token from ?token= query OR LIVINITY_SESSION
+					//    cookie → verifyToken. No/invalid token → 401. SAME existing
+					//    mechanism as /ws/desktop; no bridging before this passes.
+					let vmToken = searchParams.get('token')
+					if (!vmToken) {
+						const cookieHeader = request.headers.cookie || ''
+						const sessionMatch = cookieHeader.match(/LIVINITY_SESSION=([^;]+)/)
+						if (sessionMatch) vmToken = sessionMatch[1]
+					}
+					if (!vmToken) {
+						this.logger.verbose('WS vm rejected: no token')
+						socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+						socket.destroy()
+						return
+					}
+					const vmAuthValid = await this.verifyToken(vmToken).catch(() => false)
+					if (!vmAuthValid) {
+						this.logger.verbose('WS vm rejected: invalid token')
+						socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+						socket.destroy()
+						return
+					}
+
+					// 3. UUID guard + VmRegistry lookup (never bridge to a wrong or
+					//    absent port — T-353-02). Non-UUID/unknown → 404, not-running
+					//    → 409. The bridge target port comes ONLY from the registry.
+					if (!VM_ID_RE.test(vmId)) {
+						this.logger.verbose(`WS vm rejected: non-UUID id ${vmId}`)
+						socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
+						socket.destroy()
+						return
+					}
+					const vmView = await this.livinityd.vm.get(vmId).catch(() => undefined)
+					if (!vmView) {
+						this.logger.verbose(`WS vm rejected: unknown id ${vmId}`)
+						socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
+						socket.destroy()
+						return
+					}
+					if (vmView.state !== 'running') {
+						this.logger.verbose(`WS vm rejected: ${vmId} not running (state=${vmView.state})`)
+						socket.write('HTTP/1.1 409 Conflict\r\n\r\n')
+						socket.destroy()
+						return
+					}
+
+					// 4. WS-to-WS bridge to the container's loopback /websockify.
+					//    No LIV_API_KEY header — loopback, container has no auth (the
+					//    gate in front of it is THIS branch). Mirrors the voice proxy.
+					const vmUpstream = new WebSocket(`ws://127.0.0.1:${vmView.novncPort}/websockify`)
+					const vmProxyWss = new WebSocketServer({noServer: true})
+
+					vmUpstream.on('open', () => {
+						vmProxyWss.handleUpgrade(request, socket, head, (clientWs) => {
+							vmProxyWss.close()
+							// VNC frames are binary.
+							clientWs.binaryType = 'nodebuffer'
+							vmUpstream.binaryType = 'nodebuffer'
+							// Reliability A5 — a VNC session can idle for minutes; keep
+							// the CF/NAT hop warm or it reaps to an opaque 1006.
+							attachWsHeartbeat(clientWs)
+
+							clientWs.on('message', (data, isBinary) => {
+								if (vmUpstream.readyState === WebSocket.OPEN) vmUpstream.send(data, {binary: isBinary})
+							})
+							vmUpstream.on('message', (data, isBinary) => {
+								if (clientWs.readyState === WebSocket.OPEN) clientWs.send(data, {binary: isBinary})
+							})
+							clientWs.on('close', () => vmUpstream.close())
+							vmUpstream.on('close', () => clientWs.close())
+							clientWs.on('error', () => vmUpstream.close())
+							vmUpstream.on('error', () => clientWs.close())
+						})
+					})
+					vmUpstream.on('error', (err) => {
+						this.logger.error(`WS vm proxy: upstream error for ${vmId}`, err)
+						vmProxyWss.close()
+						socket.destroy()
+					})
+
+					return
+				}
+
 				// ── Desktop Stream WebSocket-to-TCP Proxy ──────────────────
 				// /ws/desktop bridges browser WebSocket connections to x11vnc's
 				// VNC TCP socket on localhost:5900. Binary frames flow bidirectionally.
