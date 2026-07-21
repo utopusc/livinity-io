@@ -15,6 +15,7 @@ import Server from './modules/server/index.js'
 import User from './modules/user/user.js'
 import AppStore from './modules/apps/app-store.js'
 import Apps from './modules/apps/apps.js'
+import {VmManager} from './modules/vm/vm-manager.js'
 import Files from './modules/files/files.js'
 import Notifications from './modules/notifications/notifications.js'
 import NotificationChannels from './modules/notifications/channels.js'
@@ -727,6 +728,8 @@ export default class Livinityd {
 	user: User
 	appStore: AppStore
 	apps: Apps
+	// Phase 350 (VMLIFE) — VM lifecycle orchestrator; public so the vm.* tRPC router reaches it via ctx.livinityd.vm and the boot hook calls reconcileOnBoot().
+	vm: VmManager
 	files: Files
 	notifications: Notifications
 	// Phase 310-02 — external alert-channel bridge (config CRUD + secret vault +
@@ -840,6 +843,7 @@ export default class Livinityd {
 		this.user = new User(this)
 		this.appStore = new AppStore(this, {defaultAppStoreRepo})
 		this.apps = new Apps(this)
+		this.vm = new VmManager(this)
 		this.files = new Files(this)
 		this.notifications = new Notifications(this)
 		this.notificationChannels = new NotificationChannels(this)
@@ -929,6 +933,13 @@ export default class Livinityd {
 		if (!this.developmentMode) {
 			await this.apps.cleanDockerState().catch((error) => this.logger.error(`Failed to clean Docker state`, error))
 		}
+
+		// Phase 350 (VMLIFE-03): recreate any VM container that was running before the
+		// restart. cleanDockerState() above nukes ALL containers on every non-dev boot
+		// (apps.ts:195); apps recreates its own instances, VMs need this mirror or a box
+		// Update silently deletes every running VM. Same site/ordering as the per-user
+		// app recreation loop (apps.ts:396-430).
+		await this.vm?.reconcileOnBoot().catch((error) => this.logger.error(`Failed to reconcile VM state`, error))
 
 		// Initialize PostgreSQL database (non-fatal -- falls back to YAML if unavailable)
 		const dbLogger = this.logger.createChildLogger('database')
