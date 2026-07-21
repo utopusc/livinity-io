@@ -360,6 +360,70 @@ describe('list/get — live state derivation (never the stored flag)', () => {
 		expect(view?.lastError).toBe('create failed')
 	})
 
+	// VMCREATE-04: the pessimistic `?? 'error'` fallback must be PRESERVED — an
+	// UNMAPPED docker status (a crash-loop 'restarting', or any status not in the
+	// table) derives 'error', NEVER a silent 'running'. Do NOT "fix" this toward
+	// apps.ts's optimistic `|| 'ready'` (intentional divergence).
+	test.each(['restarting', 'removing', 'wat-unknown'] as const)(
+		'unmapped docker status %s → error (pessimistic fallback preserved)',
+		async (dockerStatus) => {
+			const {vm, store} = makeManager()
+			await seed(store, {id: `u-${dockerStatus}`, containerName: `vm-u-${dockerStatus}`})
+			vi.mocked(dockerInspectStatus).mockResolvedValueOnce(dockerStatus)
+
+			const view = await vm.get(`u-${dockerStatus}`)
+			expect(view?.state).toBe('error')
+		},
+	)
+
+	// VMCREATE-04: an 'error' state with an EMPTY registry lastError still surfaces a
+	// NON-EMPTY reason (the honest generic fallback) so the admin never sees a silent,
+	// unexplained error. Here the container reports 'dead' (→ error) and no lastError
+	// was ever recorded.
+	test('error state + empty registry lastError → a non-empty generic reason is present', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {id: 'g1', containerName: 'vm-g1'}) // no lastError seeded
+		vi.mocked(dockerInspectStatus).mockResolvedValueOnce('dead')
+
+		const view = await vm.get('g1')
+		expect(view?.state).toBe('error')
+		expect(view?.lastError).toBeTruthy()
+		expect(view?.lastError).toMatch(/unexpectedly|logs/i)
+	})
+
+	// A recorded reason ALWAYS wins over the synthesized generic one (no clobber).
+	test('a recorded lastError is NOT overwritten by the generic reason', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {id: 'g2', containerName: 'vm-g2', lastError: 'compose-up: bind: address in use'})
+		vi.mocked(dockerInspectStatus).mockResolvedValueOnce('dead')
+
+		const view = await vm.get('g2')
+		expect(view?.state).toBe('error')
+		expect(view?.lastError).toBe('compose-up: bind: address in use')
+	})
+
+	// lastError is NEVER fabricated for a healthy state — a 'running' VM has no error.
+	test('a running VM does not fabricate a lastError', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {id: 'g3', containerName: 'vm-g3'})
+		vi.mocked(dockerInspectStatus).mockResolvedValueOnce('running')
+
+		const view = await vm.get('g3')
+		expect(view?.state).toBe('running')
+		expect(view?.lastError).toBeUndefined()
+	})
+
+	// A cleanly stopped VM likewise has no fabricated reason.
+	test('a stopped VM does not fabricate a lastError', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {id: 'g4', containerName: 'vm-g4', lastIntent: 'stopped'})
+		vi.mocked(dockerInspectStatus).mockResolvedValueOnce('exited')
+
+		const view = await vm.get('g4')
+		expect(view?.state).toBe('stopped')
+		expect(view?.lastError).toBeUndefined()
+	})
+
 	test('installing-os is NEVER faked — a running container reports running (honest fallback)', async () => {
 		const {vm, store} = makeManager()
 		await seed(store, {id: 'e', containerName: 'vm-e'})

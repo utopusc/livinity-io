@@ -108,6 +108,13 @@ const DOCKER_STATUS_TO_VM_STATE: Record<string, 'running' | 'stopped' | 'error'>
 	dead: 'error',
 }
 
+// Phase 351 (VMCREATE-04): the honest generic reason surfaced when a VM derives
+// 'error' but no specific reason was recorded (e.g. a post-start crash-loop the
+// detached create().catch never observed — Pitfall 4). Ensures the admin never
+// sees a silent, unexplained 'error' state. See #deriveLastError for the richer
+// docker-inspect enrichment documented as an intentional residual.
+const VM_GENERIC_ERROR_REASON = 'VM stopped unexpectedly — check the container logs.'
+
 export class VmManager {
 	readonly #livinityd: Livinityd
 	readonly #registry: VmRegistry
@@ -234,6 +241,10 @@ export class VmManager {
 		if (inFlight.has(record.id)) return 'creating'
 		try {
 			const status = await dockerInspectStatus(record.containerName)
+			// PESSIMISTIC fallback (VMCREATE-04): an UNMAPPED docker status — notably
+			// 'restarting' (a crash-loop) — falls through to 'error', NOT a silent
+			// 'running'. This is a DELIBERATE divergence from apps.ts's optimistic
+			// `|| 'ready'`; do NOT "fix" it toward that (RESEARCH Don't-Hand-Roll).
 			return DOCKER_STATUS_TO_VM_STATE[status] ?? 'error'
 		} catch {
 			// No inspectable container. If it was supposed to be up (running intent)
@@ -246,6 +257,7 @@ export class VmManager {
 
 	/** Single shared record→view mapper so list() and get() stay consistent. */
 	async #toView(record: VmInstanceRecord): Promise<VmView> {
+		const state = await this.#deriveState(record)
 		return {
 			id: record.id,
 			name: record.name,
@@ -253,10 +265,32 @@ export class VmManager {
 			resources: record.resources,
 			novncPort: record.novncPort,
 			rdpPort: record.rdpPort,
-			state: await this.#deriveState(record),
-			lastError: record.lastError,
+			state,
+			lastError: this.#deriveLastError(record, state),
 			createdAt: record.createdAt,
 		}
+	}
+
+	/**
+	 * Honest-failure reason (VMCREATE-04). The recorded `lastError` always wins; but
+	 * when the derived state is 'error' and NO reason was recorded (e.g. a post-start
+	 * crash-loop the detached create().catch never saw — Pitfall 4), synthesize a
+	 * TRANSIENT generic reason so the admin never sees a silent, unexplained 'error'.
+	 * Never fabricated for a healthy 'running'/'stopped'/'creating' state. Not
+	 * persisted (transient synth only — recomputed on every view).
+	 *
+	 * RESIDUAL (documented, matching 350's installing-os collapse precedent): a RICHER
+	 * reason read from `docker inspect --format={{json .State}}` (.Error/.ExitCode/
+	 * .FinishedAt) is an OUT-OF-SCOPE enrichment (RESEARCH Open-Q1 off-ramp). The
+	 * existing dockerInspectStatus seam lives in vm-docker.ts (outside this plan's
+	 * allowed 2-file surface) and a new execa seam here would be more than a one-line
+	 * extension. The generic reason satisfies VMCREATE-04's "a reason is present on
+	 * error" honestly; the richer read is a 351-HUMAN-UAT follow-up.
+	 */
+	#deriveLastError(record: VmInstanceRecord, state: VmState): string | undefined {
+		if (record.lastError) return record.lastError
+		if (state === 'error') return VM_GENERIC_ERROR_REASON
+		return undefined
 	}
 
 	/** List every VM with LIVE-derived state (VMLIFE-02). */
