@@ -57,6 +57,10 @@ import localDns from '../../local-dns/routes.js'
 // Phase 347-03 — landns.* opt-in LAN-DNS/mDNS namespace. DISJOINT from local-dns
 // (CF portal) by construction: own module, own store key, no shared imports (D-347-5).
 import landns from '../../landns/routes.js'
+// Phase 350-03 (VMLIFE-02/03) — vm.* namespace (list/get/create/start/stop/restart/delete,
+// every procedure adminProcedure). Fresh top-level sibling, NOT nested under `apps`: VMs
+// are provisioned programmatically from the 349 template, never via the app-install path.
+import vm from '../../vm/trpc-router.js'
 import docker from '../../docker/routes.js'
 import scheduler from '../../scheduler/routes.js'
 import monitoring from '../../monitoring/routes.js'
@@ -406,6 +410,8 @@ export function createAppRouter(opts: {
 		local: localDns,
 		// Phase 347-03 — opt-in LAN-DNS/mDNS namespace (disjoint from `local` above).
 		landns,
+		// Phase 350-03 — vm.* lifecycle namespace (admin-gated; VmManager-backed).
+		vm,
 		docker,
 		scheduler,
 		monitoring,
