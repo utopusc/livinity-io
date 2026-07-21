@@ -811,6 +811,48 @@ ${WS_TRANSPORT_BODY}
 \t}`
 
 /**
+ * Phase 353-01 (VMVIEW-01) — the VM noVNC screen path-proxy handle pair.
+ *
+ * A running dockur/qemus VM publishes its built-in noVNC web UI on a
+ * loopback-only host port (`novncPort` in [16100,16200), 350 compose invariant).
+ * These two STATIC handles make it reachable in the browser behind the EXISTING
+ * forward_auth gate under the main host at `/vm/<id>/*`, WITHOUT any per-VM
+ * Caddyfile regeneration (the id → port resolution happens in the Express
+ * `/vm/:id` proxy, not here — so VM create/delete/rename triggers ZERO regen).
+ *
+ * WS leg carved out FIRST (mirrors @webapp_stream_ws-before-@liv_ws): noVNC's
+ * `/websockify` endpoint is a WebSocket server; a forward_auth on that leg would
+ * hijack the Upgrade subrequest at :8080/auth/verify → 502 (the documented
+ * e336afdd/@liv_ws regression). The WS leg is therefore UNCONDITIONAL at Caddy
+ * and gated instead at the Express `/vm/:id/websockify` upgrade handler
+ * (Origin + verifyToken — mirrors /ws/desktop). This is the load-bearing seam.
+ *
+ * Gated GET/asset leg reuses LIV_GATE_BODY (byte-for-byte — a future gate edit
+ * must not drift) + FRAME_EMBED_STRIP (so the noVNC page iframe-embeds in the
+ * shell). Deliberately NO `uri strip_prefix /vm`: the Express proxy does its own
+ * id-scoped pathRewrite (unlike /liv's fixed-literal strip). NEVER add
+ * `copy_headers Cookie` (clobbers LIVINITY_SESSION — memory pitfall). The
+ * LIV_GATE_BODY redir is ABSOLUTE (relative redir does not terminate
+ * forward_auth — LIVOS-041/386b33e7).
+ */
+const VM_SCREEN_WS_HANDLE = `\t@vm_screen_ws path /vm/*/websockify
+\thandle @vm_screen_ws {
+\t\t# Phase 353-01 (VMVIEW-01): NO forward_auth on the VM noVNC WS leg. forward_auth's auth subrequest inherits Upgrade:websocket; livinityd's server.on('upgrade') hijacks it at :8080/auth/verify (Express route never runs) -> socket reset -> 502 (documented e336afdd/@liv_ws regression). Gated instead at the Express /vm/:id/websockify upgrade handler (Origin + verifyToken, mirrors /ws/desktop).
+\t\treverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY}
+\t\t}
+\t}`
+
+const VM_SCREEN_HANDLE = `\t@vm_screen path /vm /vm/*
+\thandle @vm_screen {
+${LIV_GATE_BODY}
+\t\treverse_proxy 127.0.0.1:8080 {
+${FRAME_EMBED_STRIP}
+${WS_TRANSPORT_BODY}
+\t\t}
+\t}`
+
+/**
  * Generate a complete Caddyfile with main domain and all subdomains.
  * In multi-user mode, uses a single wildcard block that routes all subdomains
  * to livinityd's app gateway (port 8080) for dynamic per-user routing.
@@ -848,6 +890,8 @@ ${LIV_AGENTS_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_CLI_INSTALLER_HANDLE}
+${VM_SCREEN_WS_HANDLE}
+${VM_SCREEN_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 ${LIV_LOGIN_HANDLE}
 	handle {
@@ -885,6 +929,8 @@ ${LIV_AGENTS_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_CLI_INSTALLER_HANDLE}
+${VM_SCREEN_WS_HANDLE}
+${VM_SCREEN_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 ${LIV_LOGIN_HANDLE}
 	handle {
@@ -944,6 +990,8 @@ ${LIV_AGENTS_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_CLI_INSTALLER_HANDLE}
+${VM_SCREEN_WS_HANDLE}
+${VM_SCREEN_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 ${LIV_LOGIN_HANDLE}
 	handle {

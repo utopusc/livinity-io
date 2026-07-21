@@ -1909,6 +1909,90 @@ describe('Phase 262-01 — /liv-family forward_auth gate (LIVOS-041/047/054)', (
 		expect(multi.indexOf('@liv_cli_installer path /liv/trpc/cliInstaller.detect', subStart)).toBeGreaterThan(subStart)
 	})
 
+	// ─── Phase 353-01 (VMVIEW-01) — VM noVNC screen path-proxy handle pair ───
+	//
+	// @vm_screen (GET/asset leg) is forward_auth-gated; @vm_screen_ws
+	// (/vm/*/websockify) is UNCONDITIONAL at Caddy and gated at the Express
+	// upgrade handler instead (forward_auth on a WS leg hijacks the upgrade →
+	// 502, the documented e336afdd/@liv_ws regression). Express owns the
+	// id-scoped path strip so there is deliberately NO strip_prefix /vm here,
+	// and NEVER copy_headers Cookie (clobbers LIVINITY_SESSION).
+
+	it('@vm_screen — gated (forward_auth before proxy) in all three site shapes', () => {
+		expectGatedHandle(apexOut(), 'handle @vm_screen {')
+		const fallback = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
+		expectGatedHandle(fallback, 'handle @vm_screen {')
+		const multi = generateFullCaddyfile(
+			{mainDomain: 'livinity.io', subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}]},
+			true,
+			false,
+			[],
+		)
+		const subStart = multi.indexOf('bruce.livinity.io {')
+		expect(subStart).toBeGreaterThan(-1)
+		expect(multi.indexOf('handle @vm_screen {', subStart)).toBeGreaterThan(subStart)
+	})
+
+	it('@vm_screen matcher is `path /vm /vm/*` and emits in all three sites', () => {
+		const apex = apexOut()
+		expect(apex).toContain('@vm_screen path /vm /vm/*')
+		const fallback = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
+		expect(fallback).toContain('@vm_screen path /vm /vm/*')
+		const multi = generateFullCaddyfile(
+			{mainDomain: 'livinity.io', subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}]},
+			true,
+			false,
+			[],
+		)
+		const subStart = multi.indexOf('bruce.livinity.io {')
+		expect(multi.indexOf('@vm_screen path /vm /vm/*', subStart)).toBeGreaterThan(subStart)
+	})
+
+	it('handle @vm_screen_ws is UNGATED — forward_auth on the WS leg breaks the upgrade (e336afdd)', () => {
+		const out = apexOut()
+		const idx = out.indexOf('handle @vm_screen_ws {')
+		expect(idx).toBeGreaterThan(-1)
+		// Body ends where the adjacent @vm_screen matcher begins (WS leg emitted first).
+		const end = out.indexOf('@vm_screen path /vm /vm/*', idx)
+		expect(end).toBeGreaterThan(idx)
+		// Match the directive form — the rationale comment legitimately says forward_auth.
+		expect(out.slice(idx, end)).not.toContain('forward_auth 127.0.0.1')
+	})
+
+	it('@vm_screen_ws matcher is `path /vm/*/websockify` and emits in all three sites', () => {
+		const apex = apexOut()
+		expect(apex).toContain('@vm_screen_ws path /vm/*/websockify')
+		const fallback = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
+		expect(fallback).toContain('@vm_screen_ws path /vm/*/websockify')
+		const multi = generateFullCaddyfile(
+			{mainDomain: 'livinity.io', subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}]},
+			true,
+			false,
+			[],
+		)
+		const subStart = multi.indexOf('bruce.livinity.io {')
+		expect(multi.indexOf('@vm_screen_ws path /vm/*/websockify', subStart)).toBeGreaterThan(subStart)
+	})
+
+	it('@vm_screen — no copy_headers Cookie, no strip_prefix /vm (Express owns the id-scoped strip)', () => {
+		const out = apexOut()
+		const idx = out.indexOf('handle @vm_screen {')
+		expect(idx).toBeGreaterThan(-1)
+		// Body ends where the adjacent @liv matcher begins (VM pair emitted before LIV_ASSISTANT_HANDLE).
+		const end = out.indexOf('@liv path /liv /liv/*', idx)
+		expect(end).toBeGreaterThan(idx)
+		const body = out.slice(idx, end)
+		expect(body).toContain('forward_auth 127.0.0.1:8080')
+		expect(body).toContain('uri /auth/verify')
+		// Absolute redir — a relative redir does NOT terminate forward_auth (LIVOS-041/386b33e7).
+		expect(body).toContain('redir https://{host}/login?redirect={scheme}://{host}{uri}')
+		// FRAME_EMBED_STRIP so the noVNC page iframe-embeds.
+		expect(body).toContain('header_down -X-Frame-Options')
+		// Pitfalls that must NOT appear.
+		expect(body).not.toContain('copy_headers Cookie')
+		expect(body).not.toContain('strip_prefix /vm')
+	})
+
 	// ─── Phase 269-03 (WS3) — @liv_agents auth-gated agent-list carve-out ───
 	//
 	// `/liv/api/agents` must route to livinityd :8080 (NOT AionUi :3020) so the
