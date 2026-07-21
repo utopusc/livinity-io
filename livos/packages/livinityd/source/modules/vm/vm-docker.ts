@@ -92,6 +92,16 @@ export interface RenderVmComposeOpts {
 	 * (a custom-image URL), so they are `$`-escaped before the merge (see below).
 	 */
 	osEnv?: Record<string, string>
+	/**
+	 * Phase 351 (VMCREATE-01 gap closure): a custom LOCAL image bind. The manager
+	 * has already hardlinked/copied the validated file into the VM's OWN data dir
+	 * as `hostFileName` (VMSEC-02 — never the original host path), so the rendered
+	 * bind source is `${dataDir}/${hostFileName}` (inside the VM's own dir) and the
+	 * target is the qemus-recognized `/boot.<ext>` (`containerPath`). Both fields
+	 * are SERVER-DERIVED (a uuid-scoped dir + a validated extension) — no
+	 * user-supplied string reaches the compose here, so no `$`-escape is needed.
+	 */
+	bootFileMount?: {hostFileName: string; containerPath: string}
 }
 
 /**
@@ -132,6 +142,16 @@ export function renderVmCompose(template: VmTemplate, opts: RenderVmComposeOpts)
 		ports.push(`127.0.0.1:${opts.rdpPort}:3389/tcp`, `127.0.0.1:${opts.rdpPort}:3389/udp`)
 	}
 
+	// Volumes: the template's `${APP_DATA_DIR}/storage:/storage` (already
+	// token-substituted to the VM's own dir above), plus — for a custom LOCAL image
+	// — a bind of the hardlinked file INSIDE the VM's own data dir to `/boot.<ext>`.
+	// The bind SOURCE is always within `opts.dataDir` (VMSEC-02 — no host bind
+	// outside the VM data dir); the original admin-supplied path is never mounted.
+	const volumes = [...svc.volumes]
+	if (opts.bootFileMount) {
+		volumes.push(`${opts.dataDir}/${opts.bootFileMount.hostFileName}:${opts.bootFileMount.containerPath}`)
+	}
+
 	return {
 		services: {
 			vm: {
@@ -143,7 +163,7 @@ export function renderVmCompose(template: VmTemplate, opts: RenderVmComposeOpts)
 				cap_add: svc.cap_add,
 				stop_grace_period: svc.stop_grace_period,
 				environment,
-				volumes: svc.volumes,
+				volumes,
 				ports,
 			},
 		},

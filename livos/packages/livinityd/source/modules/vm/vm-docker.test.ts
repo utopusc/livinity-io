@@ -109,6 +109,53 @@ test('renderVmCompose leaves a $-free VERSION/BOOT value untouched', () => {
 	expect(rendered.services.vm.environment.CPU_CORES).toBe('2')
 })
 
+test('renderVmCompose (custom LOCAL image) appends a VM-own-dir bind to /boot.<ext> (VMSEC-02)', () => {
+	// The manager has hardlinked the validated file into the VM's own dir as
+	// custom.<ext>; render binds THAT (inside opts.dataDir) to the qemus container
+	// target /boot.<ext> — never the original admin-supplied host path.
+	const rendered: any = renderVmCompose(LINUX_VM_TEMPLATE, {
+		id: 'loc',
+		dataDir: '/data/vm-data/loc',
+		novncPort: 16103,
+		resources: {cpus: 2, ramMiB: 2048, diskGiB: 16},
+		osEnv: {},
+		bootFileMount: {hostFileName: 'custom.iso', containerPath: '/boot.iso'},
+	})
+	const volumes: string[] = rendered.services.vm.volumes
+	// The template storage bind is preserved AND the boot bind is appended.
+	expect(volumes).toContain('/data/vm-data/loc/storage:/storage')
+	expect(volumes).toContain('/data/vm-data/loc/custom.iso:/boot.iso')
+	// The bind SOURCE is always within the VM's own data dir (no host bind outside it).
+	expect(volumes.every((v) => v.startsWith('/data/vm-data/loc/'))).toBe(true)
+	// A local image sets NO BOOT env (qemus ignores BOOT when a /boot.<ext> file is bound).
+	expect(rendered.services.vm.environment.BOOT).toBe('ubuntu') // template default only, no override
+})
+
+test('renderVmCompose (qcow2 local image) uses the matching /boot.qcow2 container target', () => {
+	const rendered: any = renderVmCompose(LINUX_VM_TEMPLATE, {
+		id: 'q',
+		dataDir: '/data/vm-data/q',
+		novncPort: 16104,
+		resources: {cpus: 2, ramMiB: 2048, diskGiB: 16},
+		osEnv: {},
+		bootFileMount: {hostFileName: 'custom.qcow2', containerPath: '/boot.qcow2'},
+	})
+	expect(rendered.services.vm.volumes).toContain('/data/vm-data/q/custom.qcow2:/boot.qcow2')
+})
+
+test('renderVmCompose WITHOUT a bootFileMount leaves volumes byte-unchanged (URL/distro branch)', () => {
+	// The URL/distro branch must render EXACTLY the template storage bind — no
+	// extra volume creeps in when bootFileMount is absent.
+	const rendered: any = renderVmCompose(LINUX_VM_TEMPLATE, {
+		id: 'url',
+		dataDir: '/data/vm-data/url',
+		novncPort: 16105,
+		resources: {cpus: 2, ramMiB: 2048, diskGiB: 16},
+		osEnv: {BOOT: 'https://cdn.example/boot.iso'},
+	})
+	expect(rendered.services.vm.volumes).toEqual(['/data/vm-data/url/storage:/storage'])
+})
+
 test('renderVmCompose (linux, no rdpPort) emits ONLY the noVNC port + preserves BOOT default', () => {
 	const rendered: any = renderVmCompose(LINUX_VM_TEMPLATE, {
 		id: 'def',

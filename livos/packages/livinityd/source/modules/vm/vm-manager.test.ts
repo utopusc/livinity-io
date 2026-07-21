@@ -44,8 +44,20 @@ vi.mock('../apps/vm-preflight.js', () => {
 	}
 })
 
-// Mock fs-extra so delete()'s rm -rf never touches a real disk (Task 2).
-vi.mock('fs-extra', () => ({default: {remove: vi.fn(async () => {})}}))
+// Mock fs-extra so delete()'s rm -rf never touches a real disk (Task 2). Phase 351
+// (VMCREATE-01 gap closure): the custom LOCAL-image path also uses fse.realpath (symlink-safe
+// containment), fse.stat (regular-file), fse.ensureDir + fse.link/copyFile (hardlink into the
+// VM's own dir). Defaults resolve a valid, contained, regular file so the happy path clears.
+vi.mock('fs-extra', () => ({
+	default: {
+		remove: vi.fn(async () => {}),
+		ensureDir: vi.fn(async () => {}),
+		realpath: vi.fn(async (p: string) => p),
+		stat: vi.fn(async () => ({isFile: () => true})),
+		link: vi.fn(async () => {}),
+		copyFile: vi.fn(async () => {}),
+	},
+}))
 
 const {composeUp, composeStop, composeRestart, composeDownVolumes, dockerInspectStatus, renderVmCompose} =
 	await import('./vm-docker.js')
@@ -207,6 +219,122 @@ describe('create — preflight-gated + detached', () => {
 		).rejects.toBeInstanceOf(VmResourceInvalid)
 
 		// Rejected BEFORE provisioning: no registry write, no compose-up.
+		expect(await records(store)).toHaveLength(0)
+		expect(composeUp).toHaveBeenCalledTimes(0)
+	})
+
+	// ── Custom LOCAL image (VMCREATE-01 gap closure) ─────────────────────────────
+	// A valid, contained, regular file: hardlink it into the VM's OWN data dir and
+	// thread a bootFileMount (/boot.<ext>) into the render — NO BOOT env (qemus
+	// ignores BOOT when a /boot.<ext> file is bound; the host path never leaks to env).
+	test('linux custom LOCAL image (contained, valid): hardlinks into the VM dir + binds /boot.<ext>, no BOOT env', async () => {
+		const {vm, store} = makeManager()
+
+		const {id} = await vm.create({...LINUX, os: {customImage: {localPath: '/fake/data/isos/ubuntu.iso'}}})
+
+		// Hardlinked (not copied) from the realpath'd source into the VM's own dir.
+		expect(fse.link).toHaveBeenCalledWith('/fake/data/isos/ubuntu.iso', `/fake/data/vm-data/${id}/custom.iso`)
+		expect(fse.copyFile).not.toHaveBeenCalled()
+		// Render receives the bind (VM-own-dir source, qemus container target) and NO BOOT env.
+		expect(renderVmCompose).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				osEnv: {},
+				bootFileMount: {hostFileName: 'custom.iso', containerPath: '/boot.iso'},
+			}),
+		)
+		expect(await records(store)).toHaveLength(1)
+	})
+
+	// EXDEV / cross-device link failure → full-copy fallback (never a hard failure).
+	test('linux custom LOCAL image: hardlink EXDEV → copyFile fallback', async () => {
+		const {vm} = makeManager()
+		vi.mocked(fse.link).mockRejectedValueOnce(Object.assign(new Error('cross-device link'), {code: 'EXDEV'}))
+
+		const {id} = await vm.create({...LINUX, os: {customImage: {localPath: '/fake/data/isos/disk.qcow2'}}})
+
+		expect(fse.copyFile).toHaveBeenCalledWith('/fake/data/isos/disk.qcow2', `/fake/data/vm-data/${id}/custom.qcow2`)
+	})
+
+	// CONTAINMENT (VMSEC-02): a real path OUTSIDE the data dir is refused at the
+	// manager BEFORE any provisioning — docker seam 0 calls, registry empty.
+	test('linux custom LOCAL image OUTSIDE the data dir: rejected, docker seam 0 calls', async () => {
+		const {vm, store} = makeManager()
+
+		await expect(
+			vm.create({...LINUX, os: {customImage: {localPath: '/etc/evil.iso'}}}),
+		).rejects.toBeInstanceOf(VmResourceInvalid)
+
+		expect(await records(store)).toHaveLength(0)
+		expect(composeUp).toHaveBeenCalledTimes(0)
+		expect(fse.link).not.toHaveBeenCalled()
+	})
+
+	// SYMLINK ESCAPE: a path that LOOKS contained but whose realpath resolves
+	// OUTSIDE the data dir is refused — proving fse.realpath (not a raw string
+	// prefix) is the load-bearing containment gate against symlink/`..` traversal.
+	test('linux custom LOCAL image via a symlink escaping the data dir: rejected via realpath', async () => {
+		const {vm, store} = makeManager()
+		// The file realpath resolves OUTSIDE (a symlink target); the root realpath is the default.
+		vi.mocked(fse.realpath).mockImplementationOnce(async () => '/etc/shadow.iso')
+
+		await expect(
+			vm.create({...LINUX, os: {customImage: {localPath: '/fake/data/isos/innocent.iso'}}}),
+		).rejects.toBeInstanceOf(VmResourceInvalid)
+
+		expect(await records(store)).toHaveLength(0)
+		expect(composeUp).toHaveBeenCalledTimes(0)
+	})
+
+	// A `..`-traversal path whose realpath resolves outside is refused the same way.
+	test('linux custom LOCAL image with a .. that resolves outside: rejected via realpath', async () => {
+		const {vm, store} = makeManager()
+		vi.mocked(fse.realpath).mockImplementationOnce(async () => '/fake/secret.iso')
+
+		await expect(
+			vm.create({...LINUX, os: {customImage: {localPath: '/fake/data/../secret.iso'}}}),
+		).rejects.toBeInstanceOf(VmResourceInvalid)
+
+		expect(await records(store)).toHaveLength(0)
+		expect(composeUp).toHaveBeenCalledTimes(0)
+	})
+
+	// A non-locally-bootable extension (qemus won't bind a .vmdk) is refused BEFORE
+	// touching the filesystem — no realpath probe, no provisioning.
+	test('linux custom LOCAL image with a non-bootable extension (.vmdk): rejected before any fs probe', async () => {
+		const {vm, store} = makeManager()
+
+		await expect(
+			vm.create({...LINUX, os: {customImage: {localPath: '/fake/data/isos/disk.vmdk'}}}),
+		).rejects.toBeInstanceOf(VmResourceInvalid)
+
+		expect(fse.realpath).not.toHaveBeenCalled()
+		expect(await records(store)).toHaveLength(0)
+		expect(composeUp).toHaveBeenCalledTimes(0)
+	})
+
+	// A dangling / non-existent path (realpath throws) is refused honestly.
+	test('linux custom LOCAL image that does not exist (realpath throws): rejected', async () => {
+		const {vm, store} = makeManager()
+		vi.mocked(fse.realpath).mockRejectedValueOnce(Object.assign(new Error('ENOENT'), {code: 'ENOENT'}))
+
+		await expect(
+			vm.create({...LINUX, os: {customImage: {localPath: '/fake/data/isos/missing.iso'}}}),
+		).rejects.toBeInstanceOf(VmResourceInvalid)
+
+		expect(await records(store)).toHaveLength(0)
+		expect(composeUp).toHaveBeenCalledTimes(0)
+	})
+
+	// A contained path that is a DIRECTORY (not a regular file) is refused.
+	test('linux custom LOCAL image pointing at a directory: rejected (not a regular file)', async () => {
+		const {vm, store} = makeManager()
+		vi.mocked(fse.stat).mockResolvedValueOnce({isFile: () => false} as unknown as Awaited<ReturnType<typeof fse.stat>>)
+
+		await expect(
+			vm.create({...LINUX, os: {customImage: {localPath: '/fake/data/isos.iso'}}}),
+		).rejects.toBeInstanceOf(VmResourceInvalid)
+
 		expect(await records(store)).toHaveLength(0)
 		expect(composeUp).toHaveBeenCalledTimes(0)
 	})

@@ -266,6 +266,57 @@ describe('OS selection discriminated union (VMCREATE-01) — schema is the cheap
 		expect(vmMock.create).toHaveBeenCalledWith(payload)
 	})
 
+	// VMCREATE-01 gap closure: the "local file" half of "local file or URL". The
+	// schema is the cheap first gate (absolute POSIX path + bootable extension);
+	// the manager does the load-bearing containment/regular-file checks.
+	test('linux + a custom LOCAL image path (.iso) is accepted and delegated', async () => {
+		const vmMock = makeVmMock()
+		const payload = {
+			name: 'Local ISO VM',
+			kind: 'linux',
+			resources: {cpus: 2, ramMiB: 4096, diskGiB: 40},
+			os: {customImage: {localPath: '/data/isos/ubuntu.iso'}},
+		}
+		await caller({vmMock}).create(payload)
+		expect(vmMock.create).toHaveBeenCalledWith(payload)
+	})
+
+	test('linux + a custom LOCAL image with a .qcow2 extension is accepted', async () => {
+		const vmMock = makeVmMock()
+		const payload = {
+			name: 'Local qcow2 VM',
+			kind: 'linux',
+			resources: {cpus: 2, ramMiB: 4096, diskGiB: 40},
+			os: {customImage: {localPath: '/data/isos/disk.qcow2'}},
+		}
+		await caller({vmMock}).create(payload)
+		expect(vmMock.create).toHaveBeenCalledWith(payload)
+	})
+
+	test('linux + a custom LOCAL image with a non-bootable extension (.vmdk) is refused at the boundary', async () => {
+		const vmMock = makeVmMock()
+		await expect(
+			caller({vmMock}).create({...VALID_CREATE, os: {customImage: {localPath: '/data/isos/disk.vmdk'}}}),
+		).rejects.toThrow()
+		expect(vmMock.create).not.toHaveBeenCalled()
+	})
+
+	test('linux + a RELATIVE custom LOCAL image path is refused (must be absolute)', async () => {
+		const vmMock = makeVmMock()
+		await expect(
+			caller({vmMock}).create({...VALID_CREATE, os: {customImage: {localPath: 'isos/ubuntu.iso'}}}),
+		).rejects.toThrow()
+		expect(vmMock.create).not.toHaveBeenCalled()
+	})
+
+	test('linux + a custom LOCAL image with no bootable extension is refused', async () => {
+		const vmMock = makeVmMock()
+		await expect(
+			caller({vmMock}).create({...VALID_CREATE, os: {customImage: {localPath: '/data/isos/notes.txt'}}}),
+		).rejects.toThrow()
+		expect(vmMock.create).not.toHaveBeenCalled()
+	})
+
 	test('windows + a macOS/unlisted edition is refused at the boundary (never reaches the manager)', async () => {
 		const vmMock = makeVmMock()
 		await expect(

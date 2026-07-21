@@ -23,10 +23,12 @@
  */
 
 import crypto from 'node:crypto'
+import path from 'node:path'
 
 import fse from 'fs-extra'
 
 import {assertKvmAvailable, assertVmResourcesSane, probeHostCapacity, VmResourceInvalid} from '../apps/vm-preflight.js'
+import {LOCAL_IMAGE_EXTENSIONS} from './vm-os-catalog.js'
 import type Livinityd from '../../index.js'
 import {
 	composeDownVolumes,
@@ -62,7 +64,13 @@ export type VmResources = {cpus: number; ramMiB: number; diskGiB: number}
 
 /** Phase 351 (VMCREATE-01): the guest-OS selection, discriminated by `kind`. */
 export type WindowsOsSelection = {edition: WindowsEdition}
-export type LinuxOsSelection = {distro: LinuxDistro} | {customImage: {url: string}}
+/**
+ * A Linux/any-OS guest source: a named distro, a custom-image URL, or (351 gap
+ * closure — VMCREATE-01 "local file or URL") a custom-image LOCAL file path. The
+ * URL and localPath forms are mutually exclusive by construction.
+ */
+export type LinuxCustomImage = {url: string} | {localPath: string}
+export type LinuxOsSelection = {distro: LinuxDistro} | {customImage: LinuxCustomImage}
 
 /**
  * The create payload. `os` is discriminated by `kind` so a Windows edition and a
@@ -76,25 +84,82 @@ export type CreateVmInput =
 	| {name: string; kind: 'linux'; resources: VmResources; os: LinuxOsSelection}
 
 /**
- * Resolve a Linux `BOOT` env value: a distro name, or a custom-image URL.
- *
- * (WR-01) The http/https scheme is RE-ASSERTED here — where the value is
- * actually consumed into the container's fetch target — not only at the router
- * zod refine. The router is the cheap first gate; this is the load-bearing one,
- * so a future non-router caller (352's create UI, a test, a refactor) cannot
- * reintroduce a `file://`/`gopher://`/etc. boot source. A garbage URL throws in
- * `new URL(...)` and is caught by create()'s error path; a valid-but-forbidden
- * scheme throws VmResourceInvalid (→ the existing callVm → BAD_REQUEST mapping).
+ * The resolved Linux boot source. Either an ENV value (a distro name or a
+ * custom-image URL, threaded into `BOOT`), or a validated LOCAL FILE that will be
+ * hardlinked into the VM's own data dir and bind-mounted to `/boot.<ext>` (qemus
+ * IGNORES `BOOT` when such a file is bound — upstream contract).
  */
-function resolveLinuxBootValue(os: LinuxOsSelection): string {
+type LinuxBootPlan = {kind: 'env'; boot: string} | {kind: 'localFile'; sourceRealPath: string; ext: string}
+
+/**
+ * Resolve a Linux boot source into an env value or a validated local file.
+ *
+ * (WR-01) For the URL branch the http/https scheme is RE-ASSERTED here — where the
+ * value is actually consumed — not only at the router zod refine. The router is the
+ * cheap first gate; this is the load-bearing one, so a future non-router caller
+ * (352's create UI, a test, a refactor) cannot reintroduce a `file://`/`gopher://`
+ * boot source. A valid-but-forbidden scheme throws VmResourceInvalid (→ the existing
+ * callVm → BAD_REQUEST mapping).
+ *
+ * For the LOCAL FILE branch (351 gap closure — VMCREATE-01 "local file or URL") the
+ * load-bearing containment + regular-file checks run in resolveLocalImage below.
+ */
+async function resolveLinuxBoot(os: LinuxOsSelection, dataDirectory: string): Promise<LinuxBootPlan> {
 	if ('customImage' in os) {
+		if ('localPath' in os.customImage) {
+			return resolveLocalImage(os.customImage.localPath, dataDirectory)
+		}
 		const {protocol} = new URL(os.customImage.url)
 		if (protocol !== 'http:' && protocol !== 'https:') {
 			throw new VmResourceInvalid(`Custom-image URL scheme ${protocol} is not allowed (http/https only).`)
 		}
-		return os.customImage.url
+		return {kind: 'env', boot: os.customImage.url}
 	}
-	return os.distro
+	return {kind: 'env', boot: os.distro}
+}
+
+/**
+ * (VMCREATE-01 gap closure + VMSEC-02) The LOAD-BEARING validation for a custom
+ * LOCAL image path — the first create-path input that lets an admin reference a
+ * host file, so it is fail-closed on every axis:
+ *   - extension must be one qemus binds locally (LOCAL_IMAGE_EXTENSIONS) — reject
+ *     a `.vmdk`/`.vhd`/etc. that qemus would silently ignore as a bind.
+ *   - `fs.realpath` resolves symlinks BEFORE the containment check, so a symlink
+ *     that lives inside the data dir but points OUTSIDE it cannot escape.
+ *   - the real path must be CONTAINED inside `livinityd.dataDirectory` (prefix
+ *     check after realpath + an explicit separator guard so `/data-evil` cannot
+ *     masquerade as `/data`) — no host bind outside the managed data root.
+ *   - it must be a REGULAR FILE (a dir / device / dangling path is refused).
+ * Every failure throws VmResourceInvalid (→ BAD_REQUEST), and — because this runs
+ * BEFORE any provisioning in create() — the docker seam is never reached on reject.
+ */
+async function resolveLocalImage(localPath: string, dataDirectory: string): Promise<LinuxBootPlan> {
+	const ext = path.posix.extname(localPath).slice(1).toLowerCase()
+	if (!(LOCAL_IMAGE_EXTENSIONS as readonly string[]).includes(ext)) {
+		throw new VmResourceInvalid(
+			`Custom-image file extension .${ext || '(none)'} is not a locally-bootable format (allowed: ${LOCAL_IMAGE_EXTENSIONS.map((e) => `.${e}`).join(', ')}).`,
+		)
+	}
+	let realFile: string
+	let realRoot: string
+	try {
+		// fse.realpath's type union includes Buffer (the encoding overload); the
+		// default (utf8) call returns a string — cast to keep the containment check
+		// string-typed. A symlink is resolved to its real target here (the gate below).
+		realFile = (await fse.realpath(localPath)) as string
+		realRoot = (await fse.realpath(dataDirectory)) as string
+	} catch {
+		throw new VmResourceInvalid('Custom-image file does not exist or is not accessible.')
+	}
+	const root = realRoot.endsWith('/') ? realRoot.slice(0, -1) : realRoot
+	if (realFile !== root && !realFile.startsWith(root + '/')) {
+		throw new VmResourceInvalid('Custom-image file must reside within the LivOS data directory.')
+	}
+	const stat = await fse.stat(realFile)
+	if (!stat.isFile()) {
+		throw new VmResourceInvalid('Custom-image path is not a regular file.')
+	}
+	return {kind: 'localFile', sourceRealPath: realFile, ext}
 }
 
 // ── Per-VM keyed single-flight (module scope) ────────────────────────────────
@@ -153,12 +218,23 @@ export class VmManager {
 	async create(input: CreateVmInput): Promise<{id: string}> {
 		const {name, kind, resources} = input
 
-		// Phase 351 (VMCREATE-01): resolve the guest-OS selection into its env value
-		// — VERSION for a Windows edition, BOOT for a Linux distro or custom-image
-		// URL. `input.kind` (not the destructured `kind`) drives the narrowing so TS
-		// resolves `input.os` to the correct branch.
+		// Phase 351 (VMCREATE-01): resolve the guest-OS selection. For Linux this may
+		// VALIDATE a custom LOCAL image file (realpath containment + regular-file +
+		// extension) and THROW VmResourceInvalid BEFORE any provisioning — the
+		// load-bearing gate (the router zod is the cheap first gate). `input.kind`
+		// (not the destructured `kind`) drives the narrowing so TS resolves `input.os`.
+		const bootPlan: LinuxBootPlan | null =
+			input.kind === 'linux' ? await resolveLinuxBoot(input.os, this.#livinityd.dataDirectory) : null
+
+		// VERSION for a Windows edition; BOOT for a Linux distro or custom-image URL.
+		// A custom LOCAL file layers NO env value (qemus IGNORES BOOT when a
+		// /boot.<ext> file is bind-mounted — the host path never leaks into env).
 		const osEnv: Record<string, string> =
-			input.kind === 'windows' ? {VERSION: input.os.edition} : {BOOT: resolveLinuxBootValue(input.os)}
+			input.kind === 'windows'
+				? {VERSION: input.os.edition}
+				: bootPlan!.kind === 'env'
+					? {BOOT: bootPlan!.boot}
+					: {}
 
 		// (1) Preflights BEFORE any provisioning (T-350-07). A throw propagates and
 		//     leaves the registry EMPTY — no /dev/kvm ⇒ clean refusal, never a
@@ -189,7 +265,34 @@ export class VmManager {
 		// (3) Render the 349 template → compose file on disk. The OS selection
 		//     (osEnv) is threaded through so the container actually boots the chosen
 		//     guest OS — renderVmCompose escapes any user-supplied '$' before merge.
-		const rendered = renderVmCompose(getVmTemplate(kind), {id, dataDir, novncPort, rdpPort, resources, osEnv})
+		// (2b) Custom LOCAL image (VMCREATE-01 gap closure): hardlink the VALIDATED
+		//      file into the VM's OWN data dir as `custom.<ext>` and bind THAT (never
+		//      the original host path) to `/boot.<ext>` — VMSEC-02 posture (no host
+		//      bind outside the VM data dir). A hardlink is free (same filesystem, no
+		//      data copy); on EXDEV (cross-device) or any link failure fall back to a
+		//      full copy so a data-dir on a different mount than the source still works.
+		let bootFileMount: {hostFileName: string; containerPath: string} | undefined
+		if (bootPlan?.kind === 'localFile') {
+			await fse.ensureDir(dataDir)
+			const hostFileName = `custom.${bootPlan.ext}`
+			const dest = `${dataDir}/${hostFileName}`
+			try {
+				await fse.link(bootPlan.sourceRealPath, dest)
+			} catch {
+				await fse.copyFile(bootPlan.sourceRealPath, dest)
+			}
+			bootFileMount = {hostFileName, containerPath: `/boot.${bootPlan.ext}`}
+		}
+
+		const rendered = renderVmCompose(getVmTemplate(kind), {
+			id,
+			dataDir,
+			novncPort,
+			rdpPort,
+			resources,
+			osEnv,
+			bootFileMount,
+		})
 		const composePath = await writeVmCompose(dataDir, rendered)
 
 		// (4) Persist the registry record (lastIntent:'running' so reconcileOnBoot

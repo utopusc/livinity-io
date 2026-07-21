@@ -153,6 +153,21 @@ export const LINUX_DISTROS: Record<LinuxDistro, OsCatalogEntry> = {
 	zorin: {label: 'Zorin OS', defaults: LINUX_DEFAULT},
 }
 
+/**
+ * Phase 351 (VMCREATE-01 gap closure): the local custom-image file extensions
+ * qemus/qemu accepts as a DIRECT bind-mount (`/boot.<ext>`). Verified against
+ * qemus/qemu-docker `src/install.sh` `findBootFile()` (fetched 2026-07-20): it
+ * scans EXACTLY `/boot.img`, `/boot.raw`, `/boot.iso`, `/boot.qcow2` (plus
+ * `/custom.iso` for dockur compat). NOTE: `vmdk`/`vhd`/`vhdx`/`vdi` are
+ * recognized ONLY on the URL-download + archive-extraction path (`findArchiveImage`),
+ * NEVER as a local bind target — so they are DELIBERATELY EXCLUDED here to avoid
+ * shipping a bind qemus would silently ignore (the "silently wrong, not loudly
+ * broken" pitfall class). URL custom images keep their broader upstream format
+ * support; a LOCAL file must be one qemus can actually boot from a bind.
+ */
+export const LOCAL_IMAGE_EXTENSIONS = ['iso', 'img', 'raw', 'qcow2'] as const
+export type LocalImageExtension = (typeof LOCAL_IMAGE_EXTENSIONS)[number]
+
 /** Tuple of every Windows edition key (for `z.enum(...)` at the schema boundary). */
 export const WINDOWS_EDITION_KEYS = Object.keys(WINDOWS_EDITIONS) as [WindowsEdition, ...WindowsEdition[]]
 

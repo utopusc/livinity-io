@@ -41,6 +41,7 @@ import {
 	WINDOWS_EDITIONS,
 	LINUX_DISTROS,
 	WINDOWS_BYO_LICENSE_NOTICE,
+	LOCAL_IMAGE_EXTENSIONS,
 } from './vm-os-catalog.js'
 import type {CreateVmInput} from './vm-manager.js'
 
@@ -57,29 +58,59 @@ const resourcesSchema = z.object({
 const nameSchema = z.string().min(1).max(255)
 
 /**
- * Phase 351 (VMCREATE-01): a custom guest-image source. Only http/https URLs are
- * accepted — a `file://`/`ftp://`/etc. scheme is refused HERE, imitating
+ * Phase 351 (VMCREATE-01): a custom guest-image URL source. Only http/https URLs
+ * are accepted — a `file://`/`ftp://`/etc. scheme is refused HERE, imitating
  * webapps/url-validator.ts's ALLOWED_SCHEMES allowlist. `z.string().url()` alone
  * accepts `file://` (a valid URL), so the `.refine` protocol check is the actual
  * gate; `.max(2048)` bounds it (shortcut-schema.ts:38 precedent).
  */
+const customImageUrlSchema = z.object({
+	url: z
+		.string()
+		.url()
+		.max(2048)
+		.refine(
+			(v) => {
+				try {
+					return ['http:', 'https:'].includes(new URL(v).protocol)
+				} catch {
+					return false
+				}
+			},
+			{message: 'Only http/https custom-image URLs are allowed'},
+		),
+})
+
+/**
+ * Phase 351 (VMCREATE-01 gap closure): a custom guest-image LOCAL file source —
+ * the "local file OR URL" branch the roadmap's VMCREATE-01 literal requires. This
+ * is the cheap first gate (an absolute POSIX path ending in a qemus-bootable
+ * extension); the LOAD-BEARING checks live at the manager (vm-manager.ts
+ * resolveLinuxBoot → resolveLocalImage): `fs.realpath` symlink-safe CONTAINMENT
+ * inside `livinityd.dataDirectory` (VMSEC-02 — no host bind outside the managed
+ * data root) + a regular-file stat, all fail-closed with VmResourceInvalid. The
+ * extension allowlist matches exactly what qemus binds locally (LOCAL_IMAGE_EXTENSIONS).
+ */
+const customImageLocalSchema = z.object({
+	localPath: z
+		.string()
+		.min(1)
+		.max(4096)
+		.refine((v) => v.startsWith('/') && !v.includes('\0'), {
+			message: 'Custom-image localPath must be an absolute path',
+		})
+		.refine(
+			(v) => {
+				const ext = v.split('.').pop()?.toLowerCase()
+				return ext !== undefined && (LOCAL_IMAGE_EXTENSIONS as readonly string[]).includes(ext)
+			},
+			{message: `Custom-image localPath must end in one of: ${LOCAL_IMAGE_EXTENSIONS.map((e) => `.${e}`).join(', ')}`},
+		),
+})
+
 const customImageSchema = z.object({
-	customImage: z.object({
-		url: z
-			.string()
-			.url()
-			.max(2048)
-			.refine(
-				(v) => {
-					try {
-						return ['http:', 'https:'].includes(new URL(v).protocol)
-					} catch {
-						return false
-					}
-				},
-				{message: 'Only http/https custom-image URLs are allowed'},
-			),
-	}),
+	// URL OR local-file — mutually exclusive by construction (VMCREATE-01 "local file or URL").
+	customImage: z.union([customImageUrlSchema, customImageLocalSchema]),
 })
 
 /**
