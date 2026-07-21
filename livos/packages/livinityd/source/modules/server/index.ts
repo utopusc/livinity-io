@@ -956,6 +956,25 @@ class Server {
 			const id = request.params.id
 
 			try {
+				// Phase 353 review CR-01/WR-02 — ADMIN-ONLY gate, fail-closed BEFORE
+				// any registry probe. Every vm.* procedure is adminProcedure and the
+				// screen is the most powerful VM capability, so it MUST match that
+				// posture. Do NOT rely on Caddy forward_auth here: /auth/verify is
+				// logged-in-only (admits ANY active member), and on multi-user
+				// per-user subdomains the apex session gate early-returns, so this
+				// Express proxy is the real gate. Resolve the session with
+				// verifySessionFull (signature+exp + jti-revocation + active-user —
+				// same strength as the GET gate's /auth/verify), then mirror
+				// adminProcedure's admin determination (is-authenticated.ts): a
+				// userId-bearing (multi-user) token requires role === 'admin'; a
+				// legacy no-userId token is single-user admin-equivalent.
+				const authToken = request.headers.authorization?.split(' ')[1] ?? request.cookies?.LIVINITY_SESSION
+				const vmScreenSession = authToken ? await this.verifySessionFull(authToken) : null
+				if (!vmScreenSession || (vmScreenSession.userId && vmScreenSession.role !== 'admin')) {
+					this.logger.verbose(`VM proxy: forbidden (non-admin/unauthenticated) for ${id}`)
+					return response.status(403).json({error: 'forbidden'})
+				}
+
 				// Validate UUID shape BEFORE the registry lookup (mirrors the
 				// z.string().uuid() discipline every vm.* procedure uses). A
 				// non-UUID id → 404 (NOT 500): path-traversal/SSRF via the id.
@@ -1340,8 +1359,19 @@ class Server {
 					}
 
 					// 2. Auth gate — token from ?token= query OR LIVINITY_SESSION
-					//    cookie → verifyToken. No/invalid token → 401. SAME existing
-					//    mechanism as /ws/desktop; no bridging before this passes.
+					//    cookie. Phase 353 review WR-02: validate with
+					//    verifySessionFull (signature+exp + jti-revocation +
+					//    active-user), NOT the weaker verifyToken (signature+exp
+					//    only) — a revoked/logged-out token or deactivated user must
+					//    lose the live VNC stream immediately, consistent with the
+					//    GET leg's /auth/verify. No/invalid token → 401.
+					//    Phase 353 review CR-01: the entire vm.* API is
+					//    adminProcedure, so the console (the most powerful VM
+					//    capability) MUST match that admin-only posture. Mirror
+					//    adminProcedure's admin determination (is-authenticated.ts):
+					//    a userId-bearing (multi-user) token requires role ===
+					//    'admin' (else 403); a legacy no-userId token is single-user
+					//    admin-equivalent. No bridging before BOTH checks pass.
 					let vmToken = searchParams.get('token')
 					if (!vmToken) {
 						const cookieHeader = request.headers.cookie || ''
@@ -1354,10 +1384,16 @@ class Server {
 						socket.destroy()
 						return
 					}
-					const vmAuthValid = await this.verifyToken(vmToken).catch(() => false)
-					if (!vmAuthValid) {
+					const vmSession = await this.verifySessionFull(vmToken).catch(() => null)
+					if (!vmSession) {
 						this.logger.verbose('WS vm rejected: invalid token')
 						socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+						socket.destroy()
+						return
+					}
+					if (vmSession.userId && vmSession.role !== 'admin') {
+						this.logger.verbose('WS vm rejected: non-admin member')
+						socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
 						socket.destroy()
 						return
 					}

@@ -26,7 +26,7 @@ describe('/vm/:id/websockify WebSocket-to-WebSocket bridge handler (auth tripwir
 		const block = extractVmWsBlock(serverSource)
 		const originIdx = block.indexOf('request.headers.origin')
 		const tokenIdx = block.search(/searchParams\.get\('token'\)/)
-		const verifyIdx = block.indexOf('verifyToken')
+		const verifyIdx = block.indexOf('verifySessionFull')
 		expect(originIdx).toBeGreaterThan(-1)
 		expect(tokenIdx).toBeGreaterThan(-1)
 		expect(verifyIdx).toBeGreaterThan(-1)
@@ -49,12 +49,30 @@ describe('/vm/:id/websockify WebSocket-to-WebSocket bridge handler (auth tripwir
 		expect(noTokenIdx).toBeLessThan(bridgeIdx)
 	})
 
-	it('(c) verifyToken is called, and it gates BEFORE the bridge', () => {
+	it('(c) verifySessionFull is called (WR-02: jti-revocation + active-user, not bare verifyToken), and it gates BEFORE the bridge', () => {
 		const block = extractVmWsBlock(serverSource)
-		const verifyIdx = block.indexOf('this.verifyToken(vmToken)')
+		const verifyIdx = block.indexOf('this.verifySessionFull(vmToken)')
 		const bridgeIdx = block.indexOf('new WebSocket(')
 		expect(verifyIdx).toBeGreaterThan(-1)
 		expect(bridgeIdx).toBeGreaterThan(verifyIdx)
+		// WR-02: the WS leg must NOT downgrade to the weaker verifyToken
+		// (signature+exp only) — that would keep a revoked/logged-out token live.
+		expect(block).not.toContain('this.verifyToken(vmToken)')
+	})
+
+	it('(c2) CR-01: an admin-role gate is present and rejects non-admin members with 403 BEFORE the bridge', () => {
+		const block = extractVmWsBlock(serverSource)
+		// The gate mirrors adminProcedure: a userId-bearing (multi-user) token
+		// must have role === 'admin'; a legacy no-userId token is single-user
+		// admin-equivalent. This pins CR-01 so it cannot silently regress.
+		const roleIdx = block.search(/role\s*!==\s*'admin'/)
+		expect(roleIdx).toBeGreaterThan(-1)
+		expect(block).toMatch(/vmSession\.userId\s*&&\s*vmSession\.role\s*!==\s*'admin'/)
+		// Non-admin rejection is 403 Forbidden (distinct from the 401 no/bad token).
+		expect(block).toContain('403 Forbidden')
+		// The role gate precedes the bridge construction.
+		const bridgeIdx = block.indexOf('new WebSocket(')
+		expect(bridgeIdx).toBeGreaterThan(roleIdx)
 	})
 
 	it('(d) missing/invalid token → 401 Unauthorized + socket.destroy()', () => {
