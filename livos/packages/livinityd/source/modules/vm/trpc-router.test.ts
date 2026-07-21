@@ -23,8 +23,35 @@
 // @ts-nocheck
 import {beforeEach, describe, expect, test, vi} from 'vitest'
 
-import {KvmUnavailable, VmResourceInvalid} from '../apps/vm-preflight.js'
-import vm from './trpc-router.js'
+// Phase 351 (VMCREATE-03/04): createOptions calls probeHostCapacity (live df) +
+// detectGpu (shells out). Mock BOTH so the router tests stay offline. The
+// preflight mock uses importOriginal so KvmUnavailable/VmResourceInvalid keep
+// their REAL class identity (the boundary `instanceof` checks + the tests'
+// `new KvmUnavailable(...)` depend on it).
+vi.mock('../apps/vm-preflight.js', async (importOriginal) => {
+	const actual = await importOriginal()
+	return {
+		...actual,
+		probeHostCapacity: vi.fn(async () => ({
+			totalMemBytes: 64 * 1024 ** 3,
+			cpuCount: 32,
+			diskFreeBytes: 4096 * 1024 ** 3,
+		})),
+	}
+})
+vi.mock('../system/gpu.js', () => ({
+	detectGpu: vi.fn(async () => ({
+		present: false,
+		vendor: 'none',
+		wsl2: false,
+		toolkitConfigured: false,
+		driverSource: 'none',
+	})),
+}))
+
+import {KvmUnavailable, VmResourceInvalid, probeHostCapacity} from '../apps/vm-preflight.js'
+import {detectGpu} from '../system/gpu.js'
+import vm, {__resetVmCreateOptionsCache} from './trpc-router.js'
 
 // A fake VmManager: every method a vi.fn with a benign default resolution.
 function makeVmMock() {
@@ -46,7 +73,7 @@ function makeCtx(opts: {role?: string; vmMock?: ReturnType<typeof makeVmMock>} =
 		currentUser: {id: 'admin-1', username: 'admin', role: opts.role ?? 'admin'},
 		dangerouslyBypassAuthentication: true,
 		logger: {error() {}, info() {}, warn() {}, verbose() {}, log() {}},
-		livinityd: {vm: vmMock},
+		livinityd: {vm: vmMock, dataDirectory: '/fake/data'},
 		request: undefined,
 		server: undefined,
 	}
@@ -69,7 +96,7 @@ const VALID_CREATE = {
 describe('vm router — namespace shape', () => {
 	test('exposes list / get / create / start / stop / restart / delete', () => {
 		const procs = (vm as any)._def?.procedures ?? {}
-		for (const name of ['list', 'get', 'create', 'start', 'stop', 'restart', 'delete']) {
+		for (const name of ['list', 'get', 'create', 'createOptions', 'start', 'stop', 'restart', 'delete']) {
 			expect(procs[name]).toBeDefined()
 		}
 	})
@@ -262,6 +289,82 @@ describe('OS selection discriminated union (VMCREATE-01) — schema is the cheap
 			caller({vmMock}).create({name: 'x', kind: 'linux', resources: {cpus: 2, ramMiB: 4096, diskGiB: 40}}),
 		).rejects.toThrow()
 		expect(vmMock.create).not.toHaveBeenCalled()
+	})
+})
+
+describe('vm.createOptions (VMCREATE-03/04) — options surface + honest GPU verdict', () => {
+	beforeEach(() => {
+		__resetVmCreateOptionsCache()
+		vi.mocked(detectGpu).mockResolvedValue({
+			present: false,
+			vendor: 'none',
+			wsl2: false,
+			toolkitConfigured: false,
+			driverSource: 'none',
+		})
+		vi.mocked(probeHostCapacity).mockResolvedValue({
+			totalMemBytes: 64 * 1024 ** 3,
+			cpuCount: 32,
+			diskFreeBytes: 4096 * 1024 ** 3,
+		})
+	})
+
+	test('is admin-gated: a non-admin caller is refused before any probe runs', async () => {
+		await expect(caller({role: 'member'}).createOptions()).rejects.toThrow()
+		expect(probeHostCapacity).not.toHaveBeenCalled()
+		expect(detectGpu).not.toHaveBeenCalled()
+	})
+
+	test('returns the OS catalog (windows editions + linux distros) data-driven from the catalog', async () => {
+		const res = await caller().createOptions()
+		// A representative, load-bearing edition/distro is present with its label + defaults.
+		expect(res.os.windows['11'].label).toContain('Windows 11')
+		expect(res.os.windows['11'].defaults).toMatchObject({cpus: expect.any(Number), ramMiB: expect.any(Number), diskGiB: expect.any(Number)})
+		expect(res.os.linux.ubuntu.label).toContain('Ubuntu')
+		expect(res.os.linux.debian.defaults.diskGiB).toBeGreaterThan(0)
+		// macOS is ABSENT by construction — never a catalog key.
+		expect((res.os.windows as any).macos).toBeUndefined()
+	})
+
+	test('carries the verbatim BYO-license notice', async () => {
+		const res = await caller().createOptions()
+		expect(res.byoLicenseNotice).toContain('supply your own valid Windows license')
+	})
+
+	test('reports host capacity {cpuCount, totalMemBytes, diskFreeBytes} (display-only disk)', async () => {
+		const res = await caller().createOptions()
+		expect(res.hostCapacity).toEqual({
+			cpuCount: 32,
+			totalMemBytes: 64 * 1024 ** 3,
+			diskFreeBytes: 4096 * 1024 ** 3,
+		})
+		expect(probeHostCapacity).toHaveBeenCalledWith('/fake/data')
+	})
+
+	// The REGRESSION that pins VMCREATE-03: gpu.status is a HARDCODED literal and is
+	// NEVER derived from detectGpu().present. A mocked-PRESENT GPU must NOT flip it —
+	// if this ever fails, the wiring accidentally leaked hostGpu.present into status.
+	test('gpu.status stays "unsupported" EVEN when detectGpu reports a present GPU (T-351-10)', async () => {
+		vi.mocked(detectGpu).mockResolvedValue({
+			present: true,
+			vendor: 'nvidia',
+			wsl2: false,
+			toolkitConfigured: true,
+			driverSource: 'linux-native',
+		})
+		const res = await caller().createOptions()
+		expect(res.gpu.status).toBe('unsupported')
+		// hostGpu is surfaced INFORMATIONALLY — present:true is reported, but it did
+		// not (and must never) flip the verdict.
+		expect(res.gpu.hostGpu.present).toBe(true)
+		expect(res.gpu.hostGpu.vendor).toBe('nvidia')
+	})
+
+	test('a df-fail-closed probe (diskFreeBytes 0) still returns options, never 500s', async () => {
+		vi.mocked(probeHostCapacity).mockResolvedValue({totalMemBytes: 64 * 1024 ** 3, cpuCount: 32, diskFreeBytes: 0})
+		const res = await caller().createOptions()
+		expect(res.hostCapacity.diskFreeBytes).toBe(0)
+		expect(res.gpu.status).toBe('unsupported')
 	})
 })
 

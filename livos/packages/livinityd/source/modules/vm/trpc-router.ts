@@ -32,8 +32,16 @@ import {z} from 'zod'
 import {TRPCError} from '@trpc/server'
 
 import {router, adminProcedure} from '../server/trpc/trpc.js'
-import {KvmUnavailable, VmResourceInvalid} from '../apps/vm-preflight.js'
-import {WINDOWS_EDITION_KEYS, LINUX_DISTRO_KEYS} from './vm-os-catalog.js'
+import {KvmUnavailable, VmResourceInvalid, probeHostCapacity} from '../apps/vm-preflight.js'
+import {detectGpu} from '../system/gpu.js'
+import type {GpuInfo} from '../system/gpu.js'
+import {
+	WINDOWS_EDITION_KEYS,
+	LINUX_DISTRO_KEYS,
+	WINDOWS_EDITIONS,
+	LINUX_DISTROS,
+	WINDOWS_BYO_LICENSE_NOTICE,
+} from './vm-os-catalog.js'
 import type {CreateVmInput} from './vm-manager.js'
 
 // ── Input schemas ─────────────────────────────────────────────────────────────
@@ -140,9 +148,83 @@ async function callVm<T>(fn: () => Promise<T>): Promise<T> {
 	}
 }
 
+/**
+ * Phase 351 (VMCREATE-03/04) — the `vm.createOptions` payload 352's create UI
+ * consumes with ZERO new backend: the guest-OS catalog + per-OS defaults, the
+ * verbatim BYO-license notice, a DISPLAY-ONLY host-capacity snapshot, and the
+ * honest GPU verdict.
+ */
+interface VmCreateOptions {
+	/** The selectable guest-OS catalog (label + per-OS resource defaults), data-driven from vm-os-catalog. */
+	os: {
+		windows: typeof WINDOWS_EDITIONS
+		linux: typeof LINUX_DISTROS
+	}
+	/** The verbatim bring-your-own Windows-license notice (single-sourced — VMCREATE-01). */
+	byoLicenseNotice: string
+	/**
+	 * A host-capacity snapshot for the UI to pre-fill/sanity-hint resource fields.
+	 * DISPLAY-ONLY / NON-AUTHORITATIVE: `diskFreeBytes` here may be up to
+	 * VM_CREATE_OPTIONS_TTL_MS stale — the load-bearing bound is the create() gate,
+	 * which RE-PROBES disk-free LIVE on every create and never trusts this value
+	 * (T-351-08). cpuCount/totalMemBytes do not drift mid-session.
+	 */
+	hostCapacity: {cpuCount: number; totalMemBytes: number; diskFreeBytes: number}
+	/**
+	 * The GPU-attachability verdict. `status` is a HARDCODED 'unsupported' literal
+	 * (VMCREATE-03 / T-351-10): neither dockur/windows nor qemus/qemu documents a
+	 * passthrough mechanism (RESEARCH A1, live-verified 2026-07-20), so the honest
+	 * capability surface never offers GPU. `hostGpu` is INFORMATIONAL ONLY and is
+	 * DELIBERATELY not consulted to derive `status` — a mocked-present GPU must not
+	 * flip it (the regression test pins this). No toggle, no compose device change.
+	 */
+	gpu: {status: 'unsupported'; hostGpu: GpuInfo}
+}
+
+// TTL cache mirroring system.ts's onboardingSystemInfoCache shape. The whole
+// payload rides a 60s TTL; the only volatility risk (disk-free) is DISPLAY-ONLY
+// here — the authoritative create() gate re-probes live (see hostCapacity doc).
+let vmCreateOptionsCache: {at: number; payload: VmCreateOptions} | null = null
+const VM_CREATE_OPTIONS_TTL_MS = 60_000
+
+/** Test-only: clear the createOptions TTL cache so a fresh probe/GPU mock is re-exercised. */
+export function __resetVmCreateOptionsCache(): void {
+	vmCreateOptionsCache = null
+}
+
+async function buildVmCreateOptions(dataDir: string): Promise<VmCreateOptions> {
+	const now = Date.now()
+	if (vmCreateOptionsCache && now - vmCreateOptionsCache.at < VM_CREATE_OPTIONS_TTL_MS) {
+		return vmCreateOptionsCache.payload
+	}
+	// probeHostCapacity fails CLOSED (diskFreeBytes 0 on a df error) and detectGpu
+	// never throws — createOptions is a read that must never 500 on a flaky probe.
+	const capacity = await probeHostCapacity(dataDir)
+	const hostGpu = await detectGpu()
+	const payload: VmCreateOptions = {
+		os: {windows: WINDOWS_EDITIONS, linux: LINUX_DISTROS},
+		byoLicenseNotice: WINDOWS_BYO_LICENSE_NOTICE,
+		hostCapacity: {
+			cpuCount: capacity.cpuCount,
+			totalMemBytes: capacity.totalMemBytes,
+			diskFreeBytes: capacity.diskFreeBytes, // DISPLAY-ONLY — the create() gate re-probes live (T-351-08).
+		},
+		// HARDCODED literal — NEVER derived from hostGpu.present (VMCREATE-03 / T-351-10).
+		gpu: {status: 'unsupported', hostGpu},
+	}
+	vmCreateOptionsCache = {at: now, payload}
+	return payload
+}
+
 // Every procedure is adminProcedure — no member-VM read/write surface exists.
 const vm = router({
 	list: adminProcedure.query(({ctx}) => callVm(() => requireVm(ctx).list())),
+	// VMCREATE-03/04: the create-flow options 352 renders. adminProcedure like every
+	// other vm.* procedure (VMSEC-02 — no member-VM read surface). Data-driven from
+	// the catalog + a live (fail-closed) host probe + the honest GPU verdict.
+	createOptions: adminProcedure.query(({ctx}) =>
+		buildVmCreateOptions(((ctx as {livinityd?: {dataDirectory?: string}}).livinityd?.dataDirectory) ?? ''),
+	),
 	get: adminProcedure.input(idInput).query(({ctx, input}) => callVm(() => requireVm(ctx).get(input.id))),
 	create: adminProcedure
 		.input(createInput)
