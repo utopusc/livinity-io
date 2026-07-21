@@ -1959,11 +1959,13 @@ describe('Phase 262-01 — /liv-family forward_auth gate (LIVOS-041/047/054)', (
 		expect(out.slice(idx, end)).not.toContain('forward_auth 127.0.0.1')
 	})
 
-	it('@vm_screen_ws matcher is `path /vm/*/websockify` and emits in all three sites', () => {
+	it('@vm_screen_ws matcher is a block on `path /vm/*/websockify` and emits in all three sites', () => {
 		const apex = apexOut()
-		expect(apex).toContain('@vm_screen_ws path /vm/*/websockify')
+		expect(apex).toContain('@vm_screen_ws {')
+		expect(apex).toContain('path /vm/*/websockify')
 		const fallback = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
-		expect(fallback).toContain('@vm_screen_ws path /vm/*/websockify')
+		expect(fallback).toContain('@vm_screen_ws {')
+		expect(fallback).toContain('path /vm/*/websockify')
 		const multi = generateFullCaddyfile(
 			{mainDomain: 'livinity.io', subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}]},
 			true,
@@ -1971,7 +1973,26 @@ describe('Phase 262-01 — /liv-family forward_auth gate (LIVOS-041/047/054)', (
 			[],
 		)
 		const subStart = multi.indexOf('bruce.livinity.io {')
-		expect(multi.indexOf('@vm_screen_ws path /vm/*/websockify', subStart)).toBeGreaterThan(subStart)
+		expect(multi.indexOf('@vm_screen_ws {', subStart)).toBeGreaterThan(subStart)
+	})
+
+	// Phase 353 review WR-01: the WS matcher MUST require the Upgrade:websocket
+	// header, not path alone. Without it, a plain GET /vm/<id>/websockify takes
+	// the UNGATED @vm_screen_ws leg and reaches the broad Express /vm/:id HTTP
+	// proxy unauthenticated. With the header condition, only a real WS upgrade
+	// matches here; a plain GET falls through to the forward_auth-gated
+	// @vm_screen (path /vm/*).
+	it('@vm_screen_ws requires the Upgrade:websocket header (plain GET falls to the gated leg)', () => {
+		const out = apexOut()
+		const idx = out.indexOf('@vm_screen_ws {')
+		expect(idx).toBeGreaterThan(-1)
+		// Matcher block ends at its `handle @vm_screen_ws {`.
+		const end = out.indexOf('handle @vm_screen_ws {', idx)
+		expect(end).toBeGreaterThan(idx)
+		const matcher = out.slice(idx, end)
+		expect(matcher).toContain('path /vm/*/websockify')
+		expect(matcher).toContain('header Connection *Upgrade*')
+		expect(matcher).toContain('header Upgrade websocket')
 	})
 
 	it('@vm_screen — no copy_headers Cookie, no strip_prefix /vm (Express owns the id-scoped strip)', () => {

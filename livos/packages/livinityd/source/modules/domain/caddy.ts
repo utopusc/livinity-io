@@ -835,9 +835,14 @@ ${WS_TRANSPORT_BODY}
  * LIV_GATE_BODY redir is ABSOLUTE (relative redir does not terminate
  * forward_auth — LIVOS-041/386b33e7).
  */
-const VM_SCREEN_WS_HANDLE = `\t@vm_screen_ws path /vm/*/websockify
+const VM_SCREEN_WS_HANDLE = `\t@vm_screen_ws {
+\t\tpath /vm/*/websockify
+\t\theader Connection *Upgrade*
+\t\theader Upgrade websocket
+\t}
 \thandle @vm_screen_ws {
-\t\t# Phase 353-01 (VMVIEW-01): NO forward_auth on the VM noVNC WS leg. forward_auth's auth subrequest inherits Upgrade:websocket; livinityd's server.on('upgrade') hijacks it at :8080/auth/verify (Express route never runs) -> socket reset -> 502 (documented e336afdd/@liv_ws regression). Gated instead at the Express /vm/:id/websockify upgrade handler (Origin + verifyToken, mirrors /ws/desktop).
+\t\t# Phase 353-01 (VMVIEW-01): NO forward_auth on the VM noVNC WS leg. forward_auth's auth subrequest inherits Upgrade:websocket; livinityd's server.on('upgrade') hijacks it at :8080/auth/verify (Express route never runs) -> socket reset -> 502 (documented e336afdd/@liv_ws regression). Gated instead at the Express /vm/:id/websockify upgrade handler (Origin + verifySessionFull + admin-role, mirrors /ws/desktop).
+\t\t# Phase 353 review WR-01: the matcher requires the Upgrade:websocket header (not path-only) so ONLY a real WS upgrade takes this UNGATED leg. A plain GET /vm/<id>/websockify (no Upgrade header) does NOT match here -> falls through to the forward_auth-gated @vm_screen (path /vm/*), closing the unauthenticated reach past the broad Express /vm/:id HTTP proxy.
 \t\treverse_proxy 127.0.0.1:8080 {
 ${WS_TRANSPORT_BODY}
 \t\t}
