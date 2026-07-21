@@ -50,7 +50,11 @@ const resourcesSchema = z.object({
 	ramMiB: z.number().int().positive(),
 	diskGiB: z.number().int().positive(),
 })
-const nameSchema = z.string().min(1)
+// (IN-03) Upper-bounded so an unbounded multi-MB `name` cannot bloat the
+// registry store. 255 mirrors customImageSchema's `.max(2048)` bounding
+// precedent (a practical display-name ceiling; the name never reaches docker —
+// containerName is the uuid-derived vm-<id>).
+const nameSchema = z.string().min(1).max(255)
 
 /**
  * Phase 351 (VMCREATE-01): a custom guest-image source. Only http/https URLs are
@@ -222,9 +226,16 @@ const vm = router({
 	// VMCREATE-03/04: the create-flow options 352 renders. adminProcedure like every
 	// other vm.* procedure (VMSEC-02 — no member-VM read surface). Data-driven from
 	// the catalog + a live (fail-closed) host probe + the honest GPU verdict.
-	createOptions: adminProcedure.query(({ctx}) =>
-		buildVmCreateOptions(((ctx as {livinityd?: {dataDirectory?: string}}).livinityd?.dataDirectory) ?? ''),
-	),
+	createOptions: adminProcedure.query(({ctx}) => {
+		// (IN-02) Probe the REAL dataDirectory. On a mis-wired daemon (no
+		// dataDirectory), surface the wiring fault as an INTERNAL_SERVER_ERROR
+		// (mirroring requireVm) rather than probing '' → a misleading "0 GB free".
+		const dataDirectory = (ctx as {livinityd?: {dataDirectory?: string}}).livinityd?.dataDirectory
+		if (!dataDirectory) {
+			throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'VM data directory unavailable'})
+		}
+		return buildVmCreateOptions(dataDirectory)
+	}),
 	get: adminProcedure.input(idInput).query(({ctx, input}) => callVm(() => requireVm(ctx).get(input.id))),
 	create: adminProcedure
 		.input(createInput)

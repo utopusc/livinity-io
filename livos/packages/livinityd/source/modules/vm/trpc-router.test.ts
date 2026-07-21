@@ -193,6 +193,19 @@ describe('zod validation rejects bad input BEFORE the manager (T-350-15)', () =>
 		await expect(caller({vmMock}).create({...VALID_CREATE, name: ''})).rejects.toThrow()
 		expect(vmMock.create).not.toHaveBeenCalled()
 	})
+	// IN-03: name is upper-bounded (.max(255)) so an unbounded multi-MB name
+	// cannot bloat the registry store. A 256-char name is refused; 255 is accepted.
+	test('create with an over-long name (>255) is refused at the boundary (IN-03)', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).create({...VALID_CREATE, name: 'x'.repeat(256)})).rejects.toThrow()
+		expect(vmMock.create).not.toHaveBeenCalled()
+	})
+	test('create with a 255-char name is accepted (IN-03 boundary)', async () => {
+		const vmMock = makeVmMock()
+		const name = 'x'.repeat(255)
+		await caller({vmMock}).create({...VALID_CREATE, name})
+		expect(vmMock.create).toHaveBeenCalledWith(expect.objectContaining({name}))
+	})
 	test('create with a kind not in the enum is refused', async () => {
 		const vmMock = makeVmMock()
 		await expect(caller({vmMock}).create({...VALID_CREATE, kind: 'macos'} as any)).rejects.toThrow()
@@ -365,6 +378,17 @@ describe('vm.createOptions (VMCREATE-03/04) — options surface + honest GPU ver
 		const res = await caller().createOptions()
 		expect(res.hostCapacity.diskFreeBytes).toBe(0)
 		expect(res.gpu.status).toBe('unsupported')
+	})
+
+	// IN-02: on a mis-wired daemon with NO dataDirectory, createOptions must surface
+	// the wiring fault (INTERNAL_SERVER_ERROR) rather than probing '' → a misleading
+	// "0 GB free". The probe is never reached.
+	test('a mis-wired daemon (no dataDirectory) → INTERNAL_SERVER_ERROR, never a misleading "0 GB free" (IN-02)', async () => {
+		vi.mocked(probeHostCapacity).mockClear() // this file has no per-test clearAllMocks — isolate the call assertion
+		const ctx = makeCtx()
+		;(ctx.livinityd as {dataDirectory?: string}).dataDirectory = undefined
+		await expect(vm.createCaller(ctx).createOptions()).rejects.toMatchObject({code: 'INTERNAL_SERVER_ERROR'})
+		expect(probeHostCapacity).not.toHaveBeenCalled()
 	})
 })
 
