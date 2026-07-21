@@ -63,6 +63,22 @@ export async function dockerInspectStatus(containerName: string): Promise<string
 	return result.stdout.trim()
 }
 
+/**
+ * Phase 351 (VMCREATE-01, Pitfall 1): double every '$' → '$$' in a set of
+ * user-supplied env values so docker compose's own `$VAR`/`${VAR}` interpolation
+ * pass (run over the compose FILE at parse time, independent of js-yaml) cannot
+ * mangle a value — e.g. a signed custom-image URL's `?sig=$2b$...` query. Pure;
+ * returns a NEW object (never mutates the caller's osEnv).
+ */
+function escapeComposeEnv(env: Record<string, string> | undefined): Record<string, string> {
+	if (!env) return {}
+	// NOTE: the FUNCTION replacer is deliberate — a STRING replacement of '$$'
+	// would be interpreted by replaceAll as a literal single '$' (the `$$` special
+	// pattern), collapsing rather than doubling. A function return is inserted
+	// verbatim, so each '$' becomes the two-char '$$' compose escape.
+	return Object.fromEntries(Object.entries(env).map(([k, v]) => [k, v.replaceAll('$', () => '$$')]))
+}
+
 export interface RenderVmComposeOpts {
 	id: string
 	dataDir: string
@@ -99,9 +115,14 @@ export function renderVmCompose(template: VmTemplate, opts: RenderVmComposeOpts)
 		RAM_SIZE: `${opts.resources.ramMiB}M`,
 		DISK_SIZE: `${opts.resources.diskGiB}G`,
 		// Phase 351 (VMCREATE-01): layer the guest-OS selection (VERSION/BOOT) over
-		// the template default, exactly where CPU/RAM/DISK are merged. Any '$' in a
-		// user-supplied value (a custom-image URL) is escaped just before this merge.
-		...(opts.osEnv ?? {}),
+		// the template default, exactly where CPU/RAM/DISK are merged. osEnv values
+		// can be USER-SUPPLIED (a custom-image URL), and docker compose interpolates
+		// $VAR/${VAR} over compose-file content at parse time — independent of
+		// js-yaml's safe serialization (351-RESEARCH Pitfall 1). Double every '$' to
+		// '$$' (compose's escape) BEFORE the merge, mirroring the ${APP_DATA_DIR}
+		// "substitute-before-read" discipline two blocks above, so a signed URL's
+		// raw '$' cannot silently truncate the download target.
+		...escapeComposeEnv(opts.osEnv),
 	}
 
 	// Host side rendered loopback-only; container side stays as the template's

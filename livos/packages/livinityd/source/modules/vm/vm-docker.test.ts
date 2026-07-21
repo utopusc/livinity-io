@@ -78,6 +78,37 @@ test('renderVmCompose (windows) merges resources into environment, preserving VE
 	expect(env.VERSION).toBe('11')
 })
 
+test('renderVmCompose escapes $ → $$ in a user-supplied custom-image BOOT URL (Pitfall 1)', () => {
+	// docker compose interpolates $VAR/${VAR} over compose-file CONTENT at parse
+	// time (independent of js-yaml). A signed custom-ISO URL with a raw '$' would
+	// be silently mangled — every '$' must be doubled BEFORE it lands in env.
+	const rendered: any = renderVmCompose(LINUX_VM_TEMPLATE, {
+		id: 'sig',
+		dataDir: '/data/vm-data/sig',
+		novncPort: 16101,
+		resources: {cpus: 2, ramMiB: 2048, diskGiB: 16},
+		osEnv: {BOOT: 'https://cdn.example/boot.iso?sig=$2b$abc$def'},
+	})
+	const boot: string = rendered.services.vm.environment.BOOT
+	// Every '$' is doubled; no lone '$' survives.
+	expect(boot).toBe('https://cdn.example/boot.iso?sig=$$2b$$abc$$def')
+	expect(/\$(?!\$)/.test(boot.replaceAll('$$', ''))).toBe(false)
+})
+
+test('renderVmCompose leaves a $-free VERSION/BOOT value untouched', () => {
+	const rendered: any = renderVmCompose(WINDOWS_VM_TEMPLATE, {
+		id: 'w',
+		dataDir: '/data/vm-data/w',
+		novncPort: 16102,
+		rdpPort: 16202,
+		resources: {cpus: 2, ramMiB: 4096, diskGiB: 64},
+		osEnv: {VERSION: '11e'},
+	})
+	expect(rendered.services.vm.environment.VERSION).toBe('11e')
+	// Numeric CPU/RAM/DISK (never user-$-bearing) are unaffected.
+	expect(rendered.services.vm.environment.CPU_CORES).toBe('2')
+})
+
 test('renderVmCompose (linux, no rdpPort) emits ONLY the noVNC port + preserves BOOT default', () => {
 	const rendered: any = renderVmCompose(LINUX_VM_TEMPLATE, {
 		id: 'def',
