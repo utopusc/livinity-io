@@ -307,8 +307,18 @@ export class VmManager {
 			const record = await this.#registry.get(id)
 			if (!record) return {deleted: false} // unknown id — no side effects
 
-			await composeStop(record.composePath, `vm-${id}`)
-			await composeDownVolumes(record.composePath, `vm-${id}`)
+			// (IN-04) The docker steps are BEST-EFFORT: a transient docker error at
+			// stop/down must never leave a VM un-deletable. Log and proceed to the
+			// durable teardown (dir + registry + ports) — this matches the
+			// composeDownVolumes doc contract ("never blocking the delete"). The
+			// graceful stop still goes FIRST so a healthy guest is not SIGKILLed
+			// before the volume teardown; only a THROWING stop is tolerated here.
+			await composeStop(record.composePath, `vm-${id}`).catch((error) => {
+				this.#livinityd.logger.error(`[vm] delete ${id}: composeStop failed (continuing teardown)`, error)
+			})
+			await composeDownVolumes(record.composePath, `vm-${id}`).catch((error) => {
+				this.#livinityd.logger.error(`[vm] delete ${id}: composeDownVolumes failed (continuing teardown)`, error)
+			})
 			await fse.remove(record.dataDir)
 			await this.#registry.delete(id)
 			vmPortAllocator.release(record.novncPort)

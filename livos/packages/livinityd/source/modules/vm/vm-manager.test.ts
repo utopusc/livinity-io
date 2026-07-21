@@ -419,6 +419,33 @@ describe('lifecycle mutations — single-flight + graceful + ordered teardown', 
 		novncRel.mockRestore()
 		rdpRel.mockRestore()
 	})
+
+	// IN-04: a transient docker stop/down error must NOT abort teardown — delete
+	// stays best-effort on the docker steps and still reaches the durable teardown
+	// (rmdir → registry-delete → port-release), so a VM is never un-deletable due
+	// to a momentary docker hiccup.
+	test('delete tolerates a throwing composeStop/composeDownVolumes and still completes teardown (IN-04)', async () => {
+		const {vm, store, logger} = makeManager()
+		await seed(store, {id: 'dz', containerName: 'vm-dz', dataDir: '/fake/data/vm-data/dz', novncPort: 16120, rdpPort: 16220})
+
+		vi.mocked(composeStop).mockRejectedValueOnce(new Error('docker hiccup'))
+		vi.mocked(composeDownVolumes).mockRejectedValueOnce(new Error('down hiccup'))
+		const novncRel = vi.spyOn(vmPortAllocator, 'release')
+		const rdpRel = vi.spyOn(vmRdpPortAllocator, 'release')
+
+		const result = await vm.delete('dz', {confirm: true})
+
+		expect(result).toEqual({deleted: true})
+		// Durable teardown still ran despite BOTH docker steps throwing.
+		expect(fse.remove).toHaveBeenCalledWith('/fake/data/vm-data/dz')
+		expect(await records(store)).toHaveLength(0)
+		expect(novncRel).toHaveBeenCalledWith(16120)
+		expect(rdpRel).toHaveBeenCalledWith(16220)
+		expect(logger.error).toHaveBeenCalled()
+
+		novncRel.mockRestore()
+		rdpRel.mockRestore()
+	})
 })
 
 describe('reconcileOnBoot — boot durability (closes the cleanDockerState wipe)', () => {
