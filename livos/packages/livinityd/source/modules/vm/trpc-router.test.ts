@@ -62,6 +62,7 @@ function makeVmMock() {
 		start: vi.fn(async () => {}),
 		stop: vi.fn(async () => {}),
 		restart: vi.fn(async () => {}),
+		rename: vi.fn(async () => {}),
 		delete: vi.fn(async () => ({deleted: true})),
 	}
 }
@@ -96,7 +97,7 @@ const VALID_CREATE = {
 describe('vm router — namespace shape', () => {
 	test('exposes list / get / create / start / stop / restart / delete', () => {
 		const procs = (vm as any)._def?.procedures ?? {}
-		for (const name of ['list', 'get', 'create', 'createOptions', 'start', 'stop', 'restart', 'delete']) {
+		for (const name of ['list', 'get', 'create', 'createOptions', 'start', 'stop', 'restart', 'rename', 'delete']) {
 			expect(procs[name]).toBeDefined()
 		}
 	})
@@ -179,6 +180,40 @@ describe('an admin caller reaches each handler and delegates with the right args
 		const res = await caller({vmMock}).delete({id: UUID, confirm: true})
 		expect(vmMock.delete).toHaveBeenCalledWith(UUID, {confirm: true})
 		expect(res).toEqual({deleted: true})
+	})
+	test('rename delegates (id, name) to VmManager.rename', async () => {
+		const vmMock = makeVmMock()
+		await caller({vmMock}).rename({id: UUID, name: 'renamed'})
+		expect(vmMock.rename).toHaveBeenCalledWith(UUID, 'renamed')
+	})
+})
+
+describe('vm.rename (VMAPP-02 edit-where-safe) — admin-gated + input-validated', () => {
+	test('rejects a non-admin (member) BEFORE the delegate', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({role: 'member', vmMock}).rename({id: UUID, name: 'x'})).rejects.toThrow()
+		expect(vmMock.rename).not.toHaveBeenCalled()
+	})
+	test('an empty name is refused at the zod boundary (min(1))', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).rename({id: UUID, name: ''})).rejects.toThrow()
+		expect(vmMock.rename).not.toHaveBeenCalled()
+	})
+	test('an over-long name (>255) is refused at the boundary (max(255))', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).rename({id: UUID, name: 'x'.repeat(256)})).rejects.toThrow()
+		expect(vmMock.rename).not.toHaveBeenCalled()
+	})
+	test('a 255-char name is accepted (boundary)', async () => {
+		const vmMock = makeVmMock()
+		const name = 'x'.repeat(255)
+		await caller({vmMock}).rename({id: UUID, name})
+		expect(vmMock.rename).toHaveBeenCalledWith(UUID, name)
+	})
+	test('a non-uuid id is refused', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).rename({id: 'not-a-uuid', name: 'x'})).rejects.toThrow()
+		expect(vmMock.rename).not.toHaveBeenCalled()
 	})
 })
 

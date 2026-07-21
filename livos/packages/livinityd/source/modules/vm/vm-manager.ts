@@ -480,6 +480,28 @@ export class VmManager {
 	}
 
 	/**
+	 * Rename a VM (edit-where-safe — VMAPP-02). The display `name` is PURE registry
+	 * metadata: it never reaches docker (the container/project is the uuid-derived
+	 * `vm-<id>`, never the user name), so a rename touches NO container, compose,
+	 * port, or data dir — just a registry.patch({name}). Single-flighted so it
+	 * cannot race a concurrent delete/lifecycle op on the SAME VM (a rename onto a
+	 * record being torn down would be a lost/orphaned write). Validates existence
+	 * first (throws the standard not-found), so renaming an unknown id is an honest
+	 * error, not a silent no-op.
+	 *
+	 * RESIDUAL (documented, VMAPP-02 scope boundary): a RESOURCE resize
+	 * (cpus/ramMiB/diskGiB) is DELIBERATELY not offered — it is NOT a safe in-place
+	 * edit (it needs a container/disk recreate), so it is out of scope for this
+	 * "edit-where-safe" verb and left to a future phase.
+	 */
+	async rename(id: string, name: string): Promise<void> {
+		return this.#withFlight(id, async () => {
+			await this.#requireRecord(id) // throws `VM ${id}: not found` for an unknown id
+			await this.#registry.patch(id, {name})
+		})
+	}
+
+	/**
 	 * Destroy a VM. Requires an explicit `confirm:true` acknowledgement (the
 	 * backend half of 352's UI confirm). ORDERED teardown (T-350-11):
 	 *   graceful stop → down --volumes → remove data dir → registry delete →

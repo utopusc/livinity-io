@@ -140,6 +140,9 @@ const idInput = z.object({id: z.string().uuid()})
 // delete requires an explicit destruction acknowledgement — z.literal(true) means
 // a missing/false `confirm` is refused at the zod boundary, before the manager.
 const deleteInput = z.object({id: z.string().uuid(), confirm: z.literal(true)})
+// rename (VMAPP-02 edit-where-safe): a uuid + the SAME bounded nameSchema as
+// create (.min(1).max(255)) — an empty/over-long name is refused before the manager.
+const renameInput = z.object({id: z.string().uuid(), name: nameSchema})
 
 /**
  * Resolve the VmManager off the daemon context, or throw a typed 500 if the VM
@@ -160,6 +163,7 @@ interface VmManagerSurface {
 	start(id: string): Promise<void>
 	stop(id: string): Promise<void>
 	restart(id: string): Promise<void>
+	rename(id: string, name: string): Promise<void>
 	delete(id: string, opts: {confirm: true}): Promise<{deleted: boolean}>
 }
 
@@ -274,6 +278,12 @@ const vm = router({
 	start: adminProcedure.input(idInput).mutation(({ctx, input}) => callVm(() => requireVm(ctx).start(input.id))),
 	stop: adminProcedure.input(idInput).mutation(({ctx, input}) => callVm(() => requireVm(ctx).stop(input.id))),
 	restart: adminProcedure.input(idInput).mutation(({ctx, input}) => callVm(() => requireVm(ctx).restart(input.id))),
+	// VMAPP-02 edit-where-safe: rename a VM's display name (registry-only metadata).
+	// adminProcedure like every other vm.* verb; callVm gives NOT_FOUND→re-throw and
+	// the single-flight race→CONFLICT mapping for free.
+	rename: adminProcedure
+		.input(renameInput)
+		.mutation(({ctx, input}) => callVm(() => requireVm(ctx).rename(input.id, input.name))),
 	delete: adminProcedure
 		.input(deleteInput)
 		.mutation(({ctx, input}) => callVm(() => requireVm(ctx).delete(input.id, {confirm: input.confirm}))),

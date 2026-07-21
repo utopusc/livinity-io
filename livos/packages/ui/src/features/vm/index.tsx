@@ -16,11 +16,12 @@ import {Loading} from '@/components/ui/loading'
 import {t} from '@/utils/i18n'
 
 import {VmEmptyState} from './components/vm-empty-state'
+import {VmList} from './components/vm-list'
 import {decideVmVisibility} from './decide-vm-visibility'
 import {useVmList} from './hooks/use-vm-list'
 
 export default function VmApp() {
-	const {isAdmin, isLoading, error} = useVmList()
+	const {isAdmin, isLoading, error, vms} = useVmList()
 	const [, setCreateOpen] = useState(false)
 	const visibility = decideVmVisibility({isLoading, isAdmin})
 
@@ -47,10 +48,14 @@ export default function VmApp() {
 						{t('vm.error.generic')}
 					</p>
 				</div>
-			) : (
+			) : vms.length === 0 ? (
 				<VmEmptyState onCreate={() => setCreateOpen(true)} />
+			) : (
+				<div className='min-h-0 flex-1 overflow-y-auto'>
+					<VmList vms={vms} />
+				</div>
 			)}
-			{/* CreateVmDialog wired in 352-03; VM list branch added in 352-02 */}
+			{/* CreateVmDialog wired in 352-03 into the setCreateOpen placeholder */}
 		</div>
 	)
 }

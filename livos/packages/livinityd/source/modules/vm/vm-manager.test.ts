@@ -759,6 +759,63 @@ describe('lifecycle mutations — single-flight + graceful + ordered teardown', 
 	})
 })
 
+describe('rename — edit-where-safe (registry-only, single-flight)', () => {
+	test('patches the name ONLY; every other field is untouched; NO docker calls', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {
+			id: 'rn1',
+			containerName: 'vm-rn1',
+			name: 'old-name',
+			kind: 'windows',
+			resources: {cpus: 4, ramMiB: 8192, diskGiB: 128},
+			novncPort: 16150,
+			rdpPort: 16250,
+		})
+
+		await vm.rename('rn1', 'new-name')
+
+		const rec = (await records(store)).find((r) => r.id === 'rn1')!
+		expect(rec.name).toBe('new-name')
+		// A rename is PURE metadata — nothing else moves.
+		expect(rec.kind).toBe('windows')
+		expect(rec.resources).toEqual({cpus: 4, ramMiB: 8192, diskGiB: 128})
+		expect(rec.containerName).toBe('vm-rn1')
+		expect(rec.novncPort).toBe(16150)
+		expect(rec.rdpPort).toBe(16250)
+		// No container/compose touched — nothing to recreate.
+		expect(composeUp).not.toHaveBeenCalled()
+		expect(composeStop).not.toHaveBeenCalled()
+		expect(composeRestart).not.toHaveBeenCalled()
+		expect(composeDownVolumes).not.toHaveBeenCalled()
+	})
+
+	test('rename of an unknown id throws not-found (no store write)', async () => {
+		const {vm, store} = makeManager()
+		await expect(vm.rename('ghost', 'whatever')).rejects.toThrow(/not found/)
+		expect(await records(store)).toHaveLength(0)
+	})
+
+	test('rename refuses while another op on the SAME id is in flight (single-flight → already in progress)', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {id: 'rn2', containerName: 'vm-rn2', name: 'busy'})
+
+		// Hold a stop open so the per-VM marker stays claimed.
+		let releaseStop!: () => void
+		vi.mocked(composeStop).mockImplementationOnce(
+			() => new Promise<void>((res) => {
+				releaseStop = () => res()
+			}),
+		)
+		const first = vm.stop('rn2')
+		// A rename on the same VM while the marker is held refuses immediately.
+		await expect(vm.rename('rn2', 'nope')).rejects.toThrow(/already in progress/)
+		releaseStop()
+		await expect(first).resolves.toBeUndefined()
+		// The name never changed — the rename was refused BEFORE any patch.
+		expect((await records(store)).find((r) => r.id === 'rn2')!.name).toBe('busy')
+	})
+})
+
 describe('reconcileOnBoot — boot durability (closes the cleanDockerState wipe)', () => {
 	test('re-ups only lastIntent==="running" VMs; skips stopped', async () => {
 		const {vm, store} = makeManager()
