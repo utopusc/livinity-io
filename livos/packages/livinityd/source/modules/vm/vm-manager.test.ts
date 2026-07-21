@@ -26,8 +26,12 @@ vi.mock('../apps/vm-preflight.js', () => ({
 // Mock fs-extra so delete()'s rm -rf never touches a real disk (Task 2).
 vi.mock('fs-extra', () => ({default: {remove: vi.fn(async () => {})}}))
 
-const {composeUp, dockerInspectStatus} = await import('./vm-docker.js')
+const {composeUp, composeStop, composeRestart, composeDownVolumes, dockerInspectStatus} =
+	await import('./vm-docker.js')
 const {assertKvmAvailable, assertVmResourcesSane} = await import('../apps/vm-preflight.js')
+const fse = (await import('fs-extra')).default
+const {vmPortAllocator, vmRdpPortAllocator} = await import('./vm-ports.js')
+const {VmRegistry} = await import('./vm-registry.js')
 const {VmManager} = await import('./vm-manager.js')
 
 // ── In-memory fake store + manager harness ───────────────────────────────────
@@ -239,5 +243,152 @@ describe('list/get — live state derivation (never the stored flag)', () => {
 	test('get of an unknown id returns undefined', async () => {
 		const {vm} = makeManager()
 		expect(await vm.get('nope')).toBeUndefined()
+	})
+})
+
+describe('lifecycle mutations — single-flight + graceful + ordered teardown', () => {
+	test('start: composeUp + running intent', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {id: 's1', containerName: 'vm-s1', lastIntent: 'stopped'})
+
+		await vm.start('s1')
+
+		expect(composeUp).toHaveBeenCalledWith('/fake/data/vm-data/seed-id/docker-compose.yml', 'vm-s1')
+		expect((await records(store))[0].lastIntent).toBe('running')
+	})
+
+	test('stop: uses composeStop (graceful, NOT down) + stopped intent', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {id: 's2', containerName: 'vm-s2', lastIntent: 'running'})
+
+		await vm.stop('s2')
+
+		expect(composeStop).toHaveBeenCalledWith('/fake/data/vm-data/seed-id/docker-compose.yml', 'vm-s2')
+		expect(composeDownVolumes).not.toHaveBeenCalled()
+		expect((await records(store))[0].lastIntent).toBe('stopped')
+	})
+
+	test('restart: composeRestart + running intent', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {id: 's3', containerName: 'vm-s3', lastIntent: 'running'})
+
+		await vm.restart('s3')
+
+		expect(composeRestart).toHaveBeenCalledWith('/fake/data/vm-data/seed-id/docker-compose.yml', 'vm-s3')
+		expect((await records(store))[0].lastIntent).toBe('running')
+	})
+
+	test('a second concurrent op on the SAME id refuses; a DIFFERENT id proceeds', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {id: 'same', containerName: 'vm-same'})
+		await seed(store, {id: 'other', containerName: 'vm-other'})
+
+		// Hold the first op open so the marker stays claimed.
+		let releaseStop!: () => void
+		vi.mocked(composeStop).mockImplementationOnce(
+			() => new Promise<void>((res) => {
+				releaseStop = () => res()
+			}),
+		)
+
+		const first = vm.stop('same')
+		// Same-id op while the marker is held → refuses immediately.
+		await expect(vm.restart('same')).rejects.toThrow(/already in progress/)
+		// Different id is unaffected.
+		await expect(vm.start('other')).resolves.toBeUndefined()
+
+		releaseStop()
+		await expect(first).resolves.toBeUndefined()
+	})
+
+	test('delete without confirm:true is refused before any teardown', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {id: 'd1', containerName: 'vm-d1'})
+
+		// @ts-expect-error — deliberately omitting the required confirm flag
+		await expect(vm.delete('d1', {})).rejects.toThrow(/confirm:true/)
+
+		expect(composeStop).not.toHaveBeenCalled()
+		expect(composeDownVolumes).not.toHaveBeenCalled()
+		expect(fse.remove).not.toHaveBeenCalled()
+		// Still present.
+		expect(await records(store)).toHaveLength(1)
+	})
+
+	test('delete of an unknown id returns {deleted:false} with no side effects', async () => {
+		const {vm} = makeManager()
+		const result = await vm.delete('ghost', {confirm: true})
+		expect(result).toEqual({deleted: false})
+		expect(composeStop).not.toHaveBeenCalled()
+		expect(composeDownVolumes).not.toHaveBeenCalled()
+		expect(fse.remove).not.toHaveBeenCalled()
+	})
+
+	test('delete: ORDERED teardown (stop → down --volumes → rmdir → registry-delete → port-release) + returns deleted', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {id: 'del', containerName: 'vm-del', novncPort: 16111, rdpPort: 16211})
+
+		const order: string[] = []
+		vi.mocked(composeStop).mockImplementationOnce(async () => {
+			order.push('stop')
+		})
+		vi.mocked(composeDownVolumes).mockImplementationOnce(async () => {
+			order.push('down')
+		})
+		vi.mocked(fse.remove).mockImplementationOnce(async () => {
+			order.push('rmdir')
+		})
+		const delSpy = vi.spyOn(VmRegistry.prototype, 'delete').mockImplementation(async () => {
+			order.push('registry-delete')
+		})
+		const novncRel = vi.spyOn(vmPortAllocator, 'release').mockImplementation(() => {
+			order.push('port-release-novnc')
+		})
+		const rdpRel = vi.spyOn(vmRdpPortAllocator, 'release').mockImplementation(() => {
+			order.push('port-release-rdp')
+		})
+
+		const result = await vm.delete('del', {confirm: true})
+
+		expect(result).toEqual({deleted: true})
+		expect(order).toEqual(['stop', 'down', 'rmdir', 'registry-delete', 'port-release-novnc', 'port-release-rdp'])
+		expect(fse.remove).toHaveBeenCalledWith('/fake/data/vm-data/seed-id')
+		expect(novncRel).toHaveBeenCalledWith(16111)
+		expect(rdpRel).toHaveBeenCalledWith(16211)
+
+		delSpy.mockRestore()
+		novncRel.mockRestore()
+		rdpRel.mockRestore()
+	})
+})
+
+describe('reconcileOnBoot — boot durability (closes the cleanDockerState wipe)', () => {
+	test('re-ups only lastIntent==="running" VMs; skips stopped', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {id: 'r1', containerName: 'vm-r1', composePath: '/p/r1.yml', lastIntent: 'running'})
+		await seed(store, {id: 'r2', containerName: 'vm-r2', composePath: '/p/r2.yml', lastIntent: 'stopped'})
+		await seed(store, {id: 'r3', containerName: 'vm-r3', composePath: '/p/r3.yml', lastIntent: 'running'})
+
+		await vm.reconcileOnBoot()
+
+		expect(composeUp).toHaveBeenCalledTimes(2)
+		expect(composeUp).toHaveBeenCalledWith('/p/r1.yml', 'vm-r1')
+		expect(composeUp).toHaveBeenCalledWith('/p/r3.yml', 'vm-r3')
+		expect(composeUp).not.toHaveBeenCalledWith('/p/r2.yml', 'vm-r2')
+	})
+
+	test('a per-VM composeUp failure is logged and does NOT abort the loop', async () => {
+		const {vm, store, logger} = makeManager()
+		await seed(store, {id: 'f1', containerName: 'vm-f1', composePath: '/p/f1.yml', lastIntent: 'running'})
+		await seed(store, {id: 'f2', containerName: 'vm-f2', composePath: '/p/f2.yml', lastIntent: 'running'})
+
+		vi.mocked(composeUp).mockRejectedValueOnce(new Error('f1 boom')) // first VM fails
+
+		await vm.reconcileOnBoot()
+
+		// The second VM still reconciled despite the first failing.
+		expect(composeUp).toHaveBeenCalledTimes(2)
+		expect(composeUp).toHaveBeenCalledWith('/p/f2.yml', 'vm-f2')
+		expect(logger.error).toHaveBeenCalled()
 	})
 })

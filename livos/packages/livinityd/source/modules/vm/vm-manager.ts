@@ -24,9 +24,14 @@
 
 import crypto from 'node:crypto'
 
+import fse from 'fs-extra'
+
 import {assertKvmAvailable, assertVmResourcesSane} from '../apps/vm-preflight.js'
 import type Livinityd from '../../index.js'
 import {
+	composeDownVolumes,
+	composeRestart,
+	composeStop,
 	composeUp,
 	dockerInspectStatus,
 	renderVmCompose,
@@ -210,5 +215,109 @@ export class VmManager {
 		const record = await this.#registry.get(id)
 		if (!record) return undefined
 		return this.#toView(record)
+	}
+
+	// ── Lifecycle mutations (single-flight per VM) ───────────────────────────────
+
+	/**
+	 * Claim the per-VM single-flight marker for the duration of `fn`. A concurrent
+	 * op on the SAME id refuses (T-350-08); a DIFFERENT id is unaffected. Always
+	 * releases the marker (finally) even when `fn` throws.
+	 */
+	async #withFlight<T>(id: string, fn: () => Promise<T>): Promise<T> {
+		if (!beginVmFlight(id)) throw new Error(`VM ${id}: an operation is already in progress`)
+		try {
+			return await fn()
+		} finally {
+			endVmFlight(id)
+		}
+	}
+
+	async #requireRecord(id: string): Promise<VmInstanceRecord> {
+		const record = await this.#registry.get(id)
+		if (!record) throw new Error(`VM ${id}: not found`)
+		return record
+	}
+
+	/** Bring a VM up and record running intent. */
+	async start(id: string): Promise<void> {
+		return this.#withFlight(id, async () => {
+			const record = await this.#requireRecord(id)
+			await composeUp(record.composePath, `vm-${id}`)
+			await this.#registry.patch(id, {lastIntent: 'running'})
+		})
+	}
+
+	/**
+	 * Gracefully stop a VM. Uses `composeStop` (docker compose `stop`), which
+	 * honors the template's `stop_grace_period: '2m'` — a Windows guest mid-write
+	 * is not SIGKILLed into disk corruption (VMLIFE-03). Records stopped intent.
+	 */
+	async stop(id: string): Promise<void> {
+		return this.#withFlight(id, async () => {
+			const record = await this.#requireRecord(id)
+			await composeStop(record.composePath, `vm-${id}`)
+			await this.#registry.patch(id, {lastIntent: 'stopped'})
+		})
+	}
+
+	/** Restart a VM (leaves running intent). */
+	async restart(id: string): Promise<void> {
+		return this.#withFlight(id, async () => {
+			const record = await this.#requireRecord(id)
+			await composeRestart(record.composePath, `vm-${id}`)
+			await this.#registry.patch(id, {lastIntent: 'running'})
+		})
+	}
+
+	/**
+	 * Destroy a VM. Requires an explicit `confirm:true` acknowledgement (the
+	 * backend half of 352's UI confirm). ORDERED teardown (T-350-11):
+	 *   graceful stop → down --volumes → remove data dir → registry delete →
+	 *   release ports.
+	 * The graceful stop goes FIRST so a guest mid-write is not SIGKILLed before
+	 * the volume teardown.
+	 */
+	async delete(id: string, opts: {confirm: true}): Promise<{deleted: boolean}> {
+		// Explicit destruction ack — refuse BEFORE any teardown.
+		if (opts?.confirm !== true) {
+			throw new Error(`VM ${id}: delete requires an explicit confirm:true acknowledgement`)
+		}
+		return this.#withFlight(id, async () => {
+			const record = await this.#registry.get(id)
+			if (!record) return {deleted: false} // unknown id — no side effects
+
+			await composeStop(record.composePath, `vm-${id}`)
+			await composeDownVolumes(record.composePath, `vm-${id}`)
+			await fse.remove(record.dataDir)
+			await this.#registry.delete(id)
+			vmPortAllocator.release(record.novncPort)
+			if (record.rdpPort !== undefined) vmRdpPortAllocator.release(record.rdpPort)
+
+			return {deleted: true}
+		})
+	}
+
+	/**
+	 * Boot-durability hook (VMLIFE-03). cleanDockerState() (apps.ts:195) nukes ALL
+	 * containers on every non-dev boot; apps recreates its own instances, and VMs
+	 * need this mirror or a box Update silently deletes every running VM
+	 * (Pitfall 1 — the most load-bearing line in the phase). Re-ups every
+	 * lastIntent==='running' VM; a stopped-intent VM is left down; a per-VM
+	 * composeUp failure is caught+logged and does NOT abort the loop.
+	 *
+	 * Residual carried to 350-REVIEW.md (out of scope, additive-only — do NOT fix
+	 * cleanDockerState here): its `docker stop --time 30` is a HARDER deadline than
+	 * the template's `stop_grace_period: '2m'`.
+	 */
+	async reconcileOnBoot(): Promise<void> {
+		for (const inst of await this.#registry.list()) {
+			if (inst.lastIntent !== 'running') continue
+			try {
+				await composeUp(inst.composePath, `vm-${inst.id}`)
+			} catch (error) {
+				this.#livinityd.logger.error(`[vm] reconcileOnBoot failed for ${inst.id}`, error)
+			}
+		}
 	}
 }
