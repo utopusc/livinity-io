@@ -16,6 +16,9 @@ vi.mock('./vm-docker.js', () => ({
 	dockerInspectStatus: vi.fn(async () => 'running'),
 	renderVmCompose: vi.fn(() => ({services: {vm: {}}})),
 	writeVmCompose: vi.fn(async (dataDir: string) => `${dataDir}/docker-compose.yml`),
+	// Phase 359 (VMSET-01): the pre-359 osEnv recovery seam. Default returns a
+	// windows VERSION so a legacy record's update re-renders with a preserved OS.
+	readOsRenderInputs: vi.fn(async () => ({osEnv: {VERSION: '10'}})),
 }))
 
 // Mock the 349/351 preflights so tests toggle KVM-present/absent + resource sanity.
@@ -41,6 +44,9 @@ vi.mock('../apps/vm-preflight.js', () => {
 			cpuCount: 32,
 			diskFreeBytes: 4096 * 1024 ** 3,
 		})),
+		// Phase 359 (VMSET-01): the resize gate — default ALLOW (null); the
+		// shrink/capacity-reject test overrides it to return a reason.
+		vmResizeVerdict: vi.fn(() => null),
 		VmResourceInvalid,
 	}
 })
@@ -63,9 +69,18 @@ vi.mock('fs-extra', () => ({
 	},
 }))
 
-const {composeUp, composeStop, composeRestart, composeDownVolumes, forceRemoveContainer, dockerInspectStatus, renderVmCompose} =
-	await import('./vm-docker.js')
-const {assertKvmAvailable, assertVmResourcesSane, probeHostCapacity, VmResourceInvalid} = await import(
+const {
+	composeUp,
+	composeStop,
+	composeRestart,
+	composeDownVolumes,
+	forceRemoveContainer,
+	dockerInspectStatus,
+	renderVmCompose,
+	writeVmCompose,
+	readOsRenderInputs,
+} = await import('./vm-docker.js')
+const {assertKvmAvailable, assertVmResourcesSane, probeHostCapacity, vmResizeVerdict, VmResourceInvalid} = await import(
 	'../apps/vm-preflight.js'
 )
 const fse = (await import('fs-extra')).default
@@ -130,6 +145,8 @@ async function seed(store: ReturnType<typeof makeFakeStore>, patch: Partial<VmIn
 		rdpPort: patch.rdpPort,
 		createdAt: patch.createdAt ?? 1,
 		lastError: patch.lastError,
+		osEnv: patch.osEnv,
+		bootFileMount: patch.bootFileMount,
 	}
 	const all = await records(store)
 	await store.set('vmInstances', [...all, rec])
@@ -191,6 +208,22 @@ describe('create — preflight-gated + detached', () => {
 			expect.anything(),
 			expect.objectContaining({osEnv: {VERSION: '10'}}),
 		)
+	})
+
+	// Phase 359 (VMSET-01): create() now PERSISTS osEnv onto the registry record so
+	// a later vm.update re-renders without dropping the OS (no on-disk recovery needed).
+	test('windows: persists osEnv {VERSION} onto the registry record', async () => {
+		const {vm, store} = makeManager()
+		await vm.create({...WIN, os: {edition: '10'}})
+		expect((await records(store))[0].osEnv).toEqual({VERSION: '10'})
+	})
+
+	test('linux custom LOCAL image: persists osEnv {} + bootFileMount onto the record', async () => {
+		const {vm, store} = makeManager()
+		const {id} = await vm.create({...LINUX, os: {customImage: {localPath: '/fake/data/isos/ubuntu.iso'}}})
+		const rec = (await records(store)).find((r) => r.id === id)!
+		expect(rec.osEnv).toEqual({})
+		expect(rec.bootFileMount).toEqual({hostFileName: 'custom.iso', containerPath: '/boot.iso'})
 	})
 
 	test('linux distro: threads BOOT into renderVmCompose osEnv', async () => {
@@ -858,6 +891,120 @@ describe('rename — edit-where-safe (registry-only, single-flight)', () => {
 		await expect(first).resolves.toBeUndefined()
 		// The name never changed — the rename was refused BEFORE any patch.
 		expect((await records(store)).find((r) => r.id === 'rn2')!.name).toBe('busy')
+	})
+})
+
+describe('update — sanctioned resize (VMSET-01: grow-only + capacity, restart-to-apply)', () => {
+	const seedWin = (store: ReturnType<typeof makeFakeStore>, over: Partial<VmInstanceRecord> = {}) =>
+		seed(store, {
+			id: 'up1',
+			containerName: 'vm-up1',
+			kind: 'windows',
+			resources: {cpus: 2, ramMiB: 4096, diskGiB: 40},
+			novncPort: 16160,
+			rdpPort: 16260,
+			osEnv: {VERSION: '10'},
+			...over,
+		})
+
+	test('happy: re-renders with the merged resources + preserved osEnv; patches registry; running → restartRequired', async () => {
+		const {vm, store} = makeManager()
+		await seedWin(store)
+		vi.mocked(dockerInspectStatus).mockResolvedValueOnce('running')
+
+		const res = await vm.update('up1', {resources: {ramMiB: 8192}})
+
+		// Re-render carried the NEW ram + the UNCHANGED cpus/disk + the preserved OS env.
+		expect(renderVmCompose).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({resources: {cpus: 2, ramMiB: 8192, diskGiB: 40}, osEnv: {VERSION: '10'}}),
+		)
+		// Registry now carries the new ram.
+		const rec = (await records(store)).find((r) => r.id === 'up1')!
+		expect(rec.resources).toEqual({cpus: 2, ramMiB: 8192, diskGiB: 40})
+		// Honest restart-required (container is live) — NEVER auto-restarted.
+		expect(res).toEqual({
+			restartRequired: true,
+			restartTriggered: false,
+			restartReason: expect.any(String),
+		})
+	})
+
+	test('a NON-running container → restartRequired:false (no restart claim)', async () => {
+		const {vm, store} = makeManager()
+		await seedWin(store)
+		vi.mocked(dockerInspectStatus).mockRejectedValueOnce(new Error('No such container'))
+
+		const res = await vm.update('up1', {resources: {ramMiB: 8192}})
+		expect(res).toEqual({restartRequired: false, restartTriggered: false})
+	})
+
+	test('NEVER composeUp/composeStop/composeRestart inside the mutation (restart-to-apply)', async () => {
+		const {vm, store} = makeManager()
+		await seedWin(store)
+
+		await vm.update('up1', {resources: {ramMiB: 8192}})
+
+		expect(composeUp).not.toHaveBeenCalled()
+		expect(composeStop).not.toHaveBeenCalled()
+		expect(composeRestart).not.toHaveBeenCalled()
+		// It DID rewrite the on-disk compose file (in place, same dataDir).
+		expect(writeVmCompose).toHaveBeenCalledWith('/fake/data/vm-data/up1', expect.anything())
+	})
+
+	test('shrink/capacity reject: throws VmResourceInvalid, no render/write, registry unchanged', async () => {
+		const {vm, store} = makeManager()
+		await seedWin(store)
+		vi.mocked(vmResizeVerdict).mockReturnValueOnce('Disk can only grow — requested 1G is below the current 40G.')
+
+		await expect(vm.update('up1', {resources: {diskGiB: 1}})).rejects.toBeInstanceOf(VmResourceInvalid)
+
+		expect(renderVmCompose).not.toHaveBeenCalled()
+		expect(writeVmCompose).not.toHaveBeenCalled()
+		// The registry resources are byte-unchanged — the resize was refused BEFORE any write.
+		expect((await records(store)).find((r) => r.id === 'up1')!.resources).toEqual({cpus: 2, ramMiB: 4096, diskGiB: 40})
+	})
+
+	test('unknown id → not found (no write)', async () => {
+		const {vm, store} = makeManager()
+		await expect(vm.update('ghost', {resources: {ramMiB: 8192}})).rejects.toThrow(/not found/)
+		expect(await records(store)).toHaveLength(0)
+	})
+
+	test('refuses while another op on the SAME id is in flight (single-flight → already in progress)', async () => {
+		const {vm, store} = makeManager()
+		await seedWin(store, {id: 'up2', containerName: 'vm-up2'})
+
+		let releaseStop!: () => void
+		vi.mocked(composeStop).mockImplementationOnce(
+			() => new Promise<void>((res) => {
+				releaseStop = () => res()
+			}),
+		)
+		const first = vm.stop('up2')
+		await expect(vm.update('up2', {resources: {ramMiB: 8192}})).rejects.toThrow(/already in progress/)
+		releaseStop()
+		await expect(first).resolves.toBeUndefined()
+	})
+
+	// LEGACY: a pre-359 record with NO osEnv recovers it from the on-disk compose
+	// (readOsRenderInputs) so the OS is never dropped, AND backfills it onto the record.
+	test('a legacy osEnv-less record: recovers the OS via readOsRenderInputs + backfills it', async () => {
+		const {vm, store} = makeManager()
+		await seedWin(store, {id: 'leg', containerName: 'vm-leg', osEnv: undefined})
+		vi.mocked(readOsRenderInputs).mockResolvedValueOnce({osEnv: {VERSION: '10'}})
+
+		await vm.update('leg', {resources: {ramMiB: 8192}})
+
+		// The recovery seam was consulted (the record had no osEnv).
+		expect(readOsRenderInputs).toHaveBeenCalledWith('/fake/data/vm-data/leg/docker-compose.yml', 'windows')
+		// Re-render preserved the recovered OS.
+		expect(renderVmCompose).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({osEnv: {VERSION: '10'}}),
+		)
+		// The record is now self-describing — osEnv backfilled.
+		expect((await records(store)).find((r) => r.id === 'leg')!.osEnv).toEqual({VERSION: '10'})
 	})
 })
 
