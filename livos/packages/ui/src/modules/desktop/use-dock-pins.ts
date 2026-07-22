@@ -21,7 +21,7 @@ import {useCallback, useEffect, useRef, useState} from 'react'
 
 import {trpcReact} from '@/trpc/trpc'
 
-export type DockPinKind = 'system' | 'app' | 'webapp' | 'native'
+export type DockPinKind = 'system' | 'app' | 'webapp' | 'native' | 'vm'
 
 export interface DockPin {
 	kind: DockPinKind
@@ -49,7 +49,7 @@ function isValidPin(value: unknown): value is DockPin {
 	if (typeof value !== 'object' || value === null) return false
 	const v = value as Record<string, unknown>
 	return (
-		(v.kind === 'system' || v.kind === 'app' || v.kind === 'webapp' || v.kind === 'native') &&
+		(v.kind === 'system' || v.kind === 'app' || v.kind === 'webapp' || v.kind === 'native' || v.kind === 'vm') &&
 		typeof v.id === 'string'
 	)
 }

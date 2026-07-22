@@ -204,6 +204,9 @@ type DockItemProps = {
 	notificationCount?: number
 	appId?: string
 	bg?: string
+	/** Arbitrary stroke-icon override (mirrors DockGlyphTile). Used for per-instance
+	 * dynamic tiles that aren't a static DOCK_ICONS key (e.g. a pinned VM's OS glyph). */
+	glyph?: DockGlyph
 	open?: boolean
 	mouseX: MotionValue<number>
 	to?: LinkProps['to']
@@ -222,6 +225,7 @@ const BOUNCE_DURATION = 0.35
 export function DockItem({
 	appId,
 	bg,
+	glyph,
 	mouseX,
 	notificationCount,
 	open,
@@ -241,7 +245,7 @@ export function DockItem({
 	const iconRef = useRef<HTMLDivElement>(null)
 
 	// Get the icon component and label for this app
-	const Icon = appId ? DOCK_ICONS[appId] : null
+	const Icon = glyph ?? (appId ? DOCK_ICONS[appId] : null)
 	const label = labelProp || (appId ? DOCK_LABELS[appId] : undefined)
 
 	// Phase 157 round 6 — per-tile tint (hover halo) + inverted-tile flag.

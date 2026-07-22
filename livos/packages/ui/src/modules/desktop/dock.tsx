@@ -6,11 +6,13 @@ import {motion, useMotionValue} from 'framer-motion'
 import React, {useCallback, useMemo} from 'react'
 import {useLocation} from 'react-router-dom'
 
+import {useCurrentUser} from '@/hooks/use-current-user'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useQueryParams} from '@/hooks/use-query-params'
 import {useSettingsNotificationCount} from '@/hooks/use-settings-notification-count'
 import {useV42MigrationActive} from '@/hooks/use-v42-migration-active'
 import {systemAppsKeyed, useApps} from '@/providers/apps'
+import type {RouterOutput} from '@/trpc/trpc'
 import {trpcReact} from '@/trpc/trpc'
 import {useWindowManagerOptional} from '@/providers/window-manager'
 import {ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger} from '@/shadcn-components/ui/context-menu'
@@ -22,6 +24,7 @@ import {useLaunchWebApp} from '@/hooks/use-launch-webapp'
 import {OPENUI_APP_ID_PREFIX, OPENUI_WMCLASS_PREFIX, useLaunchNativeApp} from '@/modules/dock/use-launch-native-app'
 import {openCommandPalette} from '@/components/cmdk'
 import {useDialogOpenProps} from '@/utils/dialog'
+import {pickIcon} from '@/features/vm/components/os-icon'
 import {DockItem} from './dock-item'
 import {FeedbackDialog} from './feedback-dialog'
 import {LogoutDialog} from './logout-dialog'
@@ -102,6 +105,13 @@ export function Dock() {
 	// desktop-content.tsx, incl. the reference-stable empty fallback).
 	const nativeAppsQ = trpcReact.apps.native.list.useQuery(undefined, {staleTime: 30 * 1000, retry: false})
 	const nativeApps = useMemo(() => nativeAppsQ.data ?? [], [nativeAppsQ.data])
+
+	// Resolve data for 'vm' pins. vm.list is adminProcedure-gated (350) — gate the
+	// query on isAdmin (D-341-6 idiom) so a non-admin session never fires a
+	// FORBIDDEN on load; absent/empty simply renders no vm tiles.
+	const {isAdmin} = useCurrentUser()
+	const vmsQ = trpcReact.vm.list.useQuery(undefined, {enabled: isAdmin})
+	const vms = useMemo(() => vmsQ.data ?? [], [vmsQ.data])
 
 	const lastFilesPath = sessionStorage.getItem('lastFilesPath')
 
@@ -184,6 +194,7 @@ export function Dock() {
 								settingsNotificationCount={settingsNotificationCount}
 								showLivAssistant={showLivAssistant}
 								nativeApps={nativeApps}
+								vms={vms}
 								windowAppIds={windowAppIds}
 								onOpenWindow={handleOpenWindow}
 								onUnpin={() => unpin(pin.kind, pin.id)}
@@ -225,6 +236,7 @@ function DockPinItem({
 	settingsNotificationCount,
 	showLivAssistant,
 	nativeApps,
+	vms,
 	windowAppIds,
 	onOpenWindow,
 	onUnpin,
@@ -238,6 +250,7 @@ function DockPinItem({
 	settingsNotificationCount: number | undefined
 	showLivAssistant: boolean
 	nativeApps: {id: string; name: string; iconUrl?: string; wmClassHint?: string}[]
+	vms: RouterOutput['vm']['list']
 	windowAppIds: Set<string>
 	onOpenWindow: OpenWindowFn
 	onUnpin: () => void
@@ -342,6 +355,28 @@ function DockPinItem({
 						onClick={() => {
 							void launchNativeApp({id: cfg.id, name: cfg.name, iconUrl: cfg.iconUrl, wmClassHint: cfg.wmClassHint})
 						}}
+					/>
+				)
+			}
+			case 'vm': {
+				// vms comes from the admin-gated vm.list query in Dock(); a non-admin
+				// session never fetches it, so vms is [] and this renders nothing.
+				const vm = vms.find((v) => v.id === pin.id)
+				// Stale pin (VM deleted) — render nothing; the pin stays in storage
+				// harmlessly (same unresolvable-pin idiom as 'native'/'webapp').
+				if (!vm) return null
+				return (
+					<DockItem
+						// vm-<id> is deliberately NOT a DOCK_ICONS/DOCK_LABELS key — the
+						// glyph prop renders the per-OS icon; label comes from vm.name.
+						appId={`vm-${vm.id}`}
+						glyph={pickIcon(vm.kind)}
+						label={vm.name}
+						{...itemProps}
+						// Shared LIVINITY_vm appId: the open-dot is imprecise across
+						// multiple pinned VMs — accepted cosmetic tradeoff (Pitfall 4).
+						open={windowAppIds.has('LIVINITY_vm')}
+						onOpenWindow={(originRect) => onOpenWindow('LIVINITY_vm', `/vm/${vm.id}`, vm.name, '', originRect)}
 					/>
 				)
 			}

@@ -59,7 +59,7 @@ const DISTRO_ICONS: Record<string, IconComponent> = {
 	slack: SiSlackware,
 }
 
-function pickIcon(kind: 'windows' | 'linux', edition?: string, distro?: string): IconComponent {
+export function pickIcon(kind: 'windows' | 'linux', edition?: string, distro?: string): IconComponent {
 	if (kind === 'windows') {
 		if (edition?.startsWith('11')) return SiWindows11
 		if (edition?.startsWith('10')) return SiWindows10
