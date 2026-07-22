@@ -229,6 +229,8 @@
   "vm.screen.state.disconnected": "Bağlantı kesildi.",
   "vm.screen.error.connection": "Ekranda bir bağlantı sorunu oluştu.",
   "vm.screen.error.retry": "Tekrar dene",
+  "vm.screen.state.preview-view-only": "Canlı önizleme (yalnızca görüntüleme)",
+  "vm.screen.action.switch-interactive": "Bu makineyi kontrol etmek için standart görünüme geçin",
   "vm.resources.summary": "{{cpus}} vCPU · {{ram}} GB RAM · {{disk}} GiB disk",
   "vm.delete.confirm.title": "{{name}} silinsin mi?",
   "vm.delete.confirm.description": "Bu işlem, sanal makineyi ve diski dahil tüm verilerini kalıcı olarak siler. Bu işlem geri alınamaz.",

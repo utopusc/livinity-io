@@ -229,6 +229,8 @@
   "vm.screen.state.disconnected": "Connection lost.",
   "vm.screen.error.connection": "The screen ran into a connection problem.",
   "vm.screen.error.retry": "Retry",
+  "vm.screen.state.preview-view-only": "Live preview (view only)",
+  "vm.screen.action.switch-interactive": "Switch to the standard view to control this machine",
   "vm.resources.summary": "{{cpus}} vCPU · {{ram}} GB RAM · {{disk}} GiB disk",
   "vm.delete.confirm.title": "Delete {{name}}?",
   "vm.delete.confirm.description": "This permanently deletes the virtual machine and all of its data, including its disk. This action cannot be undone.",

@@ -32,9 +32,11 @@
 // carries the VM name + OS icon, so a second Back/title is redundant chrome).
 // `pure` is false on the mobile in-panel path (windowId absent) so mobile keeps
 // its Back — no stranding. The {vm, onBack} core contract is otherwise intact.
+import {useEffect, useState} from 'react'
 import {TbAlertTriangle, TbArrowLeft, TbDeviceDesktop, TbLoader2, TbPlayerPlay, TbRefresh} from 'react-icons/tb'
 import {toast} from 'sonner'
 
+import {useVmEncodedScreen} from '@/hooks/use-vm-encoded-screen'
 import {useWebAppVnc} from '@/hooks/use-webapp-vnc'
 import {Button} from '@/shadcn-components/ui/button'
 import type {RouterOutput} from '@/trpc/trpc'
@@ -61,11 +63,49 @@ export function VmScreen({vm, onBack, pure}: {vm: VmView; onBack: () => void; pu
 
 	const isRunning = vm.state === 'running'
 
-	// Native RFB canvas over the 353 websockify bridge. Called unconditionally
-	// at the top level; passing `undefined` when not running keeps the hook idle
-	// (its own contract) so no canvas mounts and no WS is opened in any
-	// non-running state. viewOnly:false → keyboard/mouse forwarded to the guest.
-	const wsUrl = isRunning ? buildVmWsUrl(vm.id) : undefined
+	// ── Honest MSE-vs-RFB fallback state machine (365-02) ──────────────────────
+	// Try the 364 host-hardware-encoded <video> stream first; on ANY terminal
+	// status (unavailable/error) — or when the user asks to control the machine —
+	// LATCH a fall-back to the fully-intact 355 RFB view (which carries input).
+	// Invariants: never a black <video> presented as live (the 365-01 hook only
+	// reports 'connected' on a real playing frame + fail-closes its own connect
+	// deadline, so no hung spinner); the two surfaces are MUTUALLY EXCLUSIVE and
+	// the RFB socket only opens on fallback (`!showEncoded`), so exactly one live
+	// socket exists; the fallback decision is stored in `forcedFallback` STATE,
+	// not re-derived per render, so a status flap can never flip the surface back.
+	// The encoded surface is honestly view-only (input rides the RFB path via the
+	// switch button; full encoded input is 366). Multi-viewer: N browsers may each
+	// open the player — 2 tabs currently = 2 backend encode pairs, a documented
+	// 365-HUMAN-UAT open question, not fixed here (RFB stays functional throughout).
+	//
+	// Cap-slot discipline: the cheap synchronous MediaSource support check gates
+	// the hook arg, so a browser that can never play the encoded stream never
+	// burns a backend encode slot; the hook idles when we've latched to RFB.
+	const mseSupported = typeof window !== 'undefined' && typeof window.MediaSource !== 'undefined'
+	const [forcedFallback, setForcedFallback] = useState(false)
+	const mse = useVmEncodedScreen(isRunning && mseSupported && !forcedFallback ? vm.id : undefined)
+	// Encoded is shown while idle/connecting/connected; a terminal status excludes it.
+	const showEncoded =
+		mseSupported && isRunning && !forcedFallback && mse.status !== 'unavailable' && mse.status !== 'error'
+
+	// One-way latch: any terminal encoded status routes to the 355 RFB fallback.
+	// After it fires the hook arg goes undefined (status resets to idle) but
+	// forcedFallback keeps showEncoded false → no flapping.
+	useEffect(() => {
+		if (mse.status === 'unavailable' || mse.status === 'error') setForcedFallback(true)
+	}, [mse.status])
+	// Fresh session only: a stop→start (or a different VM) re-attempts the encoded
+	// path; within one running session the latch holds.
+	useEffect(() => {
+		setForcedFallback(false)
+	}, [vm.id, isRunning])
+
+	// Native RFB canvas over the 353 websockify bridge — the honest fallback.
+	// MUTUALLY EXCLUSIVE with the encoded path: the wsUrl (and thus the live WS)
+	// is gated on `!showEncoded`, so `useWebAppVnc` stays idle while the encoded
+	// path is active — never two live sockets. viewOnly:false → keyboard/mouse
+	// forwarded to the guest (this is the input path until 366).
+	const wsUrl = isRunning && !showEncoded ? buildVmWsUrl(vm.id) : undefined
 	const vnc = useWebAppVnc(wsUrl, {viewOnly: false})
 
 	const startMut = trpcReact.vm.start.useMutation({
@@ -95,13 +135,53 @@ export function VmScreen({vm, onBack, pure}: {vm: VmView; onBack: () => void; pu
 			)}
 
 			<div className='min-h-0 flex-1'>
-				{/* running: LivOS's own native RFB canvas + an honest status strip.
-				    The canvas is only presented as working on a real RFB connect;
-				    connecting/disconnected/error render honest copy (never a blank
-				    canvas shown as working — T-355-01). Error copy is a jargon-free
-				    t() key, NEVER the hook's raw errorMessage (jargon leak — the hook
-				    can set English 'VNC security failure'; T-355-02). */}
-				{isRunning ? (
+				{/* running (encoded): the host-hardware-encoded, VIEW-ONLY <video>.
+				    Presented as working only while the encoded status is
+				    idle/connecting/connected (an honest overlay reusing
+				    vm.screen.loading until a real playing frame); ANY terminal status
+				    latches the RFB fallback below. Mutually exclusive with the RFB
+				    branch (`showEncoded` vs `!showEncoded`). The switch button
+				    force-latches to the RFB (input) path — no "interactive" claim on
+				    the encoded surface itself. */}
+				{isRunning && showEncoded ? (
+					<div className='flex h-full w-full flex-col'>
+						{mse.status !== 'connected' ? (
+							<div className='flex items-center gap-2 border-b border-border-default bg-black/80 px-3 py-1.5 text-caption text-white/70'>
+								<TbLoader2 className='h-4 w-4 animate-spin' />
+								{t('vm.screen.loading')}
+							</div>
+						) : (
+							<div className='flex items-center gap-2 border-b border-border-default bg-black/80 px-3 py-1.5 text-caption text-white/70'>
+								<span>{t('vm.screen.state.preview-view-only')}</span>
+								<Button size='sm' variant='ghost' onClick={() => setForcedFallback(true)}>
+									<TbDeviceDesktop className='h-4 w-4' />
+									{t('vm.screen.action.switch-interactive')}
+								</Button>
+							</div>
+						)}
+						{/* view-only encoded stream (no pointer/keyboard handler — input is 366). */}
+						<video
+							ref={mse.videoRef}
+							autoPlay
+							muted
+							playsInline
+							data-testid='vm-screen-video'
+							className='min-h-0 w-full flex-1 object-contain'
+							style={{background: 'black'}}
+						/>
+					</div>
+				) : null}
+
+				{/* running (fallback): LivOS's own native RFB canvas + an honest
+				    status strip — mounted ONLY when the encoded path is not active
+				    (`!showEncoded`), so the two surfaces are mutually exclusive and
+				    exactly one live socket exists. The canvas is only presented as
+				    working on a real RFB connect; connecting/disconnected/error render
+				    honest copy (never a blank canvas shown as working — T-355-01).
+				    Error copy is a jargon-free t() key, NEVER the hook's raw
+				    errorMessage (jargon leak — the hook can set English 'VNC security
+				    failure'; T-355-02). */}
+				{isRunning && !showEncoded ? (
 					<div className='flex h-full w-full flex-col'>
 						{vnc.status !== 'connected' ? (
 							<div className='flex items-center gap-2 border-b border-border-default bg-black/80 px-3 py-1.5 text-caption text-white/70'>
