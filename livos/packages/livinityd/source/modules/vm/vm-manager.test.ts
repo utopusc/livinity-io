@@ -218,6 +218,33 @@ describe('create — preflight-gated + detached', () => {
 		expect((await records(store))[0].osEnv).toEqual({VERSION: '10'})
 	})
 
+	// Phase 359 (VMUSER-01): a supplied Windows username rides the SAME osEnv bag as
+	// VERSION, so it is threaded into renderVmCompose AND persisted onto the registry
+	// record (359-01 persistence → preserved across a later vm.update, zero extra code).
+	test('windows + username: threads USERNAME beside VERSION into renderVmCompose osEnv', async () => {
+		const {vm} = makeManager()
+		await vm.create({...WIN, os: {edition: '10', username: 'my-user'}})
+		expect(renderVmCompose).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({osEnv: {VERSION: '10', USERNAME: 'my-user'}}),
+		)
+	})
+
+	test('windows + username: persists osEnv {VERSION, USERNAME} onto the registry record', async () => {
+		const {vm, store} = makeManager()
+		await vm.create({...WIN, os: {edition: '10', username: 'my-user'}})
+		expect((await records(store))[0].osEnv).toEqual({VERSION: '10', USERNAME: 'my-user'})
+	})
+
+	// WITHOUT a username the osEnv carries no USERNAME key (optional — existing VMs
+	// and username-less creates are untouched).
+	test('windows WITHOUT username: osEnv has VERSION only (no USERNAME key)', async () => {
+		const {vm, store} = makeManager()
+		await vm.create({...WIN, os: {edition: '10'}})
+		expect((await records(store))[0].osEnv).toEqual({VERSION: '10'})
+		expect((await records(store))[0].osEnv).not.toHaveProperty('USERNAME')
+	})
+
 	test('linux custom LOCAL image: persists osEnv {} + bootFileMount onto the record', async () => {
 		const {vm, store} = makeManager()
 		const {id} = await vm.create({...LINUX, os: {customImage: {localPath: '/fake/data/isos/ubuntu.iso'}}})

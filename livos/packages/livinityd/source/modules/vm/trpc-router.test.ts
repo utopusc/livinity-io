@@ -432,6 +432,71 @@ describe('OS selection discriminated union (VMCREATE-01) — schema is the cheap
 	})
 })
 
+// Phase 359 (VMUSER-01): the optional Windows guest username on the create branch.
+// CREATE-ONLY (dockur install-time) — validated to lowercase [a-z0-9-] (3-20) at
+// the zod boundary, mirroring user/routes.ts:1042. qemus/linux has NO account
+// injection, so the linux arm carries no username (an unknown key is rejected).
+describe('windows create username (VMUSER-01) — optional, regex-validated, create-only', () => {
+	const winPayload = (username?: string) => ({
+		name: 'Win VM',
+		kind: 'windows',
+		resources: {cpus: 2, ramMiB: 4096, diskGiB: 64},
+		os: {edition: '11', ...(username !== undefined ? {username} : {})},
+	})
+
+	test('a valid username (my-user) is accepted and delegated with os.username', async () => {
+		const vmMock = makeVmMock()
+		await caller({vmMock}).create(winPayload('my-user'))
+		expect(vmMock.create).toHaveBeenCalledWith(expect.objectContaining({os: {edition: '11', username: 'my-user'}}))
+	})
+
+	test('NO username is accepted (username optional) and delegated without os.username', async () => {
+		const vmMock = makeVmMock()
+		await caller({vmMock}).create(winPayload())
+		expect(vmMock.create).toHaveBeenCalledWith(expect.objectContaining({os: {edition: '11'}}))
+	})
+
+	test('an UPPERCASE username (AB → too-short-anyway; ABCDE regex-fail) is refused at the boundary', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).create(winPayload('ABCDE'))).rejects.toThrow()
+		expect(vmMock.create).not.toHaveBeenCalled()
+	})
+
+	test('a username with a `$` injection char (a$b) is refused at the boundary', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).create(winPayload('a$b'))).rejects.toThrow()
+		expect(vmMock.create).not.toHaveBeenCalled()
+	})
+
+	test('a username with a space (a b) is refused at the boundary', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).create(winPayload('a b'))).rejects.toThrow()
+		expect(vmMock.create).not.toHaveBeenCalled()
+	})
+
+	test('a too-short username (ab, <3) is refused at the boundary', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).create(winPayload('ab'))).rejects.toThrow()
+		expect(vmMock.create).not.toHaveBeenCalled()
+	})
+
+	test('a too-long username (21 chars) is refused at the boundary', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).create(winPayload('x'.repeat(21)))).rejects.toThrow()
+		expect(vmMock.create).not.toHaveBeenCalled()
+	})
+
+	// USERNAME is create-only AND windows-only: the linux arm declares no username
+	// field, so zod STRIPS it — the delegate never sees a username on a linux create
+	// (no account injection reaches qemus). The stripped payload proves the boundary
+	// carries no username onto the linux path.
+	test('a linux payload carrying a username has it STRIPPED (no account injection on linux)', async () => {
+		const vmMock = makeVmMock()
+		await caller({vmMock}).create({...VALID_CREATE, os: {distro: 'ubuntu', username: 'my-user'}} as any)
+		expect(vmMock.create).toHaveBeenCalledWith(expect.objectContaining({os: {distro: 'ubuntu'}}))
+	})
+})
+
 describe('vm.createOptions (VMCREATE-03/04) — options surface + honest GPU verdict', () => {
 	beforeEach(() => {
 		__resetVmCreateOptionsCache()
