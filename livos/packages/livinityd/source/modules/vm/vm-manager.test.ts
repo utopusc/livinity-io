@@ -103,7 +103,7 @@ const {assertKvmAvailable, assertVmResourcesSane, probeHostCapacity, vmResizeVer
 const fse = (await import('fs-extra')).default
 const {getContainerStats} = await import('../docker/docker.js')
 const getDirectorySize = (await import('../utilities/get-directory-size.js')).default
-const {vmPortAllocator, vmRdpPortAllocator} = await import('./vm-ports.js')
+const {vmPortAllocator, vmRdpPortAllocator, vmVncRawPortAllocator} = await import('./vm-ports.js')
 const {VmRegistry} = await import('./vm-registry.js')
 const {VmManager} = await import('./vm-manager.js')
 
@@ -162,6 +162,7 @@ async function seed(store: ReturnType<typeof makeFakeStore>, patch: Partial<VmIn
 		containerName: patch.containerName ?? `vm-${patch.id ?? 'seed-id'}`,
 		novncPort: patch.novncPort ?? 16100,
 		rdpPort: patch.rdpPort,
+		vncRawPort: patch.vncRawPort,
 		createdAt: patch.createdAt ?? 1,
 		lastError: patch.lastError,
 		osEnv: patch.osEnv,
@@ -206,6 +207,9 @@ describe('create — preflight-gated + detached', () => {
 		// Windows allocates an RDP port too.
 		expect(rec.rdpPort).toBeGreaterThanOrEqual(16200)
 		expect(rec.rdpPort).toBeLessThan(16300)
+		// Phase 364 (VMENC-01): a raw-VNC port is allocated + persisted (in range).
+		expect(rec.vncRawPort).toBeGreaterThanOrEqual(16300)
+		expect(rec.vncRawPort).toBeLessThan(16400)
 
 		// compose-up was invoked (detached) — the daemon never awaited it.
 		expect(composeUp).toHaveBeenCalledWith(rec.composePath, `vm-${id}`)
@@ -216,6 +220,31 @@ describe('create — preflight-gated + detached', () => {
 		await vm.create(LINUX)
 		const [rec] = await records(store)
 		expect(rec.rdpPort).toBeUndefined()
+	})
+
+	// Phase 364 (VMENC-01): the raw-VNC port is UNIVERSAL — allocated for linux too
+	// (unlike rdpPort), threaded into renderVmCompose as a NUMBER, and persisted.
+	test('both kinds: allocate a numeric vncRawPort, thread it into renderVmCompose + persist it', async () => {
+		const {vm, store} = makeManager()
+
+		const {id: winId} = await vm.create(WIN)
+		expect(renderVmCompose).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({vncRawPort: expect.any(Number)}),
+		)
+		const winRec = (await records(store)).find((r) => r.id === winId)!
+		expect(winRec.vncRawPort).toEqual(expect.any(Number))
+
+		vi.clearAllMocks()
+		const {id: linId} = await vm.create(LINUX)
+		// Linux gets a raw-VNC port even though it has NO rdpPort.
+		expect(renderVmCompose).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({vncRawPort: expect.any(Number)}),
+		)
+		const linRec = (await records(store)).find((r) => r.id === linId)!
+		expect(linRec.vncRawPort).toEqual(expect.any(Number))
+		expect(linRec.rdpPort).toBeUndefined()
 	})
 
 	// VMCREATE-01: the OS selection must ACTUALLY reach the compose render (not a
@@ -829,6 +858,25 @@ describe('lifecycle mutations — single-flight + graceful + ordered teardown', 
 		rdpRel.mockRestore()
 	})
 
+	// Phase 364 (VMENC-01): delete() releases the raw-VNC port (in lock-step with
+	// novnc/rdp) so the slot recycles — and a record WITHOUT one (pre-364) is a no-op.
+	test('delete releases the raw-VNC port (VMENC-01); a pre-364 record without one is a no-op', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {id: 'enc-del', containerName: 'vm-enc-del', novncPort: 16101, vncRawPort: 16307})
+		const rawRel = vi.spyOn(vmVncRawPortAllocator, 'release')
+
+		await vm.delete('enc-del', {confirm: true})
+		expect(rawRel).toHaveBeenCalledWith(16307)
+
+		// A record with NO vncRawPort (pre-364) must NOT call release with undefined.
+		rawRel.mockClear()
+		await seed(store, {id: 'legacy-del', containerName: 'vm-legacy-del', novncPort: 16102})
+		await vm.delete('legacy-del', {confirm: true})
+		expect(rawRel).not.toHaveBeenCalled()
+
+		rawRel.mockRestore()
+	})
+
 	// IN-04: a transient docker stop/down error must NOT abort teardown — delete
 	// stays best-effort on the docker steps and still reaches the durable teardown
 	// (rmdir → registry-delete → port-release), so a VM is never un-deletable due
@@ -1181,11 +1229,12 @@ describe('reconcileOnBoot — boot durability (closes the cleanDockerState wipe)
 	// before any subsequent create() can re-hand-out a live port and collide on bind.
 	test('reconcileOnBoot re-primes the port allocators from every persisted record (running AND stopped)', async () => {
 		const {vm, store} = makeManager()
-		await seed(store, {id: 'p1', containerName: 'vm-p1', composePath: '/p/p1.yml', kind: 'windows', lastIntent: 'running', novncPort: 16100, rdpPort: 16200})
-		await seed(store, {id: 'p2', containerName: 'vm-p2', composePath: '/p/p2.yml', lastIntent: 'stopped', novncPort: 16101}) // stopped still owns its port
+		await seed(store, {id: 'p1', containerName: 'vm-p1', composePath: '/p/p1.yml', kind: 'windows', lastIntent: 'running', novncPort: 16100, rdpPort: 16200, vncRawPort: 16300})
+		await seed(store, {id: 'p2', containerName: 'vm-p2', composePath: '/p/p2.yml', lastIntent: 'stopped', novncPort: 16101, vncRawPort: 16301}) // stopped still owns its ports
 
 		const novncReserve = vi.spyOn(vmPortAllocator, 'reserve')
 		const rdpReserve = vi.spyOn(vmRdpPortAllocator, 'reserve')
+		const rawReserve = vi.spyOn(vmVncRawPortAllocator, 'reserve')
 
 		await vm.reconcileOnBoot()
 
@@ -1195,9 +1244,14 @@ describe('reconcileOnBoot — boot durability (closes the cleanDockerState wipe)
 		// The windows RDP port is reserved too; the linux VM has no RDP port to reserve.
 		expect(rdpReserve).toHaveBeenCalledWith(16200)
 		expect(rdpReserve).toHaveBeenCalledTimes(1)
+		// Phase 364 (VMENC-01): every persisted raw-VNC port is re-primed — running AND
+		// stopped — BEFORE any create() can re-hand-out a live VM's raw RFB port.
+		expect(rawReserve).toHaveBeenCalledWith(16300)
+		expect(rawReserve).toHaveBeenCalledWith(16301)
 
 		novncReserve.mockRestore()
 		rdpReserve.mockRestore()
+		rawReserve.mockRestore()
 	})
 
 	// WR-01 end-to-end: after priming, a fresh allocate() on the same (module

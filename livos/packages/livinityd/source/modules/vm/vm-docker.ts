@@ -102,6 +102,15 @@ export interface RenderVmComposeOpts {
 	dataDir: string
 	novncPort: number
 	rdpPort?: number
+	/**
+	 * Phase 364 (VMENC-01): the allocated loopback host port that fronts the container's
+	 * raw QEMU VNC server (dockur/qemus `VNC_PORT`, distinct from the noVNC/websockify
+	 * 8006 front door). When set, renderVmCompose publishes `127.0.0.1:<vncRawPort>:5900`
+	 * (loopback-only, VMSEC posture) AND sets the container-side `VNC_PORT: '5900'` env so
+	 * the guest's raw RFB server is reachable by the host-side encode bridge. Absent for a
+	 * pre-364 render (byte-identical to today) — the raw-VNC port is purely additive.
+	 */
+	vncRawPort?: number
 	resources: {cpus: number; ramMiB: number; diskGiB: number}
 	/**
 	 * Phase 351 (VMCREATE-01): the guest-OS selection env override — `VERSION`
@@ -151,6 +160,11 @@ export function renderVmCompose(template: VmTemplate, opts: RenderVmComposeOpts)
 		// "substitute-before-read" discipline two blocks above, so a signed URL's
 		// raw '$' cannot silently truncate the download target.
 		...escapeComposeEnv(opts.osEnv),
+		// Phase 364 (VMENC-01): the container-side raw RFB port. SERVER-DERIVED fixed
+		// value (never user input → no $-escape needed) — merged AFTER escapeComposeEnv(osEnv)
+		// so a stray osEnv `VNC_PORT` can never override the host-bridge contract. Only
+		// present when a raw-VNC host port was allocated (additive; pre-364 renders omit it).
+		...(opts.vncRawPort !== undefined ? {VNC_PORT: '5900'} : {}),
 	}
 
 	// Host side rendered loopback-only; container side stays as the template's
@@ -158,6 +172,12 @@ export function renderVmCompose(template: VmTemplate, opts: RenderVmComposeOpts)
 	const ports = [`127.0.0.1:${opts.novncPort}:8006`]
 	if (opts.rdpPort !== undefined) {
 		ports.push(`127.0.0.1:${opts.rdpPort}:3389/tcp`, `127.0.0.1:${opts.rdpPort}:3389/udp`)
+	}
+	// Phase 364 (VMENC-01): the raw RFB port (container VNC_PORT=5900), loopback-only —
+	// the un-authed host-side encode bridge is the only consumer, and the 127.0.0.1 bind
+	// (baked into the literal, identical to novnc/rdp) IS the neverPublic guard.
+	if (opts.vncRawPort !== undefined) {
+		ports.push(`127.0.0.1:${opts.vncRawPort}:5900`)
 	}
 
 	// Volumes: the template's `${APP_DATA_DIR}/storage:/storage` (already

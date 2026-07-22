@@ -63,6 +63,50 @@ test('renderVmCompose (windows) renders loopback-only ports incl. RDP tcp+udp', 
 	expect(ports).toContain('127.0.0.1:16200:3389/udp')
 })
 
+// ── Phase 364 (VMENC-01): the raw-VNC loopback port + container VNC_PORT env ──────────
+test('renderVmCompose WITH vncRawPort publishes 127.0.0.1:<port>:5900 (loopback) + sets VNC_PORT=5900', () => {
+	const rendered: any = renderVmCompose(LINUX_VM_TEMPLATE, {
+		id: 'enc',
+		dataDir: '/data/vm-data/enc',
+		novncPort: 16101,
+		vncRawPort: 16305,
+		resources: {cpus: 2, ramMiB: 2048, diskGiB: 16},
+	})
+	const ports: string[] = rendered.services.vm.ports
+	// Every published port stays loopback-only (T-364-01: no public surface).
+	expect(ports.every((p) => p.startsWith('127.0.0.1:'))).toBe(true)
+	expect(ports).toContain('127.0.0.1:16305:5900')
+	// The container-side raw RFB port is set so the guest's QEMU VNC server is reachable.
+	expect(rendered.services.vm.environment.VNC_PORT).toBe('5900')
+})
+
+test('renderVmCompose WITHOUT vncRawPort adds NO VNC_PORT env and NO :5900 port (back-compat)', () => {
+	const rendered: any = renderVmCompose(LINUX_VM_TEMPLATE, {
+		id: 'noenc',
+		dataDir: '/data/vm-data/noenc',
+		novncPort: 16102,
+		resources: {cpus: 2, ramMiB: 2048, diskGiB: 16},
+	})
+	// Byte-identical to a pre-364 render: no VNC_PORT key, no raw RFB port mapping.
+	expect(rendered.services.vm.environment).not.toHaveProperty('VNC_PORT')
+	const ports: string[] = rendered.services.vm.ports
+	expect(ports.some((p) => p.includes(':5900'))).toBe(false)
+})
+
+// A stray osEnv VNC_PORT must NEVER override the server-derived host-bridge contract:
+// the '5900' is merged AFTER escapeComposeEnv(osEnv), so it always wins.
+test('renderVmCompose: a stray osEnv VNC_PORT cannot override the server-derived 5900', () => {
+	const rendered: any = renderVmCompose(LINUX_VM_TEMPLATE, {
+		id: 'ov',
+		dataDir: '/data/vm-data/ov',
+		novncPort: 16103,
+		vncRawPort: 16306,
+		resources: {cpus: 2, ramMiB: 2048, diskGiB: 16},
+		osEnv: {VNC_PORT: '1234'},
+	})
+	expect(rendered.services.vm.environment.VNC_PORT).toBe('5900')
+})
+
 test('renderVmCompose (windows) merges resources into environment, preserving VERSION default', () => {
 	const rendered: any = renderVmCompose(WINDOWS_VM_TEMPLATE, {
 		id: 'abc',

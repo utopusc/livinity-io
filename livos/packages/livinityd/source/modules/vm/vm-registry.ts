@@ -44,6 +44,11 @@ export type VmInstanceRecord = {
 	// Phase 359 (VMSET-01): linux custom-LOCAL-image bind — re-supplied on re-render.
 	// Absent for non-local-file VMs and pre-359 records.
 	bootFileMount?: {hostFileName: string; containerPath: string}
+	// Phase 364 (VMENC-01): allocated loopback host port -> container VNC_PORT (raw RFB).
+	// The host-side encode bridge (VmVncFrameSource) connects here. Universal (windows +
+	// linux). Absent on pre-364 records; patch()/upsert()'s generic spread-merge carries it
+	// with ZERO accessor change (line 24 predicted this).
+	vncRawPort?: number
 }
 
 /**

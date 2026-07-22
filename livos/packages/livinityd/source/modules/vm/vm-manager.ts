@@ -49,7 +49,7 @@ import {
 } from './vm-docker.js'
 import {getContainerStats} from '../docker/docker.js'
 import getDirectorySize from '../utilities/get-directory-size.js'
-import {vmPortAllocator, vmRdpPortAllocator} from './vm-ports.js'
+import {vmPortAllocator, vmRdpPortAllocator, vmVncRawPortAllocator} from './vm-ports.js'
 import {getVmTemplate} from './vm-template.js'
 import {VmRegistry, type VmInstanceRecord} from './vm-registry.js'
 import type {WindowsEdition, LinuxDistro} from './vm-os-catalog.js'
@@ -310,6 +310,10 @@ export class VmManager {
 		const dataDir = `${this.#livinityd.dataDirectory}/vm-data/${id}`
 		const novncPort = vmPortAllocator.allocate()
 		const rdpPort = kind === 'windows' ? vmRdpPortAllocator.allocate() : undefined
+		// Phase 364 (VMENC-01): a raw RFB (container VNC_PORT) loopback host port for the
+		// host-side encode bridge. UNIVERSAL — allocated for BOTH kinds like novncPort
+		// (every qemus/dockur guest exposes a raw QEMU VNC server), not windows-only.
+		const vncRawPort = vmVncRawPortAllocator.allocate()
 
 		// (3) Render the 349 template → compose file on disk. The OS selection
 		//     (osEnv) is threaded through so the container actually boots the chosen
@@ -338,6 +342,7 @@ export class VmManager {
 			dataDir,
 			novncPort,
 			rdpPort,
+			vncRawPort,
 			resources,
 			osEnv,
 			bootFileMount,
@@ -358,6 +363,9 @@ export class VmManager {
 			containerName: `vm-${id}`,
 			novncPort,
 			rdpPort,
+			// Phase 364 (VMENC-01): persist the raw-VNC host port so delete()/reconcileOnBoot
+			// release/reserve it in lock-step with novncPort/rdpPort (the four-site discipline).
+			vncRawPort,
 			createdAt: Date.now(),
 			// Phase 359 (VMSET-01): persist the RAW OS render inputs so a later
 			// vm.update re-renders WITHOUT dropping VERSION/BOOT (pre-359 records that
@@ -381,6 +389,7 @@ export class VmManager {
 				// the known-broken VM stops being auto-retried.
 				vmPortAllocator.release(novncPort)
 				if (rdpPort !== undefined) vmRdpPortAllocator.release(rdpPort)
+				vmVncRawPortAllocator.release(vncRawPort) // Phase 364 (VMENC-01): release the raw-VNC port too
 				try {
 					await this.#registry.patch(id, {
 						lastIntent: 'stopped',
@@ -744,6 +753,8 @@ export class VmManager {
 			await this.#registry.delete(id)
 			vmPortAllocator.release(record.novncPort)
 			if (record.rdpPort !== undefined) vmRdpPortAllocator.release(record.rdpPort)
+			// Phase 364 (VMENC-01): release the raw-VNC port (absent on pre-364 records).
+			if (record.vncRawPort !== undefined) vmVncRawPortAllocator.release(record.vncRawPort)
 
 			return {deleted: true}
 		})
@@ -775,6 +786,9 @@ export class VmManager {
 		for (const inst of all) {
 			vmPortAllocator.reserve(inst.novncPort)
 			if (inst.rdpPort !== undefined) vmRdpPortAllocator.reserve(inst.rdpPort)
+			// Phase 364 (VMENC-01): re-prime the raw-VNC allocator too (absent on pre-364
+			// records) so the next create() never re-hands-out a live VM's raw RFB port.
+			if (inst.vncRawPort !== undefined) vmVncRawPortAllocator.reserve(inst.vncRawPort)
 		}
 
 		for (const inst of all) {
