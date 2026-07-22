@@ -15,7 +15,7 @@
 // "Open screen" (353-02) calls onOpenScreen(vm) to open the state-aware VmScreen
 // view; the honesty of that view (never a blank frame as working) lives there.
 import {useState} from 'react'
-import {TbDeviceDesktop, TbLoader2, TbPencil, TbPin, TbPinnedOff, TbPlayerPlay, TbPlayerStop, TbRefresh, TbTrash} from 'react-icons/tb'
+import {TbDeviceDesktop, TbLoader2, TbPencil, TbPin, TbPinnedOff, TbPlayerPlay, TbPlayerStop, TbRefresh, TbSettings, TbTrash} from 'react-icons/tb'
 import {toast} from 'sonner'
 
 import {useDesktopPins} from '@/modules/desktop/use-desktop-pins'
@@ -38,6 +38,7 @@ import {trpcReact} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
 
 import {OsIcon} from './os-icon'
+import {VmSettingsDialog} from './vm-settings-dialog'
 
 // Consumed from vm.list — never redefined (interfaces block of 352-02-PLAN).
 type VmView = RouterOutput['vm']['list'][number]
@@ -116,6 +117,11 @@ export function VmListItem({
 	// small non-destructive Dialog mirroring the delete-confirm structure.
 	const [renameOpen, setRenameOpen] = useState(false)
 	const [renameValue, setRenameValue] = useState(vm.name)
+
+	// Settings (359-02): a row-local, non-destructive edit surface (like rename,
+	// NOT list-owned like delete). Always available — settings is not gated on a
+	// transitional/busy VM. The heavy form lives in its own <VmSettingsDialog>.
+	const [settingsOpen, setSettingsOpen] = useState(false)
 	const renameMut = trpcReact.vm.rename.useMutation({
 		onSuccess: () => {
 			utils.vm.list.invalidate()
@@ -235,6 +241,13 @@ export function VmListItem({
 						{t('vm.controls.rename')}
 					</Button>
 
+					{/* Settings — non-destructive, always available (359-02). Opens the
+					    row-local <VmSettingsDialog> for THIS vm. */}
+					<Button size='sm' variant='ghost' onClick={() => setSettingsOpen(true)}>
+						<TbSettings className='h-4 w-4' />
+						{t('vm.controls.settings')}
+					</Button>
+
 					<Button size='sm' variant='ghost' text='destructive' onClick={onDelete}>
 						<TbTrash className='h-4 w-4' />
 						{t('vm.controls.delete')}
@@ -276,6 +289,9 @@ export function VmListItem({
 					</DialogContent>
 				</DialogPortal>
 			</Dialog>
+
+			{/* Settings dialog (row-local, non-destructive edit-where-safe — 359-02) */}
+			<VmSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} vm={vm} />
 		</div>
 	)
 }
