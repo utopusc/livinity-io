@@ -547,6 +547,16 @@ export class VmManager {
 	): Promise<{restartRequired: boolean; restartTriggered: boolean; restartReason?: string}> {
 		return this.#withFlight(id, async () => {
 			const record = await this.#requireRecord(id)
+			// (WR-02) Files-missing guard — parity with start() (:481-483): a VM whose
+			// compose file (data dir / guest disk) was removed is UNRECOVERABLE, so refuse
+			// with an honest typed VmResourceInvalid (→ BAD_REQUEST) BEFORE any render/write.
+			// Without this, writeVmCompose's fse.ensureDir would silently RECREATE the data
+			// dir + a fresh compose over an orphaned VM and report success — masking the same
+			// "delete + recreate" signal start() correctly surfaces (and, on a later start,
+			// booting a fresh empty disk instead of surfacing the loss).
+			if (!(await fse.pathExists(record.composePath))) {
+				throw new VmResourceInvalid(`VM ${id}: its files are missing — delete this VM and recreate it`)
+			}
 			const proposed = {
 				cpus: patch.resources.cpus ?? record.resources.cpus,
 				ramMiB: patch.resources.ramMiB ?? record.resources.ramMiB,
@@ -559,13 +569,25 @@ export class VmManager {
 			// VERSION/BOOT. New VMs carry osEnv on the record; pre-359 VMs recover it
 			// from the on-disk compose (fail-closed: readOsRenderInputs throws a typed
 			// VmResourceInvalid on an unreadable/unparseable compose rather than emitting
-			// an OS-losing render).
+			// an OS-losing render). Computed BEFORE BOTH writes so the registry patch and
+			// the compose render share the SAME recovered OS bag.
 			const {osEnv, bootFileMount} =
 				record.osEnv !== undefined
 					? {osEnv: record.osEnv, bootFileMount: record.bootFileMount}
 					: await readOsRenderInputs(record.composePath, record.kind)
+			// (WR-01) Registry-FIRST ordering (research T-359-10): patch the authoritative
+			// intent BEFORE writing the compose. The grow-only guard's baseline is the
+			// REGISTRY diskGiB (vmResizeVerdict above reads record.resources), so soundness
+			// requires the registry to NEVER understate the provisioned disk. Registry-first
+			// means a crash in the ~ms window leaves registry ahead-or-equal of compose (safe:
+			// an over-conservative refusal that self-heals) — compose-first could leave
+			// compose>registry and let a later grow re-render DISK_SIZE below the physical
+			// size = a forbidden shrink. Backfill osEnv/bootFileMount so a pre-359 record
+			// becomes self-describing.
+			await this.#registry.patch(id, {resources: proposed, osEnv, bootFileMount})
 			// Overwrite the compose file IN PLACE (same path). NEVER composeUp here —
-			// restart-to-apply, not live-mutate (Pitfall 1 / CONTEXT.md locked).
+			// restart-to-apply, not live-mutate (Pitfall 1 / CONTEXT.md locked). A
+			// stale-on-crash compose self-heals on the next update/start.
 			const rendered = renderVmCompose(getVmTemplate(record.kind), {
 				id,
 				dataDir: record.dataDir,
@@ -576,10 +598,6 @@ export class VmManager {
 				bootFileMount,
 			})
 			await writeVmCompose(record.dataDir, rendered)
-			// Registry patch LAST (Pitfall 3): the durable compose file is the source of
-			// truth for what boots; the registry only advances to a value already on disk.
-			// Backfill osEnv/bootFileMount so a pre-359 record becomes self-describing.
-			await this.#registry.patch(id, {resources: proposed, osEnv, bootFileMount})
 			// Honest restart-required: derive 'running' WITHOUT #deriveState (which would
 			// report 'creating' — we hold the flight). Never auto-restart the guest.
 			let running = false

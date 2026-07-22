@@ -1037,6 +1037,58 @@ describe('update — sanctioned resize (VMSET-01: grow-only + capacity, restart-
 		// The record is now self-describing — osEnv backfilled.
 		expect((await records(store)).find((r) => r.id === 'leg')!.osEnv).toEqual({VERSION: '10'})
 	})
+
+	// WR-01 (registry-first ordering): the grow-only guard's baseline is the REGISTRY
+	// diskGiB, so the registry must be patched BEFORE the compose is written. A crash
+	// between the two awaits must leave registry ahead-or-equal of compose (safe) — the
+	// OPPOSITE ordering (compose-first) could leave compose>registry and let a later grow
+	// re-render DISK_SIZE below the physical size (a forbidden shrink). Pin the call order.
+	test('patches the registry BEFORE writing the compose file (WR-01 registry-first ordering)', async () => {
+		const {vm, store} = makeManager()
+		await seedWin(store)
+
+		const order: string[] = []
+		const patchSpy = vi.spyOn(VmRegistry.prototype, 'patch').mockImplementation(async () => {
+			order.push('registry-patch')
+		})
+		vi.mocked(writeVmCompose).mockImplementationOnce(async (dataDir: string) => {
+			order.push('write-compose')
+			return `${dataDir}/docker-compose.yml`
+		})
+
+		await vm.update('up1', {resources: {ramMiB: 8192}})
+
+		// Registry patch is authoritative-intent FIRST; the compose write is SECOND.
+		expect(order).toEqual(['registry-patch', 'write-compose'])
+
+		patchSpy.mockRestore()
+	})
+
+	// WR-02 (files-missing guard): parity with start() — update() on a VM whose compose
+	// file (data dir / guest disk) was removed must refuse with a typed VmResourceInvalid
+	// and NEVER render/write a fresh compose (which would silently recreate the data dir
+	// over an unrecoverable VM and falsely report success).
+	test('rejects (VmResourceInvalid) when the compose file is missing — no render/write (WR-02)', async () => {
+		const {vm, store} = makeManager()
+		await seedWin(store, {id: 'gone-up', containerName: 'vm-gone-up'})
+		vi.mocked(fse.pathExists).mockResolvedValue(false as never)
+		const patchSpy = vi.spyOn(VmRegistry.prototype, 'patch')
+
+		await expect(vm.update('gone-up', {resources: {ramMiB: 8192}})).rejects.toBeInstanceOf(VmResourceInvalid)
+		await expect(
+			vm.update('gone-up', {resources: {ramMiB: 8192}}).catch((e) => (e as Error).message),
+		).resolves.toMatch(/files are missing/)
+
+		// Refused BEFORE any provisioning: no compose render/write, no registry patch,
+		// and the registry resources are byte-unchanged.
+		expect(renderVmCompose).not.toHaveBeenCalled()
+		expect(writeVmCompose).not.toHaveBeenCalled()
+		expect(patchSpy).not.toHaveBeenCalled()
+		expect((await records(store)).find((r) => r.id === 'gone-up')!.resources).toEqual({cpus: 2, ramMiB: 4096, diskGiB: 40})
+
+		patchSpy.mockRestore()
+		vi.mocked(fse.pathExists).mockResolvedValue(true as never) // restore default for later tests
+	})
 })
 
 describe('reconcileOnBoot — boot durability (closes the cleanDockerState wipe)', () => {
