@@ -127,7 +127,19 @@ const createInput = z.discriminatedUnion('kind', [
 		kind: z.literal('windows'),
 		name: nameSchema,
 		resources: resourcesSchema,
-		os: z.object({edition: z.enum(WINDOWS_EDITION_KEYS)}),
+		// Phase 359 (VMUSER-01): optional Windows guest username (dockur install-time
+		// only; qemus/linux has no account injection — RESEARCH Q2). CREATE-ONLY —
+		// never in vm.update. Regex mirrors user/routes.ts:1042 exactly; even reached,
+		// escapeComposeEnv $-doubles it at render (defense-in-depth; regex forbids `$`).
+		os: z.object({
+			edition: z.enum(WINDOWS_EDITION_KEYS),
+			username: z
+				.string()
+				.min(3)
+				.max(20)
+				.regex(/^[a-z0-9-]+$/, 'Username must be lowercase letters, numbers, or hyphens')
+				.optional(),
+		}),
 	}),
 	z.object({
 		kind: z.literal('linux'),

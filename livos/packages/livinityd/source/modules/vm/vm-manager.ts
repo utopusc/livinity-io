@@ -70,8 +70,13 @@ export interface VmView {
 
 export type VmResources = {cpus: number; ramMiB: number; diskGiB: number}
 
-/** Phase 351 (VMCREATE-01): the guest-OS selection, discriminated by `kind`. */
-export type WindowsOsSelection = {edition: WindowsEdition}
+/**
+ * Phase 351 (VMCREATE-01): the guest-OS selection, discriminated by `kind`.
+ * Phase 359 (VMUSER-01): optional `username` — the dockur install-time guest
+ * account name. CREATE-ONLY (dockur applies it once at install); qemus/Linux has
+ * no equivalent account injection, so there is no username on LinuxOsSelection.
+ */
+export type WindowsOsSelection = {edition: WindowsEdition; username?: string}
 /**
  * A Linux/any-OS guest source: a named distro, a custom-image URL, or (351 gap
  * closure — VMCREATE-01 "local file or URL") a custom-image LOCAL file path. The
@@ -237,9 +242,13 @@ export class VmManager {
 		// VERSION for a Windows edition; BOOT for a Linux distro or custom-image URL.
 		// A custom LOCAL file layers NO env value (qemus IGNORES BOOT when a
 		// /boot.<ext> file is bind-mounted — the host path never leaks into env).
+		// Phase 359 (VMUSER-01): a supplied Windows username rides the SAME osEnv bag
+		// as VERSION, so 359-01's registry persistence + re-render round-trip preserve
+		// it across a later vm.update with zero extra code. escapeComposeEnv $-escapes
+		// it at render (defense-in-depth; the router regex already forbids `$`).
 		const osEnv: Record<string, string> =
 			input.kind === 'windows'
-				? {VERSION: input.os.edition}
+				? {VERSION: input.os.edition, ...(input.os.username ? {USERNAME: input.os.username} : {})}
 				: bootPlan!.kind === 'env'
 					? {BOOT: bootPlan!.boot}
 					: {}
