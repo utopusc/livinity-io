@@ -26,7 +26,7 @@
 
 import type {VaapiProbeResult} from './vaapi-probe.js'
 
-export type StreamMode = 'desktop' | 'window-crop' | 'pipewire-fd' | 'vnc-window'
+export type StreamMode = 'desktop' | 'window-crop' | 'pipewire-fd' | 'vnc-window' | 'vm-rawvideo'
 
 export type DesktopOpts = {
 	mode: 'desktop'
@@ -50,7 +50,21 @@ export type PipewireFdOpts = {
 	framerate?: number
 }
 
-export type BuildArgsOpts = (DesktopOpts | WindowCropOpts) & {
+/**
+ * Phase 364 (VMENC-01): the VM-source mode. Frames arrive PRE-RENDERED as raw BGRA over
+ * ffmpeg stdin (pipe:0) from the host-side RFB frame source (VmVncFrameSource) — there is
+ * no x11grab/PipeWire capture. Unlike `vnc-window` (which never reaches ffmpeg), this mode
+ * LEGITIMATELY flows through buildFfmpegArgs: only the input clause differs; the shared
+ * low-latency tuning + VAAPI/libx264 encoder selection + fMP4 muxer tail are reused verbatim.
+ */
+export type VmRawvideoOpts = {
+	mode: 'vm-rawvideo'
+	width: number
+	height: number
+	framerate?: number
+}
+
+export type BuildArgsOpts = (DesktopOpts | WindowCropOpts | VmRawvideoOpts) & {
 	caps: VaapiProbeResult
 	zeroLatency?: boolean
 	fragmentDurationMs?: number
@@ -76,24 +90,36 @@ export function buildFfmpegArgs(opts: BuildArgsOpts): string[] {
 
 	const args: string[] = []
 
-	// ── Source: x11grab ──
-	args.push('-f', 'x11grab')
-	args.push('-framerate', String(framerate))
-	args.push('-draw_mouse', '1') // D-93-05
-
-	if (opts.mode === 'desktop') {
+	if (opts.mode === 'vm-rawvideo') {
+		// ── Source: rawvideo over stdin (Phase 364 / VMENC-01) ──
+		// Frames arrive PRE-RENDERED as raw BGRA from the host RFB client (VmVncFrameSource)
+		// on pipe:0 — no x11grab, and no -draw_mouse (the cursor is already baked into the
+		// VNC framebuffer). BGRA matches vnc-rfb-client's 32bpp raw-decoder output byte order.
+		args.push('-f', 'rawvideo')
+		args.push('-pix_fmt', 'bgra')
 		args.push('-video_size', `${opts.width}x${opts.height}`)
-		args.push('-i', opts.display)
+		args.push('-framerate', String(framerate))
+		args.push('-i', 'pipe:0')
 	} else {
-		// window-crop — explicit -grab_x / -grab_y. Spike test E proved that
-		// the `:0.0+X,Y` shorthand rejects "Invalid argument" on Mini PC ffmpeg.
-		args.push('-grab_x', String(opts.geometry.x))
-		args.push('-grab_y', String(opts.geometry.y))
-		args.push('-video_size', `${opts.geometry.w}x${opts.geometry.h}`)
-		args.push('-i', opts.display)
+		// ── Source: x11grab ──
+		args.push('-f', 'x11grab')
+		args.push('-framerate', String(framerate))
+		args.push('-draw_mouse', '1') // D-93-05
+
+		if (opts.mode === 'desktop') {
+			args.push('-video_size', `${opts.width}x${opts.height}`)
+			args.push('-i', opts.display)
+		} else {
+			// window-crop — explicit -grab_x / -grab_y. Spike test E proved that
+			// the `:0.0+X,Y` shorthand rejects "Invalid argument" on Mini PC ffmpeg.
+			args.push('-grab_x', String(opts.geometry.x))
+			args.push('-grab_y', String(opts.geometry.y))
+			args.push('-video_size', `${opts.geometry.w}x${opts.geometry.h}`)
+			args.push('-i', opts.display)
+		}
 	}
 
-	// ── Low-latency tuning (D-93-02) ──
+	// ── Low-latency tuning (D-93-02) ── [SHARED — reused verbatim by every ffmpeg mode]
 	if (zeroLatency) {
 		args.push('-fflags', 'nobuffer')
 		args.push('-probesize', '32')

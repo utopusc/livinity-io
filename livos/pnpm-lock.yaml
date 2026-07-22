@@ -449,6 +449,9 @@ importers:
       valid-filename:
         specifier: ^4.0.0
         version: 4.0.0
+      vnc-rfb-client:
+        specifier: ^0.2.0
+        version: 0.2.0
       ws:
         specifier: ^8.21.0
         version: 8.21.0
@@ -16157,6 +16160,9 @@ packages:
         optional: true
       jsdom:
         optional: true
+
+  vnc-rfb-client@0.2.0:
+    resolution: {integrity: sha512-7M5byZyXvkw3M3VW3kDO2DdUgTqWbq27ILGfKayyxKtOzFkxaHfFRbsFSTa78xRKEpiOQ1cPaMpEKrGb509osg==}
 
   void-elements@3.1.0:
     resolution: {integrity: sha512-Dhxzh5HZuiHQhbvTW9AMetFfBHDMYpo23Uo9btPXgdYP+3T5S+p+jgNy7spra+veYhBP2dCSgxR/i2Y02h5/6w==}
@@ -35512,6 +35518,8 @@ snapshots:
       - sugarss
       - supports-color
       - terser
+
+  vnc-rfb-client@0.2.0: {}
 
   void-elements@3.1.0: {}
 

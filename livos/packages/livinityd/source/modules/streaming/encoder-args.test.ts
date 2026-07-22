@@ -159,6 +159,64 @@ describe('encoder-args.buildFfmpegArgs', () => {
 		expect(argv2).toContain('-draw_mouse')
 	})
 
+	// ── Phase 364 (VMENC-01): the additive 'vm-rawvideo' input branch ──────────────────
+	it('Test V1: vm-rawvideo + VAAPI feeds pipe:0 rawvideo/bgra into the SHARED VAAPI+fMP4 tail', () => {
+		const argv = buildFfmpegArgs({
+			mode: 'vm-rawvideo',
+			width: 1280,
+			height: 720,
+			caps: HAS_VAAPI,
+		})
+		// Source clause: rawvideo/bgra over stdin, NOT x11grab.
+		expect(argv).toContain('-f')
+		expect(argv).toContain('rawvideo')
+		expect(argv).toContain('-pix_fmt')
+		expect(argv).toContain('bgra')
+		expect(argv).toContain('-video_size')
+		expect(argv).toContain('1280x720')
+		expect(argv).toContain('-i')
+		expect(argv).toContain('pipe:0')
+		// The x11grab source + its cursor flag are ABSENT (the VNC framebuffer has the cursor).
+		expect(argv).not.toContain('x11grab')
+		expect(argv).not.toContain('-draw_mouse')
+		// The SHARED VAAPI encoder clause is reused verbatim.
+		expect(argv).toContain('h264_vaapi')
+		expect(argv).toContain('-vaapi_device')
+		expect(argv).toContain('/dev/dri/renderD128')
+		expect(argv).toContain('hwupload,scale_vaapi=format=nv12')
+		// The SHARED fMP4 muxer tail is reused verbatim, sinking to pipe:1.
+		expect(argv).toContain('-movflags')
+		expect(argv).toContain('+frag_keyframe+empty_moov+default_base_moof+separate_moof')
+		expect(argv[argv.length - 1]).toBe('pipe:1')
+	})
+
+	it('Test V2: vm-rawvideo WITHOUT VAAPI reuses the libx264 fallback branch verbatim', () => {
+		const argv = buildFfmpegArgs({
+			mode: 'vm-rawvideo',
+			width: 1920,
+			height: 1080,
+			caps: NO_VAAPI,
+		})
+		expect(argv).toContain('rawvideo')
+		expect(argv).toContain('pipe:0')
+		// The reused libx264 branch (same as desktop/window-crop).
+		expect(argv).toContain('-c:v')
+		expect(argv).toContain('libx264')
+		expect(argv).toContain('-preset')
+		expect(argv).toContain('ultrafast')
+		expect(argv).not.toContain('h264_vaapi')
+	})
+
+	it('Test V3: vm-rawvideo NEVER throws (contrast: vnc-window still throws)', () => {
+		expect(() =>
+			buildFfmpegArgs({mode: 'vm-rawvideo', width: 800, height: 600, caps: HAS_VAAPI}),
+		).not.toThrow()
+		// vnc-window remains refused — it never reaches ffmpeg (stream-manager vnc branch).
+		expect(() =>
+			buildFfmpegArgs({mode: 'vnc-window'} as unknown as Parameters<typeof buildFfmpegArgs>[0]),
+		).toThrow(/vnc-window/)
+	})
+
 	it('Test 8: snapshot — desktop + libx264 wire format is locked', () => {
 		const argv = buildFfmpegArgs({
 			mode: 'desktop',
