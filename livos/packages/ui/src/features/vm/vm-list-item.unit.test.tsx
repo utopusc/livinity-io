@@ -67,3 +67,17 @@ describe('lifecycle mutations are wired (VMAPP-02)', () => {
 		expect(src).toMatch(/toast\.error\(error\.message\)/)
 	})
 })
+
+describe('the Settings affordance is row-local, like rename — never list-owned (359-02)', () => {
+	it('vm-list-item.tsx renders a Settings button opening a per-row <VmSettingsDialog>', () => {
+		const src = read(LIST_ITEM)
+		// A Settings button (icon + label) in the controls row.
+		expect(src).toMatch(/TbSettings/)
+		expect(src).toMatch(/vm\.controls\.settings/)
+		// Row-local open-state (mirrors renameOpen — NOT a single list-owned dialog).
+		expect(src).toMatch(/const \[settingsOpen, setSettingsOpen\] = useState\(false\)/)
+		expect(src).toMatch(/onClick=\{\(\) => setSettingsOpen\(true\)\}/)
+		// The heavy form is a dedicated component wired for THIS vm.
+		expect(src).toMatch(/<VmSettingsDialog open=\{settingsOpen\} onOpenChange=\{setSettingsOpen\} vm=\{vm\} \/>/)
+	})
+})
