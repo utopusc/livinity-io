@@ -126,8 +126,15 @@ function makeFakeStore() {
 function makeManager() {
 	const store = makeFakeStore()
 	const logger = {error: vi.fn(), log: vi.fn()}
-	const livinityd = {store, dataDirectory: '/fake/data', logger} as unknown as Livinityd
-	return {vm: new VmManager(livinityd), store, logger}
+	// Phase 364 (VMENC-01): the StreamManager seam vm-manager calls INTO for the encoded
+	// screen. Defaults: VAAPI present, a successful start, one session stopped on cascade.
+	const streamManager = {
+		encodeAvailable: vi.fn(() => true),
+		startVmStream: vi.fn(async () => ({streamId: 's1', wsUrl: '/ws/vm-stream/s1'})),
+		stopStreamsForVm: vi.fn(async () => 1),
+	}
+	const livinityd = {store, dataDirectory: '/fake/data', logger, streamManager} as unknown as Livinityd
+	return {vm: new VmManager(livinityd), store, logger, streamManager}
 }
 
 // Phase 351 (VMCREATE-01): CreateVmInput now carries a discriminated `os`
@@ -1000,6 +1007,98 @@ describe('rename — edit-where-safe (registry-only, single-flight)', () => {
 		await expect(first).resolves.toBeUndefined()
 		// The name never changed — the rename was refused BEFORE any patch.
 		expect((await records(store)).find((r) => r.id === 'rn2')!.name).toBe('busy')
+	})
+})
+
+describe('encoded screen — VMENC-01 (honest VAAPI+running+port gate → StreamManager)', () => {
+	test('happy: running VM with a vncRawPort → startVmStream({admin, vmId, port}); returns the stream handle', async () => {
+		const {vm, store, streamManager} = makeManager()
+		await seed(store, {id: 'enc1', containerName: 'vm-enc1', vncRawPort: 16307})
+		vi.mocked(dockerInspectStatus).mockResolvedValueOnce('running')
+
+		const res = await vm.startEncodedScreen('enc1')
+
+		expect(res).toEqual({streamId: 's1', wsUrl: '/ws/vm-stream/s1'})
+		expect(streamManager.startVmStream).toHaveBeenCalledWith({userId: 'admin', vmId: 'enc1', vncRawPort: 16307})
+	})
+
+	test('no VAAPI: refuses VmResourceInvalid; startVmStream NOT called (honest fallback to 355)', async () => {
+		const {vm, store, streamManager} = makeManager()
+		await seed(store, {id: 'enc2', containerName: 'vm-enc2', vncRawPort: 16307})
+		streamManager.encodeAvailable.mockReturnValueOnce(false)
+
+		await expect(vm.startEncodedScreen('enc2')).rejects.toBeInstanceOf(VmResourceInvalid)
+		expect(streamManager.startVmStream).not.toHaveBeenCalled()
+	})
+
+	test('not running: refuses VmResourceInvalid; startVmStream NOT called', async () => {
+		const {vm, store, streamManager} = makeManager()
+		await seed(store, {id: 'enc3', containerName: 'vm-enc3', vncRawPort: 16307})
+		vi.mocked(dockerInspectStatus).mockResolvedValueOnce('exited')
+
+		await expect(vm.startEncodedScreen('enc3')).rejects.toBeInstanceOf(VmResourceInvalid)
+		expect(streamManager.startVmStream).not.toHaveBeenCalled()
+	})
+
+	test('pre-364 record (no vncRawPort): refuses VmResourceInvalid; startVmStream NOT called', async () => {
+		const {vm, store, streamManager} = makeManager()
+		await seed(store, {id: 'enc4', containerName: 'vm-enc4'}) // no vncRawPort
+		// NOTE: no dockerInspectStatus once-mock — the vncRawPort guard throws BEFORE the
+		// running check runs, so queuing one here would leak into a later test.
+
+		await expect(vm.startEncodedScreen('enc4')).rejects.toBeInstanceOf(VmResourceInvalid)
+		expect(streamManager.startVmStream).not.toHaveBeenCalled()
+	})
+
+	test('unknown id: not found; startVmStream NOT called', async () => {
+		const {vm, streamManager} = makeManager()
+		await expect(vm.startEncodedScreen('ghost')).rejects.toThrow(/not found/)
+		expect(streamManager.startVmStream).not.toHaveBeenCalled()
+	})
+
+	test('stopEncodedScreen delegates to stopStreamsForVm and returns {stopped:true} when count>0', async () => {
+		const {vm, streamManager} = makeManager()
+		const res = await vm.stopEncodedScreen('enc5')
+		expect(streamManager.stopStreamsForVm).toHaveBeenCalledWith('enc5')
+		expect(res).toEqual({stopped: true})
+	})
+
+	test('stopEncodedScreen returns {stopped:false} when there was no live session', async () => {
+		const {vm, streamManager} = makeManager()
+		streamManager.stopStreamsForVm.mockResolvedValueOnce(0)
+		const res = await vm.stopEncodedScreen('enc6')
+		expect(res).toEqual({stopped: false})
+	})
+
+	test('stop() cascade-stops the VM’s encode session; a throwing cascade does NOT abort stop()', async () => {
+		const {vm, store, streamManager} = makeManager()
+		await seed(store, {id: 'encstop', containerName: 'vm-encstop', lastIntent: 'running'})
+
+		await vm.stop('encstop')
+		expect(streamManager.stopStreamsForVm).toHaveBeenCalledWith('encstop')
+		expect((await records(store))[0].lastIntent).toBe('stopped')
+
+		// A throwing cascade is swallowed — stop() still resolves and records stopped intent.
+		streamManager.stopStreamsForVm.mockRejectedValueOnce(new Error('cascade boom'))
+		await seed(store, {id: 'encstop2', containerName: 'vm-encstop2', lastIntent: 'running'})
+		await expect(vm.stop('encstop2')).resolves.toBeUndefined()
+		expect((await records(store)).find((r) => r.id === 'encstop2')!.lastIntent).toBe('stopped')
+	})
+
+	test('delete() cascade-stops the encode session before teardown; a throwing cascade does NOT abort delete()', async () => {
+		const {vm, store, streamManager} = makeManager()
+		await seed(store, {id: 'encdel', containerName: 'vm-encdel', novncPort: 16109, vncRawPort: 16319})
+
+		await vm.delete('encdel', {confirm: true})
+		expect(streamManager.stopStreamsForVm).toHaveBeenCalledWith('encdel')
+		expect(await records(store)).toHaveLength(0)
+
+		// A throwing cascade must not abort the durable teardown.
+		streamManager.stopStreamsForVm.mockRejectedValueOnce(new Error('cascade boom'))
+		await seed(store, {id: 'encdel2', containerName: 'vm-encdel2', novncPort: 16110, vncRawPort: 16320})
+		const res = await vm.delete('encdel2', {confirm: true})
+		expect(res).toEqual({deleted: true})
+		expect(await records(store)).toHaveLength(0)
 	})
 })
 

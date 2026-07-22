@@ -579,6 +579,11 @@ export class VmManager {
 			const record = await this.#requireRecord(id)
 			await composeStop(record.composePath, `vm-${id}`)
 			await this.#registry.patch(id, {lastIntent: 'stopped'})
+			// Phase 364 (VMENC-01): a stopped VM must leave no live encode session (orphan
+			// ffmpeg/RFB) — cascade-stop best-effort so a throwing teardown never fails stop().
+			await this.#livinityd.streamManager?.stopStreamsForVm(id).catch((e) =>
+				this.#livinityd.logger.error(`[vm] stop ${id}: stopStreamsForVm failed`, e),
+			)
 		})
 	}
 
@@ -611,6 +616,48 @@ export class VmManager {
 			await this.#requireRecord(id) // throws `VM ${id}: not found` for an unknown id
 			await this.#registry.patch(id, {name})
 		})
+	}
+
+	/**
+	 * VMENC-01: start the hardware-encoded, multi-viewer screen for a running VM.
+	 * HONEST capability gate — refused (typed VmResourceInvalid → BAD_REQUEST) when the
+	 * host has no VAAPI encoder (365 falls back to the 355 noVNC path) or the VM is not
+	 * running or predates the raw-VNC port (pre-364 record). Delegates the encode/fanout
+	 * to the StreamManager (which owns the RFB frame source + ffmpeg pair's lifecycle);
+	 * the session is EPHEMERAL (never persisted — VMENC-RESEARCH §3). adminProcedure at
+	 * the router (plan 03) is the auth gate; this is the manager-level contract.
+	 */
+	async startEncodedScreen(id: string): Promise<{streamId: string; wsUrl: string}> {
+		return this.#withFlight(id, async () => {
+			const record = await this.#requireRecord(id)
+			const sm = this.#livinityd.streamManager
+			if (!sm || !sm.encodeAvailable()) {
+				throw new VmResourceInvalid('Hardware video encoding is unavailable on this host — use the standard VM screen.')
+			}
+			if (record.vncRawPort === undefined) {
+				throw new VmResourceInvalid(`VM ${id}: predates the encoded-screen feature — delete and recreate it to enable it.`)
+			}
+			// Derive 'running' via a DIRECT docker inspect — NOT #deriveState, which reports
+			// 'creating' while we hold the single-flight marker (identical to update()'s
+			// comment). Using #deriveState here would make the running check ALWAYS fail.
+			let running = false
+			try {
+				running = (await dockerInspectStatus(record.containerName)) === 'running'
+			} catch {
+				running = false
+			}
+			if (!running) {
+				throw new VmResourceInvalid(`VM ${id}: must be running to open its encoded screen.`)
+			}
+			return sm.startVmStream({userId: 'admin', vmId: id, vncRawPort: record.vncRawPort})
+		})
+	}
+
+	/** VMENC-01: stop any live encoded-screen session for this VM (idempotent — 0 sessions is fine). */
+	async stopEncodedScreen(id: string): Promise<{stopped: boolean}> {
+		const sm = this.#livinityd.streamManager
+		const count = sm ? await sm.stopStreamsForVm(id) : 0
+		return {stopped: count > 0}
 	}
 
 	/**
@@ -715,6 +762,13 @@ export class VmManager {
 		return this.#withFlight(id, async () => {
 			const record = await this.#registry.get(id)
 			if (!record) return {deleted: false} // unknown id — no side effects
+
+			// Phase 364 (VMENC-01): stop any live encode session FIRST (before the container
+			// dies) so a deleted VM never leaves a zombie ffmpeg/RFB. Best-effort — a throwing
+			// cascade must never abort the durable teardown below (zombie-delete discipline).
+			await this.#livinityd.streamManager?.stopStreamsForVm(id).catch((error) => {
+				this.#livinityd.logger.error(`[vm] delete ${id}: stopStreamsForVm failed (continuing teardown)`, error)
+			})
 
 			// (IN-04) The docker steps are BEST-EFFORT: a transient docker error at
 			// stop/down must never leave a VM un-deletable. Log and proceed to the
