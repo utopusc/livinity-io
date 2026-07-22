@@ -80,13 +80,18 @@ describe('non-running states show honest affordances, not a screen', () => {
 	})
 })
 
-describe('Windows VMs surface an RDP hint from getIpAddresses + rdpPort (VMVIEW-02)', () => {
-	it('vm-screen.tsx renders the rdp-hint only for kind windows', () => {
+describe('the RDP hint is removed from the VM screen entirely (VMPURE-01 — re-homes in 359)', () => {
+	it('vm-screen.tsx no longer renders the rdp-hint or its getIpAddresses query', () => {
 		const src = read(SCREEN)
-		expect(src).toMatch(/trpcReact\.system\.getIpAddresses\.useQuery/)
-		expect(src).toMatch(/vm\.kind === 'windows'/)
-		expect(src).toMatch(/vm\.rdpPort/)
-		expect(src).toMatch(/vm\.screen\.rdp-hint/)
+		expect(src).not.toMatch(/vm\.screen\.rdp-hint/)
+		expect(src).not.toMatch(/getIpAddresses/)
+		expect(src).not.toMatch(/rdpIp/)
+	})
+	it('the rdp-hint key is deleted from BOTH locales (parity both ways)', () => {
+		const en = JSON.parse(read(EN)) as Record<string, string>
+		const tr = JSON.parse(read(TR)) as Record<string, string>
+		expect(en['vm.screen.rdp-hint']).toBeUndefined()
+		expect(tr['vm.screen.rdp-hint']).toBeUndefined()
 	})
 })
 
@@ -126,10 +131,39 @@ describe('zero user-facing VNC jargon — every vm.screen.* value is jargon-free
 	})
 })
 
-describe('VmScreen stays 356-ready — unchanged {vm, onBack} export surface', () => {
-	it('vm-screen.tsx keeps the named VmScreen({vm, onBack}) export so 356 can host it in a window', () => {
+describe('VmScreen keeps its {vm, onBack} core contract + additive `pure` suppression prop (356-host-able)', () => {
+	it('vm-screen.tsx keeps the named VmScreen({vm, onBack, pure}) export so 356 can host it in a window', () => {
 		const src = read(SCREEN)
-		expect(src).toMatch(/export function VmScreen\(\{vm, onBack\}/)
+		expect(src).toMatch(/export function VmScreen\(\{vm, onBack, pure\}/)
+	})
+})
+
+describe('windowed VM screen is a PURE stream — header/Back/title suppressed via `pure` (VMPURE-01)', () => {
+	it('vm-screen.tsx gates its header/Back/title block on !pure', () => {
+		const src = read(SCREEN)
+		// The header (Back + title) is conditionally rendered only when NOT pure.
+		// Anchor the block end on the closing </div>)} — NOT the generic )} which
+		// would false-terminate inside the t('vm.screen.title', {...}) call.
+		const header = src.match(/\{!pure &&[\s\S]*?vm\.screen\.title[\s\S]*?<\/div>\s*\)\}/)?.[0] ?? ''
+		expect(header, 'header block must be wrapped in {!pure && ...}').not.toBe('')
+		expect(header).toMatch(/vm\.screen\.back/)
+		expect(header).toMatch(/vm\.screen\.title/)
+	})
+	it('vm-content.tsx derives windowed from windowId presence (NOT initialRoute) and threads it', () => {
+		const src = read('src/modules/window/app-contents/vm-content.tsx')
+		expect(src).toMatch(/windowId !== undefined/)
+		expect(src).toMatch(/windowed=\{windowed\}/)
+	})
+	it('index.tsx computes pureScreen from windowed + a resolved seed and gates the Create-VM header', () => {
+		const src = read('src/features/vm/index.tsx')
+		expect(src).toMatch(/pureScreen = !!windowed && !!initialScreenVm/)
+		expect(src).toMatch(/\{!pureScreen &&/)
+		expect(src).toMatch(/pure=\{pureScreen\}/)
+	})
+	it('window-content.tsx forwards windowId through the LIVINITY_vm arm', () => {
+		const src = read('src/modules/window/window-content.tsx')
+		const arm = src.match(/case ['"]LIVINITY_vm['"]:[\s\S]*?VmWindowContent[^\n]*/)?.[0] ?? ''
+		expect(arm).toMatch(/windowId=\{windowId\}/)
 	})
 })
 
