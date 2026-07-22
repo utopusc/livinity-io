@@ -181,3 +181,96 @@ describe('EN/TR parity for every new vm.screen.* key (hard gate)', () => {
 		expect(tr['vm.open-screen.coming-353']).toBeUndefined()
 	})
 })
+
+// ── Phase 365-02 (VMENC-01 UI half, VMENC-02) ────────────────────────────────
+// Source-regex integration pins for the honest MSE-vs-RFB fallback state
+// machine. Like the 355 pins these prove SHAPE (readFileSync), never runtime —
+// no render, no RTL, no jsdom-MSE mock (the file's idiom). They guard the
+// threat-model honesty invariants (T-365-05/06/07) tsc/build cannot catch.
+
+describe('the running screen tries the host-encoded <video> first (VMENC-01 / T-365-05)', () => {
+	it('vm-screen.tsx actually calls useVmEncodedScreen (not just imports it)', () => {
+		const src = read(SCREEN)
+		expect(src).toMatch(/useVmEncodedScreen\(/)
+	})
+	it('the cheap MediaSource support check precedes the hook call that burns a cap slot', () => {
+		const src = read(SCREEN)
+		// Cap-slot discipline: window.MediaSource support gate BEFORE the mutation-
+		// gating hook arg — never spin up a backend encode pair for a browser that
+		// can never play the result.
+		expect(src).toMatch(/MediaSource[\s\S]{0,300}useVmEncodedScreen/)
+	})
+	it('the encoded surface is a view-only <video> with autoPlay/muted/playsInline', () => {
+		const src = read(SCREEN)
+		// Honest playback attrs (never a stalled/black frame mistaken for live; the
+		// hook only reports connected on a real playing frame).
+		expect(src).toMatch(/<video[^>]*autoPlay/)
+		expect(src).toMatch(/<video[^>]*\bmuted\b/)
+		expect(src).toMatch(/<video[^>]*playsInline/)
+		// view-only: bound to the hook's videoRef, no pointer/keyboard handler here.
+		expect(src).toMatch(/<video[^>]*ref=\{mse\.videoRef\}/)
+	})
+})
+
+describe('the two surfaces are mutually exclusive — never both mounted (T-365-06)', () => {
+	it('the encoded branch is gated on showEncoded and the RFB branch on !showEncoded', () => {
+		const src = read(SCREEN)
+		// Encoded branch (showEncoded) …
+		expect(src).toMatch(/showEncoded \?/)
+		// … and the PRESERVED 355 RFB canvas lives under the complementary
+		// !showEncoded branch — the two conditions can never both be true.
+		// (Plan-suggested `{0,400}` cannot span the preserved verbatim RFB status
+		// strip; non-greedy `[\s\S]*?` keeps the SAME mutual-exclusion intent.)
+		expect(src).toMatch(/\{isRunning && !showEncoded \?[\s\S]*?vnc\.containerRef/)
+	})
+	it('the RFB WS socket only opens on fallback (wsUrl gated on !showEncoded)', () => {
+		const src = read(SCREEN)
+		// The RFB useWebAppVnc wsUrl idles while the encoded path is active, so
+		// exactly one live socket exists.
+		expect(src).toMatch(/isRunning && !showEncoded \?[\s\S]{0,80}buildVmWsUrl/)
+	})
+})
+
+describe('the fallback decision is LATCHED in state — no flapping (T-365-05)', () => {
+	it('forcedFallback is React state, and showEncoded derives from it', () => {
+		const src = read(SCREEN)
+		expect(src).toMatch(/const \[forcedFallback, setForcedFallback\] = useState/)
+		// showEncoded reads the latch (stored), not a fresh per-render re-derivation.
+		expect(src).toMatch(/showEncoded =[\s\S]{0,140}forcedFallback/)
+	})
+	it('EVERY terminal encoded status routes through the ONE setForcedFallback latch', () => {
+		const src = read(SCREEN)
+		// Both terminal statuses feed the single one-way latch effect.
+		expect(src).toMatch(/mse\.status === 'unavailable'/)
+		expect(src).toMatch(/mse\.status === 'error'/)
+		expect(src).toMatch(
+			/mse\.status === 'unavailable' \|\| mse\.status === 'error'\) setForcedFallback\(true\)/,
+		)
+	})
+	it('the switch-to-interactive button force-latches to the RFB (input) path', () => {
+		const src = read(SCREEN)
+		expect(src).toMatch(
+			/switch-interactive[\s\S]{0,200}setForcedFallback|setForcedFallback[\s\S]{0,200}switch-interactive/,
+		)
+	})
+})
+
+describe('no raw hook status leaks to the DOM; connecting reuses the honest copy (T-365-07)', () => {
+	it('vm-screen.tsx never renders a raw mse.errorMessage and reuses vm.screen.loading', () => {
+		const src = read(SCREEN)
+		// Mirror the existing vnc.errorMessage ban — no raw hook string in the UI.
+		expect(src).not.toMatch(/mse\.errorMessage/)
+		// The encoded connecting overlay reuses the existing honest loading copy.
+		expect(src).toMatch(/vm\.screen\.loading/)
+	})
+	it('the two new vm.screen.* keys exist at EN/TR parity, jargon-free', () => {
+		const en = JSON.parse(read(EN)) as Record<string, string>
+		const tr = JSON.parse(read(TR)) as Record<string, string>
+		for (const k of ['vm.screen.state.preview-view-only', 'vm.screen.action.switch-interactive']) {
+			expect(en[k], `missing EN key: ${k}`).toBeTruthy()
+			expect(tr[k], `missing TR key: ${k}`).toBeTruthy()
+			expect(en[k]).not.toMatch(/VNC|noVNC|RFB|websockify|codec|MSE|encoder/i)
+			expect(tr[k]).not.toMatch(/VNC|noVNC|RFB|websockify|codec|MSE|encoder/i)
+		}
+	})
+})
