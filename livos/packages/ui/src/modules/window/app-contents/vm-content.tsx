@@ -10,11 +10,11 @@ import {Loading} from '@/components/ui/loading'
 // default export of @/features/vm.
 const VmAppInner = React.lazy(() => import('@/features/vm'))
 
-export default function VmWindowContent() {
+export default function VmWindowContent({initialRoute}: {initialRoute?: string}) {
 	return (
 		<ErrorBoundary FallbackComponent={ErrorBoundaryCardFallback}>
 			<Suspense fallback={<Loading />}>
-				<VmAppInner />
+				<VmAppInner initialRoute={initialRoute} />
 			</Suspense>
 		</ErrorBoundary>
 	)

@@ -211,6 +211,8 @@
   "vm.controls.restart": "Restart",
   "vm.controls.rename": "Rename",
   "vm.controls.open-screen": "Open screen",
+  "vm.controls.pin": "Add to Dock",
+  "vm.controls.unpin": "Remove from Dock",
   "vm.controls.delete": "Delete",
   "vm.screen.title": "{{name}} — screen",
   "vm.screen.back": "Back",

@@ -19,9 +19,9 @@ import {VmScreen} from './vm-screen'
 
 type VmView = RouterOutput['vm']['list'][number]
 
-export function VmList({vms}: {vms: VmView[]}) {
+export function VmList({vms, initialScreenVmId}: {vms: VmView[]; initialScreenVmId?: string}) {
 	const [vmPendingDelete, setVmPendingDelete] = useState<VmView | null>(null)
-	const [screenVmId, setScreenVmId] = useState<string | null>(null)
+	const [screenVmId, setScreenVmId] = useState<string | null>(initialScreenVmId ?? null)
 
 	// Re-resolve the viewed VM from the live list every render so its state stays
 	// honest while the screen is open (no parallel query). If it vanished (deleted

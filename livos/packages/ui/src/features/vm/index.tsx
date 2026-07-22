@@ -22,10 +22,13 @@ import {VmList} from './components/vm-list'
 import {decideVmVisibility} from './decide-vm-visibility'
 import {useVmList} from './hooks/use-vm-list'
 
-export default function VmApp() {
+export default function VmApp({initialRoute}: {initialRoute?: string}) {
 	const {isAdmin, isLoading, error, vms} = useVmList()
 	const [createOpen, setCreateOpen] = useState(false)
 	const visibility = decideVmVisibility({isLoading, isAdmin})
+	// Deep-link from a pinned VM Dock tile: /vm/<id> seeds the list straight into
+	// that VM's 353 screen (parse once here, thread the id down — no new routing).
+	const initialScreenVmId = initialRoute?.startsWith('/vm/') ? initialRoute.slice('/vm/'.length) : undefined
 
 	if (visibility === 'loading') {
 		return <Loading />
@@ -60,7 +63,7 @@ export default function VmApp() {
 						</Button>
 					</div>
 					<div className='min-h-0 flex-1 overflow-y-auto'>
-						<VmList vms={vms} />
+						<VmList vms={vms} initialScreenVmId={initialScreenVmId} />
 					</div>
 				</>
 			)}

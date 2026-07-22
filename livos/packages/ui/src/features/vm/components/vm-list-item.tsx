@@ -15,8 +15,10 @@
 // "Open screen" (353-02) calls onOpenScreen(vm) to open the state-aware VmScreen
 // view; the honesty of that view (never a blank frame as working) lives there.
 import {useState} from 'react'
-import {TbDeviceDesktop, TbLoader2, TbPencil, TbPlayerPlay, TbPlayerStop, TbRefresh, TbTrash} from 'react-icons/tb'
+import {TbDeviceDesktop, TbLoader2, TbPencil, TbPin, TbPinnedOff, TbPlayerPlay, TbPlayerStop, TbRefresh, TbTrash} from 'react-icons/tb'
 import {toast} from 'sonner'
+
+import {useDockPins} from '@/modules/desktop/use-dock-pins'
 
 import {Badge} from '@/shadcn-components/ui/badge'
 import {Button} from '@/shadcn-components/ui/button'
@@ -82,6 +84,12 @@ export function VmListItem({
 	onOpenScreen: (vm: VmView) => void
 }) {
 	const utils = trpcReact.useUtils()
+
+	// Desktop shortcut (354): pin/unpin rides the SAME client-only useDockPins
+	// mechanism as every other Dock pin. This handler NEVER touches a vm.*
+	// mutation — unpin removes only the Dock tile, never the VM (unpin ≠ delete).
+	const {isPinned, pin, unpin} = useDockPins()
+	const pinnedToDesktop = isPinned('vm', vm.id)
 
 	const startMut = trpcReact.vm.start.useMutation({
 		onSuccess: () => utils.vm.list.invalidate(),
@@ -192,6 +200,16 @@ export function VmListItem({
 					<Button size='sm' variant='ghost' onClick={() => onOpenScreen(vm)}>
 						<TbDeviceDesktop className='h-4 w-4' />
 						{t('vm.controls.open-screen')}
+					</Button>
+
+					{/* Pin/unpin to the desktop Dock — client-only (useDockPins), no vm.* mutation. */}
+					<Button
+						size='sm'
+						variant='ghost'
+						onClick={() => (pinnedToDesktop ? unpin('vm', vm.id) : pin({kind: 'vm', id: vm.id}))}
+					>
+						{pinnedToDesktop ? <TbPinnedOff className='h-4 w-4' /> : <TbPin className='h-4 w-4' />}
+						{pinnedToDesktop ? t('vm.controls.unpin') : t('vm.controls.pin')}
 					</Button>
 
 					<Button size='sm' variant='ghost' onClick={openRename} disabled={renameMut.isPending}>

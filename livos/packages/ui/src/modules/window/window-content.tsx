@@ -285,7 +285,7 @@ export function WindowAppContent({appId, initialRoute, windowId}: {appId: string
 			return <MyDevicesWindowContent />
 
 		case 'LIVINITY_vm':
-			return <VmWindowContent />
+			return <VmWindowContent initialRoute={initialRoute} />
 
 
 		case 'LIVINITY_terminal':
