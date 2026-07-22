@@ -138,6 +138,32 @@ export function vmResourceVerdict(
 	return null
 }
 
+// Phase 359 (VMSET-01): the resize gate. Grow-only disk (shrink is upstream-
+// unsupported/corrupting — CONTEXT.md locked) + a host-capacity re-check that
+// CREDITS the VM's already-allocated disk back into free space, so the disk
+// bound is the GROWTH DELTA (the current image already occupies its space),
+// never the absolute new total. RAM/CPU have no analogous prior allocation to
+// credit. Delegates the actual bound to vmResourceVerdict (single-sourced) so the
+// RAM/CPU/disk math never drifts from the create() gate.
+export function vmResizeVerdict(
+	current: {cpus: number; ramMiB: number; diskGiB: number},
+	proposed: {cpus: number; ramMiB: number; diskGiB: number},
+	host: HostCapacity,
+): string | null {
+	if (proposed.diskGiB < current.diskGiB) {
+		return `Disk can only grow — requested ${proposed.diskGiB}G is below the current ${current.diskGiB}G. Shrinking a VM disk is not supported.`
+	}
+	const adjustedHost: HostCapacity = {
+		totalMemBytes: host.totalMemBytes,
+		cpuCount: host.cpuCount,
+		diskFreeBytes: host.diskFreeBytes + current.diskGiB * 1024 ** 3,
+	}
+	return vmResourceVerdict(
+		{CPU_CORES: String(proposed.cpus), RAM_SIZE: `${proposed.ramMiB}M`, DISK_SIZE: `${proposed.diskGiB}G`},
+		adjustedHost,
+	)
+}
+
 /**
  * Live host-capacity probe reused by the create gate. RAM/CPU are node-native
  * (never throw); disk free space is read via the shared `getDiskUsageByPath` df

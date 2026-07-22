@@ -19,6 +19,7 @@ import {$} from 'execa'
 import fse from 'fs-extra'
 import yaml from 'js-yaml'
 
+import {VmResourceInvalid} from '../apps/vm-preflight.js'
 import type {VmTemplate} from './vm-template.js'
 
 /**
@@ -185,6 +186,60 @@ export function renderVmCompose(template: VmTemplate, opts: RenderVmComposeOpts)
 			},
 		},
 	}
+}
+
+// Phase 359 (VMSET-01): recover the RAW osEnv + bootFileMount from an ALREADY-
+// RENDERED compose object so vm.update can re-render with new resources WITHOUT
+// dropping the VM's OS/boot (Pitfall 2). Un-escapes the compose escape ('$$'->'$')
+// so the value is raw again — renderVmCompose re-escapes it exactly once on the
+// next render (a naive re-feed of the still-escaped value would double to '$$$$').
+// Pure (no I/O) so it unit-tests against a plain object.
+export function extractOsRenderInputs(
+	composeObj: unknown,
+	kind: 'windows' | 'linux',
+): {osEnv: Record<string, string>; bootFileMount?: {hostFileName: string; containerPath: string}} {
+	const svc = (composeObj as any)?.services?.vm ?? {}
+	const env: Record<string, unknown> = svc.environment ?? {}
+	const unescape = (v: string) => v.replaceAll('$$', '$') // reverse escapeComposeEnv (string search+replace, literal)
+	const osEnv: Record<string, string> = {}
+	const key = kind === 'windows' ? 'VERSION' : 'BOOT'
+	if (typeof env[key] === 'string') osEnv[key] = unescape(env[key] as string)
+	let bootFileMount: {hostFileName: string; containerPath: string} | undefined
+	const volumes: string[] = Array.isArray(svc.volumes) ? svc.volumes : []
+	const bootVol = volumes.find((v) => typeof v === 'string' && /:\/boot\.[a-z0-9]+$/i.test(v))
+	if (bootVol) {
+		const sep = bootVol.lastIndexOf(':')
+		const containerPath = bootVol.slice(sep + 1)
+		const hostPath = bootVol.slice(0, sep)
+		bootFileMount = {hostFileName: hostPath.slice(hostPath.lastIndexOf('/') + 1), containerPath}
+	}
+	return {osEnv, bootFileMount}
+}
+
+/**
+ * Thin I/O wrapper — read + parse the on-disk compose, then extract. FAIL-CLOSED:
+ * an unreadable/unparseable compose THROWS a typed VmResourceInvalid (→ callVm's
+ * BAD_REQUEST) rather than letting a raw fs/YAML error surface as an opaque 500 —
+ * the caller must NEVER emit an OS-losing re-render on a recovery failure
+ * (CONTEXT.md locked). The message mirrors start()'s "files missing — delete and
+ * recreate" precedent (vm-manager.ts:460-462) so the admin gets an actionable next
+ * step. Only reached for pre-359 records (new VMs carry osEnv on the record).
+ */
+export async function readOsRenderInputs(
+	composePath: string,
+	kind: 'windows' | 'linux',
+): Promise<{osEnv: Record<string, string>; bootFileMount?: {hostFileName: string; containerPath: string}}> {
+	let parsed: unknown
+	try {
+		parsed = yaml.load(await fse.readFile(composePath, 'utf8'))
+	} catch (error) {
+		throw new VmResourceInvalid(
+			`This VM's compose file could not be read to preserve its OS selection (${String(
+				(error as Error)?.message ?? error,
+			)}). Its files may be missing or corrupt — delete this VM and recreate it.`,
+		)
+	}
+	return extractOsRenderInputs(parsed, kind)
 }
 
 /**

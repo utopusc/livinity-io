@@ -36,6 +36,14 @@ export type VmInstanceRecord = {
 	rdpPort?: number // windows only, allocated loopback host port -> container 3389
 	createdAt: number
 	lastError?: string // surfaced verbatim by list/get on `error` state
+	// Phase 359 (VMSET-01): the RAW guest-OS env (VERSION|BOOT) create() rendered —
+	// lets vm.update re-render without losing the OS. Absent on pre-359 records
+	// (recovered from the on-disk compose then). patch()'s generic spread-merge
+	// carries these new optional fields with ZERO accessor change (line 24 predicted this).
+	osEnv?: Record<string, string>
+	// Phase 359 (VMSET-01): linux custom-LOCAL-image bind — re-supplied on re-render.
+	// Absent for non-local-file VMs and pre-359 records.
+	bootFileMount?: {hostFileName: string; containerPath: string}
 }
 
 /**
