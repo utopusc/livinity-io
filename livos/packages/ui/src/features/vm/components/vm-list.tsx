@@ -3,14 +3,21 @@
 // list; each row's delete button just selects the pending VM). The motion stagger
 // mirrors users.tsx's list.
 //
-// Phase 353-02 (VMVIEW-01) — also owns the list<->screen view state. Opening a
-// VM's screen swaps the list for <VmScreen> WITHIN this app window (no window
-// registration plumbing); the screen keeps reading LIVE state from the SAME
-// vm.list polling (we re-resolve the row by id every render, so a state change
-// while viewing is reflected honestly), then Back returns to the list.
+// Phase 353-02 (VMVIEW-01) — also owns the list<->screen view state; the screen
+// keeps reading LIVE state from the SAME vm.list polling (we re-resolve the row
+// by id every render, so a state change while viewing is reflected honestly),
+// then Back returns to the list.
+//
+// Phase 356-01 (VMWIN-01) — the app-list "Open screen" button now opens a
+// DEDICATED first-class LivOS window (windowManager.openWindow, converging with
+// the 354 dock pin) instead of swapping <VmScreen> in-place. The internal
+// `screenVmId` machinery is NOT dead: `initialScreenVmId` seeds a freshly-opened
+// /vm/<id> window so it renders <VmScreen> on mount, and Back (onBack ->
+// setScreenVmId(null)) falls back to the list WITHIN that same window.
 import {motion} from 'motion/react'
 import {useState} from 'react'
 
+import {useWindowManagerOptional} from '@/providers/window-manager'
 import type {RouterOutput} from '@/trpc/trpc'
 
 import {DeleteVmDialog} from './delete-vm-dialog'
@@ -20,6 +27,7 @@ import {VmScreen} from './vm-screen'
 type VmView = RouterOutput['vm']['list'][number]
 
 export function VmList({vms, initialScreenVmId}: {vms: VmView[]; initialScreenVmId?: string}) {
+	const windowManager = useWindowManagerOptional()
 	const [vmPendingDelete, setVmPendingDelete] = useState<VmView | null>(null)
 	const [screenVmId, setScreenVmId] = useState<string | null>(initialScreenVmId ?? null)
 
@@ -43,7 +51,7 @@ export function VmList({vms, initialScreenVmId}: {vms: VmView[]; initialScreenVm
 					<VmListItem
 						vm={vm}
 						onDelete={() => setVmPendingDelete(vm)}
-						onOpenScreen={(v) => setScreenVmId(v.id)}
+						onOpenScreen={(v) => windowManager?.openWindow('LIVINITY_vm', `/vm/${v.id}`, v.name, '')}
 					/>
 				</motion.div>
 			))}
