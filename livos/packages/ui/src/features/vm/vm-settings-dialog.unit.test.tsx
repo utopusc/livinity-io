@@ -18,6 +18,8 @@ const read = (rel: string) => readFileSync(resolve(process.cwd(), rel), 'utf8')
 
 const DIALOG = 'src/features/vm/components/vm-settings-dialog.tsx'
 const LIST_ITEM = 'src/features/vm/components/vm-list-item.tsx'
+const POPOVER = 'src/modules/desktop/live-usage-popover.tsx'
+const HOOK = 'src/hooks/use-vm-stats.ts'
 const EN = 'public/locales/en.json'
 const TR = 'public/locales/tr.json'
 
@@ -180,5 +182,28 @@ describe('the Settings affordance is wired row-local on each VM row (VMSET-01)',
 		expect(src).toMatch(/settingsOpen/)
 		expect(src).toMatch(/<VmSettingsDialog\b/)
 		expect(src).toMatch(/open=\{settingsOpen\}/)
+	})
+})
+
+describe('Gauge is exported for cross-module reuse (VMSTATS-01)', () => {
+	it('live-usage-popover.tsx exports the Gauge component (never duplicated in the vm feature)', () => {
+		expect(read(POPOVER)).toMatch(/export function Gauge\b/)
+	})
+})
+
+describe('useVmStats polls CPU/RAM but NOT disk (VMSTATS-01 cadence)', () => {
+	it('the hook polls vm.stats every 3s, enabled only on running+open', () => {
+		const src = read(HOOK)
+		expect(src).toMatch(/vm\.stats\.useQuery/)
+		expect(src).toMatch(/refetchInterval:\s*3000/)
+		// enabled gates on BOTH the surface being open (vmId non-null) AND the VM running.
+		expect(src).toMatch(/vmId !== null && running/)
+	})
+
+	it('vm.diskUsage is fetched once (present but off the poll — exactly ONE refetchInterval in the hook)', () => {
+		const src = read(HOOK)
+		expect(src).toMatch(/vm\.diskUsage\.useQuery/)
+		// Structural du-off-poll guarantee: the only refetchInterval in the whole hook is the stats poll.
+		expect((src.match(/refetchInterval/g) ?? []).length).toBe(1)
 	})
 })

@@ -28,7 +28,7 @@ import {Progress} from '@/shadcn-components/ui/progress'
 import {cn} from '@/shadcn-lib/utils'
 import {t} from '@/utils/i18n'
 
-function Gauge({
+export function Gauge({
 	icon: Icon,
 	label,
 	value,
