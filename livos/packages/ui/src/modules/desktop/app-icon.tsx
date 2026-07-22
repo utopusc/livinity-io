@@ -1,4 +1,5 @@
 import {motion} from 'framer-motion'
+import type {ComponentType} from 'react'
 import {useEffect, useRef, useState} from 'react'
 import {FaRegPlayCircle} from 'react-icons/fa'
 import {FaRegCirclePause} from 'react-icons/fa6'
@@ -36,15 +37,21 @@ export function AppIcon({
 	onClick,
 	state = 'ready',
 	progress,
+	glyph,
 }: {
 	label: string
 	src: string
 	onClick?: () => void
 	state?: AppStateOrLoading
 	progress?: number
+	// Phase 357 (VMDESK-01) — additive OS-glyph override for VM desktop tiles
+	// (the precedented DockItem `glyph?` pattern ported to the grid tile). When
+	// absent the tile renders the existing <LauncherIcon src={src}/> byte-for-byte.
+	glyph?: ComponentType<{className?: string}>
 }) {
 	const inProgress = arrayIncludes(progressStates, state)
 	const isStopped = state === 'stopped'
+	const Glyph = glyph
 
 	const appIcon = (
 		<motion.button
@@ -82,7 +89,13 @@ export function AppIcon({
 					'relative aspect-square w-12 shrink-0 overflow-hidden rounded-xl shadow-sm transition-all duration-300 group-hover:scale-105 group-hover:shadow-[0_0_16px_rgba(255,255,255,0.5)] group-hover:ring-2 group-hover:ring-white/60 group-focus-visible:ring-2 group-focus-visible:ring-white/60 group-active:scale-95 group-data-[state=open]:ring-2 group-data-[state=open]:ring-white/60 md:w-16 md:rounded-2xl',
 				)}
 			>
-				<LauncherIcon src={src} imgClassName={cn((inProgress || isStopped) && 'brightness-50')} />
+				{Glyph ? (
+					<div className='flex h-full w-full items-center justify-center bg-neutral-800/50 backdrop-blur-sm'>
+						<Glyph className='h-1/2 w-1/2 text-white' />
+					</div>
+				) : (
+					<LauncherIcon src={src} imgClassName={cn((inProgress || isStopped) && 'brightness-50')} />
+				)}
 				{inProgress && (
 					<div className='absolute inset-0 flex items-center justify-center'>
 						<div className='relative h-1.5 w-[75%] overflow-hidden rounded-full bg-white/30'>
