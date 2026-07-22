@@ -50,6 +50,13 @@ describe('useWebAppVnc — source-text invariants', () => {
 		expect(HOOK_SRC).toMatch(/addEventListener\(\s*['"]securityfailure['"]/)
 	})
 
+	it('maps a credentialsrequired event to an honest error status (Phase 355, additive)', () => {
+		// Previously unlistened → status stuck at 'connecting' forever. The
+		// listener is generation-guarded like the other four and flips to 'error'.
+		expect(HOOK_SRC).toMatch(/addEventListener\('credentialsrequired'/)
+		expect(HOOK_SRC).toMatch(/credentialsrequired[\s\S]{0,400}setStatus\('error'\)/)
+	})
+
 	it('exposes a reconnect() that resets the backoff step', () => {
 		expect(HOOK_SRC).toMatch(/backoffStepRef\.current\s*=\s*0/)
 	})

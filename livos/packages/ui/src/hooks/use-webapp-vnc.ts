@@ -223,6 +223,19 @@ export function useWebAppVnc(wsUrl: string | undefined, options?: UseWebAppVncOp
 			setStatus('error')
 			setErrorMessage(detail?.reason || 'VNC security failure')
 		}
+		// Phase 355 — additive: honestly surface a 'credentialsrequired' event.
+		// Without a listener, an RFB that demands credentials leaves the hook
+		// stuck at 'connecting' forever. dockur/qemus VNC is loopback/password-
+		// less so this is not expected to fire, but if it does we flip to 'error'
+		// (generation-guarded like the other handlers) instead of hanging. The
+		// message is generic — consumers that ban VNC jargon (VM screen) render
+		// their own t() copy, not errorMessage.
+		const onCredentialsRequired: RfbEventListener = () => {
+			if (generation !== reconnectGenerationRef.current) return
+			// 'credentialsrequired' → honest error, never a silent hang.
+			setStatus('error')
+			setErrorMessage('This screen requires credentials that are not available')
+		}
 		// Phase 303 — guest→host copy. When the streamed app copies, x11vnc
 		// sends an RFB ServerCutText and noVNC dispatches a 'clipboard' event
 		// carrying the copied string in `detail.text` (verified against @novnc
@@ -252,6 +265,7 @@ export function useWebAppVnc(wsUrl: string | undefined, options?: UseWebAppVncOp
 		rfb.addEventListener('connect', onConnect)
 		rfb.addEventListener('disconnect', onDisconnect)
 		rfb.addEventListener('securityfailure', onSecurityFailure)
+		rfb.addEventListener('credentialsrequired', onCredentialsRequired)
 		rfb.addEventListener('clipboard', onClipboard)
 	}, [teardownRfb])
 
