@@ -200,6 +200,10 @@ interface VmManagerSurface {
 		patch: {resources: {cpus?: number; ramMiB?: number; diskGiB?: number}},
 	): Promise<{restartRequired: boolean; restartTriggered: boolean; restartReason?: string}>
 	delete(id: string, opts: {confirm: true}): Promise<{deleted: boolean}>
+	// VMSTATS-01: read-only live-usage delegates (typed `unknown` like list/get to
+	// avoid a value import of VmStatsView/VmDiskUsageView).
+	stats(id: string): Promise<unknown>
+	diskUsage(id: string): Promise<unknown>
 }
 
 /**
@@ -307,6 +311,14 @@ const vm = router({
 		return buildVmCreateOptions(dataDirectory)
 	}),
 	get: adminProcedure.input(idInput).query(({ctx, input}) => callVm(() => requireVm(ctx).get(input.id))),
+	// VMSTATS-01: live per-VM CPU/RAM usage. adminProcedure QUERY (audit-exempt — a
+	// 3s poll logs nothing, same posture as vm.list/vm.get/docker.containerStats).
+	// Read-only, zero exposure surface. Structurally du-FREE — disk is vm.diskUsage.
+	stats: adminProcedure.input(idInput).query(({ctx, input}) => callVm(() => requireVm(ctx).stats(input.id))),
+	// VMSTATS-01: per-VM disk-used (du of the guest storage dir). SEPARATE from
+	// vm.stats so the 3s poll never pays the du CPU cost — the client fetches this
+	// once on dialog open + on demand (live-usage-popover disk-not-polled precedent).
+	diskUsage: adminProcedure.input(idInput).query(({ctx, input}) => callVm(() => requireVm(ctx).diskUsage(input.id))),
 	create: adminProcedure
 		.input(createInput)
 		.mutation(({ctx, input}) => callVm(() => requireVm(ctx).create(input))),
