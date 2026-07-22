@@ -61,3 +61,35 @@ describe('create flow is wired to the honest API surface (VMAPP-02)', () => {
 		expect(src).toMatch(/trpcReact\.vm\.create\b/)
 	})
 })
+
+// Phase 359 (VMUSER-01): the Windows guest username default. Source-text pins over
+// the raw component (no @testing-library here) — the field is windows-gated, the
+// prefill comes from useCurrentUser().username, the username threads into the
+// windows mutate ONLY, and Linux/custom gets an HONEST note (never a fake field).
+describe('Windows guest username default (VMUSER-01)', () => {
+	it('prefills from the current user (destructures username from useCurrentUser)', () => {
+		const src = read(DIALOG)
+		expect(src).toMatch(/username:\s*myUsername\s*\}\s*=\s*useCurrentUser\(\)/)
+		// The prefill applies the current user's name on Windows selection.
+		expect(src).toMatch(/setUsername\(myUsername\s*\?\?\s*''\)/)
+	})
+
+	it('renders the username field ONLY for Windows (gated on isWindows), never for other images', () => {
+		const src = read(DIALOG)
+		// The field + its label live inside an isWindows-gated branch.
+		expect(src).toMatch(/isWindows\s*\?\s*\(\s*<Labeled label=\{t\('vm\.create\.username-label'\)\}/)
+	})
+
+	it('threads username into the WINDOWS mutate only (omitted when empty)', () => {
+		const src = read(DIALOG)
+		expect(src).toMatch(/trimmedUser\s*\?\s*\{username:\s*trimmedUser\}\s*:\s*\{\}/)
+		// The linux/custom mutate branches carry NO username.
+		expect(src).toMatch(/os:\s*\{distro:\s*distro as never\}/)
+		expect(src).not.toMatch(/os:\s*\{customImage,\s*username/)
+	})
+
+	it('shows an HONEST not-supported note for non-Windows images (no fake username field)', () => {
+		const src = read(DIALOG)
+		expect(src).toMatch(/vm\.create\.username-linux-note/)
+	})
+})

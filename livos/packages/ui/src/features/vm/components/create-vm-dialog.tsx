@@ -64,7 +64,10 @@ const num = (v: string) => {
 }
 
 export function CreateVmDialog({open, onOpenChange}: {open: boolean; onOpenChange: (open: boolean) => void}) {
-	const {isAdmin} = useCurrentUser()
+	// Phase 359 (VMUSER-01): the installing user's own username is the Windows guest
+	// default (prefilled, still editable) — a purely client-side prefill (no extra
+	// backend for it; the server re-validates the regex on create).
+	const {isAdmin, username: myUsername} = useCurrentUser()
 	const utils = trpcReact.useUtils()
 
 	// The dialog only ever renders inside the admin-gated surface; gate the query
@@ -78,6 +81,9 @@ export function CreateVmDialog({open, onOpenChange}: {open: boolean; onOpenChang
 	const [customMode, setCustomMode] = useState<'url' | 'localPath'>('url')
 	const [customValue, setCustomValue] = useState('')
 	const [resources, setResources] = useState<Resources>(BASE_RESOURCES)
+	// Phase 359 (VMUSER-01): the Windows guest username. Empty until a Windows OS is
+	// selected, then prefilled with the installing user's username (still editable).
+	const [username, setUsername] = useState('')
 
 	const createMut = trpcReact.vm.create.useMutation({
 		onSuccess: () => {
@@ -93,6 +99,7 @@ export function CreateVmDialog({open, onOpenChange}: {open: boolean; onOpenChang
 		setCustomMode('url')
 		setCustomValue('')
 		setResources(BASE_RESOURCES)
+		setUsername('')
 	}
 
 	const handleOpenChange = (next: boolean) => {
@@ -112,6 +119,10 @@ export function CreateVmDialog({open, onOpenChange}: {open: boolean; onOpenChang
 			const key = val.slice('win:'.length)
 			const entry = opts.os.windows[key as keyof typeof opts.os.windows]
 			if (entry) setResources({...entry.defaults})
+			// Phase 359 (VMUSER-01): prefill the guest username with the installing
+			// user's own name — but only if untouched, so a re-pick never clobbers an
+			// edit (mirrors the resources-defaults prefill idiom).
+			if (!username) setUsername(myUsername ?? '')
 		} else if (val.startsWith('linux:')) {
 			const key = val.slice('linux:'.length)
 			const entry = opts.os.linux[key as keyof typeof opts.os.linux]
@@ -133,7 +144,16 @@ export function CreateVmDialog({open, onOpenChange}: {open: boolean; onOpenChang
 		const trimmedName = name.trim()
 		if (osValue.startsWith('win:')) {
 			const edition = osValue.slice('win:'.length)
-			createMut.mutate({name: trimmedName, kind: 'windows', resources, os: {edition: edition as never}})
+			// Phase 359 (VMUSER-01): thread a non-empty username onto os.username; an
+			// empty one is OMITTED so the server default applies. Windows-only — the
+			// linux/custom branches carry no username (no account injection).
+			const trimmedUser = username.trim()
+			createMut.mutate({
+				name: trimmedName,
+				kind: 'windows',
+				resources,
+				os: {edition: edition as never, ...(trimmedUser ? {username: trimmedUser} : {})},
+			})
 			return
 		}
 		if (osValue.startsWith('linux:')) {
@@ -247,6 +267,18 @@ export function CreateVmDialog({open, onOpenChange}: {open: boolean; onOpenChang
 									</span>
 									<span className='text-caption text-text-tertiary'>{opts.byoLicenseNotice}</span>
 								</div>
+							) : null}
+
+							{/* Phase 359 (VMUSER-01): Windows-only guest username, prefilled with the
+							    installing user's name (editable). For a Linux/custom image there is NO
+							    account injection upstream — render an HONEST note, never a fake field. */}
+							{isWindows ? (
+								<Labeled label={t('vm.create.username-label')}>
+									<Input value={username} onValueChange={setUsername} />
+									<p className='mt-1 text-caption text-text-tertiary'>{t('vm.create.username-hint')}</p>
+								</Labeled>
+							) : osChosen ? (
+								<p className='text-caption text-text-tertiary'>{t('vm.create.username-linux-note')}</p>
 							) : null}
 
 							{/* Resources — pre-filled from the OS defaults, editable, shown against
