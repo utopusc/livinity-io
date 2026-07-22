@@ -47,6 +47,13 @@ const MAX_QUEUE_BYTES = 8 * 1024 * 1024
 const CONNECT_DEADLINE_MS = 15_000
 // Live-edge catch-up threshold — jump near the buffered end if we drift behind.
 const MAX_LAG_SECONDS = 1.5
+// Live-window eviction (WR-02): keep only this many seconds of decoded media
+// behind the playhead. The 8 MB queue cap bounds only the PENDING append queue,
+// not the SourceBuffer's buffered range — without eviction a long live session
+// grows until QuotaExceededError. `sb.remove` operates on a TIME range, so the
+// init segment (ftyp+moov, decode metadata — not part of any time range) is
+// never touched by it (IN-01, SourceBuffer side).
+const KEEP_SECONDS = 30
 
 /**
  * MediaSource fMP4 player over the 364 encoded-screen stream. `vmId` falsy →
@@ -61,6 +68,11 @@ export function useVmEncodedScreen(vmId: string | undefined): UseVmEncodedScreen
 	const queueRef = useRef<ArrayBuffer[]>([])
 	const queueBytesRef = useRef(0)
 	const initHandledRef = useRef(false)
+	// The init segment (ftyp+moov) is held APART from the drop-oldest media queue
+	// (IN-01): a pre-sourceopen media burst > MAX_QUEUE_BYTES must never shift the
+	// init out of the FIFO. It is appended first, exactly once, before any media.
+	const initSegmentRef = useRef<ArrayBuffer | null>(null)
+	const initAppendedRef = useRef(false)
 	const listenersAbortRef = useRef<AbortController | null>(null)
 	const deadlineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const reconnectGenerationRef = useRef(0)
@@ -144,6 +156,8 @@ export function useVmEncodedScreen(vmId: string | undefined): UseVmEncodedScreen
 		queueRef.current = []
 		queueBytesRef.current = 0
 		initHandledRef.current = false
+		initSegmentRef.current = null
+		initAppendedRef.current = false
 		// Best-effort release of the backend RFB+ffmpeg pair for the session we
 		// actually started (stopEncodedScreen is idempotent server-side).
 		const startedId = startedVmIdRef.current
@@ -184,6 +198,18 @@ export function useVmEncodedScreen(vmId: string | undefined): UseVmEncodedScreen
 
 		setStatus('connecting')
 
+		// Fail-closed connect deadline — ARM BEFORE the mutation await (WR-01) so
+		// the ENTIRE connect (mutation + WS handshake + first frame) is bounded: a
+		// hung startEncodedScreen (network stall with a live TCP conn, proxy hang
+		// that never resolves/rejects) can no longer spin 'connecting' forever.
+		// One shared timer covers connecting→connected; it is CLEARED on the real
+		// 'playing' event (onPlaying, CR-01) and in teardown(). The generation
+		// check inside the callback makes early arming safe.
+		deadlineTimerRef.current = setTimeout(() => {
+			if (generation !== reconnectGenerationRef.current) return
+			fail('error')
+		}, CONNECT_DEADLINE_MS)
+
 		let session: {streamId: string; wsUrl: string}
 		try {
 			session = await startEncodedScreenMutRef.current.mutateAsync({id: currentVmId})
@@ -205,12 +231,6 @@ export function useVmEncodedScreen(vmId: string | undefined): UseVmEncodedScreen
 		const ac = new AbortController()
 		listenersAbortRef.current = ac
 
-		// Fail-closed deadline: no real playing frame in time → fall back.
-		deadlineTimerRef.current = setTimeout(() => {
-			if (generation !== reconnectGenerationRef.current) return
-			fail('error')
-		}, CONNECT_DEADLINE_MS)
-
 		let ws: WebSocket
 		try {
 			ws = new WebSocket(fullUrl)
@@ -224,7 +244,23 @@ export function useVmEncodedScreen(vmId: string | undefined): UseVmEncodedScreen
 
 		const pump = () => {
 			const sb = sourceBufferRef.current
-			if (!sb || sb.updating || queueRef.current.length === 0) return
+			if (!sb || sb.updating) return
+			// Init segment ALWAYS appends first, exactly once, before any media
+			// fragment — held apart from the drop-oldest queue so it can never be
+			// evicted (IN-01).
+			if (!initAppendedRef.current) {
+				const init = initSegmentRef.current
+				if (!init) return
+				initAppendedRef.current = true
+				try {
+					sb.appendBuffer(init)
+				} catch {
+					if (generation !== reconnectGenerationRef.current) return
+					fail('error')
+				}
+				return
+			}
+			if (queueRef.current.length === 0) return
 			const chunk = queueRef.current.shift()!
 			queueBytesRef.current -= chunk.byteLength
 			try {
@@ -232,6 +268,30 @@ export function useVmEncodedScreen(vmId: string | undefined): UseVmEncodedScreen
 			} catch {
 				if (generation !== reconnectGenerationRef.current) return
 				fail('error')
+			}
+		}
+
+		// Live-window eviction (WR-02): reclaim decoded frames older than
+		// KEEP_SECONDS behind the playhead. Guarded on !sb.updating AND an empty
+		// pending queue (never remove-while-updating — that throws — and never
+		// starve a pending append). Driven from the updateend queue + timeupdate.
+		// `remove` takes a TIME range from buffered.start(0); the init segment is
+		// decode metadata outside any time range and is never touched (IN-01).
+		const evict = () => {
+			const sb = sourceBufferRef.current
+			const video = videoRef.current
+			if (!sb || sb.updating || !video) return
+			if (!initAppendedRef.current || queueRef.current.length > 0) return
+			const buffered = sb.buffered
+			if (buffered.length === 0) return
+			const start = buffered.start(0)
+			const target = video.currentTime - KEEP_SECONDS
+			if (target > start + 1) {
+				try {
+					sb.remove(start, target)
+				} catch {
+					/* remove can throw mid-state; harmless — retried on next updateend */
+				}
 			}
 		}
 
@@ -262,9 +322,17 @@ export function useVmEncodedScreen(vmId: string | undefined): UseVmEncodedScreen
 				fail('error')
 				return
 			}
-			// Honest 'connected' — only on a real playing frame.
+			// Honest 'connected' — only on a real playing frame. CR-01: this is the
+			// ONLY place that disarms the connect deadline. Without this clear the
+			// shared timer fires at CONNECT_DEADLINE_MS on the HAPPY path and demotes
+			// the working <video> to RFB; after 'connected' the deadline must NEVER
+			// fire. (Success ≠ teardown, so teardown's clear alone is insufficient.)
 			const onPlaying = () => {
 				if (generation !== reconnectGenerationRef.current) return
+				if (deadlineTimerRef.current) {
+					clearTimeout(deadlineTimerRef.current)
+					deadlineTimerRef.current = null
+				}
 				setStatus('connected')
 			}
 			video.addEventListener('playing', onPlaying, {signal: ac.signal})
@@ -312,7 +380,13 @@ export function useVmEncodedScreen(vmId: string | undefined): UseVmEncodedScreen
 						return
 					}
 					sourceBufferRef.current = sb
-					sb.addEventListener('updateend', pump, {signal: ac.signal})
+					// On each completed append/remove: drain queued media, then (queue
+					// empty, not updating) reclaim the live window behind the playhead.
+					const onUpdateEnd = () => {
+						pump()
+						evict()
+					}
+					sb.addEventListener('updateend', onUpdateEnd, {signal: ac.signal})
 					sb.addEventListener(
 						'error',
 						() => {
@@ -321,13 +395,14 @@ export function useVmEncodedScreen(vmId: string | undefined): UseVmEncodedScreen
 						},
 						{signal: ac.signal},
 					)
-					// Init segment is already first in the FIFO queue — drain it.
+					// Init segment is held in its dedicated ref — pump appends it first.
 					pump()
 				},
 				{signal: ac.signal},
 			)
-			// Queue the init segment; it appends once 'sourceopen' wires the buffer.
-			enqueue(data)
+			// Hold the init segment apart from the drop-oldest media queue (IN-01);
+			// pump() appends it before any media once 'sourceopen' wires the buffer.
+			initSegmentRef.current = data
 		}
 
 		ws.onmessage = (ev) => {

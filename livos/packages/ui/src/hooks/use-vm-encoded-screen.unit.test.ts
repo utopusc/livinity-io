@@ -70,6 +70,55 @@ describe('every failure surface funnels through ONE terminal fail() handler', ()
 	})
 })
 
+describe('connect deadline lifecycle — armed before the await, CLEARED on connected (CR-01/WR-01, IN-03)', () => {
+	it('arms the deadline BEFORE the startEncodedScreen await (WR-01: a hung mutation is bounded)', () => {
+		const src = read(HOOK)
+		// setStatus('connecting') → deadline setTimeout → THEN the mutation await,
+		// so the timer covers the entire connect (mutation + WS + first frame).
+		expect(src).toMatch(
+			/setStatus\('connecting'\)[\s\S]{0,600}deadlineTimerRef\.current = setTimeout[\s\S]{0,600}startEncodedScreen/,
+		)
+	})
+	it('CLEARS the deadline the moment playback is confirmed (CR-01: healthy stream must not self-destruct at 15 s)', () => {
+		const src = read(HOOK)
+		// The onPlaying/connected block must disarm the shared timer before it
+		// latches 'connected'; without this the deadline fires on the happy path
+		// and demotes the working <video> to RFB. This pin would have caught CR-01.
+		expect(src).toMatch(/clearTimeout\(deadlineTimerRef[\s\S]{0,160}setStatus\('connected'\)/)
+	})
+	it('clears the deadline in exactly one place besides teardown (the connected latch)', () => {
+		const src = read(HOOK)
+		// teardown() clears it (unmount/vmId-change) + onPlaying clears it (success)
+		// = two clearTimeout(deadlineTimerRef sites; the success clear is the CR-01 fix.
+		const clears = src.match(/clearTimeout\(deadlineTimerRef/g) ?? []
+		expect(clears.length).toBe(2)
+	})
+})
+
+describe('SourceBuffer live-window eviction — bounded memory + init never evicted (WR-02, IN-01)', () => {
+	it('evicts decoded media behind the live window via sb.remove on a time range (WR-02)', () => {
+		const src = read(HOOK)
+		expect(src).toMatch(/\.remove\(\s*start\s*,\s*target\s*\)/)
+		expect(src).toMatch(/KEEP_SECONDS/)
+	})
+	it('guards eviction on !sb.updating so it never removes-while-updating', () => {
+		const src = read(HOOK)
+		// The evict() helper bails while the buffer is updating (append/remove in
+		// flight) — removing mid-update throws.
+		expect(src).toMatch(/const evict = \(\)[\s\S]{0,200}sb\.updating/)
+	})
+	it('holds the init segment apart from the drop-oldest queue so a pre-sourceopen burst cannot evict it (IN-01)', () => {
+		const src = read(HOOK)
+		// Init is stored in its own ref (not enqueue()d into the byte-capped FIFO),
+		// and pump() appends it first, exactly once, before any media chunk.
+		expect(src).toMatch(/initSegmentRef\.current = data/)
+		expect(src).toMatch(/initAppendedRef/)
+		// The old drop-oldest loop only ever shifts MEDIA chunks now — the init
+		// segment is no longer enqueued, so `enqueue(data)` for the init is gone.
+		expect(src).not.toMatch(/enqueue\(data\)/)
+	})
+})
+
 describe('teardown releases the session and every resource', () => {
 	it('best-effort stops the backend encode session', () => {
 		const src = read(HOOK)
