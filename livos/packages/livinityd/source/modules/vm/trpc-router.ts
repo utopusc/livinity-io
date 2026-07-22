@@ -195,6 +195,9 @@ interface VmManagerSurface {
 	stop(id: string): Promise<void>
 	restart(id: string): Promise<void>
 	rename(id: string, name: string): Promise<void>
+	// VMENC-01: the hardware-encoded multi-viewer screen lifecycle (plan 02 delegate).
+	startEncodedScreen(id: string): Promise<{streamId: string; wsUrl: string}>
+	stopEncodedScreen(id: string): Promise<{stopped: boolean}>
 	update(
 		id: string,
 		patch: {resources: {cpus?: number; ramMiB?: number; diskGiB?: number}},
@@ -331,6 +334,17 @@ const vm = router({
 	rename: adminProcedure
 		.input(renameInput)
 		.mutation(({ctx, input}) => callVm(() => requireVm(ctx).rename(input.id, input.name))),
+	// VMENC-01: start the hardware-encoded, multi-viewer VM screen. adminProcedure like
+	// every other vm.* verb (VMSEC-02 — no member-VM surface; VMENC-RESEARCH §9 — riding
+	// streaming's privateProcedure would be a privilege regression). callVm maps the honest
+	// capability refusal (no VAAPI / not running / pre-364 record) to BAD_REQUEST so the
+	// client (365) falls back to the 355 noVNC path.
+	startEncodedScreen: adminProcedure
+		.input(idInput)
+		.mutation(({ctx, input}) => callVm(() => requireVm(ctx).startEncodedScreen(input.id))),
+	stopEncodedScreen: adminProcedure
+		.input(idInput)
+		.mutation(({ctx, input}) => callVm(() => requireVm(ctx).stopEncodedScreen(input.id))),
 	// VMSET-01/02: sanctioned fail-closed resource resize. adminProcedure (audit for
 	// free); callVm gives the VmResourceInvalid->BAD_REQUEST + single-flight->CONFLICT
 	// mapping. Restart-to-apply — the manager persists but never restarts the guest.

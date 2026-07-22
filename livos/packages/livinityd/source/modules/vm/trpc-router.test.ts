@@ -63,6 +63,9 @@ function makeVmMock() {
 		stop: vi.fn(async () => {}),
 		restart: vi.fn(async () => {}),
 		rename: vi.fn(async () => {}),
+		// VMENC-01: the hardware-encoded screen lifecycle delegates.
+		startEncodedScreen: vi.fn(async () => ({streamId: 's1', wsUrl: '/ws/vm-stream/s1'})),
+		stopEncodedScreen: vi.fn(async () => ({stopped: true})),
 		update: vi.fn(async () => ({restartRequired: false, restartTriggered: false})),
 		delete: vi.fn(async () => ({deleted: true})),
 		// VMSTATS-01: read-only live-usage delegates.
@@ -101,7 +104,7 @@ const VALID_CREATE = {
 describe('vm router — namespace shape', () => {
 	test('exposes list / get / create / start / stop / restart / delete', () => {
 		const procs = (vm as any)._def?.procedures ?? {}
-		for (const name of ['list', 'get', 'create', 'createOptions', 'start', 'stop', 'restart', 'rename', 'update', 'delete', 'stats', 'diskUsage']) {
+		for (const name of ['list', 'get', 'create', 'createOptions', 'start', 'stop', 'restart', 'rename', 'startEncodedScreen', 'stopEncodedScreen', 'update', 'delete', 'stats', 'diskUsage']) {
 			expect(procs[name]).toBeDefined()
 		}
 	})
@@ -286,6 +289,64 @@ describe('vm.update (VMSET-01/02) — admin-gated + allowed-keys-only + fail-clo
 		const vmMock = makeVmMock()
 		await expect(caller({vmMock}).update({id: 'not-a-uuid', resources: {ramMiB: 8192}})).rejects.toThrow()
 		expect(vmMock.update).not.toHaveBeenCalled()
+	})
+})
+
+// Phase 364 (VMENC-01): the hardware-encoded screen procedures. adminProcedure
+// like every other vm.* verb (VMSEC-02 — no member-VM surface; VMENC-RESEARCH §9 —
+// riding streaming's privateProcedure would be a privilege regression). The honest
+// capability refusal (VmResourceInvalid: no VAAPI / not running / pre-364) maps to
+// BAD_REQUEST so 365 can fall back to the 355 noVNC path.
+describe('vm.startEncodedScreen / vm.stopEncodedScreen (VMENC-01) — admin-gated + honest capability refusal', () => {
+	test('startEncodedScreen rejects a non-admin (member) BEFORE the delegate', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({role: 'member', vmMock}).startEncodedScreen({id: UUID})).rejects.toThrow()
+		expect(vmMock.startEncodedScreen).not.toHaveBeenCalled()
+	})
+	test('startEncodedScreen delegates the uuid to VmManager.startEncodedScreen and returns {streamId,wsUrl}', async () => {
+		const vmMock = makeVmMock()
+		const res = await caller({vmMock}).startEncodedScreen({id: UUID})
+		expect(vmMock.startEncodedScreen).toHaveBeenCalledWith(UUID)
+		expect(res).toEqual({streamId: 's1', wsUrl: '/ws/vm-stream/s1'})
+	})
+	// The wsUrl the procedure surfaces MUST carry the /ws/vm-stream/ prefix — the
+	// strong-gated route (never /ws/stream/, the member path). Closes the last
+	// coverage gap on the returned URL (plan-check addition).
+	test('the returned wsUrl carries the /ws/vm-stream/ prefix (strong-gated route)', async () => {
+		const vmMock = makeVmMock()
+		const res = await caller({vmMock}).startEncodedScreen({id: UUID})
+		expect((res as {wsUrl: string}).wsUrl.startsWith('/ws/vm-stream/')).toBe(true)
+	})
+	// The honest capability refusal (no VAAPI / not running / pre-364 record) is a
+	// VmResourceInvalid → BAD_REQUEST (callVm mapping), so the client (365) falls
+	// back to the 355 noVNC path instead of seeing an opaque 500.
+	test('a VmResourceInvalid capability refusal → BAD_REQUEST (not a 500)', async () => {
+		const vmMock = makeVmMock()
+		vmMock.startEncodedScreen = vi.fn(async () => {
+			throw new VmResourceInvalid('encoded screen unavailable (no VAAPI)')
+		})
+		await expect(caller({vmMock}).startEncodedScreen({id: UUID})).rejects.toMatchObject({code: 'BAD_REQUEST'})
+	})
+	test('a non-uuid id is refused at the schema (delegate not called)', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).startEncodedScreen({id: 'not-a-uuid'})).rejects.toThrow()
+		expect(vmMock.startEncodedScreen).not.toHaveBeenCalled()
+	})
+	test('stopEncodedScreen rejects a non-admin (member) BEFORE the delegate', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({role: 'member', vmMock}).stopEncodedScreen({id: UUID})).rejects.toThrow()
+		expect(vmMock.stopEncodedScreen).not.toHaveBeenCalled()
+	})
+	test('stopEncodedScreen delegates the uuid to VmManager.stopEncodedScreen', async () => {
+		const vmMock = makeVmMock()
+		const res = await caller({vmMock}).stopEncodedScreen({id: UUID})
+		expect(vmMock.stopEncodedScreen).toHaveBeenCalledWith(UUID)
+		expect(res).toEqual({stopped: true})
+	})
+	test('stopEncodedScreen refuses a non-uuid id at the schema (delegate not called)', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).stopEncodedScreen({id: 'not-a-uuid'})).rejects.toThrow()
+		expect(vmMock.stopEncodedScreen).not.toHaveBeenCalled()
 	})
 })
 
