@@ -104,7 +104,7 @@ export function VmScreen({vm, onBack}: {vm: VmView; onBack: () => void}) {
 					<div className='flex h-full w-full flex-col'>
 						{vnc.status !== 'connected' ? (
 							<div className='flex items-center gap-2 border-b border-border-default bg-black/80 px-3 py-1.5 text-caption text-white/70'>
-								{vnc.status === 'connecting' ? (
+								{vnc.status === 'connecting' || vnc.status === 'idle' ? (
 									<>
 										<TbLoader2 className='h-4 w-4 animate-spin' />
 										{t('vm.screen.loading')}
