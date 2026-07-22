@@ -12,6 +12,7 @@ vi.mock('./vm-docker.js', () => ({
 	composeStop: vi.fn(async () => {}),
 	composeRestart: vi.fn(async () => {}),
 	composeDownVolumes: vi.fn(async () => {}),
+	forceRemoveContainer: vi.fn(async () => {}),
 	dockerInspectStatus: vi.fn(async () => 'running'),
 	renderVmCompose: vi.fn(() => ({services: {vm: {}}})),
 	writeVmCompose: vi.fn(async (dataDir: string) => `${dataDir}/docker-compose.yml`),
@@ -56,10 +57,13 @@ vi.mock('fs-extra', () => ({
 		stat: vi.fn(async () => ({isFile: () => true})),
 		link: vi.fn(async () => {}),
 		copyFile: vi.fn(async () => {}),
+		// Default: compose file present (happy path for start()/reconcileOnBoot()).
+		// Individual tests override to false to exercise the orphan/missing-compose paths.
+		pathExists: vi.fn(async () => true),
 	},
 }))
 
-const {composeUp, composeStop, composeRestart, composeDownVolumes, dockerInspectStatus, renderVmCompose} =
+const {composeUp, composeStop, composeRestart, composeDownVolumes, forceRemoveContainer, dockerInspectStatus, renderVmCompose} =
 	await import('./vm-docker.js')
 const {assertKvmAvailable, assertVmResourcesSane, probeHostCapacity, VmResourceInvalid} = await import(
 	'../apps/vm-preflight.js'
@@ -87,7 +91,7 @@ function makeFakeStore() {
 
 function makeManager() {
 	const store = makeFakeStore()
-	const logger = {error: vi.fn()}
+	const logger = {error: vi.fn(), log: vi.fn()}
 	const livinityd = {store, dataDirectory: '/fake/data', logger} as unknown as Livinityd
 	return {vm: new VmManager(livinityd), store, logger}
 }
@@ -757,6 +761,47 @@ describe('lifecycle mutations — single-flight + graceful + ordered teardown', 
 		novncRel.mockRestore()
 		rdpRel.mockRestore()
 	})
+
+	// Live-found 2026-07-22 (the zombie-VM bug): a busy/locked guest data.img (held
+	// by a qemu the compose-down couldn't reap, or an ORPHAN whose compose file is
+	// already gone) makes fse.remove THROW. The durable teardown — force-remove the
+	// container by name (frees the file), then registry.delete + port release — MUST
+	// still run, or the VM the operator deleted resurrects in the list and gets
+	// re-upped by reconcileOnBoot ("no such file or directory" on every boot).
+	test('delete completes registry-delete even when fse.remove REJECTS (busy data.img) + force-removes by name', async () => {
+		const {vm, store, logger} = makeManager()
+		await seed(store, {id: 'zmb', containerName: 'vm-zmb', dataDir: '/fake/data/vm-data/zmb', novncPort: 16130, rdpPort: 16230})
+
+		vi.mocked(fse.remove).mockRejectedValueOnce(Object.assign(new Error('EBUSY: resource busy'), {code: 'EBUSY'}))
+		const novncRel = vi.spyOn(vmPortAllocator, 'release')
+		const rdpRel = vi.spyOn(vmRdpPortAllocator, 'release')
+
+		const result = await vm.delete('zmb', {confirm: true})
+
+		expect(result).toEqual({deleted: true})
+		// Container force-removed by its deterministic name (frees the busy file).
+		expect(forceRemoveContainer).toHaveBeenCalledWith('vm-zmb')
+		// The registry entry is GONE despite the dir-removal failure — no resurrection.
+		expect(await records(store)).toHaveLength(0)
+		expect(novncRel).toHaveBeenCalledWith(16130)
+		expect(rdpRel).toHaveBeenCalledWith(16230)
+		expect(logger.error).toHaveBeenCalled() // the dir-removal failure was logged
+
+		novncRel.mockRestore()
+		rdpRel.mockRestore()
+	})
+
+	// Live-found 2026-07-22: an orphaned record (compose file gone) gives a CLEAR
+	// "files are missing — delete + recreate" error, not a raw docker "no such file
+	// or directory", and never shells composeUp on a missing file.
+	test('start throws a clear error (no composeUp) when the compose file is missing', async () => {
+		const {vm, store} = makeManager()
+		await seed(store, {id: 'orph', containerName: 'vm-orph', novncPort: 16140})
+		vi.mocked(fse.pathExists).mockResolvedValueOnce(false as never)
+
+		await expect(vm.start('orph')).rejects.toThrow(/files are missing/)
+		expect(composeUp).not.toHaveBeenCalled()
+	})
 })
 
 describe('rename — edit-where-safe (registry-only, single-flight)', () => {
@@ -829,6 +874,26 @@ describe('reconcileOnBoot — boot durability (closes the cleanDockerState wipe)
 		expect(composeUp).toHaveBeenCalledWith('/p/r1.yml', 'vm-r1')
 		expect(composeUp).toHaveBeenCalledWith('/p/r3.yml', 'vm-r3')
 		expect(composeUp).not.toHaveBeenCalledWith('/p/r2.yml', 'vm-r2')
+	})
+
+	// Live-found 2026-07-22: a record whose compose file is GONE (orphan/partial
+	// delete) must be SKIPPED — not composeUp'd — so boot does not spam "no such
+	// file or directory" on every restart. The other running VM still reconciles.
+	test('reconcileOnBoot SKIPS a record whose compose file is missing (no composeUp) + still re-ups the others', async () => {
+		const {vm, store, logger} = makeManager()
+		await seed(store, {id: 'gone', containerName: 'vm-gone', composePath: '/p/gone.yml', lastIntent: 'running'})
+		await seed(store, {id: 'ok', containerName: 'vm-ok', composePath: '/p/ok.yml', lastIntent: 'running'})
+		// Only the 'gone' VM's compose file is missing.
+		vi.mocked(fse.pathExists).mockImplementation(async (p: unknown) => p !== '/p/gone.yml')
+
+		await vm.reconcileOnBoot()
+
+		expect(composeUp).toHaveBeenCalledTimes(1)
+		expect(composeUp).toHaveBeenCalledWith('/p/ok.yml', 'vm-ok')
+		expect(composeUp).not.toHaveBeenCalledWith('/p/gone.yml', 'vm-gone')
+		expect(logger.log).toHaveBeenCalled() // the skip was logged
+
+		vi.mocked(fse.pathExists).mockResolvedValue(true as never) // restore default for later tests
 	})
 
 	test('a per-VM composeUp failure is logged and does NOT abort the loop', async () => {

@@ -52,6 +52,23 @@ export async function composeDownVolumes(composePath: string, projectName: strin
 }
 
 /**
+ * Force-remove a VM container BY NAME (`docker rm -f <name>`) — the delete-path
+ * fallback for when compose-based teardown can't run: an ORPHANED VM whose
+ * `docker-compose.yml` was already removed (so `compose down` errors on the
+ * missing `--file`), or a wedged qemu the compose-down didn't reap. Because the
+ * compose sets an explicit deterministic `container_name: vm-<id>`, this reliably
+ * targets the real container and frees any HOST FILE (the guest `data.img`) it
+ * still holds — without which `fse.remove(dataDir)` throws on the busy file and
+ * the durable `registry.delete` never runs (the zombie-VM bug, live-found
+ * 2026-07-22). Best-effort: the caller `.catch()`es it; a missing container just
+ * exits non-zero, harmlessly. containerName is server-derived (`vm-<id>`), never
+ * request input.
+ */
+export async function forceRemoveContainer(containerName: string): Promise<void> {
+	await $`docker rm -f ${containerName}`
+}
+
+/**
  * Live container status via `docker inspect`. Dynamic `import('execa')` INSIDE
  * the function (not a top-level import) so `vi.mock('execa')` intercepts it in
  * offline tests — the exact shape app-state-reconcile.ts:59-63 uses. The

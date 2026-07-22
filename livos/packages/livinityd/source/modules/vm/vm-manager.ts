@@ -36,6 +36,7 @@ import {
 	composeStop,
 	composeUp,
 	dockerInspectStatus,
+	forceRemoveContainer,
 	renderVmCompose,
 	writeVmCompose,
 } from './vm-docker.js'
@@ -452,6 +453,13 @@ export class VmManager {
 	async start(id: string): Promise<void> {
 		return this.#withFlight(id, async () => {
 			const record = await this.#requireRecord(id)
+			// (live-found 2026-07-22) A clear error beats a raw docker "no such file or
+			// directory" when the compose file is gone (an orphaned/partial-delete
+			// record): the VM is unrecoverable, so tell the admin to delete + recreate
+			// rather than surfacing a cryptic compose path.
+			if (!(await fse.pathExists(record.composePath))) {
+				throw new Error(`VM ${id}: its files are missing — delete this VM and recreate it`)
+			}
 			await composeUp(record.composePath, `vm-${id}`)
 			await this.#registry.patch(id, {lastIntent: 'running'})
 		})
@@ -530,7 +538,28 @@ export class VmManager {
 			await composeDownVolumes(record.composePath, `vm-${id}`).catch((error) => {
 				this.#livinityd.logger.error(`[vm] delete ${id}: composeDownVolumes failed (continuing teardown)`, error)
 			})
-			await fse.remove(record.dataDir)
+			// (live-found 2026-07-22) Force-remove the container BY NAME as well: on an
+			// ORPHAN whose compose file is already gone, `compose down` errors on the
+			// missing --file and never removes the container; on a wedged qemu the down
+			// may not reap it. Either way the still-running qemu holds the guest
+			// `data.img` open, so the fse.remove below throws on the busy file and the
+			// durable registry.delete never runs — the zombie VM the operator hit.
+			// `docker rm -f vm-<id>` (deterministic container_name) reaps it + frees the
+			// file. Best-effort: a missing container just exits non-zero, harmlessly.
+			await forceRemoveContainer(record.containerName).catch((error) => {
+				this.#livinityd.logger.error(`[vm] delete ${id}: forceRemoveContainer failed (continuing teardown)`, error)
+			})
+			// (live-found 2026-07-22) BEST-EFFORT dir removal — a locked/busy file must
+			// NEVER abort the durable teardown. A leftover data dir is recoverable disk
+			// cruft; a SURVIVING REGISTRY ENTRY is a resurrection (the list keeps showing
+			// the VM and reconcileOnBoot re-ups a VM the admin explicitly deleted). So the
+			// registry.delete + port release below run REGARDLESS of a dir-removal error.
+			await fse.remove(record.dataDir).catch((error) => {
+				this.#livinityd.logger.error(
+					`[vm] delete ${id}: data-dir removal failed (leaving disk cruft; VM still removed from registry)`,
+					error,
+				)
+			})
 			await this.#registry.delete(id)
 			vmPortAllocator.release(record.novncPort)
 			if (record.rdpPort !== undefined) vmRdpPortAllocator.release(record.rdpPort)
@@ -569,6 +598,18 @@ export class VmManager {
 
 		for (const inst of all) {
 			if (inst.lastIntent !== 'running') continue
+			// (live-found 2026-07-22) Skip a record whose compose file is gone (an
+			// orphan from a partial delete, or a hand-removed data dir): composeUp would
+			// spam "no such file or directory" on every boot. It already surfaces as
+			// 'error' in the list (dockerInspectStatus finds no container), and the
+			// hardened delete() now cleans it up on retry. Do NOT auto-delete here —
+			// that is destructive and the admin decides.
+			if (!(await fse.pathExists(inst.composePath))) {
+				this.#livinityd.logger.log(
+					`[vm] reconcileOnBoot: compose file missing for ${inst.id} (${inst.composePath}) — skipping re-up; delete this VM to clean it up`,
+				)
+				continue
+			}
 			try {
 				await composeUp(inst.composePath, `vm-${inst.id}`)
 			} catch (error) {
