@@ -895,10 +895,13 @@ describe('rename — edit-where-safe (registry-only, single-flight)', () => {
 })
 
 describe('update — sanctioned resize (VMSET-01: grow-only + capacity, restart-to-apply)', () => {
-	const seedWin = (store: ReturnType<typeof makeFakeStore>, over: Partial<VmInstanceRecord> = {}) =>
-		seed(store, {
-			id: 'up1',
-			containerName: 'vm-up1',
+	const seedWin = (store: ReturnType<typeof makeFakeStore>, over: Partial<VmInstanceRecord> = {}) => {
+		const id = over.id ?? 'up1'
+		return seed(store, {
+			id,
+			containerName: `vm-${id}`,
+			dataDir: `/fake/data/vm-data/${id}`,
+			composePath: `/fake/data/vm-data/${id}/docker-compose.yml`,
 			kind: 'windows',
 			resources: {cpus: 2, ramMiB: 4096, diskGiB: 40},
 			novncPort: 16160,
@@ -906,6 +909,7 @@ describe('update — sanctioned resize (VMSET-01: grow-only + capacity, restart-
 			osEnv: {VERSION: '10'},
 			...over,
 		})
+	}
 
 	test('happy: re-renders with the merged resources + preserved osEnv; patches registry; running → restartRequired', async () => {
 		const {vm, store} = makeManager()

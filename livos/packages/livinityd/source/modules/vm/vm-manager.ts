@@ -27,7 +27,13 @@ import path from 'node:path'
 
 import fse from 'fs-extra'
 
-import {assertKvmAvailable, assertVmResourcesSane, probeHostCapacity, VmResourceInvalid} from '../apps/vm-preflight.js'
+import {
+	assertKvmAvailable,
+	assertVmResourcesSane,
+	probeHostCapacity,
+	vmResizeVerdict,
+	VmResourceInvalid,
+} from '../apps/vm-preflight.js'
 import {LOCAL_IMAGE_EXTENSIONS} from './vm-os-catalog.js'
 import type Livinityd from '../../index.js'
 import {
@@ -37,6 +43,7 @@ import {
 	composeUp,
 	dockerInspectStatus,
 	forceRemoveContainer,
+	readOsRenderInputs,
 	renderVmCompose,
 	writeVmCompose,
 } from './vm-docker.js'
@@ -311,6 +318,11 @@ export class VmManager {
 			novncPort,
 			rdpPort,
 			createdAt: Date.now(),
+			// Phase 359 (VMSET-01): persist the RAW OS render inputs so a later
+			// vm.update re-renders WITHOUT dropping VERSION/BOOT (pre-359 records that
+			// lack these fall back to the on-disk recovery path in update()).
+			osEnv,
+			bootFileMount,
 		})
 
 		// (5) DETACH the long compose-up (usb-import .catch-into-logger discipline).
@@ -506,6 +518,74 @@ export class VmManager {
 		return this.#withFlight(id, async () => {
 			await this.#requireRecord(id) // throws `VM ${id}: not found` for an unknown id
 			await this.#registry.patch(id, {name})
+		})
+	}
+
+	/**
+	 * Sanctioned resource resize (VMSET-01/02). adminProcedure + single-flight like
+	 * every other vm.* verb. Allowed keys ONLY: cpus/ramMiB/diskGiB (name stays
+	 * vm.rename; USERNAME is create-only). GROW-ONLY disk + host-capacity re-check
+	 * (fail-closed, BAD_REQUEST). RESTART-TO-APPLY: rewrites the on-disk compose IN
+	 * PLACE (same path — reconcile/zombie-delete guards untouched) + patches the
+	 * registry, but NEVER composeUp — a running guest keeps its old config until an
+	 * explicit stop+start (start() re-reads the compose fresh off disk). Returns the
+	 * honest {restartRequired,...} shape (provider-config-router precedent) — the VM
+	 * is NEVER auto-restarted inside the mutation.
+	 */
+	async update(
+		id: string,
+		patch: {resources: {cpus?: number; ramMiB?: number; diskGiB?: number}},
+	): Promise<{restartRequired: boolean; restartTriggered: boolean; restartReason?: string}> {
+		return this.#withFlight(id, async () => {
+			const record = await this.#requireRecord(id)
+			const proposed = {
+				cpus: patch.resources.cpus ?? record.resources.cpus,
+				ramMiB: patch.resources.ramMiB ?? record.resources.ramMiB,
+				diskGiB: patch.resources.diskGiB ?? record.resources.diskGiB,
+			}
+			// Grow-only + host-capacity (delta-credited) — fail-closed BEFORE any write.
+			const reason = vmResizeVerdict(record.resources, proposed, await probeHostCapacity(this.#livinityd.dataDirectory))
+			if (reason) throw new VmResourceInvalid(reason)
+			// Recover the OS-selection render inputs so the re-render NEVER drops
+			// VERSION/BOOT. New VMs carry osEnv on the record; pre-359 VMs recover it
+			// from the on-disk compose (fail-closed: readOsRenderInputs throws a typed
+			// VmResourceInvalid on an unreadable/unparseable compose rather than emitting
+			// an OS-losing render).
+			const {osEnv, bootFileMount} =
+				record.osEnv !== undefined
+					? {osEnv: record.osEnv, bootFileMount: record.bootFileMount}
+					: await readOsRenderInputs(record.composePath, record.kind)
+			// Overwrite the compose file IN PLACE (same path). NEVER composeUp here —
+			// restart-to-apply, not live-mutate (Pitfall 1 / CONTEXT.md locked).
+			const rendered = renderVmCompose(getVmTemplate(record.kind), {
+				id,
+				dataDir: record.dataDir,
+				novncPort: record.novncPort,
+				rdpPort: record.rdpPort,
+				resources: proposed,
+				osEnv,
+				bootFileMount,
+			})
+			await writeVmCompose(record.dataDir, rendered)
+			// Registry patch LAST (Pitfall 3): the durable compose file is the source of
+			// truth for what boots; the registry only advances to a value already on disk.
+			// Backfill osEnv/bootFileMount so a pre-359 record becomes self-describing.
+			await this.#registry.patch(id, {resources: proposed, osEnv, bootFileMount})
+			// Honest restart-required: derive 'running' WITHOUT #deriveState (which would
+			// report 'creating' — we hold the flight). Never auto-restart the guest.
+			let running = false
+			try {
+				running = (await dockerInspectStatus(record.containerName)) === 'running'
+			} catch {
+				running = false
+			}
+			return running
+				? {
+						restartRequired: true,
+						restartTriggered: false,
+						restartReason: 'Resource changes apply the next time this VM is stopped and started.',
+					}
+				: {restartRequired: false, restartTriggered: false}
 		})
 	}
 
