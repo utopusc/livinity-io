@@ -97,8 +97,11 @@ describe('app-icon: additive glyph override, URL path preserved', () => {
 // ── D: UNPIN INVARIANT (crown) — the desktop button touches NO vm.* mutation ─
 describe('vm-list-item: desktop unpin ≠ delete', () => {
 	// Isolate on the DISTINCT desktop-surface comment (NOT "Dock") so this can
-	// never match 354's dock button block.
-	const pinBlock = vmListItemSrc.match(/Pin\/unpin to the desktop surface[\s\S]*?<\/Button>/)?.[0] ?? ''
+	// never match 354's dock menu-item block. 363 consolidated the flat pin
+	// <Button> into a <DropdownMenuItem>, so the block terminates on
+	// </DropdownMenuItem> (the "Pin/unpin to the desktop surface" anchor comment
+	// is preserved on the menu item).
+	const pinBlock = vmListItemSrc.match(/Pin\/unpin to the desktop surface[\s\S]*?<\/DropdownMenuItem>/)?.[0] ?? ''
 
 	it('D1. the isolated desktop unpin handler exists', () => {
 		expect(pinBlock).not.toBe('')
@@ -136,7 +139,8 @@ describe('i18n: pin-desktop/unpin-desktop parity, 354 TR fix, jargon-free', () =
 		// is legitimate and out of scope (deviation from the plan's literal
 		// vmListItemSrc list, which would false-positive on that 353 comment).
 		const vmClick = desktopContentSrc.match(/vm-pin-\$\{vm\.id\}[\s\S]*?<\/motion\.div>/)?.[0] ?? ''
-		const desktopPinBtn = vmListItemSrc.match(/Pin\/unpin to the desktop surface[\s\S]*?<\/Button>/)?.[0] ?? ''
+		// 363: pin affordance is now a <DropdownMenuItem>, re-anchor the terminator.
+		const desktopPinBtn = vmListItemSrc.match(/Pin\/unpin to the desktop surface[\s\S]*?<\/DropdownMenuItem>/)?.[0] ?? ''
 		for (const src of [desktopPinsSrc, vmClick, desktopPinBtn, enSrc, trSrc]) {
 			expect(src).not.toBe('')
 			expect(src).not.toMatch(/VNC|noVNC|RFB|websockify/i)

@@ -74,10 +74,13 @@ describe('window-content.tsx: LIVINITY_vm arm passes initialRoute', () => {
 
 // ── 7: UNPIN INVARIANT (load-bearing) — unpin touches NO vm.* mutation ────
 describe('vm-list-item.tsx: unpin ≠ delete invariant', () => {
-	// Isolate the pin/unpin Button block only — the row's OTHER handlers
+	// Isolate the pin/unpin menu-item block only — the row's OTHER handlers
 	// (start/stop/restart/rename/delete) legitimately reference vm.* mutations
-	// and must NOT be in the extracted block.
-	const pinBlock = vmListItemSrc.match(/Pin\/unpin to the desktop Dock[\s\S]*?<\/Button>/)?.[0] ?? ''
+	// and must NOT be in the extracted block. 363 consolidated the flat pin
+	// <Button> into a <DropdownMenuItem>, so the block now terminates on
+	// </DropdownMenuItem> (the "Pin/unpin to the desktop Dock" anchor comment is
+	// preserved on the menu item).
+	const pinBlock = vmListItemSrc.match(/Pin\/unpin to the desktop Dock[\s\S]*?<\/DropdownMenuItem>/)?.[0] ?? ''
 
 	it('7a. the isolated unpin handler actually exists', () => {
 		expect(pinBlock).not.toBe('')
