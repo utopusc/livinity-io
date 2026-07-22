@@ -18,10 +18,13 @@
 //     always-visible list row or stream (358 removed it from the stream to shrink
 //     the host-LAN-IP info-disclosure surface; this is a relocation, not a
 //     regression). (T-359-10)
+import {Cpu, HardDrive, MemoryStick} from 'lucide-react'
 import {useState} from 'react'
 import {TbLoader2} from 'react-icons/tb'
 import {toast} from 'sonner'
 
+import {useVmStats} from '@/hooks/use-vm-stats'
+import {Gauge} from '@/modules/desktop/live-usage-popover'
 import {Button} from '@/shadcn-components/ui/button'
 import {
 	Dialog,
@@ -36,6 +39,7 @@ import {useCurrentUser} from '@/hooks/use-current-user'
 import type {RouterOutput} from '@/trpc/trpc'
 import {trpcReact} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
+import {maybePrettyBytes} from '@/utils/pretty-bytes'
 
 // Consumed from vm.list — never redefined (same import as vm-list-item.tsx:43).
 type VmView = RouterOutput['vm']['list'][number]
@@ -61,6 +65,10 @@ export function VmSettingsDialog({
 }) {
 	const {isAdmin} = useCurrentUser()
 	const utils = trpcReact.useUtils()
+
+	// Phase 362 (VMSTATS-01): live per-VM usage — polled ONLY while this dialog is
+	// open on a running VM (stopped → no poll, honest allocated-only facts below).
+	const {stats, disk} = useVmStats(vm.id, vm.state === 'running')
 
 	// Editable resources, seeded from the VM's current allocation. Re-seeded on
 	// every open (handleOpenChange resets on close). cpus/ramMiB are freely
@@ -258,6 +266,36 @@ export function VmSettingsDialog({
 							<span className='text-caption font-medium text-text-secondary'>
 								{t('vm.settings.facts-label')}
 							</span>
+							{/* Live used-vs-allocated gauges — rendered ONLY for a running VM
+							    (T-362-08). A stopped VM shows the honest allocated-only text rows
+							    below and issues no poll. Reuses the shared Gauge + jargon-free
+							    cpu/memory/storage keys (no new locale keys minted). The RAM
+							    denominator is the server-paired ramAllocMiB (registry), never a
+							    cgroup value (T-362-10). */}
+							{vm.state === 'running' && stats ? (
+								<div className='flex flex-col gap-2'>
+									<Gauge
+										icon={Cpu}
+										label={t('cpu')}
+										value={stats.cpuPercent !== undefined ? `${Math.round(stats.cpuPercent)}%` : undefined}
+										progress={(stats.cpuPercent ?? 0) / 100}
+									/>
+									<Gauge
+										icon={MemoryStick}
+										label={t('memory')}
+										value={stats.ramUsedMiB !== undefined ? maybePrettyBytes(stats.ramUsedMiB * 1024 * 1024) : undefined}
+										valueSub={`/ ${ramGiB(stats.ramAllocMiB)} GB`}
+										progress={stats.ramUsedMiB !== undefined ? stats.ramUsedMiB / stats.ramAllocMiB : 0}
+									/>
+									<Gauge
+										icon={HardDrive}
+										label={t('storage')}
+										value={disk?.diskUsedBytes !== undefined ? maybePrettyBytes(disk.diskUsedBytes) : undefined}
+										valueSub={disk ? `/ ${disk.diskAllocGiB} GiB` : undefined}
+										progress={disk?.diskUsedBytes !== undefined ? disk.diskUsedBytes / (disk.diskAllocGiB * 1024 ** 3) : 0}
+									/>
+								</div>
+							) : null}
 							<div className='flex justify-between text-caption text-text-tertiary'>
 								<span>{t('vm.settings.facts-kind')}</span>
 								<span>{vm.kind === 'windows' ? 'Windows' : 'Linux'}</span>

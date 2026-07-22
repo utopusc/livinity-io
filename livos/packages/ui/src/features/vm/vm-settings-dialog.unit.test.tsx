@@ -207,3 +207,32 @@ describe('useVmStats polls CPU/RAM but NOT disk (VMSTATS-01 cadence)', () => {
 		expect((src.match(/refetchInterval/g) ?? []).length).toBe(1)
 	})
 })
+
+describe('the Settings dialog shows live gauges for a running VM, allocated-only when stopped (VMSTATS-01)', () => {
+	it('sources live usage from the reusable useVmStats(vm.id, running) hook', () => {
+		const src = read(DIALOG)
+		expect(src).toMatch(/useVmStats\(vm\.id,\s*vm\.state === 'running'\)/)
+	})
+
+	it('the gauges render ONLY when the VM is running (honest stopped — no live-at-0% gauges) (T-362-08)', () => {
+		const src = read(DIALOG)
+		expect(src).toMatch(/vm\.state === 'running' && stats/)
+	})
+
+	it('reuses the shared exported Gauge (never a duplicate in the vm feature)', () => {
+		const src = read(DIALOG)
+		expect(src).toMatch(/import\s*\{[^}]*Gauge[^}]*\}\s*from\s*'@\/modules\/desktop\/live-usage-popover'/)
+	})
+
+	it("the RAM gauge's allocated denominator is the server-paired ramAllocMiB, never a cgroup value (T-362-10)", () => {
+		const src = read(DIALOG)
+		expect(src).toMatch(/stats\.ramAllocMiB/)
+	})
+
+	it('labels reuse the jargon-free cpu/memory/storage keys — no new vm.stats.* key strings minted (VMSTATS-01)', () => {
+		const src = read(DIALOG)
+		expect(src).toMatch(/t\('cpu'\)/)
+		// No fabricated vm.stats.* locale keys — the gauges reuse existing cpu/memory/storage.
+		expect(src).not.toMatch(/vm\.stats\./)
+	})
+})
