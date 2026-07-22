@@ -75,6 +75,45 @@ export function VmSettingsDialog({
 	// needs a stop+start. Never an "applied/live" claim.
 	const [restartHint, setRestartHint] = useState<string | null>(null)
 
+	// Apply-now phase machine (361 / VMAPPLY-01). Client-sequenced vm.stop → vm.start
+	// (start() = composeUp re-reads the freshly-written compose and recreates the
+	// container). Honest transitional states; 'done' — the ONLY honest "applied"
+	// claim — is reached ONLY after startMut.mutateAsync resolves. Any failure lands
+	// in 'error' with the verbatim server message, NEVER 'done'.
+	type ApplyPhase = 'idle' | 'stopping' | 'starting' | 'done' | 'error'
+	const [applyPhase, setApplyPhase] = useState<ApplyPhase>('idle')
+	const [applyError, setApplyError] = useState<string | null>(null)
+	const stopMut = trpcReact.vm.stop.useMutation()
+	const startMut = trpcReact.vm.start.useMutation()
+	const applying = applyPhase === 'stopping' || applyPhase === 'starting'
+
+	const applyNow = async () => {
+		setApplyError(null)
+		setApplyPhase('stopping')
+		try {
+			await stopMut.mutateAsync({id: vm.id})
+		} catch (e) {
+			// VM is still running — honest error, the change was NOT applied.
+			setApplyPhase('error')
+			setApplyError((e as Error).message)
+			return
+		}
+		setApplyPhase('starting')
+		try {
+			// start() = composeUp — recreates the container with the new compose.
+			await startMut.mutateAsync({id: vm.id})
+		} catch (e) {
+			// VM is stopped and the compose is written, but start did NOT resolve —
+			// honest error, NEVER an "applied" claim.
+			setApplyPhase('error')
+			setApplyError((e as Error).message)
+			return
+		}
+		utils.vm.list.invalidate()
+		setApplyPhase('done') // ONLY here — after start resolved — is the change live.
+		setRestartHint(null)
+	}
+
 	const updateMut = trpcReact.vm.update.useMutation({
 		onSuccess: (data) => {
 			utils.vm.list.invalidate()
@@ -92,9 +131,13 @@ export function VmSettingsDialog({
 	const resetState = () => {
 		setResources({cpus: vm.resources.cpus, ramMiB: vm.resources.ramMiB, diskGiB: vm.resources.diskGiB})
 		setRestartHint(null)
+		setApplyPhase('idle')
+		setApplyError(null)
 	}
 
 	const handleOpenChange = (next: boolean) => {
+		// Don't let an overlay/ESC close tear the dialog down mid-apply.
+		if (!next && (applyPhase === 'stopping' || applyPhase === 'starting')) return
 		onOpenChange(next)
 		if (!next) {
 			resetState()
@@ -165,8 +208,44 @@ export function VmSettingsDialog({
 						<p className='text-caption text-text-tertiary'>{t('vm.settings.disk-grow-only-hint')}</p>
 
 						{/* Honest restart-to-apply hint — shown ONLY when the server said so.
-						    NEVER an "applied/live" claim. */}
-						{restartHint ? <p className='text-caption text-text-secondary'>{restartHint}</p> : null}
+						    NEVER an "applied/live" claim. Beside it, the Apply-now action
+						    (361 / VMAPPLY-01): client-sequenced vm.stop → vm.start (=composeUp)
+						    that actually applies the pending edits, with honest phases. It
+						    NEVER routes through the in-place restart bounce (which does NOT
+						    re-read the compose). */}
+						{restartHint ? (
+							<div className='flex flex-col gap-2'>
+								<p className='text-caption text-text-secondary'>{restartHint}</p>
+								{applyPhase === 'done' ? (
+									<p className='text-caption text-text-secondary'>{t('vm.settings.apply-done')}</p>
+								) : (
+									<div className='flex flex-col gap-1'>
+										<Button
+											size='dialog'
+											variant='primary'
+											onClick={applyNow}
+											disabled={updateMut.isPending || applying}
+										>
+											{applying ? (
+												<span className='flex items-center gap-1.5'>
+													<TbLoader2 className='h-4 w-4 animate-spin' />
+													{applyPhase === 'stopping'
+														? t('vm.settings.apply-stopping')
+														: t('vm.settings.apply-starting')}
+												</span>
+											) : (
+												t('vm.settings.apply-now')
+											)}
+										</Button>
+										{applyPhase === 'error' ? (
+											<p className='text-caption text-destructive2'>
+												{t('vm.settings.apply-failed')} {applyError}
+											</p>
+										) : null}
+									</div>
+								)}
+							</div>
+						) : null}
 
 						{/* Server refusal surfaces verbatim inline (in addition to the toast)
 						    so a grow-only / capacity BAD_REQUEST stays visible. */}
@@ -207,7 +286,11 @@ export function VmSettingsDialog({
 					</div>
 
 					<DialogFooter>
-						<Button size='dialog' onClick={() => handleOpenChange(false)} disabled={updateMut.isPending}>
+						<Button
+							size='dialog'
+							onClick={() => handleOpenChange(false)}
+							disabled={updateMut.isPending || applying}
+						>
 							{t('cancel')}
 						</Button>
 						<Button size='dialog' variant='primary' onClick={handleSubmit} disabled={!canSubmit}>
