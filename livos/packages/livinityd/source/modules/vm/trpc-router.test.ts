@@ -63,6 +63,7 @@ function makeVmMock() {
 		stop: vi.fn(async () => {}),
 		restart: vi.fn(async () => {}),
 		rename: vi.fn(async () => {}),
+		update: vi.fn(async () => ({restartRequired: false, restartTriggered: false})),
 		delete: vi.fn(async () => ({deleted: true})),
 	}
 }
@@ -97,7 +98,7 @@ const VALID_CREATE = {
 describe('vm router — namespace shape', () => {
 	test('exposes list / get / create / start / stop / restart / delete', () => {
 		const procs = (vm as any)._def?.procedures ?? {}
-		for (const name of ['list', 'get', 'create', 'createOptions', 'start', 'stop', 'restart', 'rename', 'delete']) {
+		for (const name of ['list', 'get', 'create', 'createOptions', 'start', 'stop', 'restart', 'rename', 'update', 'delete']) {
 			expect(procs[name]).toBeDefined()
 		}
 	})
@@ -214,6 +215,46 @@ describe('vm.rename (VMAPP-02 edit-where-safe) — admin-gated + input-validated
 		const vmMock = makeVmMock()
 		await expect(caller({vmMock}).rename({id: 'not-a-uuid', name: 'x'})).rejects.toThrow()
 		expect(vmMock.rename).not.toHaveBeenCalled()
+	})
+})
+
+describe('vm.update (VMSET-01/02) — admin-gated + allowed-keys-only + fail-closed', () => {
+	test('rejects a non-admin (member) BEFORE the delegate', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({role: 'member', vmMock}).update({id: UUID, resources: {ramMiB: 8192}})).rejects.toThrow()
+		expect(vmMock.update).not.toHaveBeenCalled()
+	})
+	test('delegates {resources} field-by-field to VmManager.update(id, {resources})', async () => {
+		const vmMock = makeVmMock()
+		await caller({vmMock}).update({id: UUID, resources: {ramMiB: 8192}})
+		expect(vmMock.update).toHaveBeenCalledWith(UUID, {resources: {ramMiB: 8192}})
+	})
+	test('an unrecognized TOP-LEVEL key (name) is refused at the .strict() boundary', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).update({id: UUID, name: 'x', resources: {ramMiB: 8192}} as any)).rejects.toThrow()
+		expect(vmMock.update).not.toHaveBeenCalled()
+	})
+	test('an unrecognized INNER resources key (foo) is refused at the inner .strict() boundary', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).update({id: UUID, resources: {ramMiB: 8192, foo: 1}} as any)).rejects.toThrow()
+		expect(vmMock.update).not.toHaveBeenCalled()
+	})
+	test('an EMPTY resources ({}) is refused (refine requires >=1 field)', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).update({id: UUID, resources: {}})).rejects.toThrow()
+		expect(vmMock.update).not.toHaveBeenCalled()
+	})
+	test('a shrink/capacity VmResourceInvalid from the delegate → BAD_REQUEST', async () => {
+		const vmMock = makeVmMock()
+		vmMock.update = vi.fn(async () => {
+			throw new VmResourceInvalid('disk can only grow')
+		})
+		await expect(caller({vmMock}).update({id: UUID, resources: {diskGiB: 1}})).rejects.toMatchObject({code: 'BAD_REQUEST'})
+	})
+	test('a non-uuid id is refused at the schema (delegate not called)', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).update({id: 'not-a-uuid', resources: {ramMiB: 8192}})).rejects.toThrow()
+		expect(vmMock.update).not.toHaveBeenCalled()
 	})
 })
 
