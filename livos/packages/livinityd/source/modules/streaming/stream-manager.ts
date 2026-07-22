@@ -37,6 +37,7 @@ import {
 import type {VaapiProbeResult} from './vaapi-probe.js'
 import {spawnVncForWindow} from './vnc-bridge.js'
 import {PortAllocator} from './port-allocator.js'
+import {VmVncFrameSource, type VmFrameSource, type VmVncLogger} from './vm-vnc-source.js'
 
 // Phase 101-02 (D-101-PORT-ALLOC / D-101-PORT-RANGE-EXTEND): the inline
 // Phase-99 counter that lived here has been replaced by the constructor-
@@ -68,11 +69,28 @@ export type StreamTarget =
 	| Omit<WindowCropOpts, 'mode'>
 	| Omit<PipewireFdOpts, 'mode'>
 	| VncStreamTarget
+	// Phase 364 (VMENC-01): the vm-fmp4 session's "target" is the owning VM id — it
+	// has no display/window/geometry (frames arrive pre-rendered over the RFB pipe).
+	| {vmId: string}
 
 export type StartStreamOpts = {
 	userId: string
 	mode: StreamMode
 	target: StreamTarget
+	zeroLatency?: boolean
+	fragmentDurationMs?: number
+}
+
+/**
+ * Phase 364 (VMENC-01): args for the async `startVmStream` — the third session kind.
+ * A running VM's raw RFB framebuffer (loopback `vncRawPort`) is VAAPI-encoded and fanned
+ * out through the SAME Fmp4Fanout as host-app fmp4 streams. Admin-owned (see vm-manager).
+ */
+export type StartVmStreamOpts = {
+	userId: string
+	vmId: string
+	vncRawPort: number
+	framerate?: number
 	zeroLatency?: boolean
 	fragmentDurationMs?: number
 }
@@ -88,8 +106,9 @@ export type StreamRecord = {
 	status: StreamStatus
 	startedAt: number
 	wsUrl: string
-	/** Phase 99: discriminator — `'fmp4'` for ffmpeg/gst-backed sessions, `'vnc'` for x11vnc-backed. */
-	kind: 'fmp4' | 'vnc'
+	/** Phase 99: discriminator — `'fmp4'` for ffmpeg/gst-backed sessions, `'vnc'` for x11vnc-backed.
+	 *  Phase 364: `'vm-fmp4'` for the VM RFB→VAAPI encode session (fmp4-shaped downstream). */
+	kind: 'fmp4' | 'vnc' | 'vm-fmp4'
 }
 
 type FmpSession = {
@@ -134,7 +153,34 @@ type VncSession = {
 	lastViewerLeftAt: number | null
 }
 
-export type StreamSession = FmpSession | VncSession
+/**
+ * Phase 364 (VMENC-01) — the VM RFB→VAAPI encode session. Structurally an fmp4 session
+ * (owns an `encoder` ChildProcess + a `Fmp4Fanout`, shares the cap counter + idle reaper),
+ * PLUS a companion `frameSource` (the host RFB client) that continuously feeds the encoder's
+ * stdin. The two companions are torn down together (frame source close → encoder SIGTERM→
+ * SIGKILL → map.delete LAST) so a stop/crash never leaves a zombie ffmpeg or an orphan RFB
+ * socket (cc21c2d6 ethos). `vmId` is the owning VM (cascade key for stopStreamsForVm).
+ */
+type VmFmpSession = {
+	kind: 'vm-fmp4'
+	streamId: string
+	userId: string
+	vmId: string
+	mode: 'vm-rawvideo'
+	target: {vmId: string}
+	targetKey: string
+	encoder: ChildProcess
+	frameSource: VmFrameSource
+	fanout: Fmp4Fanout
+	startedAt: number
+	status: StreamStatus
+	stopRequested: boolean
+	/** Phase 305 — viewerless-grace reaper bookkeeping (see attachViewer). */
+	viewers: number
+	lastViewerLeftAt: number | null
+}
+
+export type StreamSession = FmpSession | VncSession | VmFmpSession
 
 export type SpawnFactory = (cmd: string, args: string[]) => ChildProcess
 
@@ -156,7 +202,21 @@ export type StreamManagerOpts = {
 	 * allocate/release wiring without touching real ports.
 	 */
 	portAllocator?: PortAllocator
+	/**
+	 * Phase 364 (VMENC-01): injectable VM-RFB frame-source factory — the test seam
+	 * (mirrors the injectable `spawn` factory) so vitest drives a fake frame source
+	 * without a real RFB socket. Defaults to a real `VmVncFrameSource`.
+	 */
+	vmFrameSourceFactory?: VmFrameSourceFactory
 }
+
+/** Phase 364 (VMENC-01): the injected frame-source constructor seam. */
+export type VmFrameSourceFactory = (opts: {
+	host?: string
+	port: number
+	framerate?: number
+	logger?: VmVncLogger
+}) => VmFrameSource
 
 const DEFAULT_STOP_TIMEOUT_MS = 2000
 
@@ -167,6 +227,19 @@ export class StreamCapExceededError extends Error {
 	}
 }
 
+/**
+ * Phase 364 (VMENC-01): thrown by startVmStream when the host has no VAAPI encoder.
+ * Defense-in-depth — vm-manager's startEncodedScreen ALSO pre-checks encodeAvailable()
+ * and refuses fail-closed with a typed VmResourceInvalid (→ BAD_REQUEST → 355 fallback).
+ */
+export class VmEncodeUnavailableError extends Error {
+	code = 'VM_ENCODE_UNAVAILABLE'
+	constructor() {
+		super('hardware video encoding (VAAPI) is unavailable on this host')
+		this.name = 'VmEncodeUnavailableError'
+	}
+}
+
 export class StreamManager extends EventEmitter {
 	private streams = new Map<string, StreamSession>()
 	private readonly caps: VaapiProbeResult
@@ -174,6 +247,7 @@ export class StreamManager extends EventEmitter {
 	private readonly logger: StreamManagerOpts['logger']
 	private readonly stopTimeoutMs: number
 	private readonly portAllocator: PortAllocator
+	private readonly vmFrameSourceFactory: VmFrameSourceFactory
 
 	constructor(opts: StreamManagerOpts) {
 		super()
@@ -184,6 +258,9 @@ export class StreamManager extends EventEmitter {
 		// Phase 101-02: use injected allocator when provided, else default
 		// [15900, 16000) range (D-101-PORT-ALLOC / D-101-PORT-RANGE-EXTEND).
 		this.portAllocator = opts.portAllocator ?? new PortAllocator()
+		// Phase 364 (VMENC-01): the RFB frame-source seam — real VmVncFrameSource unless a
+		// test injects a fake (parity with the injectable spawnFactory).
+		this.vmFrameSourceFactory = opts.vmFrameSourceFactory ?? ((o) => new VmVncFrameSource(o))
 	}
 
 	/** Phase 101-02: expose allocator for boot-time wiring + diagnostics. */
@@ -196,6 +273,15 @@ export class StreamManager extends EventEmitter {
 		return this.caps.vaapi ? 10 : 5
 	}
 
+	/**
+	 * Phase 364 (VMENC-01): true when the host can hardware-encode (VAAPI present). The
+	 * honest capability gate — vm-manager consults this BEFORE offering an encoded screen
+	 * so a no-VAAPI host falls back to the 355 noVNC path instead of a black frame.
+	 */
+	encodeAvailable(): boolean {
+		return this.caps.vaapi
+	}
+
 	startStream(opts: StartStreamOpts): {streamId: string; wsUrl: string} {
 		// 1. Idempotency check (GA-93-07)
 		const targetKey = stableStringify(opts.target)
@@ -206,7 +292,7 @@ export class StreamManager extends EventEmitter {
 				session.targetKey === targetKey &&
 				session.status === 'alive'
 			) {
-				return {streamId: session.streamId, wsUrl: wsUrlFor(session.streamId)}
+				return {streamId: session.streamId, wsUrl: wsUrlFor(session.streamId, session.kind)}
 			}
 		}
 
@@ -313,7 +399,7 @@ export class StreamManager extends EventEmitter {
 			this.logger?.info?.(
 				`stream ${streamId} started (user=${opts.userId} mode=vnc-window ${targetLabel} rfbPort=${rfbPort})`,
 			)
-			return {streamId, wsUrl: wsUrlFor(streamId)}
+			return {streamId, wsUrl: wsUrlFor(streamId, 'vnc')}
 		}
 
 		// 3. Build argv
@@ -418,7 +504,186 @@ export class StreamManager extends EventEmitter {
 		})
 
 		this.logger?.info?.(`stream ${streamId} started (user=${opts.userId} mode=${opts.mode} cmd=${cmd})`)
-		return {streamId, wsUrl: wsUrlFor(streamId)}
+		return {streamId, wsUrl: wsUrlFor(streamId, 'fmp4')}
+	}
+
+	/**
+	 * Phase 364 (VMENC-01) — start the third session kind: a running VM's raw RFB
+	 * framebuffer, VAAPI-encoded and fanned out through the SAME Fmp4Fanout as host-app
+	 * fmp4 streams. Async because the frame source's WxH handshake must complete BEFORE
+	 * the encoder argv (which bakes -video_size) can be built.
+	 *
+	 * Sequence (companion-process cascade, PATTERNS §1/§2):
+	 *   cap-check (shared alive-count) → construct frame source → await frameSource.start()
+	 *   for {width,height} → build vm-rawvideo argv → spawn encoder → register the session →
+	 *   wire frameSource.onFrame → encoder.stdin, encoder.stdout → fanout.feed.
+	 *
+	 * Fail-closed: a frameSource.start() rejection (VNC unreachable) leaves NO half-
+	 * registered session and NO orphan process. An unexpected encoder exit closes the
+	 * frame source (and vice-versa) on EVERY path so the cap slot always frees.
+	 */
+	async startVmStream(opts: StartVmStreamOpts): Promise<{streamId: string; wsUrl: string}> {
+		// Defense-in-depth VAAPI gate (vm-manager pre-checks encodeAvailable(); this guards
+		// any other caller). A no-VAAPI host must never register a session that produces nothing.
+		if (!this.caps.vaapi) {
+			throw new VmEncodeUnavailableError()
+		}
+
+		// Cap check — vm-fmp4 counts against the SAME alive-count as host-app streams
+		// (T-364-06: no separate unbounded pool).
+		const aliveCount = Array.from(this.streams.values()).filter((s) => s.status === 'alive').length
+		const cap = this.getCap()
+		if (aliveCount >= cap) {
+			throw new StreamCapExceededError(cap)
+		}
+
+		// Construct + start the RFB frame source FIRST (its handshake yields the dims the
+		// encoder argv needs). A rejection here means nothing was registered — best-effort
+		// close the source and rethrow fail-closed.
+		const frameSource = this.vmFrameSourceFactory({
+			host: '127.0.0.1',
+			port: opts.vncRawPort,
+			framerate: opts.framerate,
+			logger: this.logger,
+		})
+		let dims: {width: number; height: number}
+		try {
+			dims = await frameSource.start()
+		} catch (err) {
+			await frameSource.stop().catch(() => {})
+			throw err
+		}
+
+		// Build the vm-rawvideo argv with the handshake dims; spawn + register.
+		const argv = buildFfmpegArgs({
+			mode: 'vm-rawvideo',
+			width: dims.width,
+			height: dims.height,
+			framerate: opts.framerate,
+			caps: this.caps,
+			zeroLatency: opts.zeroLatency,
+			fragmentDurationMs: opts.fragmentDurationMs,
+		})
+		const encoder = this.spawnFactory('ffmpeg', argv)
+		const streamId = randomUUID()
+		const fanout = new Fmp4Fanout({logger: this.logger})
+
+		const session: VmFmpSession = {
+			kind: 'vm-fmp4',
+			streamId,
+			userId: opts.userId,
+			vmId: opts.vmId,
+			mode: 'vm-rawvideo',
+			target: {vmId: opts.vmId},
+			targetKey: stableStringify({vmId: opts.vmId}),
+			encoder,
+			frameSource,
+			fanout,
+			startedAt: Date.now(),
+			status: 'alive',
+			stopRequested: false,
+			viewers: 0,
+			lastViewerLeftAt: Date.now(),
+		}
+		this.streams.set(streamId, session)
+
+		// Feed the RFB frames into the encoder's stdin (the one NEW wiring vs x11grab, which
+		// owns its own capture). A burst of RFB damage rects is already throttled to the
+		// framerate by the frame source, so this is one write per encode tick.
+		frameSource.onFrame((chunk: Buffer) => {
+			const stdin = encoder.stdin
+			if (stdin && stdin.writable) {
+				try {
+					stdin.write(chunk)
+				} catch (err) {
+					this.logger?.warn?.(`stream ${streamId}: encoder.stdin.write threw`, err)
+				}
+			}
+		})
+		// Writing to a just-exited encoder's stdin emits EPIPE on the pipe — swallow it
+		// (the encoder.on('exit') handler owns the real teardown) so it never crashes the daemon.
+		encoder.stdin?.on('error', (err) => {
+			this.logger?.warn?.(`stream ${streamId}: encoder stdin error`, err)
+		})
+
+		// Encoder stdout → fanout (REUSED verbatim from the fmp4 branch).
+		if (encoder.stdout) {
+			encoder.stdout.on('data', (chunk: Buffer) => {
+				try {
+					fanout.feed(chunk)
+				} catch (err) {
+					this.logger?.error?.(`stream ${streamId}: fanout.feed threw`, err)
+				}
+			})
+			encoder.stdout.on('error', (err) => {
+				this.logger?.warn?.(`stream ${streamId}: encoder stdout error`, err)
+			})
+		}
+
+		// Stderr tail for crash diagnostics (same idiom as the fmp4 branch).
+		const stderrTail: string[] = []
+		if (encoder.stderr) {
+			encoder.stderr.on('data', (chunk: Buffer) => {
+				const line = chunk.toString('utf-8').trim()
+				if (!line) return
+				this.logger?.verbose?.(`stream ${streamId} stderr: ${line}`)
+				stderrTail.push(line)
+				if (stderrTail.length > 50) stderrTail.shift()
+			})
+		}
+
+		// Crash detection — an unrequested encoder exit flips off 'alive', closes the fanout,
+		// AND closes the frame source on EVERY path (no orphan RFB socket, cap slot freed).
+		// (encoder narrowed to the EventEmitter surface — @types/node resolution in this
+		// package drops the EE methods off ChildProcess; the fmp4 branch lives with that
+		// pre-existing diagnostic, this new call site avoids adding to it.)
+		;(encoder as unknown as EventEmitter).on('exit', (code, signal) => {
+			if (session.stopRequested) {
+				this.logger?.info?.(`vm stream ${streamId}: encoder exited cleanly (stop requested)`)
+				return
+			}
+			session.status = 'crashed'
+			try {
+				fanout.close('encoder-exited')
+			} catch (err) {
+				this.logger?.warn?.(`vm stream ${streamId}: fanout.close after exit threw`, err)
+			}
+			void frameSource.stop().catch(() => {})
+			if (code !== 0 && code !== null) {
+				const tailMsg =
+					stderrTail.length > 0
+						? `\n--- ffmpeg stderr (last ${stderrTail.length}) ---\n${stderrTail.join('\n')}`
+						: ' (no stderr captured)'
+				this.logger?.error?.(
+					`vm stream ${streamId}: encoder crashed (code=${code} signal=${signal} argv=${JSON.stringify(argv)})${tailMsg}`,
+				)
+				this.emit('crash', {streamId, code, signal})
+			} else {
+				this.logger?.warn?.(
+					`vm stream ${streamId}: encoder exited without a stop request (code=${code} signal=${signal}) — freeing its cap slot`,
+				)
+			}
+		})
+
+		// The other direction: a dead RFB socket must never leave a live ffmpeg. On an
+		// unrequested frame-source close/error, cascade a stopStream (which SIGTERMs the encoder).
+		frameSource.on('close', () => {
+			if (session.stopRequested) return
+			this.logger?.warn?.(`vm stream ${streamId}: frame source closed unexpectedly — stopping the encode session`)
+			void this.stopStream(streamId).catch((err) =>
+				this.logger?.warn?.(`vm stream ${streamId}: stopStream after frame-source close threw`, err),
+			)
+		})
+		frameSource.on('error', (err) => {
+			if (session.stopRequested) return
+			this.logger?.warn?.(`vm stream ${streamId}: frame source error — stopping the encode session`, err)
+			void this.stopStream(streamId).catch(() => {})
+		})
+
+		this.logger?.info?.(
+			`vm stream ${streamId} started (user=${opts.userId} vmId=${opts.vmId} ${dims.width}x${dims.height} port=${opts.vncRawPort})`,
+		)
+		return {streamId, wsUrl: wsUrlFor(streamId, 'vm-fmp4')}
 	}
 
 	async stopStream(streamId: string): Promise<{stopped: boolean}> {
@@ -461,6 +726,52 @@ export class StreamManager extends EventEmitter {
 			this.logger?.info?.(
 				`stream ${streamId} stopped (vnc, ${targetLabel})`,
 			)
+			return {stopped: true}
+		}
+
+		// Phase 364 (VMENC-01) — vm-fmp4 cascade: tear BOTH companions down in order and
+		// ALWAYS delete the map entry + close the fanout LAST, even if the frame-source
+		// teardown throws (no zombie ffmpeg, no orphan RFB socket — cc21c2d6 ethos).
+		if (session.kind === 'vm-fmp4') {
+			// 1. Close the RFB frame source FIRST — best-effort, never aborts the rest.
+			await session.frameSource.stop().catch((err) =>
+				this.logger?.warn?.(`stream ${streamId}: frame-source stop threw (continuing teardown)`, err),
+			)
+			// 2. SIGTERM → timer → SIGKILL the encoder (REUSED from the fmp4 escalation).
+			const vmEncoder = session.encoder
+			try {
+				vmEncoder.kill('SIGTERM')
+			} catch (err) {
+				this.logger?.warn?.(`stream ${streamId}: SIGTERM threw`, err)
+			}
+			await new Promise<void>((resolve) => {
+				let resolved = false
+				const onExit = () => {
+					if (resolved) return
+					resolved = true
+					clearTimeout(timer)
+					resolve()
+				}
+				const timer = setTimeout(() => {
+					if (resolved) return
+					try {
+						vmEncoder.kill('SIGKILL')
+					} catch (err) {
+						this.logger?.warn?.(`stream ${streamId}: SIGKILL threw`, err)
+					}
+					setTimeout(onExit, 100)
+				}, this.stopTimeoutMs)
+				// (EventEmitter narrowing — see startVmStream's exit handler note.)
+				;(vmEncoder as unknown as EventEmitter).once('exit', onExit)
+			})
+			// 3. Close the fanout + delete the map entry — UNCONDITIONALLY last.
+			try {
+				session.fanout.close('vm-stopped')
+			} catch (err) {
+				this.logger?.warn?.(`stream ${streamId}: fanout.close threw`, err)
+			}
+			this.streams.delete(streamId)
+			this.logger?.info?.(`vm stream ${streamId} stopped (vmId=${session.vmId})`)
 			return {stopped: true}
 		}
 
@@ -543,6 +854,25 @@ export class StreamManager extends EventEmitter {
 		return ids.length
 	}
 
+	/**
+	 * Phase 364 (VMENC-01) — the sibling of stopStreamsForDisplay for the vm-fmp4 kind:
+	 * an OWNING VM stopping/deleting must cascade-stop its dependent encode session so no
+	 * orphan ffmpeg/RFB survives (T-364-07). vm-manager's stop()/delete() call this.
+	 * Idempotent (stopStream short-circuits an already-stopping session). Returns the count.
+	 */
+	async stopStreamsForVm(vmId: string): Promise<number> {
+		const ids: string[] = []
+		for (const session of this.streams.values()) {
+			if (session.kind === 'vm-fmp4' && session.vmId === vmId && session.status === 'alive') {
+				ids.push(session.streamId)
+			}
+		}
+		for (const streamId of ids) {
+			await this.stopStream(streamId)
+		}
+		return ids.length
+	}
+
 	listStreams(filter: {userId: string}): StreamRecord[] {
 		const out: StreamRecord[] = []
 		for (const session of this.streams.values()) {
@@ -570,13 +900,18 @@ export class StreamManager extends EventEmitter {
 
 	getFanout(streamId: string): Fmp4Fanout | null {
 		const session = this.streams.get(streamId)
-		if (!session || session.kind !== 'fmp4') return null
+		// Phase 364 (VMENC-01): vm-fmp4 is fanout-shaped downstream — it owns a Fmp4Fanout
+		// exactly like fmp4, so it MUST be accepted here or VM frames never fan out.
+		if (!session || (session.kind !== 'fmp4' && session.kind !== 'vm-fmp4')) return null
 		return session.fanout
 	}
 
 	addSubscriber(streamId: string, ws: SubscriberSocket): boolean {
 		const session = this.streams.get(streamId)
-		if (!session || session.kind !== 'fmp4') return false
+		// Phase 364 (VMENC-01): accept vm-fmp4 too — the WS route calls this to attach a
+		// viewer to a VM encode session's fanout (gating on `!== 'fmp4'` would close every
+		// VM viewer socket → zero frames ever delivered).
+		if (!session || (session.kind !== 'fmp4' && session.kind !== 'vm-fmp4')) return false
 		session.fanout.addSubscriber(ws)
 		return true
 	}
@@ -633,10 +968,12 @@ export class StreamManager extends EventEmitter {
 			mode: session.mode,
 			target: session.target,
 			subscriberCount:
-				session.kind === 'fmp4' ? session.fanout.getSubscriberCount() : 0,
+				session.kind === 'fmp4' || session.kind === 'vm-fmp4'
+					? session.fanout.getSubscriberCount()
+					: 0,
 			status: session.status,
 			startedAt: session.startedAt,
-			wsUrl: wsUrlFor(session.streamId),
+			wsUrl: wsUrlFor(session.streamId, session.kind),
 			kind: session.kind,
 		}
 	}
@@ -646,7 +983,16 @@ export class StreamManager extends EventEmitter {
 		for (const session of this.streams.values()) {
 			try {
 				if (session.kind === 'fmp4') session.fanout.close('test-clear')
-				else session.x11vnc.kill('SIGKILL')
+				else if (session.kind === 'vm-fmp4') {
+					// Phase 364 (VMENC-01): tear down BOTH companions of the vm-fmp4 pair.
+					session.fanout.close('test-clear')
+					try {
+						session.encoder.kill('SIGKILL')
+					} catch {
+						/* noop */
+					}
+					void session.frameSource.stop().catch(() => {})
+				} else session.x11vnc.kill('SIGKILL')
 			} catch {
 				/* noop */
 			}
@@ -655,8 +1001,14 @@ export class StreamManager extends EventEmitter {
 	}
 }
 
-function wsUrlFor(streamId: string): string {
-	return `/ws/stream/${streamId}`
+/**
+ * Phase 364 (VMENC-01): kind-aware WS URL. A vm-fmp4 session rides the admin-gated
+ * `/ws/vm-stream/<id>` route (the STRONG verifySessionFull+admin gate, wired in plan 03) —
+ * NOT the weaker member-scoped `/ws/stream/<id>` verifyToken route. Returning the wrong
+ * URL for a VM stream would either 404 or drop it onto the wrong auth posture.
+ */
+function wsUrlFor(streamId: string, kind: StreamSession['kind']): string {
+	return kind === 'vm-fmp4' ? `/ws/vm-stream/${streamId}` : `/ws/stream/${streamId}`
 }
 
 /** Stable JSON.stringify by sorting keys — used for the idempotency key. */
