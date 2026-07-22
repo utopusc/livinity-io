@@ -32,10 +32,13 @@ type WindowProps = {
 	// render the Chat icon + inline chat-input bar (Teach + Skills
 	// omitted — RESEARCH A5). Mutually exclusive with `webappId`.
 	nativeAppId?: string
+	// Phase 356 (VMWIN-01) — a render-time glyph (VM per-OS icon) for the chrome
+	// drag-bar pill. Derived in windows-container.tsx; NEVER persisted.
+	titleIcon?: React.ReactNode
 }
 
 export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
-	{id, title, icon, position, size, zIndex, children, originRect, isPinnedToTopBar = false, appId, webappId, nativeAppId},
+	{id, title, icon, position, size, zIndex, children, originRect, isPinnedToTopBar = false, appId, webappId, nativeAppId, titleIcon},
 	ref,
 ) {
 	const {closeWindow, closeDisplay, focusWindow, updateWindowPosition, updateWindowSize, pinWindowToTopBar} = useWindowManager()
@@ -373,6 +376,7 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 				<WindowChrome
 					title={title}
 					icon={icon}
+					titleIcon={titleIcon}
 					onClose={handleClose}
 					windowWidth={size.width}
 					webappId={webappId}
