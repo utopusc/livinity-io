@@ -47,6 +47,8 @@ import {
 	renderVmCompose,
 	writeVmCompose,
 } from './vm-docker.js'
+import {getContainerStats} from '../docker/docker.js'
+import getDirectorySize from '../utilities/get-directory-size.js'
 import {vmPortAllocator, vmRdpPortAllocator} from './vm-ports.js'
 import {getVmTemplate} from './vm-template.js'
 import {VmRegistry, type VmInstanceRecord} from './vm-registry.js'
@@ -66,6 +68,36 @@ export interface VmView {
 	state: VmState
 	lastError?: string
 	createdAt: number
+}
+
+/**
+ * Phase 362 (VMSTATS-01): live per-VM CPU/RAM usage paired with the
+ * registry-allocated resources. Live fields are ABSENT (not zero) when the VM
+ * is not running — an absent field is unambiguously "not measured"; a 0 could be
+ * misread as "measured and idle" for a VM that is actually stopped. NOTE the type
+ * intentionally has NO memoryLimit/memoryPercent field: a VM sets no cgroup
+ * mem_limit, so that cgroup value is the host's unbounded ceiling — meaningless as
+ * "% allocated". Every consumer is forced through ramAllocMiB (the registry value).
+ */
+export interface VmStatsView {
+	running: boolean
+	cpuPercent?: number // 0-100, live — present iff running
+	ramUsedMiB?: number // working-set MiB, live — present iff running
+	ramAllocMiB: number // ALWAYS — record.resources.ramMiB, NEVER the cgroup
+	cpuAllocated: number // ALWAYS — record.resources.cpus
+}
+
+/**
+ * Phase 362 (VMSTATS-01): per-VM disk usage — SEPARATE from VmStatsView so the
+ * du shell-out is never on the 3s stats poll (du causes CPU spikes —
+ * live-usage-popover disk-not-polled precedent). diskUsedBytes is the honest,
+ * thin-provisioning-aware on-host size of the guest storage dir (du block
+ * accounting, sparse-aware); absent when not running.
+ */
+export interface VmDiskUsageView {
+	running: boolean
+	diskUsedBytes?: number // du of `${dataDir}/storage`, live — present iff running
+	diskAllocGiB: number // ALWAYS — record.resources.diskGiB
 }
 
 export type VmResources = {cpus: number; ramMiB: number; diskGiB: number}
@@ -446,6 +478,48 @@ export class VmManager {
 		const record = await this.#registry.get(id)
 		if (!record) return undefined
 		return this.#toView(record)
+	}
+
+	/**
+	 * Live CPU/RAM usage for one VM (VMSTATS-01). READ-ONLY, admin-gated at the
+	 * router (audit-exempt query). Gates on #deriveState (the SAME live-state
+	 * derivation list()/get() use) BEFORE touching docker: a stopped VM returns
+	 * allocated-only, and getContainerStats is NOT called — a stopped container's
+	 * stats call can return a misleading all-zero SUCCESS (not a throw), so we never
+	 * rely on the call to detect state. Pairs the live read against the registry
+	 * allocated values SERVER-side (the client never reconciles two sources).
+	 */
+	async stats(id: string): Promise<VmStatsView | undefined> {
+		const record = await this.#registry.get(id)
+		if (!record) return undefined
+		const running = (await this.#deriveState(record)) === 'running'
+		const base = {running, ramAllocMiB: record.resources.ramMiB, cpuAllocated: record.resources.cpus}
+		if (!running) return base
+		const live = await getContainerStats(record.containerName)
+		return {
+			...base,
+			cpuPercent: live.cpuPercent,
+			// ALLOC stays the registry ramMiB (base) — ramUsedMiB is the live working
+			// set; live.memoryLimit/memoryPercent are DELIBERATELY unused (Pitfall 1).
+			ramUsedMiB: Math.round(live.memoryUsage / 1024 / 1024),
+		}
+	}
+
+	/**
+	 * Per-VM disk usage (VMSTATS-01) — SEPARATE from stats() so the du shell-out is
+	 * never on the 3s poll path (the router exposes this as its own procedure the
+	 * client fetches once on open, not on the poll interval). Same #deriveState gate
+	 * + honest-stopped contract as stats(). du of `${dataDir}/storage` is the honest
+	 * thin-provisioning-aware metric (getDirectorySize block accounting).
+	 */
+	async diskUsage(id: string): Promise<VmDiskUsageView | undefined> {
+		const record = await this.#registry.get(id)
+		if (!record) return undefined
+		const running = (await this.#deriveState(record)) === 'running'
+		const base = {running, diskAllocGiB: record.resources.diskGiB}
+		if (!running) return base
+		const diskUsedBytes = await getDirectorySize(`${record.dataDir}/storage`)
+		return {...base, diskUsedBytes}
 	}
 
 	// ── Lifecycle mutations (single-flight per VM) ───────────────────────────────
