@@ -217,6 +217,8 @@
   "vm.controls.unpin-desktop": "Remove from Desktop",
   "vm.controls.settings": "Settings",
   "vm.controls.delete": "Delete",
+  "vm.controls.more": "More actions",
+  "vm.usage.summary": "Live usage",
   "vm.screen.title": "{{name}} — screen",
   "vm.screen.back": "Back",
   "vm.screen.loading": "Connecting to screen…",

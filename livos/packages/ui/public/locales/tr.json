@@ -217,6 +217,8 @@
   "vm.controls.unpin-desktop": "Masaüstünden Kaldır",
   "vm.controls.settings": "Ayarlar",
   "vm.controls.delete": "Sil",
+  "vm.controls.more": "Diğer işlemler",
+  "vm.usage.summary": "Canlı kullanım",
   "vm.screen.title": "{{name}} — ekran",
   "vm.screen.back": "Geri",
   "vm.screen.loading": "Ekrana bağlanılıyor…",

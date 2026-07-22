@@ -15,9 +15,11 @@
 // "Open screen" (353-02) calls onOpenScreen(vm) to open the state-aware VmScreen
 // view; the honesty of that view (never a blank frame as working) lives there.
 import {useState} from 'react'
-import {TbDeviceDesktop, TbLoader2, TbPencil, TbPin, TbPinnedOff, TbPlayerPlay, TbPlayerStop, TbRefresh, TbSettings, TbTrash} from 'react-icons/tb'
+import {TbDeviceDesktop, TbDotsVertical, TbLoader2, TbPencil, TbPin, TbPinnedOff, TbPlayerPlay, TbPlayerStop, TbRefresh, TbSettings, TbTrash} from 'react-icons/tb'
 import {toast} from 'sonner'
 
+import {LOADING_DASH} from '@/constants'
+import {useVmStats} from '@/hooks/use-vm-stats'
 import {useDesktopPins} from '@/modules/desktop/use-desktop-pins'
 import {useDockPins} from '@/modules/desktop/use-dock-pins'
 
@@ -32,10 +34,18 @@ import {
 	DialogPortal,
 	DialogTitle,
 } from '@/shadcn-components/ui/dialog'
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from '@/shadcn-components/ui/dropdown-menu'
 import {Input, Labeled} from '@/shadcn-components/ui/input'
 import type {RouterOutput} from '@/trpc/trpc'
 import {trpcReact} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
+import {maybePrettyBytes} from '@/utils/pretty-bytes'
 
 import {OsIcon} from './os-icon'
 import {VmSettingsDialog} from './vm-settings-dialog'
@@ -99,6 +109,11 @@ export function VmListItem({
 	// desktop surface).
 	const {isPinned: isDesktopPinned, pin: pinDesktop, unpin: unpinDesktop} = useDesktopPins()
 	const pinnedToDesktopSurface = isDesktopPinned('vm', vm.id)
+
+	// Compact live-usage readout (363, reuses 362's running-gated hook verbatim —
+	// a stopped VM issues ZERO polls). Only the CPU/RAM 3s stats are read here; the
+	// heavier disk du and the full Gauge cards stay in the Settings dialog.
+	const {stats} = useVmStats(vm.id, vm.state === 'running')
 
 	const startMut = trpcReact.vm.start.useMutation({
 		onSuccess: () => utils.vm.list.invalidate(),
@@ -170,6 +185,23 @@ export function VmListItem({
 							disk: vm.resources.diskGiB,
 						})}
 					</div>
+					{/* Line 3 — compact live readout, running-gated (362). Absent when
+					    stopped so the allocated caption above stands alone (no dead line). */}
+					{vm.state === 'running' && stats ? (
+						<div
+							className='mt-1 flex items-center gap-3 text-caption tabular-nums text-text-tertiary'
+							aria-label={t('vm.usage.summary')}
+						>
+							<span>
+								{t('cpu')} {stats.cpuPercent !== undefined ? `${Math.round(stats.cpuPercent)}%` : LOADING_DASH}
+							</span>
+							<span>
+								{t('memory')}{' '}
+								{stats.ramUsedMiB !== undefined ? maybePrettyBytes(stats.ramUsedMiB * 1024 * 1024) : LOADING_DASH} /{' '}
+								{ramGiB(stats.ramAllocMiB)} GB
+							</span>
+						</div>
+					) : null}
 					{/* Errored VM: surface the honest reason; NEVER render as healthy. */}
 					{vm.state === 'error' && vm.lastError ? (
 						<div className='mt-1 text-caption text-destructive2'>{vm.lastError}</div>
@@ -177,81 +209,92 @@ export function VmListItem({
 				</div>
 
 				<div className='flex shrink-0 items-center gap-1.5'>
-					{isUp ? (
-						<>
-							<Button
-								size='sm'
-								variant='ghost'
-								disabled={controlsDisabled}
-								onClick={() => stopMut.mutate({id: vm.id})}
-							>
-								<TbPlayerStop className='h-4 w-4' />
-								{t('vm.controls.stop')}
-							</Button>
-							<Button
-								size='sm'
-								variant='ghost'
-								disabled={controlsDisabled}
-								onClick={() => restartMut.mutate({id: vm.id})}
-							>
-								<TbRefresh className='h-4 w-4' />
-								{t('vm.controls.restart')}
-							</Button>
-						</>
-					) : (
-						<Button
-							size='sm'
-							variant='ghost'
-							disabled={controlsDisabled}
-							onClick={() => startMut.mutate({id: vm.id})}
-						>
-							<TbPlayerPlay className='h-4 w-4' />
-							{t('vm.controls.start')}
-						</Button>
-					)}
-
-					{/* Open screen — 353 wires the real state-aware noVNC screen view. */}
-					<Button size='sm' variant='ghost' onClick={() => onOpenScreen(vm)}>
+					{/* PRIMARY affordance — Open screen (356 window). Filled (not ghost) =
+					    the clear hierarchy signal; the callback is unchanged from 353. */}
+					<Button size='sm' variant='primary' onClick={() => onOpenScreen(vm)}>
 						<TbDeviceDesktop className='h-4 w-4' />
 						{t('vm.controls.open-screen')}
 					</Button>
 
-					{/* Pin/unpin to the desktop Dock — client-only (useDockPins), no vm.* mutation. */}
-					<Button
-						size='sm'
-						variant='ghost'
-						onClick={() => (pinnedToDesktop ? unpin('vm', vm.id) : pin({kind: 'vm', id: vm.id}))}
-					>
-						{pinnedToDesktop ? <TbPinnedOff className='h-4 w-4' /> : <TbPin className='h-4 w-4' />}
-						{pinnedToDesktop ? t('vm.controls.unpin') : t('vm.controls.pin')}
-					</Button>
+					{/* OVERFLOW — every other action, consolidated (app-icon idiom). A
+					    VISIBLE DropdownMenu (NOT a right-click ContextMenu) so the row stays
+					    touch-usable on the mobile VM list. Delete last + destructive. */}
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button size='sm' variant='ghost' aria-label={t('vm.controls.more')}>
+								<TbDotsVertical className='h-4 w-4' />
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align='end'>
+							{/* Lifecycle — state-gated, disabled while transitional/busy. */}
+							{isUp ? (
+								<>
+									<DropdownMenuItem disabled={controlsDisabled} onSelect={() => stopMut.mutate({id: vm.id})}>
+										<TbPlayerStop className='mr-2 h-4 w-4' />
+										{t('vm.controls.stop')}
+									</DropdownMenuItem>
+									<DropdownMenuItem disabled={controlsDisabled} onSelect={() => restartMut.mutate({id: vm.id})}>
+										<TbRefresh className='mr-2 h-4 w-4' />
+										{t('vm.controls.restart')}
+									</DropdownMenuItem>
+								</>
+							) : (
+								<DropdownMenuItem disabled={controlsDisabled} onSelect={() => startMut.mutate({id: vm.id})}>
+									<TbPlayerPlay className='mr-2 h-4 w-4' />
+									{t('vm.controls.start')}
+								</DropdownMenuItem>
+							)}
 
-					{/* Pin/unpin to the desktop surface — client-only (useDesktopPins), no vm.* mutation. */}
-					<Button
-						size='sm'
-						variant='ghost'
-						onClick={() => (pinnedToDesktopSurface ? unpinDesktop('vm', vm.id) : pinDesktop({kind: 'vm', id: vm.id}))}
-					>
-						{pinnedToDesktopSurface ? <TbPinnedOff className='h-4 w-4' /> : <TbPin className='h-4 w-4' />}
-						{pinnedToDesktopSurface ? t('vm.controls.unpin-desktop') : t('vm.controls.pin-desktop')}
-					</Button>
+							<DropdownMenuSeparator />
 
-					<Button size='sm' variant='ghost' onClick={openRename} disabled={renameMut.isPending}>
-						<TbPencil className='h-4 w-4' />
-						{t('vm.controls.rename')}
-					</Button>
+							{/* Pin/unpin to the desktop Dock — client-only (useDockPins), no vm.* mutation. */}
+							<DropdownMenuItem
+								onSelect={() => (pinnedToDesktop ? unpin('vm', vm.id) : pin({kind: 'vm', id: vm.id}))}
+							>
+								{pinnedToDesktop ? <TbPinnedOff className='mr-2 h-4 w-4' /> : <TbPin className='mr-2 h-4 w-4' />}
+								{pinnedToDesktop ? t('vm.controls.unpin') : t('vm.controls.pin')}
+							</DropdownMenuItem>
 
-					{/* Settings — non-destructive, always available (359-02). Opens the
-					    row-local <VmSettingsDialog> for THIS vm. */}
-					<Button size='sm' variant='ghost' onClick={() => setSettingsOpen(true)}>
-						<TbSettings className='h-4 w-4' />
-						{t('vm.controls.settings')}
-					</Button>
+							{/* Pin/unpin to the desktop surface — client-only (useDesktopPins), no vm.* mutation. */}
+							<DropdownMenuItem
+								onSelect={() =>
+									pinnedToDesktopSurface ? unpinDesktop('vm', vm.id) : pinDesktop({kind: 'vm', id: vm.id})
+								}
+							>
+								{pinnedToDesktopSurface ? (
+									<TbPinnedOff className='mr-2 h-4 w-4' />
+								) : (
+									<TbPin className='mr-2 h-4 w-4' />
+								)}
+								{pinnedToDesktopSurface ? t('vm.controls.unpin-desktop') : t('vm.controls.pin-desktop')}
+							</DropdownMenuItem>
 
-					<Button size='sm' variant='ghost' text='destructive' onClick={onDelete}>
-						<TbTrash className='h-4 w-4' />
-						{t('vm.controls.delete')}
-					</Button>
+							<DropdownMenuItem disabled={renameMut.isPending} onSelect={openRename}>
+								<TbPencil className='mr-2 h-4 w-4' />
+								{t('vm.controls.rename')}
+							</DropdownMenuItem>
+
+							{/* Settings — non-destructive, always available (359-02). Opens the
+							    row-local <VmSettingsDialog> for THIS vm. */}
+							<DropdownMenuItem onSelect={() => setSettingsOpen(true)}>
+								<TbSettings className='mr-2 h-4 w-4' />
+								{t('vm.controls.settings')}
+							</DropdownMenuItem>
+
+							<DropdownMenuSeparator />
+
+							{/* Delete — LAST + destructive (mirrors app-icon uninstall placement).
+							    Reuses the shared destructive tokens inline (dropdownClasses has no
+							    rootDestructive); still the list-owned onDelete confirm dialog. */}
+							<DropdownMenuItem
+								className='text-destructive2-lightest focus:text-destructive2-lightest'
+								onSelect={onDelete}
+							>
+								<TbTrash className='mr-2 h-4 w-4' />
+								{t('vm.controls.delete')}
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
 				</div>
 			</div>
 
