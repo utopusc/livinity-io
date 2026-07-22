@@ -14,9 +14,18 @@
 // `screenVmId` machinery is NOT dead: `initialScreenVmId` seeds a freshly-opened
 // /vm/<id> window so it renders <VmScreen> on mount, and Back (onBack ->
 // setScreenVmId(null)) falls back to the list WITHIN that same window.
+//
+// Phase 356 review (M-01) — the WindowManagerProvider is mounted unconditionally
+// (router.tsx), so `windowManager` is NON-null on mobile too; only
+// WindowsContainer returns null on mobile (windows-container.tsx:22). Opening a
+// desktop window on a phone therefore accretes an UNRENDERED window. So on mobile
+// we fall back to the pre-356 in-panel <VmScreen> swap (353 behavior), reusing the
+// SAME useIsMobile signal WindowsContainer gates on so the two can never disagree.
+// Desktop keeps the first-class-window path.
 import {motion} from 'motion/react'
 import {useState} from 'react'
 
+import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useWindowManagerOptional} from '@/providers/window-manager'
 import type {RouterOutput} from '@/trpc/trpc'
 
@@ -28,6 +37,7 @@ type VmView = RouterOutput['vm']['list'][number]
 
 export function VmList({vms, initialScreenVmId}: {vms: VmView[]; initialScreenVmId?: string}) {
 	const windowManager = useWindowManagerOptional()
+	const isMobile = useIsMobile()
 	const [vmPendingDelete, setVmPendingDelete] = useState<VmView | null>(null)
 	const [screenVmId, setScreenVmId] = useState<string | null>(initialScreenVmId ?? null)
 
@@ -51,7 +61,11 @@ export function VmList({vms, initialScreenVmId}: {vms: VmView[]; initialScreenVm
 					<VmListItem
 						vm={vm}
 						onDelete={() => setVmPendingDelete(vm)}
-						onOpenScreen={(v) => windowManager?.openWindow('LIVINITY_vm', `/vm/${v.id}`, v.name, '')}
+						onOpenScreen={(v) =>
+							isMobile
+								? setScreenVmId(v.id) // mobile: in-panel <VmScreen> swap (353 behavior — WindowsContainer renders nothing on mobile)
+								: windowManager?.openWindow('LIVINITY_vm', `/vm/${v.id}`, v.name, '') // desktop: first-class window
+						}
 					/>
 				</motion.div>
 			))}

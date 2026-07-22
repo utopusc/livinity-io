@@ -11,10 +11,13 @@
 //   - the render-time-ONLY invariant: titleIcon must never enter window-manager
 //     (WindowState / OPEN_WINDOW / the reducer / the pinned-window Postgres
 //     icon:string field — a ReactNode cannot round-trip).
-//   - the convergence invariant: the app-list "Open screen" button routes
-//     through windowManager.openWindow with the SAME shape as the 354 dock pin
-//     (also the 357 desktop-shortcut's shape), NOT the old in-place setScreenVmId
-//     swap — while the internal screenVmId seed machinery stays intact.
+//   - the convergence invariant: on DESKTOP the app-list "Open screen" button
+//     routes through windowManager.openWindow with the SAME shape as the 354 dock
+//     pin (also the 357 desktop-shortcut's shape); on MOBILE it falls back to the
+//     pre-356 in-panel setScreenVmId swap (M-01 — WindowsContainer renders nothing
+//     on mobile, so a desktop window would be an invisible accretion), gated on
+//     the SAME useIsMobile signal windows-container.tsx uses — while the internal
+//     screenVmId seed machinery stays intact.
 //   - missing/stale VM → the title icon renders nothing (never crashes).
 //   - no NEW VNC jargon on the touched user-facing surface (355 guard intent).
 
@@ -93,20 +96,31 @@ describe('C. VmWindowTitleIcon derives the per-OS glyph, gracefully missing', ()
 	})
 })
 
-// ── D: List open-screen routes through openWindow, NOT a setScreenVmId swap ─
-describe('D. app-list "Open screen" converges on windowManager.openWindow', () => {
-	// Isolate the onOpenScreen handler expression — anchored on its closing `)}`
-	// (the `/>`-anchored idiom) so the captured span is the actual handler, not an
-	// overshoot into the rest of the JSX.
-	const openHandler = vmListSrc.match(/onOpenScreen=\{[\s\S]*?\)\}/)?.[0] ?? ''
+// ── D: List open-screen — desktop → openWindow, mobile → in-panel swap (M-01) ─
+describe('D. app-list "Open screen" converges on windowManager.openWindow (desktop) with an in-panel mobile fallback', () => {
+	// Isolate the onOpenScreen handler expression. Post-M-01 the handler is a
+	// multi-line isMobile ternary (no single-line `)}` to anchor on), so capture
+	// from `onOpenScreen={` to the first line that is just whitespace + the closing
+	// brace of the JSX expression container — the comment lines carry `//` text (no
+	// bare `}`), so the earliest `\n\s*}` is the real terminator, not an overshoot.
+	const openHandler = vmListSrc.match(/onOpenScreen=\{[\s\S]*?\n\s*\}/)?.[0] ?? ''
 
-	it('D1. the handler opens a dedicated LIVINITY_vm window with the dock-pin shape', () => {
+	it('D1. the DESKTOP branch opens a dedicated LIVINITY_vm window with the dock-pin shape', () => {
 		expect(openHandler).not.toBe('')
 		expect(openHandler).toMatch(/openWindow\('LIVINITY_vm',\s*`\/vm\/\$\{v\.id\}`,\s*v\.name,\s*''\)/)
 	})
 
-	it('D2. the handler no longer does an in-place setScreenVmId swap', () => {
-		expect(openHandler).not.toMatch(/setScreenVmId\(/)
+	it('D2. the handler gates on the sanctioned useIsMobile signal, falling back to the in-panel setScreenVmId swap on mobile (M-01)', () => {
+		// WindowManagerProvider is mounted unconditionally, so `windowManager` is
+		// non-null on mobile too and a desktop openWindow would accrete an UNRENDERED
+		// window (WindowsContainer returns null on mobile). The fix branches on the
+		// SAME useIsMobile signal windows-container.tsx gates on: desktop → first-class
+		// window, mobile → the pre-356 in-panel <VmScreen> swap. Both branches + the
+		// gate must be present so the two renderers can never disagree.
+		expect(vmListSrc).toMatch(/const isMobile = useIsMobile\(\)/)
+		expect(vmListSrc).toMatch(/from '@\/hooks\/use-is-mobile'/)
+		expect(openHandler).toMatch(/isMobile\b/)
+		expect(openHandler).toMatch(/setScreenVmId\(v\.id\)/)
 	})
 
 	it('D3. VmList wires up useWindowManagerOptional', () => {
