@@ -144,6 +144,25 @@ const deleteInput = z.object({id: z.string().uuid(), confirm: z.literal(true)})
 // create (.min(1).max(255)) — an empty/over-long name is refused before the manager.
 const renameInput = z.object({id: z.string().uuid(), name: nameSchema})
 
+// Phase 359 (VMSET-01/02): the sanctioned resize input. Allowed keys ONLY —
+// id + a partial resources object. `.strict()` at BOTH levels REFUSES any other
+// key (name stays vm.rename; USERNAME is create-only, never resizable). The
+// manager is the load-bearing grow-only + capacity gate; this is the cheap first
+// gate. name/username/kind/composePath/containerName are all rejected here.
+const updateResourcesSchema = z
+	.object({
+		cpus: z.number().int().positive().optional(),
+		ramMiB: z.number().int().positive().optional(),
+		diskGiB: z.number().int().positive().optional(),
+	})
+	.strict()
+const updateInput = z
+	.object({id: z.string().uuid(), resources: updateResourcesSchema})
+	.strict()
+	.refine((v) => v.resources.cpus !== undefined || v.resources.ramMiB !== undefined || v.resources.diskGiB !== undefined, {
+		message: 'Provide at least one of cpus, ramMiB, or diskGiB to update.',
+	})
+
 /**
  * Resolve the VmManager off the daemon context, or throw a typed 500 if the VM
  * subsystem is unavailable (mirrors native-routes' requireStore). The gate has
@@ -164,6 +183,10 @@ interface VmManagerSurface {
 	stop(id: string): Promise<void>
 	restart(id: string): Promise<void>
 	rename(id: string, name: string): Promise<void>
+	update(
+		id: string,
+		patch: {resources: {cpus?: number; ramMiB?: number; diskGiB?: number}},
+	): Promise<{restartRequired: boolean; restartTriggered: boolean; restartReason?: string}>
 	delete(id: string, opts: {confirm: true}): Promise<{deleted: boolean}>
 }
 
@@ -284,6 +307,14 @@ const vm = router({
 	rename: adminProcedure
 		.input(renameInput)
 		.mutation(({ctx, input}) => callVm(() => requireVm(ctx).rename(input.id, input.name))),
+	// VMSET-01/02: sanctioned fail-closed resource resize. adminProcedure (audit for
+	// free); callVm gives the VmResourceInvalid->BAD_REQUEST + single-flight->CONFLICT
+	// mapping. Restart-to-apply — the manager persists but never restarts the guest.
+	// The delegate arg is built field-by-field ({resources: input.resources}) — the raw
+	// request body is NEVER spread into the manager/registry (T-359-02 tampering control).
+	update: adminProcedure
+		.input(updateInput)
+		.mutation(({ctx, input}) => callVm(() => requireVm(ctx).update(input.id, {resources: input.resources}))),
 	delete: adminProcedure
 		.input(deleteInput)
 		.mutation(({ctx, input}) => callVm(() => requireVm(ctx).delete(input.id, {confirm: input.confirm}))),
