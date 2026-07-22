@@ -23,9 +23,15 @@
 // NEVER the hook's raw errorMessage (which can be English 'VNC security
 // failure').
 //
-// 356-readiness: VmScreen's {vm, onBack} prop contract + named export are
+// 356-readiness: VmScreen's {vm, onBack} core prop contract + named export are
 // intentionally unchanged so Phase 356 can host this component in a
 // window-manager window unmodified — no panel-only assumptions baked in.
+//
+// 358-01 (VMPURE-01): an ADDITIVE `pure?` prop suppresses the header/Back/title
+// row when the screen is shown AS A WINDOW (the 356 window chrome already
+// carries the VM name + OS icon, so a second Back/title is redundant chrome).
+// `pure` is false on the mobile in-panel path (windowId absent) so mobile keeps
+// its Back — no stranding. The {vm, onBack} core contract is otherwise intact.
 import {TbAlertTriangle, TbArrowLeft, TbDeviceDesktop, TbLoader2, TbPlayerPlay, TbRefresh} from 'react-icons/tb'
 import {toast} from 'sonner'
 
@@ -50,7 +56,7 @@ export function buildVmWsUrl(id: string) {
 	return `${p}//${window.location.host}/vm/${id}/websockify`
 }
 
-export function VmScreen({vm, onBack}: {vm: VmView; onBack: () => void}) {
+export function VmScreen({vm, onBack, pure}: {vm: VmView; onBack: () => void; pure?: boolean}) {
 	const utils = trpcReact.useUtils()
 
 	const isRunning = vm.state === 'running'
@@ -67,31 +73,26 @@ export function VmScreen({vm, onBack}: {vm: VmView; onBack: () => void}) {
 		onError: (error) => toast.error(error.message),
 	})
 
-	// RDP hint (Windows only, informational). Reuses the already-shipped
-	// system.getIpAddresses query (settings-summary.tsx precedent) + vm.rdpPort.
-	const ipQ = trpcReact.system.getIpAddresses.useQuery(undefined, {enabled: vm.kind === 'windows'})
-	const rdpIp = ipQ.data?.[0]
-
 	return (
 		<div className='flex h-full w-full flex-col'>
-			{/* Header: back to list + name + honest state-derived title. */}
-			<div className='flex shrink-0 items-center gap-2 border-b border-border-default p-3'>
-				<Button size='sm' variant='ghost' onClick={onBack} aria-label={t('vm.screen.back')}>
-					<TbArrowLeft className='h-4 w-4' />
-					{t('vm.screen.back')}
-				</Button>
-				<TbDeviceDesktop className='h-4 w-4 shrink-0 text-text-secondary' />
-				<span className='truncate text-body-sm font-medium text-text-primary'>
-					{t('vm.screen.title', {name: vm.name})}
-				</span>
-			</div>
-
-			{/* Windows-only RDP hint — informational, never implies the screen below. */}
-			{vm.kind === 'windows' && vm.rdpPort && rdpIp ? (
-				<div className='shrink-0 border-b border-border-default bg-surface-1 px-3 py-2 text-caption text-text-tertiary'>
-					{t('vm.screen.rdp-hint', {ip: rdpIp, port: vm.rdpPort})}
+			{/* Header (Back + name + title): suppressed in a WINDOW (pure stream —
+			    the 356 window chrome already carries name + OS icon). Kept on the
+			    mobile in-panel path (pure false) so the user can return to the VM
+			    list. The Windows RDP hint block that used to sit below the header
+			    was REMOVED here in 358-01 (info-disclosure of the host LAN IP; it
+			    re-homes to the 359 settings/details surface). */}
+			{!pure && (
+				<div className='flex shrink-0 items-center gap-2 border-b border-border-default p-3'>
+					<Button size='sm' variant='ghost' onClick={onBack} aria-label={t('vm.screen.back')}>
+						<TbArrowLeft className='h-4 w-4' />
+						{t('vm.screen.back')}
+					</Button>
+					<TbDeviceDesktop className='h-4 w-4 shrink-0 text-text-secondary' />
+					<span className='truncate text-body-sm font-medium text-text-primary'>
+						{t('vm.screen.title', {name: vm.name})}
+					</span>
 				</div>
-			) : null}
+			)}
 
 			<div className='min-h-0 flex-1'>
 				{/* running: LivOS's own native RFB canvas + an honest status strip.

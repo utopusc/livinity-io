@@ -226,7 +226,6 @@
   "vm.screen.state.disconnected": "Connection lost.",
   "vm.screen.error.connection": "The screen ran into a connection problem.",
   "vm.screen.error.retry": "Retry",
-  "vm.screen.rdp-hint": "For full performance on Windows, connect a Remote Desktop client to {{ip}}:{{port}}.",
   "vm.resources.summary": "{{cpus}} vCPU · {{ram}} GB RAM · {{disk}} GiB disk",
   "vm.delete.confirm.title": "Delete {{name}}?",
   "vm.delete.confirm.description": "This permanently deletes the virtual machine and all of its data, including its disk. This action cannot be undone.",

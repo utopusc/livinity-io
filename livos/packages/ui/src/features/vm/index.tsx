@@ -22,13 +22,21 @@ import {VmList} from './components/vm-list'
 import {decideVmVisibility} from './decide-vm-visibility'
 import {useVmList} from './hooks/use-vm-list'
 
-export default function VmApp({initialRoute}: {initialRoute?: string}) {
+export default function VmApp({initialRoute, windowed}: {initialRoute?: string; windowed?: boolean}) {
 	const {isAdmin, isLoading, error, vms} = useVmList()
 	const [createOpen, setCreateOpen] = useState(false)
 	const visibility = decideVmVisibility({isLoading, isAdmin})
 	// Deep-link from a pinned VM Dock tile: /vm/<id> seeds the list straight into
 	// that VM's 353 screen (parse once here, thread the id down — no new routing).
 	const initialScreenVmId = initialRoute?.startsWith('/vm/') ? initialRoute.slice('/vm/'.length) : undefined
+	// Phase 358-01 (VMPURE-01) — a WINDOWED screen (windowId present) whose
+	// seeded VM resolves is a PURE stream: suppress VmApp's Create-VM header
+	// AND VmScreen's own Back/title (threaded via `pure`). Resolved against
+	// the SAME vms array VmList re-resolves against (no drift). Mobile
+	// in-panel / 357-desktop-icon-on-mobile have windowId ABSENT → windowed
+	// is false → pureScreen false → full chrome kept (no stranding).
+	const initialScreenVm = initialScreenVmId ? vms.find((v) => v.id === initialScreenVmId) : undefined
+	const pureScreen = !!windowed && !!initialScreenVm
 
 	if (visibility === 'loading') {
 		return <Loading />
@@ -57,13 +65,15 @@ export default function VmApp({initialRoute}: {initialRoute?: string}) {
 				<VmEmptyState onCreate={() => setCreateOpen(true)} />
 			) : (
 				<>
-					<div className='flex shrink-0 items-center justify-end border-b border-border-default p-3'>
-						<Button size='sm' variant='primary' onClick={() => setCreateOpen(true)}>
-							{t('vm.create.button')}
-						</Button>
-					</div>
+					{!pureScreen && (
+						<div className='flex shrink-0 items-center justify-end border-b border-border-default p-3'>
+							<Button size='sm' variant='primary' onClick={() => setCreateOpen(true)}>
+								{t('vm.create.button')}
+							</Button>
+						</div>
+					)}
 					<div className='min-h-0 flex-1 overflow-y-auto'>
-						<VmList vms={vms} initialScreenVmId={initialScreenVmId} />
+						<VmList vms={vms} initialScreenVmId={initialScreenVmId} pure={pureScreen} />
 					</div>
 				</>
 			)}

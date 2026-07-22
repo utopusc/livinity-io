@@ -35,7 +35,7 @@ import {VmScreen} from './vm-screen'
 
 type VmView = RouterOutput['vm']['list'][number]
 
-export function VmList({vms, initialScreenVmId}: {vms: VmView[]; initialScreenVmId?: string}) {
+export function VmList({vms, initialScreenVmId, pure}: {vms: VmView[]; initialScreenVmId?: string; pure?: boolean}) {
 	const windowManager = useWindowManagerOptional()
 	const isMobile = useIsMobile()
 	const [vmPendingDelete, setVmPendingDelete] = useState<VmView | null>(null)
@@ -46,7 +46,7 @@ export function VmList({vms, initialScreenVmId}: {vms: VmView[]; initialScreenVm
 	// elsewhere), fall back to the list.
 	const screenVm = screenVmId ? (vms.find((v) => v.id === screenVmId) ?? null) : null
 	if (screenVm) {
-		return <VmScreen vm={screenVm} onBack={() => setScreenVmId(null)} />
+		return <VmScreen vm={screenVm} onBack={() => setScreenVmId(null)} pure={pure} />
 	}
 
 	return (

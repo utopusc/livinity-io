@@ -226,7 +226,6 @@
   "vm.screen.state.disconnected": "Bağlantı kesildi.",
   "vm.screen.error.connection": "Ekranda bir bağlantı sorunu oluştu.",
   "vm.screen.error.retry": "Tekrar dene",
-  "vm.screen.rdp-hint": "Windows'ta tam performans için bir Uzak Masaüstü istemcisini {{ip}}:{{port}} adresine bağlayın.",
   "vm.resources.summary": "{{cpus}} vCPU · {{ram}} GB RAM · {{disk}} GiB disk",
   "vm.delete.confirm.title": "{{name}} silinsin mi?",
   "vm.delete.confirm.description": "Bu işlem, sanal makineyi ve diski dahil tüm verilerini kalıcı olarak siler. Bu işlem geri alınamaz.",
