@@ -177,9 +177,12 @@ describe('Delete is the last menu item and destructive (mirrors app-icon uninsta
 })
 
 describe('the compact live readout is running-gated (362 hook reuse)', () => {
-	it('reuses the running-gated useVmStats hook', () => {
+	it('reuses the running-gated useVmStats hook, opting OUT of the disk du (W-01 — wantDisk falsey)', () => {
 		const src = read(LIST_ITEM)
+		// Two-arg call: wantDisk falls back to its false default, so the compact row
+		// NEVER triggers a du shell-out. The heavier disk read stays in the dialog.
 		expect(src).toMatch(/useVmStats\(vm\.id,\s*vm\.state === 'running'\)/)
+		expect(src).not.toMatch(/useVmStats\([^)]*,\s*true\)/)
 	})
 
 	it('renders the readout ONLY for a running VM with stats', () => {

@@ -19,7 +19,7 @@
 //     the host-LAN-IP info-disclosure surface; this is a relocation, not a
 //     regression). (T-359-10)
 import {Cpu, HardDrive, MemoryStick} from 'lucide-react'
-import {useState} from 'react'
+import {useRef, useState} from 'react'
 import {TbLoader2} from 'react-icons/tb'
 import {toast} from 'sonner'
 
@@ -68,7 +68,9 @@ export function VmSettingsDialog({
 
 	// Phase 362 (VMSTATS-01): live per-VM usage — polled ONLY while this dialog is
 	// open on a running VM (stopped → no poll, honest allocated-only facts below).
-	const {stats, disk} = useVmStats(vm.id, vm.state === 'running')
+	// `open` is threaded as wantDisk (W-01) so the disk du fires ONLY while this
+	// dialog is actually open — a mounted-but-closed dialog pays no du.
+	const {stats, disk} = useVmStats(vm.id, vm.state === 'running', open)
 
 	// Editable resources, seeded from the VM's current allocation. Re-seeded on
 	// every open (handleOpenChange resets on close). cpus/ramMiB are freely
@@ -94,14 +96,23 @@ export function VmSettingsDialog({
 	const stopMut = trpcReact.vm.stop.useMutation()
 	const startMut = trpcReact.vm.start.useMutation()
 	const applying = applyPhase === 'stopping' || applyPhase === 'starting'
+	// I-01: synchronous re-entry latch. `applying` is derived from applyPhase state
+	// and only flips AFTER a re-render, leaving a micro-window where a fast
+	// double-click fires applyNow twice (two vm.stop calls) before the disabled prop
+	// propagates. The ref closes that window in the SAME tick. The honest ApplyPhase
+	// states are unchanged — this only rejects the duplicate re-entry.
+	const applyingRef = useRef(false)
 
 	const applyNow = async () => {
+		if (applyingRef.current) return
+		applyingRef.current = true
 		setApplyError(null)
 		setApplyPhase('stopping')
 		try {
 			await stopMut.mutateAsync({id: vm.id})
 		} catch (e) {
 			// VM is still running — honest error, the change was NOT applied.
+			applyingRef.current = false
 			setApplyPhase('error')
 			setApplyError((e as Error).message)
 			return
@@ -113,11 +124,13 @@ export function VmSettingsDialog({
 		} catch (e) {
 			// VM is stopped and the compose is written, but start did NOT resolve —
 			// honest error, NEVER an "applied" claim.
+			applyingRef.current = false
 			setApplyPhase('error')
 			setApplyError((e as Error).message)
 			return
 		}
 		utils.vm.list.invalidate()
+		applyingRef.current = false
 		setApplyPhase('done') // ONLY here — after start resolved — is the change live.
 		setRestartHint(null)
 	}
@@ -141,6 +154,7 @@ export function VmSettingsDialog({
 		setRestartHint(null)
 		setApplyPhase('idle')
 		setApplyError(null)
+		applyingRef.current = false // I-01: clear the re-entry latch on close/reset.
 	}
 
 	const handleOpenChange = (next: boolean) => {

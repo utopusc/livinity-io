@@ -100,6 +100,14 @@ describe('Apply-now applies pending edits via STOP+START, never composeRestart (
 		expect(firstError).toBeLessThan(doneClaim)
 	})
 
+	it('guards applyNow against a synchronous double-click re-entry (I-01 latch)', () => {
+		const src = read(DIALOG)
+		// A synchronous ref latch rejects a second applyNow before the ApplyPhase-derived
+		// `disabled` prop propagates (the derived `applying` only flips post-render).
+		expect(src).toMatch(/applyingRef/)
+		expect(src).toMatch(/if \(applyingRef\.current\) return/)
+	})
+
 	it('the Apply-now control is gated behind restartHint (only after a save that needs a restart)', () => {
 		const src = read(DIALOG)
 		// The apply key appears downstream of a restartHint gate in the render tree.
@@ -206,12 +214,23 @@ describe('useVmStats polls CPU/RAM but NOT disk (VMSTATS-01 cadence)', () => {
 		// Structural du-off-poll guarantee: the only refetchInterval in the whole hook is the stats poll.
 		expect((src.match(/refetchInterval/g) ?? []).length).toBe(1)
 	})
+
+	it('vm.diskUsage is AND-gated behind an explicit wantDisk opt-in (W-01 — du off the hot path)', () => {
+		const src = read(HOOK)
+		// wantDisk is a defaulted-false third param, so the compact row and a CLOSED
+		// dialog never trigger a du shell-out.
+		expect(src).toMatch(/wantDisk\s*=\s*false/)
+		// The disk query's enabled must AND-in wantDisk (never just `enabled`).
+		expect(src).toMatch(/diskUsage\.useQuery\([^)]*enabled:\s*enabled && wantDisk/)
+	})
 })
 
 describe('the Settings dialog shows live gauges for a running VM, allocated-only when stopped (VMSTATS-01)', () => {
-	it('sources live usage from the reusable useVmStats(vm.id, running) hook', () => {
+	it('sources live usage from the reusable useVmStats(vm.id, running, open) hook — disk du gated on open (W-01)', () => {
 		const src = read(DIALOG)
-		expect(src).toMatch(/useVmStats\(vm\.id,\s*vm\.state === 'running'\)/)
+		// The dialog passes its `open` state as wantDisk so the du fires ONLY while
+		// the dialog is actually open — a mounted-but-closed dialog pays no du.
+		expect(src).toMatch(/useVmStats\(vm\.id,\s*vm\.state === 'running',\s*open\)/)
 	})
 
 	it('the gauges render ONLY when the VM is running (honest stopped — no live-at-0% gauges) (T-362-08)', () => {
