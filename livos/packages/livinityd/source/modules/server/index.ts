@@ -1524,6 +1524,126 @@ class Server {
 					return
 				}
 
+				// ── VMENC vm-stream WS (strong-gated) START ── (Phase 364, VMENC-01)
+				// Hardware-encoded VM screen fan-out. STRONG gate — verifySessionFull
+				// + admin-role, byte-for-byte /vm/<id>/websockify (NOT the weaker
+				// verifyToken the member /ws/stream path uses; 353 CR-01 privilege-
+				// reversal lesson). Only ever attaches to a 'vm-fmp4' session (404
+				// otherwise — no crossover into a member fmp4/vnc session, no existence
+				// leak). Wires attachViewer/detachViewer so the 60s idle reaper frees
+				// the cap slot on disconnect (parity with the fmp4/vnc arms).
+				const vmStreamMatch = pathname.match(/^\/ws\/vm-stream\/([0-9a-f-]+)$/i)
+				if (vmStreamMatch) {
+					const streamId = vmStreamMatch[1]
+
+					// 1. Origin validation (Spoofing mitigation) — BEFORE the token
+					//    check, identical to /vm/<id>/websockify.
+					const vmStreamOrigin = request.headers.origin
+					if (vmStreamOrigin) {
+						const domainCfgRaw = await this.livinityd.ai.redis.get('livos:domain:config').catch(() => null)
+						let allowedDomain = ''
+						if (domainCfgRaw) {
+							const dc = JSON.parse(domainCfgRaw)
+							if (dc.active && dc.domain) allowedDomain = dc.domain
+						}
+						if (allowedDomain) {
+							const originHost = new URL(vmStreamOrigin).hostname
+							if (originHost !== allowedDomain && !originHost.endsWith('.' + allowedDomain)) {
+								this.logger.verbose(`WS vm-stream rejected: origin mismatch ${vmStreamOrigin}`)
+								socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+								socket.destroy()
+								return
+							}
+						}
+					}
+
+					// 2. Auth gate — token from ?token= query OR LIVINITY_SESSION
+					//    cookie, validated with verifySessionFull (signature+exp +
+					//    jti-revocation + active-user), NOT the weaker verifyToken (353
+					//    review WR-02). No/invalid token → 401. The whole vm.* API is
+					//    adminProcedure, so a userId-bearing member token (role !==
+					//    'admin') → 403 — byte-for-byte /vm/<id>/websockify's admin
+					//    posture (353 review CR-01). A legacy no-userId token is
+					//    single-user admin-equivalent.
+					let vmStreamToken = searchParams.get('token')
+					if (!vmStreamToken) {
+						const cookieHeader = request.headers.cookie || ''
+						const sessionMatch = cookieHeader.match(/LIVINITY_SESSION=([^;]+)/)
+						if (sessionMatch) vmStreamToken = sessionMatch[1]
+					}
+					if (!vmStreamToken) {
+						this.logger.verbose('WS vm-stream rejected: no token')
+						socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+						socket.destroy()
+						return
+					}
+					const vmStreamSession = await this.verifySessionFull(vmStreamToken).catch(() => null)
+					if (!vmStreamSession) {
+						this.logger.verbose('WS vm-stream rejected: invalid token')
+						socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+						socket.destroy()
+						return
+					}
+					if (vmStreamSession.userId && vmStreamSession.role !== 'admin') {
+						this.logger.verbose('WS vm-stream rejected: non-admin member')
+						socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+						socket.destroy()
+						return
+					}
+
+					// 3. StreamManager + session lookup. 503 if no manager. Only ever
+					//    attach to a 'vm-fmp4' session — a null session OR any other kind
+					//    (a member fmp4/vnc host-app stream) → 404 (NOT 403), so the VM
+					//    route can never cross into a member session and a
+					//    foreign/unknown streamId never leaks existence (STRIDE I).
+					const streamManager = this.livinityd.streamManager
+					if (!streamManager) {
+						this.logger.verbose(`WS vm-stream ${streamId} rejected: StreamManager not available`)
+						socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n')
+						socket.destroy()
+						return
+					}
+					const session = streamManager.getSession(streamId)
+					if (!session || session.kind !== 'vm-fmp4') {
+						this.logger.verbose(`WS vm-stream ${streamId} rejected: no vm-fmp4 session`)
+						socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
+						socket.destroy()
+						return
+					}
+
+					// 4. Upgrade → attachWsHeartbeat + addSubscriber + attachViewer; on
+					//    close/error → detachViewer + fanout.removeSubscriber (mirrors
+					//    the /ws/stream fmp4 arm — the idle reaper frees the cap slot on
+					//    a tab crash / navigate-away).
+					const vmStreamWss = new WebSocketServer({noServer: true})
+					vmStreamWss.handleUpgrade(request, socket, head, (ws) => {
+						vmStreamWss.close()
+						ws.binaryType = 'nodebuffer'
+						attachWsHeartbeat(ws)
+						const ok = streamManager.addSubscriber(streamId, ws)
+						if (!ok) {
+							this.logger.verbose(`WS vm-stream ${streamId}: addSubscriber returned false (race?)`)
+							ws.close(1011, 'stream gone')
+							return
+						}
+						streamManager.attachViewer(streamId)
+						ws.on('close', () => {
+							streamManager.detachViewer(streamId)
+							const fanout = streamManager.getFanout(streamId)
+							if (fanout) fanout.removeSubscriber(ws)
+						})
+						ws.on('error', (err) => {
+							this.logger.error(`WS vm-stream ${streamId}: client error`, err)
+							streamManager.detachViewer(streamId)
+							const fanout = streamManager.getFanout(streamId)
+							if (fanout) fanout.removeSubscriber(ws)
+						})
+					})
+
+					return
+				}
+				// ── VMENC vm-stream WS END ──
+
 				// ── Phase 93 — Streaming Subsystem WS Endpoint ────────────
 				// /ws/stream/<streamId> attaches a browser to the StreamManager's
 				// per-stream Fmp4Fanout. JWT-from-query auth (LIVINITY_SESSION
