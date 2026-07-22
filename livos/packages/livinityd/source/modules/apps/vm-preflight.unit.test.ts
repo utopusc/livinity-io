@@ -12,6 +12,7 @@ import {
 	VmResourceInvalid,
 	parseSizeToBytes,
 	vmResourceVerdict,
+	vmResizeVerdict,
 	probeHostCapacity,
 	assertVmResourcesSane,
 } from './vm-preflight.js'
@@ -117,6 +118,39 @@ describe('vmResourceVerdict (#6 foot-gun guard)', () => {
 	})
 	test('fail-closed: zero free space refuses any positive disk request', () => {
 		expect(vmResourceVerdict({DISK_SIZE: '1G'}, {...host, diskFreeBytes: 0})).toMatch(/disk/i)
+	})
+})
+
+// Phase 359 (VMSET-01): the resize gate — grow-only disk + delta-credited host
+// capacity, delegating the load-bearing RAM/CPU/disk bound to vmResourceVerdict.
+describe('vmResizeVerdict (VMSET-01 — grow-only + delta-credited capacity)', () => {
+	// 16G RAM, 8 cores; 30G free (used across the disk-credit cases below).
+	const host = {totalMemBytes: 16 * 1024 ** 3, cpuCount: 8, diskFreeBytes: 30 * 1024 ** 3}
+	const cur = {cpus: 2, ramMiB: 2048, diskGiB: 40}
+
+	test('(a) shrinking diskGiB → non-null grow-only refusal (before any capacity math)', () => {
+		const r = vmResizeVerdict(cur, {cpus: 2, ramMiB: 2048, diskGiB: 20}, host)
+		expect(r).toMatch(/grow/i)
+		expect(r).toContain('20G')
+		expect(r).toContain('40G')
+	})
+	test('(b) a grow whose DELTA fits free+credited space → allow (null)', () => {
+		// current 40G already occupies its space → credited back: free 30G + 40G = 70G;
+		// proposed 60G total ≤ 70G → allowed even though 60G > the raw 30G free.
+		expect(vmResizeVerdict(cur, {cpus: 2, ramMiB: 2048, diskGiB: 60}, host)).toBeNull()
+	})
+	test('(c) a grow whose DELTA exceeds free+credited space → refuse', () => {
+		// free 30G + credited 40G = 70G; proposed 200G > 70G → refuse.
+		expect(vmResizeVerdict(cur, {cpus: 2, ramMiB: 2048, diskGiB: 200}, host)).toMatch(/disk/i)
+	})
+	test('(d) RAM over 0.9*host → refuse (delegated to vmResourceVerdict)', () => {
+		expect(vmResizeVerdict(cur, {cpus: 2, ramMiB: 20 * 1024, diskGiB: 40}, host)).toMatch(/exceeds this box/i)
+	})
+	test('(e) CPU over host cores → refuse (delegated)', () => {
+		expect(vmResizeVerdict(cur, {cpus: 64, ramMiB: 2048, diskGiB: 40}, host)).toMatch(/cores/i)
+	})
+	test('(f) an in-bounds no-op (proposed === current) → allow (null)', () => {
+		expect(vmResizeVerdict(cur, {...cur}, host)).toBeNull()
 	})
 })
 

@@ -17,7 +17,7 @@ vi.mock('execa', () => ({
 	},
 }))
 
-const {dockerInspectStatus, renderVmCompose} = await import('./vm-docker.js')
+const {dockerInspectStatus, renderVmCompose, extractOsRenderInputs} = await import('./vm-docker.js')
 
 test('dockerInspectStatus returns the mocked container status (trimmed)', async () => {
 	dockerState.set('vm-abc', {status: 'running'})
@@ -154,6 +154,61 @@ test('renderVmCompose WITHOUT a bootFileMount leaves volumes byte-unchanged (URL
 		osEnv: {BOOT: 'https://cdn.example/boot.iso'},
 	})
 	expect(rendered.services.vm.volumes).toEqual(['/data/vm-data/url/storage:/storage'])
+})
+
+// ── Phase 359 (VMSET-01): extractOsRenderInputs — recover the RAW osEnv/bootFileMount
+// from an already-rendered compose so vm.update can re-render WITHOUT dropping the OS.
+test('extractOsRenderInputs (windows) recovers VERSION from a rendered compose', () => {
+	const rendered = renderVmCompose(WINDOWS_VM_TEMPLATE, {
+		id: 'ex-w',
+		dataDir: '/data/vm-data/ex-w',
+		novncPort: 16110,
+		rdpPort: 16210,
+		resources: {cpus: 2, ramMiB: 4096, diskGiB: 64},
+		osEnv: {VERSION: '10'},
+	})
+	expect(extractOsRenderInputs(rendered, 'windows').osEnv.VERSION).toBe('10')
+})
+
+test('extractOsRenderInputs (linux) un-escapes a $-bearing BOOT and round-trips idempotently (no $$$$)', () => {
+	const raw = 'https://cdn.example/boot.iso?sig=$2b$abc'
+	const rendered: any = renderVmCompose(LINUX_VM_TEMPLATE, {
+		id: 'ex-l',
+		dataDir: '/data/vm-data/ex-l',
+		novncPort: 16111,
+		resources: {cpus: 2, ramMiB: 2048, diskGiB: 16},
+		osEnv: {BOOT: raw},
+	})
+	// The rendered compose has the value $-escaped ('$' → '$$').
+	expect(rendered.services.vm.environment.BOOT).toContain('$$')
+	// extractOsRenderInputs un-escapes it back to the RAW value.
+	const recovered = extractOsRenderInputs(rendered, 'linux')
+	expect(recovered.osEnv.BOOT).toBe(raw)
+	// Re-rendering with the recovered raw osEnv escapes exactly once — byte-identical
+	// to the first render's escaped value (never double-escaped to '$$$$').
+	const reRendered: any = renderVmCompose(LINUX_VM_TEMPLATE, {
+		id: 'ex-l',
+		dataDir: '/data/vm-data/ex-l',
+		novncPort: 16111,
+		resources: {cpus: 2, ramMiB: 2048, diskGiB: 16},
+		osEnv: recovered.osEnv,
+	})
+	expect(reRendered.services.vm.environment.BOOT).toBe(rendered.services.vm.environment.BOOT)
+	expect(reRendered.services.vm.environment.BOOT).not.toContain('$$$$')
+})
+
+test('extractOsRenderInputs (linux) recovers a bootFileMount from a /boot.<ext> volume', () => {
+	const rendered = renderVmCompose(LINUX_VM_TEMPLATE, {
+		id: 'ex-b',
+		dataDir: '/data/vm-data/ex-b',
+		novncPort: 16112,
+		resources: {cpus: 2, ramMiB: 2048, diskGiB: 16},
+		osEnv: {},
+		bootFileMount: {hostFileName: 'custom.iso', containerPath: '/boot.iso'},
+	})
+	const recovered = extractOsRenderInputs(rendered, 'linux')
+	expect(recovered.bootFileMount?.hostFileName).toBe('custom.iso')
+	expect(recovered.bootFileMount?.containerPath).toBe('/boot.iso')
 })
 
 test('renderVmCompose (linux, no rdpPort) emits ONLY the noVNC port + preserves BOOT default', () => {
