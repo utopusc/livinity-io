@@ -165,8 +165,12 @@ export const DEFAULT_WINDOW_SIZES: Record<string, Size> = {
 	'LIVINITY_ai-chat': {width: 1300, height: 850},
 	'LIVINITY_docker': {width: 1400, height: 900},
 	'LIVINITY_my-devices': {width: 900, height: 650},
-	// Phase 352-01 — wider than My-devices to fit an OS/resources column layout.
-	'LIVINITY_vm': {width: 1100, height: 750},
+	// Phase 360-01 (VMFIT-01) — aligned to the SAME 16:9 {1280,720} as the
+	// openWindow isVm arm. The isVm branch shadows this lookup for LIVINITY_vm,
+	// so it's a defensive fallback only: never a non-16:9 value that could skew
+	// scaleViewport's pointer mapping. (Pre-360 this was {1100,750} for the
+	// 352-01 OS/resources list layout; the responsive clamp handles the list fine at 16:9.)
+	'LIVINITY_vm': {width: 1280, height: 720},
 	'LIVINITY_subagents': {width: 950, height: 650},
 	'LIVINITY_schedules': {width: 950, height: 650},
 	'LIVINITY_terminal': {width: 900, height: 600},
@@ -495,6 +499,18 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		// DEFAULT_WINDOW_SIZES.default {900,600} with no aspect preservation,
 		// which letterboxed the browser-stream and opened too small.
 		const isShortcut = isShortcutKind(appId)
+		// Phase 360 (VMFIT-01) — the VM screen window (LIVINITY_vm) is a live
+		// noVNC stream exactly like a WebApp/native window, so it must open at the
+		// SAME 16:9 base + aspect-preserved clamp. Pre-360 it fell through to the
+		// fixed non-16:9 DEFAULT_WINDOW_SIZES['LIVINITY_vm'] {1100,750}, whose
+		// aspect mismatch skewed noVNC's scaleViewport pointer-coordinate mapping
+		// (the reported "mouse lag", investigation Q3) AND gave the window a
+		// different shape than the webapp stream (Q4). One flag fixes both. VM has
+		// one exact appId (not a prefix family), so an equality check, not startsWith.
+		// No guest-resolution API exists server-side (unlike DISPLAY_*, which pass a
+		// real `suggested` WxH), so an exact 1:1 isn't possible — 16:9 closes most of
+		// the gap with zero backend and zero caller changes (no VM site passes `suggested`).
+		const isVm = appId === 'LIVINITY_vm'
 		// Native windows are sized a touch larger (+2px each axis) so that the
 		// CONTENT area, once the 1px window border is subtracted on each side, is
 		// exactly the 1280x720 16:9 stream — otherwise the noVNC canvas letterboxes
@@ -502,10 +518,10 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		// inner resolution, "bir tık büyük"). WebApp keeps its exact 1280x720.
 		const baseSize = suggested ?? (isNative
 			? {width: 1282, height: 722}
-			: (isWebApp || isShortcut)
+			: (isWebApp || isShortcut || isVm)
 				? {width: 1280, height: 720}
 				: (DEFAULT_WINDOW_SIZES[appId] || DEFAULT_WINDOW_SIZES.default))
-		const size = getResponsiveSize(baseSize.width, baseSize.height, isWebApp || isNative || isDisplay || isShortcut || suggested != null)
+		const size = getResponsiveSize(baseSize.width, baseSize.height, isWebApp || isNative || isDisplay || isShortcut || isVm || suggested != null)
 		// Use current state.windows.length at call time, not as dependency
 		const windowCount = state.windows.length
 
