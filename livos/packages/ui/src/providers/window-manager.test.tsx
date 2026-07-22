@@ -181,7 +181,10 @@ describe('window-manager — Phase 290 INV-2 shortcut window size', () => {
     it('gives a shortcut the SAME 1280x720 base as a webapp (isWebApp || isShortcut arm)', () => {
         // The 1280x720 baseSize arm must fire for shortcuts too, not just
         // webapps — otherwise a shortcut falls through to the default lookup.
-        expect(SRC).toMatch(/\(isWebApp \|\| isShortcut\)\s*\n\s*\? \{width: 1280, height: 720\}/)
+        // Phase 360 widened this to tolerate any additional OR-kinds after
+        // isShortcut (it added `|| isVm`) — the arm's intent (shortcut → 1280x720)
+        // is preserved regardless of later OR-siblings.
+        expect(SRC).toMatch(/\(isWebApp \|\| isShortcut[^)]*\)\s*\n\s*\? \{width: 1280, height: 720\}/)
     })
 
     it('preserves aspect for shortcuts (isShortcut threaded into getResponsiveSize)', () => {
@@ -206,6 +209,48 @@ describe('window-manager — Phase 290 INV-2 shortcut window size', () => {
         expect(defaultIdx).toBeGreaterThan(-1)
         expect(shortcutIdx).toBeLessThan(defaultIdx)
     })
+})
+
+// Phase 360 (VMFIT-01) — the VM screen window (LIVINITY_vm) must open at the
+// SAME 1280x720 16:9 aspect-preserved size as a WebApp/native stream window.
+// Pre-360 it fell through to the fixed non-16:9 {1100,750} with
+// preserveAspect=false, which (per investigation Q3/Q4) both shaped the
+// window differently AND skewed noVNC's scaleViewport pointer mapping (the
+// reported "mouse lag"). Source-text invariants — each FAILS against pre-360
+// code (no isVm flag, VM not in the 1280x720 arm, VM not in the clamp).
+describe('window-manager — Phase 360 VMFIT VM screen window size', () => {
+	it('derives isVm from the exact LIVINITY_vm appId (equality, not a prefix)', () => {
+		expect(SRC).toMatch(/const isVm = appId === 'LIVINITY_vm'/)
+	})
+
+	it('gives the VM window the SAME 1280x720 base as a webapp (isWebApp || isShortcut || isVm arm)', () => {
+		// The 1280x720 baseSize arm must fire for the VM window too, BEFORE the
+		// DEFAULT_WINDOW_SIZES[appId] fallback — otherwise it falls through to
+		// the old non-16:9 default.
+		expect(SRC).toMatch(/\(isWebApp \|\| isShortcut \|\| isVm\)\s*\n\s*\? \{width: 1280, height: 720\}/)
+	})
+
+	it('preserves aspect for the VM window (isVm threaded into getResponsiveSize)', () => {
+		// isVm must be in the preserveAspect OR-chain so the 1280x720 base is
+		// clamped 16:9 — the mechanism that shrinks scaleViewport's pointer skew.
+		expect(SRC).toMatch(/getResponsiveSize\([^)]*isVm[^)]*suggested != null\)/)
+	})
+
+	it('does NOT let the VM window fall through to the default {900,600} (isVm before the default fallback)', () => {
+		// Regression-lock the divergence: isVm must appear textually BEFORE the
+		// DEFAULT_WINDOW_SIZES.default fallback in the baseSize selection.
+		const baseSizeBlock = SRC.match(/const baseSize = suggested \?\?[\s\S]*?DEFAULT_WINDOW_SIZES\.default\)\)/)
+		expect(baseSizeBlock).not.toBeNull()
+		const body = baseSizeBlock![0]
+		expect(body.indexOf('isVm')).toBeGreaterThanOrEqual(0)
+		expect(body.indexOf('isVm')).toBeLessThan(body.indexOf('DEFAULT_WINDOW_SIZES.default'))
+	})
+
+	it('aligns the shadowed DEFAULT_WINDOW_SIZES[LIVINITY_vm] entry to 16:9 (no non-16:9 value survives)', () => {
+		// Belt-and-suspenders: the isVm arm fires first, but if it's ever removed
+		// the fallback must still be 16:9 — never the pre-360 {1100,750}.
+		expect(DEFAULT_WINDOW_SIZES['LIVINITY_vm']).toEqual({width: 1280, height: 720})
+	})
 })
 
 // Phase 260-05 (SC6) — hydrate reconciliation against displays.list.
