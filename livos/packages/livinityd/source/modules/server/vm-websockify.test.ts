@@ -17,13 +17,17 @@ import {join} from 'node:path'
 const serverSource = readFileSync(join(import.meta.dirname, 'index.ts'), 'utf-8')
 
 describe('/vm/:id/websockify WebSocket-to-WebSocket bridge handler (auth tripwire)', () => {
-	it('branch exists and matches the dockur WS endpoint allowlist (websockify|status|audio)', () => {
-		// Fix-forward 2026-07-22: the dockur/qemus viewer opens /websockify (VNC) AND
-		// /status (install-progress; reload-loops if unroutable) AND /audio — the
-		// bridge covers all three under the SAME admin gate, preserving the endpoint.
-		expect(serverSource).toContain('const vmWsMatch = pathname.match(/^\\/vm\\/([^/]+)\\/(websockify|status|audio)$/)')
+	it('branch exists and matches the websockify-ONLY allowlist (Phase 355 VMVNC-03 narrowing)', () => {
+		// Phase 355 (VMVNC-03): the beta.5 {websockify,status,audio} widening was
+		// dropped once 355-01 replaced the dockur/qemus viewer iframe with LivOS's
+		// own native RFB client, which speaks ONLY /websockify. /status and /audio
+		// now have ZERO repo consumers, so the matcher is narrowed to /websockify.
+		expect(serverSource).toContain('const vmWsMatch = pathname.match(/^\\/vm\\/([^/]+)\\/websockify$/)')
 		expect(serverSource).toContain('if (vmWsMatch)')
-		expect(serverSource).toContain('const vmWsEndpoint = vmWsMatch[2]')
+		// The dockur-page-only {status,audio} alternation MUST be gone (re-widening
+		// requires a fresh consumer + security review — see the branch doc comment).
+		expect(serverSource).not.toContain('(websockify|status|audio)')
+		expect(serverSource).not.toContain('const vmWsEndpoint = vmWsMatch[2]')
 	})
 
 	it('(a) Origin check runs BEFORE the token check', () => {
@@ -91,8 +95,8 @@ describe('/vm/:id/websockify WebSocket-to-WebSocket bridge handler (auth tripwir
 	it('(e) bridge target is built ONLY from vm.novncPort (registry), never request input', () => {
 		const block = extractVmWsBlock(serverSource)
 		// The upstream URL is loopback + the registry-sourced novncPort; the endpoint
-		// (websockify|status|audio) comes from the vetted allowlist match, not raw input.
-		expect(block).toContain('ws://127.0.0.1:${vmView.novncPort}/${vmWsEndpoint}')
+		// is the fixed /websockify literal (Phase 355 narrowing), never raw input.
+		expect(block).toContain('ws://127.0.0.1:${vmView.novncPort}/websockify')
 		// The id is UUID-validated before the registry lookup (SSRF discipline).
 		expect(block).toMatch(/VM_ID_RE\.test\(vmId\)/)
 		// The target host is a hardcoded loopback literal — never derived from

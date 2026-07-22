@@ -811,48 +811,41 @@ ${WS_TRANSPORT_BODY}
 \t}`
 
 /**
- * Phase 353-01 (VMVIEW-01) — the VM noVNC screen path-proxy handle pair.
+ * Phase 355 (VMVNC-03) — the VM screen WS-bridge handle (websockify-ONLY).
  *
- * A running dockur/qemus VM publishes its built-in noVNC web UI on a
+ * A running dockur/qemus VM publishes its VNC-over-WS `/websockify` endpoint on a
  * loopback-only host port (`novncPort` in [16100,16200), 350 compose invariant).
- * These two STATIC handles make it reachable in the browser behind the EXISTING
- * forward_auth gate under the main host at `/vm/<id>/*`, WITHOUT any per-VM
- * Caddyfile regeneration (the id → port resolution happens in the Express
- * `/vm/:id` proxy, not here — so VM create/delete/rename triggers ZERO regen).
+ * LivOS's OWN native RFB client (355-01) connects to it through the Express
+ * `/vm/<id>/websockify` upgrade bridge — the id → port resolution happens there,
+ * not here, so VM create/delete/rename triggers ZERO Caddyfile regen.
  *
- * WS leg carved out FIRST (mirrors @webapp_stream_ws-before-@liv_ws): noVNC's
- * `/websockify` endpoint is a WebSocket server; a forward_auth on that leg would
- * hijack the Upgrade subrequest at :8080/auth/verify → 502 (the documented
- * e336afdd/@liv_ws regression). The WS leg is therefore UNCONDITIONAL at Caddy
- * and gated instead at the Express `/vm/:id/websockify` upgrade handler
- * (Origin + verifyToken — mirrors /ws/desktop). This is the load-bearing seam.
+ * NO forward_auth on this WS leg (mirrors @webapp_stream_ws-before-@liv_ws): a
+ * forward_auth subrequest inherits Upgrade:websocket and livinityd's
+ * server.on('upgrade') hijacks it at :8080/auth/verify → 502 (the documented
+ * e336afdd/@liv_ws regression). The leg is therefore UNCONDITIONAL at Caddy and
+ * gated instead at the Express `/vm/:id/websockify` upgrade handler
+ * (Origin + verifySessionFull + admin-role — the 353 gate). Load-bearing seam.
  *
- * Gated GET/asset leg reuses LIV_GATE_BODY (byte-for-byte — a future gate edit
- * must not drift) + FRAME_EMBED_STRIP (so the noVNC page iframe-embeds in the
- * shell). Deliberately NO `uri strip_prefix /vm`: the Express proxy does its own
- * id-scoped pathRewrite (unlike /liv's fixed-literal strip). NEVER add
- * `copy_headers Cookie` (clobbers LIVINITY_SESSION — memory pitfall). The
- * LIV_GATE_BODY redir is ABSOLUTE (relative redir does not terminate
- * forward_auth — LIVOS-041/386b33e7).
+ * Phase 355 NARROWED the matcher to the `/vm/<id>/websockify` path ONLY. The beta.5 widening
+ * to {websockify,status,audio} existed SOLELY to service dockur's bundled viewer
+ * page (which auto-opened /status install-progress + /audio). 355-01 replaced
+ * that page's iframe with our native RFB client, which speaks ONLY /websockify —
+ * /status + /audio have ZERO consumers now, and the whole forward_auth-gated
+ * @vm_screen HTTP page-proxy handle was REMOVED with the iframe. A plain
+ * non-Upgrade GET to /vm/* no longer matches (Upgrade header required, WR-01) and
+ * has no @vm_screen handle → it falls through to the site default (no container
+ * proxy): a strictly SMALLER surface than the removed admin-gated-but-reachable
+ * page-proxy. Do NOT re-widen without a fresh consumer + security review.
  */
 const VM_SCREEN_WS_HANDLE = `\t@vm_screen_ws {
-\t\tpath /vm/*/websockify /vm/*/status /vm/*/audio
+\t\tpath /vm/*/websockify
 \t\theader Connection *Upgrade*
 \t\theader Upgrade websocket
 \t}
 \thandle @vm_screen_ws {
-\t\t# Phase 353-01 (VMVIEW-01): NO forward_auth on the VM noVNC WS leg. forward_auth's auth subrequest inherits Upgrade:websocket; livinityd's server.on('upgrade') hijacks it at :8080/auth/verify (Express route never runs) -> socket reset -> 502 (documented e336afdd/@liv_ws regression). Gated instead at the Express /vm/:id/websockify upgrade handler (Origin + verifySessionFull + admin-role, mirrors /ws/desktop).
-\t\t# Phase 353 review WR-01: the matcher requires the Upgrade:websocket header (not path-only) so ONLY a real WS upgrade takes this UNGATED leg. A plain GET /vm/<id>/websockify (no Upgrade header) does NOT match here -> falls through to the forward_auth-gated @vm_screen (path /vm/*), closing the unauthenticated reach past the broad Express /vm/:id HTTP proxy.
+\t\t# Phase 353-01 (VMVIEW-01): NO forward_auth on the VM screen WS leg. forward_auth's auth subrequest inherits Upgrade:websocket; livinityd's server.on('upgrade') hijacks it at :8080/auth/verify (Express route never runs) -> socket reset -> 502 (documented e336afdd/@liv_ws regression). Gated instead at the Express /vm/:id/websockify upgrade handler (Origin + verifySessionFull + admin-role, mirrors /ws/desktop).
+\t\t# Phase 353 review WR-01: the matcher requires the Upgrade:websocket header (not path-only) so ONLY a real WS upgrade takes this UNGATED leg. Phase 355 (VMVNC-03) narrowed the path to /vm/*/websockify ONLY (native RFB client; /status+/audio were dockur-page-only, removed with the iframe) and deleted the forward_auth-gated @vm_screen HTTP page-proxy handle: a plain non-Upgrade GET /vm/* now falls through to the site default (no container proxy) — strictly smaller than the removed reachable proxy.
 \t\treverse_proxy 127.0.0.1:8080 {
-${WS_TRANSPORT_BODY}
-\t\t}
-\t}`
-
-const VM_SCREEN_HANDLE = `\t@vm_screen path /vm /vm/*
-\thandle @vm_screen {
-${LIV_GATE_BODY}
-\t\treverse_proxy 127.0.0.1:8080 {
-${FRAME_EMBED_STRIP}
 ${WS_TRANSPORT_BODY}
 \t\t}
 \t}`
@@ -896,7 +889,6 @@ ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_CLI_INSTALLER_HANDLE}
 ${VM_SCREEN_WS_HANDLE}
-${VM_SCREEN_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 ${LIV_LOGIN_HANDLE}
 	handle {
@@ -935,7 +927,6 @@ ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_CLI_INSTALLER_HANDLE}
 ${VM_SCREEN_WS_HANDLE}
-${VM_SCREEN_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 ${LIV_LOGIN_HANDLE}
 	handle {
@@ -996,7 +987,6 @@ ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_CLI_INSTALLER_HANDLE}
 ${VM_SCREEN_WS_HANDLE}
-${VM_SCREEN_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 ${LIV_LOGIN_HANDLE}
 	handle {

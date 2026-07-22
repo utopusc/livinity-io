@@ -938,95 +938,15 @@ class Server {
 			}
 		})
 
-		// ── VM noVNC screen proxy (Phase 353-01, VMVIEW-01) ─────────────────
-		// Routes /vm/<id>/* to the VM's loopback noVNC port (container 8006 →
-		// host novncPort in [16100,16200), 350 compose invariant). Mirrors the
-		// /app/:appId proxy above. The HTTP/asset leg is forward_auth-gated at
-		// Caddy (@vm_screen) AND defense-in-depth by the apex session gate; the
-		// WS leg (/vm/:id/websockify) is handled MANUALLY in the upgrade handler
-		// (Caddy routes it unconditionally — @vm_screen_ws — so Express is its
-		// sole auth gate). WS is DISABLED on this middleware, exactly like /app.
-		//
-		// SSRF/port-confusion discipline (T-353-02): `:id` is UUID-validated
-		// BEFORE any lookup (404, never 500, on a non-UUID); the target port
-		// comes ONLY from the range-checked registry, never from client input.
-		const vmProxyCache = new Map<string, ReturnType<typeof createProxyMiddleware>>()
-
-		this.app.use('/vm/:id', async (request, response, next) => {
-			const id = request.params.id
-
-			try {
-				// Phase 353 review CR-01/WR-02 — ADMIN-ONLY gate, fail-closed BEFORE
-				// any registry probe. Every vm.* procedure is adminProcedure and the
-				// screen is the most powerful VM capability, so it MUST match that
-				// posture. Do NOT rely on Caddy forward_auth here: /auth/verify is
-				// logged-in-only (admits ANY active member), and on multi-user
-				// per-user subdomains the apex session gate early-returns, so this
-				// Express proxy is the real gate. Resolve the session with
-				// verifySessionFull (signature+exp + jti-revocation + active-user —
-				// same strength as the GET gate's /auth/verify), then mirror
-				// adminProcedure's admin determination (is-authenticated.ts): a
-				// userId-bearing (multi-user) token requires role === 'admin'; a
-				// legacy no-userId token is single-user admin-equivalent.
-				const authToken = request.headers.authorization?.split(' ')[1] ?? request.cookies?.LIVINITY_SESSION
-				const vmScreenSession = authToken ? await this.verifySessionFull(authToken) : null
-				if (!vmScreenSession || (vmScreenSession.userId && vmScreenSession.role !== 'admin')) {
-					this.logger.verbose(`VM proxy: forbidden (non-admin/unauthenticated) for ${id}`)
-					return response.status(403).json({error: 'forbidden'})
-				}
-
-				// Validate UUID shape BEFORE the registry lookup (mirrors the
-				// z.string().uuid() discipline every vm.* procedure uses). A
-				// non-UUID id → 404 (NOT 500): path-traversal/SSRF via the id.
-				if (!VM_ID_RE.test(id)) {
-					this.logger.verbose(`VM proxy: non-UUID id rejected: ${id}`)
-					return response.status(404).json({error: 'not found'})
-				}
-
-				const vm = await this.livinityd.vm.get(id)
-				if (!vm) {
-					this.logger.verbose(`VM proxy: VM ${id} not found`)
-					return response.status(404).json({error: 'not found'})
-				}
-
-				// Known but not running → honest 409 the UI can map to a start
-				// affordance (VMVIEW-02: never a wrong-port proxy, never a blank
-				// success). novncPort is always allocated; readiness is the state.
-				if (vm.state !== 'running') {
-					this.logger.verbose(`VM proxy: VM ${id} not running (state=${vm.state})`)
-					return response.status(409).json({error: 'vm-not-running', state: vm.state})
-				}
-
-				// Cache the proxy per id (port is stable per VM: allocated at
-				// create, released at delete). The target port is registry-sourced.
-				let proxy = vmProxyCache.get(id)
-				if (!proxy) {
-					this.logger.log(`VM proxy: Creating proxy for ${id} -> 127.0.0.1:${vm.novncPort}`)
-					proxy = createProxyMiddleware({
-						target: `http://127.0.0.1:${vm.novncPort}`,
-						changeOrigin: true,
-						// ws disabled — WS upgrades handled manually in upgrade handler.
-						// pathRewrite MUST strip the full /vm/<id> prefix or the noVNC
-						// page's root-relative assets 404 → blank frame (VMVIEW-02 forbids).
-						pathRewrite: (path) => path.replace(`/vm/${id}`, '') || '/',
-						logProvider: () => ({
-							log: this.logger.verbose,
-							debug: this.logger.verbose,
-							info: this.logger.verbose,
-							warn: this.logger.verbose,
-							error: this.logger.error,
-						}),
-					})
-					vmProxyCache.set(id, proxy)
-				}
-
-				this.logger.verbose(`VM proxy: Routing /vm/${id} to 127.0.0.1:${vm.novncPort}`)
-				return proxy(request, response, next)
-			} catch (error) {
-				this.logger.error(`VM proxy error for ${id}:`, error)
-				return next(error)
-			}
-		})
+		// ── VM noVNC screen surface (Phase 355, VMVNC-03) ───────────────────
+		// The dead /vm/:id HTTP page-proxy (353-01) was REMOVED here: 355-01
+		// replaced the dockur/qemus-page <iframe src=/vm/<id>/> with LivOS's own
+		// native RFB canvas, which speaks ONLY the gated /vm/<id>/websockify WS
+		// bridge (handled MANUALLY in the upgrade handler below). No repo consumer
+		// of the HTTP asset leg remains (355-01 grep-swept), so the whole
+		// middleware + its vmProxyCache are gone — a strictly smaller surface. The
+		// WS bridge below is the sole VM-screen server surface and its own auth
+		// gate. VM_ID_RE (WS UUID guard) + createProxyMiddleware (/app proxy) stay.
 
 		// Handle WebSocket upgrade requests
 		// We add a single upgrade handler for all WebSocket servers and check
@@ -1333,19 +1253,20 @@ class Server {
 				// the documented e336afdd regression), so Express is the SOLE gate
 				// here (T-353-01). Steps 1-2 mirror /ws/desktop verbatim; step 3
 				// is the VmRegistry lookup. No new auth mechanism.
-				// Fix-forward 2026-07-22 (live beta finding): the dockur/qemus viewer
-				// opens MULTIPLE websockets from its root page — /websockify (VNC),
-				// /status (install-progress; its onerror does window.location.reload()
-				// → a reload LOOP if the WS is unroutable), and /audio. All three are
-				// same-origin subresources of the already-admin-gated screen, so this
-				// bridge covers the full allowlist and preserves the endpoint so the
-				// container's own nginx (novncPort=8006) routes each to its backend
-				// (websockify→5700, status→8004, audio→8003). The auth gate below is
-				// IDENTICAL for every endpoint (no per-endpoint weakening).
-				const vmWsMatch = pathname.match(/^\/vm\/([^/]+)\/(websockify|status|audio)$/)
+				// Phase 355 (VMVNC-03) NARROWED this matcher to /websockify-ONLY.
+				// The beta.5 widening to {websockify,status,audio} existed ONLY to
+				// service the dockur/qemus bundled viewer page, which auto-opened
+				// /status (install-progress; its onerror did window.location.reload()
+				// → a reload LOOP) and /audio from its root page. 355-01 replaced
+				// that iframe with LivOS's own native RFB client, which speaks ONLY
+				// /websockify — /status and /audio now have ZERO repo consumers
+				// (grep-swept), so they are dropped from BOTH this regex and the
+				// Caddy @vm_screen_ws matcher (same commit). Do NOT re-widen without
+				// a fresh consumer + security review. The auth gate below is
+				// byte-for-byte the 353 gate — only this matcher narrowed.
+				const vmWsMatch = pathname.match(/^\/vm\/([^/]+)\/websockify$/)
 				if (vmWsMatch) {
 					const vmId = vmWsMatch[1]
-					const vmWsEndpoint = vmWsMatch[2]
 
 					// 1. Origin validation (Spoofing mitigation) — BEFORE the token
 					//    check, identical to /ws/desktop.
@@ -1434,7 +1355,7 @@ class Server {
 					// 4. WS-to-WS bridge to the container's loopback /websockify.
 					//    No LIV_API_KEY header — loopback, container has no auth (the
 					//    gate in front of it is THIS branch). Mirrors the voice proxy.
-					const vmUpstream = new WebSocket(`ws://127.0.0.1:${vmView.novncPort}/${vmWsEndpoint}`)
+					const vmUpstream = new WebSocket(`ws://127.0.0.1:${vmView.novncPort}/websockify`)
 					const vmProxyWss = new WebSocketServer({noServer: true})
 
 					vmUpstream.on('open', () => {

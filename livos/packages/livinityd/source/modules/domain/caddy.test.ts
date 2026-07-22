@@ -1909,66 +1909,67 @@ describe('Phase 262-01 — /liv-family forward_auth gate (LIVOS-041/047/054)', (
 		expect(multi.indexOf('@liv_cli_installer path /liv/trpc/cliInstaller.detect', subStart)).toBeGreaterThan(subStart)
 	})
 
-	// ─── Phase 353-01 (VMVIEW-01) — VM noVNC screen path-proxy handle pair ───
+	// ─── Phase 355 (VMVNC-03) — VM screen WS bridge narrowed to websockify-ONLY ───
 	//
-	// @vm_screen (GET/asset leg) is forward_auth-gated; @vm_screen_ws
-	// (/vm/*/websockify) is UNCONDITIONAL at Caddy and gated at the Express
-	// upgrade handler instead (forward_auth on a WS leg hijacks the upgrade →
-	// 502, the documented e336afdd/@liv_ws regression). Express owns the
-	// id-scoped path strip so there is deliberately NO strip_prefix /vm here,
-	// and NEVER copy_headers Cookie (clobbers LIVINITY_SESSION).
+	// 355-01 replaced the dockur/qemus viewer iframe with LivOS's own native RFB
+	// client, which speaks ONLY /vm/<id>/websockify. This narrowed the surface:
+	//   • @vm_screen_ws is now `path /vm/*/websockify` ONLY (the beta.5
+	//     {websockify,status,audio} widening existed solely for the dockur page —
+	//     /status + /audio have ZERO consumers now).
+	//   • the forward_auth-gated @vm_screen HTTP page-proxy handle is REMOVED
+	//     entirely (its only consumer was the deleted iframe + the deleted Express
+	//     /vm/:id HTTP proxy). A plain non-Upgrade GET /vm/* no longer matches
+	//     @vm_screen_ws (Upgrade required, WR-01) and has no @vm_screen handle →
+	//     it falls through to the site default (no container proxy): a strictly
+	//     SMALLER surface than the removed admin-gated-but-reachable page-proxy.
+	// @vm_screen_ws stays UNCONDITIONAL at Caddy (forward_auth on a WS leg hijacks
+	// the upgrade → 502, the documented e336afdd/@liv_ws regression) and gated at
+	// the Express upgrade handler instead.
 
-	it('@vm_screen — gated (forward_auth before proxy) in all three site shapes', () => {
-		expectGatedHandle(apexOut(), 'handle @vm_screen {')
-		const fallback = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
-		expectGatedHandle(fallback, 'handle @vm_screen {')
-		const multi = generateFullCaddyfile(
-			{mainDomain: 'livinity.io', subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}]},
-			true,
-			false,
-			[],
-		)
-		const subStart = multi.indexOf('bruce.livinity.io {')
-		expect(subStart).toBeGreaterThan(-1)
-		expect(multi.indexOf('handle @vm_screen {', subStart)).toBeGreaterThan(subStart)
-	})
-
-	it('@vm_screen matcher is `path /vm /vm/*` and emits in all three sites', () => {
+	it('@vm_screen HTTP page-proxy handle is REMOVED in all three site shapes (355 narrowing)', () => {
 		const apex = apexOut()
-		expect(apex).toContain('@vm_screen path /vm /vm/*')
+		expect(apex).not.toContain('handle @vm_screen {')
+		expect(apex).not.toContain('@vm_screen path /vm /vm/*')
 		const fallback = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
-		expect(fallback).toContain('@vm_screen path /vm /vm/*')
+		expect(fallback).not.toContain('handle @vm_screen {')
+		expect(fallback).not.toContain('@vm_screen path /vm /vm/*')
 		const multi = generateFullCaddyfile(
 			{mainDomain: 'livinity.io', subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}]},
 			true,
 			false,
 			[],
 		)
-		const subStart = multi.indexOf('bruce.livinity.io {')
-		expect(multi.indexOf('@vm_screen path /vm /vm/*', subStart)).toBeGreaterThan(subStart)
+		expect(multi).not.toContain('handle @vm_screen {')
+		expect(multi).not.toContain('@vm_screen path /vm /vm/*')
 	})
 
 	it('handle @vm_screen_ws is UNGATED — forward_auth on the WS leg breaks the upgrade (e336afdd)', () => {
 		const out = apexOut()
 		const idx = out.indexOf('handle @vm_screen_ws {')
 		expect(idx).toBeGreaterThan(-1)
-		// Body ends where the adjacent @vm_screen matcher begins (WS leg emitted first).
-		const end = out.indexOf('@vm_screen path /vm /vm/*', idx)
+		// Body ends where the adjacent @liv matcher begins (VM WS leg now emitted
+		// directly before LIV_ASSISTANT_HANDLE; the @vm_screen handle is gone).
+		const end = out.indexOf('@liv path /liv /liv/*', idx)
 		expect(end).toBeGreaterThan(idx)
 		// Match the directive form — the rationale comment legitimately says forward_auth.
 		expect(out.slice(idx, end)).not.toContain('forward_auth 127.0.0.1')
 	})
 
-	it('@vm_screen_ws matcher is a block on the dockur WS path allowlist and emits in all three sites', () => {
-		// Fix-forward 2026-07-22: broadened from /websockify only to the full dockur
-		// viewer WS set (websockify=VNC, status=install-progress, audio) so /status
-		// (whose onerror reload-loops if unroutable) also takes the UNGATED WS leg.
+	it('@vm_screen_ws matcher is websockify-ONLY (355 narrowing) and emits in all three sites', () => {
+		// Phase 355 (VMVNC-03): narrowed from the beta.5 {websockify,status,audio}
+		// dockur-viewer set back to /websockify ONLY — the native RFB client speaks
+		// only /websockify; /status + /audio were dockur-page-only, removed with the
+		// iframe. Re-widening requires a fresh consumer + security review.
 		const apex = apexOut()
 		expect(apex).toContain('@vm_screen_ws {')
-		expect(apex).toContain('path /vm/*/websockify /vm/*/status /vm/*/audio')
+		expect(apex).toContain('path /vm/*/websockify')
+		expect(apex).not.toContain('path /vm/*/websockify /vm/*/status /vm/*/audio')
+		expect(apex).not.toContain('/vm/*/status')
+		expect(apex).not.toContain('/vm/*/audio')
 		const fallback = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
 		expect(fallback).toContain('@vm_screen_ws {')
-		expect(fallback).toContain('path /vm/*/websockify /vm/*/status /vm/*/audio')
+		expect(fallback).toContain('path /vm/*/websockify')
+		expect(fallback).not.toContain('/vm/*/status')
 		const multi = generateFullCaddyfile(
 			{mainDomain: 'livinity.io', subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}]},
 			true,
@@ -1977,15 +1978,16 @@ describe('Phase 262-01 — /liv-family forward_auth gate (LIVOS-041/047/054)', (
 		)
 		const subStart = multi.indexOf('bruce.livinity.io {')
 		expect(multi.indexOf('@vm_screen_ws {', subStart)).toBeGreaterThan(subStart)
+		expect(multi).not.toContain('/vm/*/status')
 	})
 
 	// Phase 353 review WR-01: the WS matcher MUST require the Upgrade:websocket
 	// header, not path alone. Without it, a plain GET /vm/<id>/websockify takes
-	// the UNGATED @vm_screen_ws leg and reaches the broad Express /vm/:id HTTP
-	// proxy unauthenticated. With the header condition, only a real WS upgrade
-	// matches here; a plain GET falls through to the forward_auth-gated
-	// @vm_screen (path /vm/*).
-	it('@vm_screen_ws requires the Upgrade:websocket header (plain GET falls to the gated leg)', () => {
+	// the UNGATED @vm_screen_ws leg. With the header condition, only a real WS
+	// upgrade matches here; a plain GET no longer matches @vm_screen_ws and (with
+	// @vm_screen removed in 355) falls through to the site default — no container
+	// proxy at all.
+	it('@vm_screen_ws requires the Upgrade:websocket header (plain GET falls through to site default)', () => {
 		const out = apexOut()
 		const idx = out.indexOf('@vm_screen_ws {')
 		expect(idx).toBeGreaterThan(-1)
@@ -1996,25 +1998,6 @@ describe('Phase 262-01 — /liv-family forward_auth gate (LIVOS-041/047/054)', (
 		expect(matcher).toContain('path /vm/*/websockify')
 		expect(matcher).toContain('header Connection *Upgrade*')
 		expect(matcher).toContain('header Upgrade websocket')
-	})
-
-	it('@vm_screen — no copy_headers Cookie, no strip_prefix /vm (Express owns the id-scoped strip)', () => {
-		const out = apexOut()
-		const idx = out.indexOf('handle @vm_screen {')
-		expect(idx).toBeGreaterThan(-1)
-		// Body ends where the adjacent @liv matcher begins (VM pair emitted before LIV_ASSISTANT_HANDLE).
-		const end = out.indexOf('@liv path /liv /liv/*', idx)
-		expect(end).toBeGreaterThan(idx)
-		const body = out.slice(idx, end)
-		expect(body).toContain('forward_auth 127.0.0.1:8080')
-		expect(body).toContain('uri /auth/verify')
-		// Absolute redir — a relative redir does NOT terminate forward_auth (LIVOS-041/386b33e7).
-		expect(body).toContain('redir https://{host}/login?redirect={scheme}://{host}{uri}')
-		// FRAME_EMBED_STRIP so the noVNC page iframe-embeds.
-		expect(body).toContain('header_down -X-Frame-Options')
-		// Pitfalls that must NOT appear.
-		expect(body).not.toContain('copy_headers Cookie')
-		expect(body).not.toContain('strip_prefix /vm')
 	})
 
 	// ─── Phase 269-03 (WS3) — @liv_agents auth-gated agent-list carve-out ───
