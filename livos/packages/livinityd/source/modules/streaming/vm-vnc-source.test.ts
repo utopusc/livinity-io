@@ -176,4 +176,82 @@ describe('VmVncFrameSource', () => {
 
 		await expect(started).rejects.toBeInstanceOf(VmVncConnectError)
 	})
+
+	// ── WR-01 / audit RESIDUAL-1(b): guest-reported framebuffer dims are capped ──────────────
+	it('Test 5: over-max framebuffer dims fail start() CLOSED (no alloc, no resolve)', async () => {
+		const fake = new FakeRfbClient()
+		fake.clientWidth = 100000 // absurd resolution advertised by a compromised guest
+		fake.clientHeight = 100000
+		fake.fb = Buffer.from([1, 2, 3, 4]) // getFb() must NOT be consulted on the reject path
+		let getFbCalls = 0
+		fake.getFb = () => {
+			getFbCalls += 1
+			return fake.fb
+		}
+		fake.onConnect = (c) => c.emit('firstFrameUpdate', c.fb)
+
+		const src = new VmVncFrameSource({port: 16300, clientFactory: () => fake})
+		await expect(src.start()).rejects.toBeInstanceOf(VmVncConnectError)
+		// Fail-closed BEFORE retaining any framebuffer (→ no huge W×H×4 alloc, no encoder spawn).
+		expect(getFbCalls).toBe(0)
+		await src.stop()
+	})
+
+	it('Test 5b: exactly 8192x8192 is accepted (the ceiling is inclusive)', async () => {
+		const fake = new FakeRfbClient()
+		fake.clientWidth = 8192
+		fake.clientHeight = 8192
+		fake.fb = Buffer.alloc(16)
+		fake.onConnect = (c) => c.emit('firstFrameUpdate', c.fb)
+
+		const src = new VmVncFrameSource({port: 16300, clientFactory: () => fake})
+		const dims = await src.start()
+		expect(dims).toEqual({width: 8192, height: 8192})
+		await src.stop()
+	})
+
+	it('Test 5c: non-positive dims (0x0) fail start() closed', async () => {
+		const fake = new FakeRfbClient()
+		fake.clientWidth = 0
+		fake.clientHeight = 0
+		fake.onConnect = (c) => c.emit('firstFrameUpdate', null)
+
+		const src = new VmVncFrameSource({port: 16300, clientFactory: () => fake})
+		await expect(src.start()).rejects.toBeInstanceOf(VmVncConnectError)
+		await src.stop()
+	})
+
+	// ── Audit RESIDUAL-1(a): a library-EMITTED 'error' fails the source closed (no crash) ─────
+	it('Test 6: a library "error" event before the first frame rejects start() CLOSED', async () => {
+		const fake = new FakeRfbClient()
+		// A decode/socket error surfaces via the EventEmitter 'error' channel. Without the source's
+		// own 'error' listener this emit would throw as an unhandledException (the very bug fixed);
+		// the fact this test does not crash proves the listener is attached.
+		fake.onConnect = (c) => c.emit('error', new Error('malformed RFB rectangle'))
+
+		const src = new VmVncFrameSource({port: 16300, clientFactory: () => fake})
+		await expect(src.start()).rejects.toBeInstanceOf(VmVncConnectError)
+		await src.stop()
+	})
+
+	it('Test 6b: a library "error" AFTER the first frame surfaces to on("error") subscribers', async () => {
+		const fake = new FakeRfbClient()
+		fake.clientWidth = 640
+		fake.clientHeight = 480
+		fake.fb = Buffer.alloc(640 * 480 * 4)
+		fake.onConnect = (c) => c.emit('firstFrameUpdate', c.fb)
+
+		const src = new VmVncFrameSource({port: 16300, clientFactory: () => fake})
+		const errors: unknown[] = []
+		src.on('error', (e) => errors.push(e))
+		await src.start()
+
+		// A post-start decode error must fail closed via the 'error' channel (stream-manager
+		// cascades a stopStream) rather than crash the daemon.
+		fake.emit('error', new Error('decode blew up mid-stream'))
+		expect(errors.length).toBeGreaterThanOrEqual(1)
+		expect(errors[errors.length - 1]).toBeInstanceOf(Error)
+
+		await src.stop()
+	})
 })

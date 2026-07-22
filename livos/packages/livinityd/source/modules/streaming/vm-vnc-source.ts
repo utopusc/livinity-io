@@ -101,6 +101,17 @@ const DEFAULT_RETRY_DELAY_MS = 100
 const DEFAULT_START_TIMEOUT_MS = 15000
 const MAX_CONNECT_ATTEMPTS = 3 // total connects (mirrors vnc-bridge.ts's 3×100ms ECONNREFUSED retry)
 
+/**
+ * Phase 364 WR-01 / audit RESIDUAL-1(b): defense-in-depth ceiling on the guest/QEMU-reported
+ * framebuffer geometry. A VM guest is an UNTRUSTED workload; its ServerInit width/height flow,
+ * unbounded, into (a) the vnc-rfb-client W×H×4 BGRA allocation and (b) the ffmpeg `-video_size
+ * WxH` argv. A compromised guest advertising an absurd resolution could drive a large per-frame
+ * host allocation in livinityd → OOM DoS. 8192×8192 BGRA is 256 MiB — already generous for any
+ * real display; anything ≤0, non-integer, or beyond this is rejected fail-closed (→ start()
+ * rejects → 355 noVNC fallback), never a hang, never a huge alloc.
+ */
+const MAX_FRAMEBUFFER_DIMENSION = 8192
+
 /** Typed fail-closed error so callers (plan 02) can distinguish "VM screen unavailable" cleanly. */
 export class VmVncConnectError extends Error {
 	code = 'VM_VNC_CONNECT_FAILED'
@@ -174,9 +185,30 @@ export class VmVncFrameSource implements VmFrameSource {
 		this.#client = client
 
 		client.on('firstFrameUpdate', () => {
+			// WR-01 / RESIDUAL-1(b): clamp the untrusted guest-reported dims BEFORE retaining any
+			// framebuffer or resolving start() (which is what triggers the encoder spawn + the
+			// `-video_size WxH` argv downstream). Reject non-positive / non-integer / over-max
+			// geometry fail-closed so a compromised guest can never drive a large host allocation.
+			const w = client.clientWidth
+			const h = client.clientHeight
+			if (
+				!Number.isInteger(w) ||
+				!Number.isInteger(h) ||
+				w <= 0 ||
+				h <= 0 ||
+				w > MAX_FRAMEBUFFER_DIMENSION ||
+				h > MAX_FRAMEBUFFER_DIMENSION
+			) {
+				this.#failClosed(
+					new VmVncConnectError(
+						`VM VNC ${this.#host}:${this.#port}: implausible framebuffer ${w}x${h} (allowed 1..${MAX_FRAMEBUFFER_DIMENSION} per axis)`,
+					),
+				)
+				return
+			}
 			this.#latestFrame = client.getFb() ?? this.#latestFrame
 			this.#armThrottle()
-			this.#settleResolved({width: client.clientWidth, height: client.clientHeight})
+			this.#settleResolved({width: w, height: h})
 		})
 		client.on('frameUpdated', () => {
 			this.#latestFrame = client.getFb() ?? this.#latestFrame
@@ -184,6 +216,14 @@ export class VmVncFrameSource implements VmFrameSource {
 		client.on('connectError', (err) => this.#onConnectFailure(err))
 		client.on('connectTimeout', () => this.#onConnectFailure(new Error('connect timeout')))
 		client.on('authError', () => this.#onConnectFailure(new Error('auth error (unexpected over no-auth loopback)')))
+		// Audit RESIDUAL-1(a): vnc-rfb-client parses UNTRUSTED guest framebuffer bytes in the host
+		// process. A library-emitted 'error' with NO listener throws as an unhandledException — and
+		// livinityd has no daemon-wide uncaughtException guard (out of scope by design). Attach a
+		// handler so any emitted decode/socket error fails the source CLOSED instead of crashing the
+		// daemon. NOTE: this catches EMITTED 'error' events only; a SYNCHRONOUS throw inside the
+		// library's own net.Socket 'data' handler is NOT interceptable here (documented RESIDUAL in
+		// 364-SECURITY.md — needs live dockur-QEMU verification + possible worker isolation later).
+		client.on('error', (err) => this.#onLibraryError(err))
 		client.on('disconnected', () => this.#emitClose())
 		client.on('closed', () => this.#emitClose())
 
@@ -219,6 +259,18 @@ export class VmVncFrameSource implements VmFrameSource {
 				err,
 			),
 		)
+	}
+
+	/** Audit RESIDUAL-1(a): a library-EMITTED 'error' (decode/socket failure over the untrusted RFB
+	 *  stream). Fail closed: pre-start it rejects start() (→ 355 noVNC fallback); post-start it
+	 *  surfaces to the 'error' subscribers so the stream-manager cascades a stopStream (no live
+	 *  ffmpeg on a dead RFB socket). Never retries — a decode error is not an ECONNREFUSED. */
+	#onLibraryError(err: unknown): void {
+		if (!this.#settled) {
+			this.#failClosed(new VmVncConnectError(`VM VNC ${this.#host}:${this.#port}: RFB client error`, err))
+			return
+		}
+		this.#emitError(err)
 	}
 
 	#armThrottle(): void {

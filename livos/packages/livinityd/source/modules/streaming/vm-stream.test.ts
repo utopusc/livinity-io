@@ -25,9 +25,10 @@
  */
 
 import {describe, it, expect} from 'vitest'
+import {EventEmitter} from 'node:events'
 import {spawn as nodeSpawn, type ChildProcess} from 'node:child_process'
 import {join} from 'node:path'
-import {StreamManager, VmEncodeUnavailableError} from './stream-manager.js'
+import {StreamManager, StreamCapExceededError, VmEncodeUnavailableError} from './stream-manager.js'
 import type {SubscriberSocket} from './fmp4-fanout.js'
 import type {VmFrameSource} from './vm-vnc-source.js'
 
@@ -250,5 +251,110 @@ describe('StreamManager vm-fmp4 — FakeFrameSource ↔ fake-encoder ↔ Fmp4Fan
 		await waitFor(() => mgr.getStream(start.streamId) === null, 2000, 'session reaped after frame-source close')
 		await waitFor(() => spawnedChildren[0].exitCode !== null || spawnedChildren[0].killed, 1500, 'encoder exit')
 		expect(mgr.listStreams({userId: 'admin'})).toEqual([])
+	}, 10_000)
+})
+
+// ── WR-02: the shared concurrent-stream cap is reserved ATOMICALLY across the start() await ──
+//
+// A lightweight fake ChildProcess (no real ffmpeg process) + a DEFERRED frame source whose
+// start() stays pending until released. This lets N startVmStream calls on DISTINCT VMs all
+// park in `await frameSource.start()` simultaneously — the exact window WR-02 fixes. Without the
+// synchronous reservation every one of them would pass `aliveCount < cap` (nothing is registered
+// while they are all awaiting) and overshoot the shared cap.
+
+/** Minimal EventEmitter-backed ChildProcess stand-in — enough for startVmStream's wiring. */
+class FakeEncoder extends EventEmitter {
+	stdin = Object.assign(new EventEmitter(), {writable: true, write: () => true})
+	stdout = new EventEmitter()
+	stderr = new EventEmitter()
+	killed = false
+	kill(): boolean {
+		this.killed = true
+		queueMicrotask(() => this.emit('exit', 0, null))
+		return true
+	}
+}
+
+/** A VmFrameSource whose start() resolves only when the test releases it (models the await window). */
+class DeferredFrameSource implements VmFrameSource {
+	release!: () => void
+	private readonly gate: Promise<void>
+	stopped = false
+	constructor(private readonly dims = {width: 320, height: 240}) {
+		this.gate = new Promise<void>((res) => {
+			this.release = res
+		})
+	}
+	async start(): Promise<{width: number; height: number}> {
+		await this.gate
+		return this.dims
+	}
+	onFrame(): void {
+		/* no frames needed for the cap test */
+	}
+	async stop(): Promise<void> {
+		this.stopped = true
+	}
+	on(): void {
+		/* no lifecycle signals needed */
+	}
+}
+
+describe('StreamManager vm-fmp4 — WR-02 atomic cap reservation', () => {
+	it('N concurrent startVmStream on DISTINCT VMs never exceeds the shared cap (cap=K)', async () => {
+		const CAP = 10 // vaapi=true → getCap() === 10
+		const N = 15 // over-subscribe by 5
+		const sources: DeferredFrameSource[] = Array.from({length: N}, () => new DeferredFrameSource())
+		let idx = 0
+		const mgr = new StreamManager({
+			caps: {vaapi: true, profiles: ['VAProfileH264High']},
+			spawn: () => new FakeEncoder() as unknown as ChildProcess,
+			vmFrameSourceFactory: () => sources[idx++],
+			stopTimeoutMs: 100,
+		})
+
+		// Fire all N concurrently. Each runs its SYNCHRONOUS prefix (cap-check + reservation) before
+		// parking in the await — so the reservations serialise them even though start() is pending.
+		const attempts = sources.map((_, i) =>
+			mgr
+				.startVmStream({userId: 'admin', vmId: `vm-${i}`, vncRawPort: 16400 + i})
+				.then(() => 'ok' as const)
+				.catch((e) => e),
+		)
+
+		// Now let every parked start() resolve.
+		for (const s of sources) s.release()
+		const results = await Promise.all(attempts)
+
+		const ok = results.filter((r) => r === 'ok').length
+		const capErrors = results.filter((r) => r instanceof StreamCapExceededError).length
+		expect(ok).toBe(CAP) // exactly the cap succeeded — never more
+		expect(capErrors).toBe(N - CAP) // the overflow was rejected fail-closed
+		expect(mgr.listStreams({userId: 'admin'}).filter((s) => s.status === 'alive')).toHaveLength(CAP)
+
+		mgr._clearForTests()
+	}, 10_000)
+
+	it('a failed start RELEASES its reservation so the freed slot is reusable', async () => {
+		const good = new FakeFrameSource()
+		const bad = new FakeFrameSource({startRejects: true})
+		const good2 = new FakeFrameSource()
+		let idx = 0
+		const order = [good, bad, good2]
+		const mgr = new StreamManager({
+			caps: {vaapi: true, profiles: ['VAProfileH264High']},
+			spawn: () => new FakeEncoder() as unknown as ChildProcess,
+			vmFrameSourceFactory: () => order[idx++],
+			stopTimeoutMs: 100,
+		})
+
+		await mgr.startVmStream({userId: 'admin', vmId: 'vm-good', vncRawPort: 16350})
+		// This one fails in start() — its reservation MUST be released, not leaked.
+		await expect(mgr.startVmStream({userId: 'admin', vmId: 'vm-bad', vncRawPort: 16351})).rejects.toThrow()
+		// A subsequent start still succeeds (the freed reservation did not permanently consume a slot).
+		await mgr.startVmStream({userId: 'admin', vmId: 'vm-good2', vncRawPort: 16352})
+
+		expect(mgr.listStreams({userId: 'admin'}).filter((s) => s.status === 'alive')).toHaveLength(2)
+		mgr._clearForTests()
 	}, 10_000)
 })
