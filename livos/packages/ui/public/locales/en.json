@@ -213,6 +213,8 @@
   "vm.controls.open-screen": "Open screen",
   "vm.controls.pin": "Add to Dock",
   "vm.controls.unpin": "Remove from Dock",
+  "vm.controls.pin-desktop": "Add to Desktop",
+  "vm.controls.unpin-desktop": "Remove from Desktop",
   "vm.controls.delete": "Delete",
   "vm.screen.title": "{{name}} — screen",
   "vm.screen.back": "Back",

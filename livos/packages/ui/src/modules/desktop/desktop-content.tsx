@@ -3,7 +3,9 @@ import {useLocation} from 'react-router-dom'
 import {useState, useEffect, useCallback, useMemo, useRef} from 'react'
 
 import {CliAuthDialog} from '@/features/liv-ai/cli-auth-dialog'
+import {pickIcon} from '@/features/vm/components/os-icon'
 import {useCliAuthBridge} from '@/hooks/use-cli-auth-bridge'
+import {useCurrentUser} from '@/hooks/use-current-user'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useMobileApp} from '@/modules/mobile/mobile-app-context'
 import {useApps, systemAppsKeyed} from '@/providers/apps'
@@ -16,6 +18,7 @@ import {AppGrid, AppGridItem, DesktopLayout} from './app-grid/app-grid'
 import {AppIcon, AppIconConnected} from './app-icon'
 import {DesktopFolder} from './desktop-folder'
 import {DockSpacer} from './dock'
+import {useDesktopPins} from './use-desktop-pins'
 import {WebAppIcon} from './webapp-icon'
 import {ShortcutIcon} from './shortcut-icon'
 import {WidgetMeta, getWidgetSize} from './widgets/widget-types'
@@ -225,6 +228,21 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 	// against the query result so the empty fallback is reference-stable.
 	const nativeApps = useMemo(() => nativeAppsQ.data ?? [], [nativeAppsQ.data])
 
+	// Phase 357 (VMDESK-01) — VMs pinned to the DESKTOP surface (client-only
+	// useDesktopPins, own keys — a SECOND independent surface beside the 354
+	// Dock pin). vm.list is adminProcedure-gated (350); gate the query on
+	// isAdmin (dock.tsx:112-113 idiom) AND skip it entirely when no VM is
+	// pinned so a non-admin (or a user with zero VM pins) never fires a
+	// FORBIDDEN on the home surface (Pitfall 4).
+	const {isAdmin} = useCurrentUser()
+	const {pins: desktopVmPins} = useDesktopPins()
+	const vmsQ = trpcReact.vm.list.useQuery(undefined, {
+		enabled: isAdmin && desktopVmPins.length > 0,
+		staleTime: 30 * 1000,
+		retry: false,
+	})
+	const vms = useMemo(() => vmsQ.data ?? [], [vmsQ.data])
+
 	const isMobile = useIsMobile()
 	const {openApp} = useMobileApp()
 
@@ -332,6 +350,37 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		}))
 		appItems.push(...shortcutItems)
 
+		// Phase 357 (VMDESK-01) — VMs pinned to the DESKTOP surface (client-only
+		// useDesktopPins, own keys — a SECOND independent surface beside the 354
+		// Dock pin). Resolve each pin against the admin-gated vm.list; a deleted
+		// VM's stale pin SELF-HEALS (dropped here, stays in storage — dock.tsx's
+		// `if (!vm) return null` idiom in list-comprehension form). Click opens the
+		// 356 VM window on desktop, the in-panel app path on mobile (WindowsContainer
+		// is mobile-null) — the SAME useIsMobile() branch 356 established; NEVER an
+		// unconditional openWindow (356's mobile-accretion bug class).
+		const vmPinItems: AppGridItem[] = desktopVmPins
+			.filter((p) => p.kind === 'vm')
+			.map((p) => vms.find((v) => v.id === p.id))
+			.filter((vm): vm is (typeof vms)[number] => !!vm)
+			.map((vm) => ({
+				id: `vm-pin-${vm.id}`,
+				node: (
+					<motion.div initial={{opacity: 0, scale: 0}} animate={{opacity: 1, scale: 1}} transition={{type: 'spring', stiffness: 400, damping: 25}}>
+						<AppIcon
+							label={vm.name}
+							src=''
+							glyph={pickIcon(vm.kind)}
+							onClick={() =>
+								isMobile
+									? openApp('LIVINITY_vm', `/vm/${vm.id}`, vm.name, '')
+									: windowManager?.openWindow('LIVINITY_vm', `/vm/${vm.id}`, vm.name, '')
+							}
+						/>
+					</motion.div>
+				),
+			}))
+		appItems.push(...vmPinItems)
+
 		// System apps shown in grid on mobile (dock is hidden)
 		if (isMobile) {
 			const mobileSystemApps = [
@@ -407,7 +456,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		})
 
 		return [...appItems, ...folderItems, ...widgetItems]
-	}, [userApps, webapps, shortcuts, nativeApps, folders, widgets, isMobile, openApp, windowManager])
+	}, [userApps, webapps, shortcuts, nativeApps, folders, widgets, isMobile, openApp, windowManager, desktopVmPins, vms])
 
 	// Phase 157 round 4 — conditional render deferred to AFTER all hooks
 	// have run. Returning `null` mid-function would have skipped the

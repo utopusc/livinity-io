@@ -18,6 +18,7 @@ import {useState} from 'react'
 import {TbDeviceDesktop, TbLoader2, TbPencil, TbPin, TbPinnedOff, TbPlayerPlay, TbPlayerStop, TbRefresh, TbTrash} from 'react-icons/tb'
 import {toast} from 'sonner'
 
+import {useDesktopPins} from '@/modules/desktop/use-desktop-pins'
 import {useDockPins} from '@/modules/desktop/use-dock-pins'
 
 import {Badge} from '@/shadcn-components/ui/badge'
@@ -90,6 +91,13 @@ export function VmListItem({
 	// mutation — unpin removes only the Dock tile, never the VM (unpin ≠ delete).
 	const {isPinned, pin, unpin} = useDockPins()
 	const pinnedToDesktop = isPinned('vm', vm.id)
+
+	// Desktop surface (357): an INDEPENDENT second pin — useDesktopPins, own
+	// storage keys, never the 354 dock list. Like the dock pin above, its
+	// unpin NEVER touches a vm.* mutation (unpin ≠ delete, extended to the
+	// desktop surface).
+	const {isPinned: isDesktopPinned, pin: pinDesktop, unpin: unpinDesktop} = useDesktopPins()
+	const pinnedToDesktopSurface = isDesktopPinned('vm', vm.id)
 
 	const startMut = trpcReact.vm.start.useMutation({
 		onSuccess: () => utils.vm.list.invalidate(),
@@ -210,6 +218,16 @@ export function VmListItem({
 					>
 						{pinnedToDesktop ? <TbPinnedOff className='h-4 w-4' /> : <TbPin className='h-4 w-4' />}
 						{pinnedToDesktop ? t('vm.controls.unpin') : t('vm.controls.pin')}
+					</Button>
+
+					{/* Pin/unpin to the desktop surface — client-only (useDesktopPins), no vm.* mutation. */}
+					<Button
+						size='sm'
+						variant='ghost'
+						onClick={() => (pinnedToDesktopSurface ? unpinDesktop('vm', vm.id) : pinDesktop({kind: 'vm', id: vm.id}))}
+					>
+						{pinnedToDesktopSurface ? <TbPinnedOff className='h-4 w-4' /> : <TbPin className='h-4 w-4' />}
+						{pinnedToDesktopSurface ? t('vm.controls.unpin-desktop') : t('vm.controls.pin-desktop')}
 					</Button>
 
 					<Button size='sm' variant='ghost' onClick={openRename} disabled={renameMut.isPending}>
