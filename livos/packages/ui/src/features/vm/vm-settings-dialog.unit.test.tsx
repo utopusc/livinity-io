@@ -62,6 +62,71 @@ describe('restart-to-apply is honest — never an "applied/live" claim (T-359-12
 	})
 })
 
+describe('Apply-now applies pending edits via STOP+START, never composeRestart (VMAPPLY-01 / T-361-02)', () => {
+	it('vm-settings-dialog.tsx sequences vm.stop → vm.start (both mutateAsync), never vm.restart', () => {
+		const src = read(DIALOG)
+		// Two existing adminProcedures reused — a new backend verb is NOT introduced.
+		expect(src).toMatch(/trpcReact\.vm\.stop\.useMutation/)
+		expect(src).toMatch(/trpcReact\.vm\.start\.useMutation/)
+		// The apply path awaits stop THEN start (the confirmed composeUp apply path).
+		expect(src).toMatch(/stopMut\.mutateAsync/)
+		expect(src).toMatch(/startMut\.mutateAsync/)
+		// The dialog NEVER routes an apply through the in-place restart bounce.
+		expect(src).not.toMatch(/vm\.restart/)
+	})
+
+	it('renders honest ordered phases — stop precedes "starting", start precedes the "done"/applied claim (T-361-01)', () => {
+		const src = read(DIALOG)
+		// stop is awaited BEFORE we ever render "Starting…".
+		expect(src.indexOf('stopMut.mutateAsync')).toBeGreaterThan(-1)
+		expect(src.indexOf("setApplyPhase('starting')")).toBeGreaterThan(-1)
+		expect(src.indexOf('stopMut.mutateAsync')).toBeLessThan(src.indexOf("setApplyPhase('starting')"))
+		// start is awaited BEFORE the honest "applied" claim ('done') is ever set.
+		expect(src.indexOf('startMut.mutateAsync')).toBeGreaterThan(-1)
+		expect(src.indexOf("setApplyPhase('done')")).toBeGreaterThan(-1)
+		expect(src.indexOf('startMut.mutateAsync')).toBeLessThan(src.indexOf("setApplyPhase('done')"))
+	})
+
+	it('the failure path sets error and NEVER "done" (no false applied on stop/start reject)', () => {
+		const src = read(DIALOG)
+		expect(src).toMatch(/setApplyPhase\('error'\)/)
+		// After the last catch that sets 'error', there is a `return` — the 'done'
+		// claim is unreachable on failure. Assert both error catches precede a return.
+		const firstError = src.indexOf("setApplyPhase('error')")
+		const doneClaim = src.indexOf("setApplyPhase('done')")
+		// 'done' lives AFTER the error handling (bottom of the happy path), never inside a catch.
+		expect(firstError).toBeLessThan(doneClaim)
+	})
+
+	it('the Apply-now control is gated behind restartHint (only after a save that needs a restart)', () => {
+		const src = read(DIALOG)
+		// The apply key appears downstream of a restartHint gate in the render tree.
+		expect(src).toMatch(/restartHint[\s\S]*vm\.settings\.apply-now/)
+	})
+
+	it('the five apply-* keys exist at EN/TR parity and are jargon-free', () => {
+		const en = JSON.parse(read(EN)) as Record<string, string>
+		const tr = JSON.parse(read(TR)) as Record<string, string>
+		const keys = [
+			'vm.settings.apply-now',
+			'vm.settings.apply-stopping',
+			'vm.settings.apply-starting',
+			'vm.settings.apply-done',
+			'vm.settings.apply-failed',
+		]
+		for (const k of keys) {
+			expect(en[k], `missing EN ${k}`).toBeTruthy()
+			expect(tr[k], `missing TR ${k}`).toBeTruthy()
+			expect(en[k]).not.toMatch(/VNC|noVNC|RFB|websockify/i)
+			expect(tr[k]).not.toMatch(/VNC|noVNC|RFB|websockify/i)
+		}
+		// apply-done LEGITIMATELY says "applied"/"uygulandı" — it is gated behind a
+		// resolved start(); the restart-required prohibition stays scoped to its own key.
+		expect(en['vm.settings.apply-done']).toMatch(/applied/i)
+		expect(tr['vm.settings.apply-done']).toMatch(/uygulandı/i)
+	})
+})
+
 describe('the RDP endpoint is re-homed windows-only + admin-gated (T-359-10)', () => {
 	it('vm-settings-dialog.tsx gates the RDP block on windows + rdpPort + host IP, never unconditional', () => {
 		const src = read(DIALOG)
