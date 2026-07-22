@@ -110,7 +110,7 @@ export function Dock() {
 	// query on isAdmin (D-341-6 idiom) so a non-admin session never fires a
 	// FORBIDDEN on load; absent/empty simply renders no vm tiles.
 	const {isAdmin} = useCurrentUser()
-	const vmsQ = trpcReact.vm.list.useQuery(undefined, {enabled: isAdmin})
+	const vmsQ = trpcReact.vm.list.useQuery(undefined, {enabled: isAdmin, staleTime: 30 * 1000, retry: false})
 	const vms = useMemo(() => vmsQ.data ?? [], [vmsQ.data])
 
 	const lastFilesPath = sessionStorage.getItem('lastFilesPath')

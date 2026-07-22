@@ -86,7 +86,7 @@ describe('vm-list-item.tsx: unpin ≠ delete invariant', () => {
 
 	it('7b. the isolated unpin handler matches NO generic vm.* mutation/invalidation', () => {
 		const genericMutation =
-			/trpcReact\.vm\.\w+\.(useMutation|mutate)|\bvm\.(delete|start|stop|restart|rename)\b|deleteMut|utils\.vm\.\w+\.invalidate/
+			/trpcReact\.vm\.\w+\.(useMutation|mutate)|\bvm\.(delete|start|stop|restart|rename)\b|\w*Mut\.mutate\b|deleteMut|utils\.vm\.\w+\.invalidate/
 		expect(pinBlock).not.toMatch(genericMutation)
 	})
 
