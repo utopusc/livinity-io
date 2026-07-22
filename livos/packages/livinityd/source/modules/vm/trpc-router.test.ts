@@ -65,6 +65,9 @@ function makeVmMock() {
 		rename: vi.fn(async () => {}),
 		update: vi.fn(async () => ({restartRequired: false, restartTriggered: false})),
 		delete: vi.fn(async () => ({deleted: true})),
+		// VMSTATS-01: read-only live-usage delegates.
+		stats: vi.fn(async () => ({running: true, ramAllocMiB: 4096, cpuAllocated: 2})),
+		diskUsage: vi.fn(async () => ({running: true, diskAllocGiB: 40})),
 	}
 }
 
@@ -98,7 +101,7 @@ const VALID_CREATE = {
 describe('vm router — namespace shape', () => {
 	test('exposes list / get / create / start / stop / restart / delete', () => {
 		const procs = (vm as any)._def?.procedures ?? {}
-		for (const name of ['list', 'get', 'create', 'createOptions', 'start', 'stop', 'restart', 'rename', 'update', 'delete']) {
+		for (const name of ['list', 'get', 'create', 'createOptions', 'start', 'stop', 'restart', 'rename', 'update', 'delete', 'stats', 'diskUsage']) {
 			expect(procs[name]).toBeDefined()
 		}
 	})
@@ -186,6 +189,34 @@ describe('an admin caller reaches each handler and delegates with the right args
 		const vmMock = makeVmMock()
 		await caller({vmMock}).rename({id: UUID, name: 'renamed'})
 		expect(vmMock.rename).toHaveBeenCalledWith(UUID, 'renamed')
+	})
+})
+
+describe('vm.stats / vm.diskUsage — read-only admin-gated (VMSTATS-01)', () => {
+	test('vm.stats rejects a non-admin (member) BEFORE the delegate', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({role: 'member', vmMock}).stats({id: UUID})).rejects.toThrow()
+		expect(vmMock.stats).not.toHaveBeenCalled()
+	})
+	test('vm.diskUsage rejects a non-admin (member) BEFORE the delegate', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({role: 'member', vmMock}).diskUsage({id: UUID})).rejects.toThrow()
+		expect(vmMock.diskUsage).not.toHaveBeenCalled()
+	})
+	test('vm.stats delegates the uuid to VmManager.stats', async () => {
+		const vmMock = makeVmMock()
+		await caller({vmMock}).stats({id: UUID})
+		expect(vmMock.stats).toHaveBeenCalledWith(UUID)
+	})
+	test('vm.diskUsage delegates the uuid to VmManager.diskUsage', async () => {
+		const vmMock = makeVmMock()
+		await caller({vmMock}).diskUsage({id: UUID})
+		expect(vmMock.diskUsage).toHaveBeenCalledWith(UUID)
+	})
+	test('vm.stats refuses a non-uuid id at the schema (delegate not called)', async () => {
+		const vmMock = makeVmMock()
+		await expect(caller({vmMock}).stats({id: 'not-a-uuid'})).rejects.toThrow()
+		expect(vmMock.stats).not.toHaveBeenCalled()
 	})
 })
 
