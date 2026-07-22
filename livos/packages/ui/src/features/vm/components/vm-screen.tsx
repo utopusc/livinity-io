@@ -1,32 +1,35 @@
-// Phase 353-02 (VMVIEW-01, VMVIEW-02) — the state-aware VM screen view.
+// Phase 355-01 (VMVNC-01, VMVNC-02) — the state-aware VM screen view, now
+// driven by LivOS's OWN native RFB canvas.
 //
-// Replaces the 352 disabled "open screen" placeholder with a real browser
-// noVNC surface. The view drives ENTIRELY off the already-shipped vm.list/vm.get
-// polling (352) plus the existing system.getIpAddresses query — no new backend
-// query, no touch of vm-manager/vm-registry.
+// Replaces 353's iframe of dockur/qemus's bundled noVNC page (`src=/vm/<id>/`)
+// with a native RFB canvas rendered via the shared `useWebAppVnc` hook —
+// exactly the surface the webapp/native-app/X11 streams already use. The canvas
+// connects to the EXISTING admin-gated `wss://<host>/vm/<id>/websockify` WS
+// bridge (353 + beta.5, byte-for-byte untouched); cookie auth rides the
+// same-origin handshake just like the iframe did. Removing the dockur page also
+// removes its coupling (root-path entry, /status install-WS reload-loop,
+// /audio socket) that caused the beta.5 pain.
 //
-// Honesty guarantee (VMVIEW-02 / T-353-06): a running VM's iframe is only ever
-// presented as working AFTER onLoad fires. If onLoad never fires within the
-// timeout, or onError fires, we flip to an honest retry/error affordance —
-// NEVER a bare/blank iframe shown as if it were the live desktop. The iframe is
-// same-origin (`/vm/<id>/`, remote-desktop-content.tsx precedent) to avoid
-// Cloudflare-Tunnel cross-subdomain issues.
+// Honesty guarantee (VMVNC-01 / T-355-01): the canvas is presented as working
+// ONLY on a real RFB `connect` (vnc.status === 'connected'). connecting /
+// disconnected / error render honest copy + a Reconnect affordance — never a
+// blank canvas shown as if it were the live desktop. Real RFB
+// connect/disconnect/securityfailure events replace 353's fragile
+// onLoad/onError/timeout blank-frame heuristic (strictly MORE honest).
 //
-// noVNC entry page (VERIFIED live 2026-07-22 against dockur/qemus source): the
-// dockur/qemus container serves its viewer at the ROOT `/` on port 8006 (nginx
-// `location / { root /run/shm }`, index.html with RELATIVE asset refs), NOT at
-// `/vnc.html` (the earlier RESEARCH guess 404'd on the box). The src MUST keep
-// the trailing slash so (a) index.html's relative `css/`,`js/` refs resolve
-// under `/vm/<id>/`, and (b) the viewer's `getURL()` (window.location.pathname)
-// derives the correct `/vm/<id>/websockify` + `/vm/<id>/status` WS URLs. The
-// viewer opens TWO websockets (websockify=VNC, status=install-progress); both
-// (plus /audio) are proxied by the Express /vm/:id/<endpoint> WS bridge — a
-// missing /status WS would trigger the viewer's onerror window.location.reload()
-// loop. The blank-frame heuristic below remains the honest backstop.
-import {useEffect, useRef, useState} from 'react'
+// Jargon ban (VMVNC-02, operator directive): zero user-facing VNC/noVNC/RFB/
+// websockify terminology — every string is a jargon-free t() key. In
+// particular the error branch renders t('vm.screen.error.connection') and
+// NEVER the hook's raw errorMessage (which can be English 'VNC security
+// failure').
+//
+// 356-readiness: VmScreen's {vm, onBack} prop contract + named export are
+// intentionally unchanged so Phase 356 can host this component in a
+// window-manager window unmodified — no panel-only assumptions baked in.
 import {TbAlertTriangle, TbArrowLeft, TbDeviceDesktop, TbLoader2, TbPlayerPlay, TbRefresh} from 'react-icons/tb'
 import {toast} from 'sonner'
 
+import {useWebAppVnc} from '@/hooks/use-webapp-vnc'
 import {Button} from '@/shadcn-components/ui/button'
 import type {RouterOutput} from '@/trpc/trpc'
 import {trpcReact} from '@/trpc/trpc'
@@ -36,52 +39,28 @@ import {t} from '@/utils/i18n'
 type VmView = RouterOutput['vm']['list'][number]
 
 /**
- * Exact sandbox token list (locked by test). Scoped to the MINIMUM noVNC needs:
- * same-origin (canvas reads same-origin assets + the /websockify WS is
- * same-origin) + scripts (the noVNC React/JS client). Deliberately withholds the
- * form-submit, popup, and download grants — the noVNC chrome has no login form,
- * no popup, no file download (T-353-07: minimal EoP surface). Order + spacing
- * matter (mirrors the LIV_ASSISTANT sandbox convention).
+ * Same-origin WS URL for the VM's screen bridge. Cookie auth rides the
+ * same-origin handshake (the 353 upgrade gate reads the session cookie) — NO
+ * `?token=` query. This is the ONLY VM-specific part of the wiring; the
+ * `/vm/<id>/websockify` gate itself (Origin + verifySessionFull + admin) is
+ * byte-for-byte untouched. Exported so the test can pin the shape.
  */
-export const VM_SCREEN_SANDBOX = 'allow-same-origin allow-scripts'
-
-/** How long the iframe gets to fire onLoad before we call it a failed load. */
-const LOAD_TIMEOUT_MS = 15_000
+export function buildVmWsUrl(id: string) {
+	const p = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+	return `${p}//${window.location.host}/vm/${id}/websockify`
+}
 
 export function VmScreen({vm, onBack}: {vm: VmView; onBack: () => void}) {
 	const utils = trpcReact.useUtils()
 
-	// Blank-frame heuristic (the one genuinely-new bit of logic — no in-repo
-	// analog). `loaded` flips true only on the iframe's onLoad; `failed` flips
-	// true on onError OR when the timeout elapses without a load. `attempt` bumps
-	// the iframe key to force a clean re-mount on retry.
-	const [loaded, setLoaded] = useState(false)
-	const [failed, setFailed] = useState(false)
-	const [attempt, setAttempt] = useState(0)
-	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
 	const isRunning = vm.state === 'running'
 
-	// Arm/disarm the load-timeout only while we're actually trying to show the
-	// iframe (running + not yet loaded/failed). Reset on every attempt + whenever
-	// the VM leaves the running state.
-	useEffect(() => {
-		if (timerRef.current) {
-			clearTimeout(timerRef.current)
-			timerRef.current = null
-		}
-		if (!isRunning || loaded || failed) return
-		timerRef.current = setTimeout(() => setFailed(true), LOAD_TIMEOUT_MS)
-		return () => {
-			if (timerRef.current) clearTimeout(timerRef.current)
-		}
-	}, [isRunning, loaded, failed, attempt])
-
-	const retry = () => {
-		setLoaded(false)
-		setFailed(false)
-		setAttempt((n) => n + 1)
-	}
+	// Native RFB canvas over the 353 websockify bridge. Called unconditionally
+	// at the top level; passing `undefined` when not running keeps the hook idle
+	// (its own contract) so no canvas mounts and no WS is opened in any
+	// non-running state. viewOnly:false → keyboard/mouse forwarded to the guest.
+	const wsUrl = isRunning ? buildVmWsUrl(vm.id) : undefined
+	const vnc = useWebAppVnc(wsUrl, {viewOnly: false})
 
 	const startMut = trpcReact.vm.start.useMutation({
 		onSuccess: () => utils.vm.list.invalidate(),
@@ -114,42 +93,50 @@ export function VmScreen({vm, onBack}: {vm: VmView; onBack: () => void}) {
 				</div>
 			) : null}
 
-			<div className='relative min-h-0 flex-1'>
-				{/* running: same-origin noVNC iframe with the blank-frame backstop. */}
-				{isRunning && !failed ? (
-					<iframe
-						key={attempt}
-						src={`/vm/${vm.id}/`}
-						title={t('vm.screen.title', {name: vm.name})}
-						data-testid='vm-screen-iframe'
-						className='h-full w-full border-0 bg-black'
-						sandbox={VM_SCREEN_SANDBOX}
-						allow='clipboard-read; clipboard-write'
-						onLoad={() => setLoaded(true)}
-						onError={() => setFailed(true)}
-					/>
-				) : null}
-
-				{/* running but the frame never confirmed a load: HONEST failure, not a
-				    blank frame shown as working (VMVIEW-02 core guarantee). */}
-				{isRunning && failed ? (
-					<div className='flex h-full w-full flex-col items-center justify-center gap-3 p-8 text-center'>
-						<TbAlertTriangle className='h-8 w-8 text-destructive2' />
-						<p className='max-w-md text-body-sm leading-tight text-text-tertiary'>
-							{t('vm.screen.error.blank-frame')}
-						</p>
-						<Button size='sm' variant='default' onClick={retry}>
-							<TbRefresh className='h-4 w-4' />
-							{t('vm.screen.error.retry')}
-						</Button>
-					</div>
-				) : null}
-
-				{/* running + not-yet-loaded: honest connecting spinner over the frame. */}
-				{isRunning && !loaded && !failed ? (
-					<div className='pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-black/40 text-body-sm text-white'>
-						<TbLoader2 className='h-4 w-4 animate-spin' />
-						{t('vm.screen.loading')}
+			<div className='min-h-0 flex-1'>
+				{/* running: LivOS's own native RFB canvas + an honest status strip.
+				    The canvas is only presented as working on a real RFB connect;
+				    connecting/disconnected/error render honest copy (never a blank
+				    canvas shown as working — T-355-01). Error copy is a jargon-free
+				    t() key, NEVER the hook's raw errorMessage (jargon leak — the hook
+				    can set English 'VNC security failure'; T-355-02). */}
+				{isRunning ? (
+					<div className='flex h-full w-full flex-col'>
+						{vnc.status !== 'connected' ? (
+							<div className='flex items-center gap-2 border-b border-border-default bg-black/80 px-3 py-1.5 text-caption text-white/70'>
+								{vnc.status === 'connecting' ? (
+									<>
+										<TbLoader2 className='h-4 w-4 animate-spin' />
+										{t('vm.screen.loading')}
+									</>
+								) : null}
+								{vnc.status === 'disconnected' ? (
+									<>
+										<span>{t('vm.screen.state.disconnected')}</span>
+										<Button size='sm' variant='ghost' onClick={vnc.reconnect}>
+											<TbRefresh className='h-4 w-4' />
+											{t('vm.screen.error.retry')}
+										</Button>
+									</>
+								) : null}
+								{vnc.status === 'error' ? (
+									<>
+										<span className='text-destructive2'>{t('vm.screen.error.connection')}</span>
+										<Button size='sm' variant='ghost' onClick={vnc.reconnect}>
+											<TbRefresh className='h-4 w-4' />
+											{t('vm.screen.error.retry')}
+										</Button>
+									</>
+								) : null}
+							</div>
+						) : null}
+						{/* isRunning-gated native canvas (mounts only in this branch). */}
+						<div
+							ref={vnc.containerRef}
+							data-testid='vm-screen-canvas'
+							className='flex-1 min-h-0 outline-none [&_canvas]:h-full [&_canvas]:w-full [&_canvas]:object-contain'
+							style={{background: 'black'}}
+						/>
 					</div>
 				) : null}
 
@@ -175,7 +162,7 @@ export function VmScreen({vm, onBack}: {vm: VmView; onBack: () => void}) {
 					</div>
 				) : null}
 
-				{/* creating / installing-os: honest progress, no iframe. */}
+				{/* creating / installing-os: honest progress, no canvas. */}
 				{vm.state === 'creating' || vm.state === 'installing-os' ? (
 					<div className='flex h-full w-full flex-col items-center justify-center gap-3 p-8 text-center'>
 						<TbLoader2 className='h-8 w-8 animate-spin text-text-secondary' />

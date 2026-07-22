@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 //
-// Phase 353-02 (VMVIEW-01, VMVIEW-02) — VM screen honesty guard tests.
+// Phase 355-01 (VMVNC-01, VMVNC-02) — VM screen honesty + jargon guard tests.
 //
 // `@testing-library/react` is NOT installed in this UI package (danger-zone
 // precedent, verified 2026-07-21) — no render/screen. These are source-text
 // invariants over the raw component text (readFileSync) pinning the honesty
-// guarantees the threat model (T-353-06/07) depends on, which tsc/pnpm build
+// guarantees the threat model (T-355-01/02) depends on, which tsc/pnpm build
 // cannot catch (they are string/structure invariants, not type errors).
+//
+// 355 retargets the honesty guard away from the retired iframe onLoad/timeout
+// heuristic onto the native RFB status machine (connecting/disconnected/error)
+// and adds a durable jargon guard over the vm.screen.* locale values.
 
 import {readFileSync} from 'node:fs'
 import {resolve} from 'node:path'
@@ -22,42 +26,40 @@ const VM_LIST = 'src/features/vm/components/vm-list.tsx'
 const EN = 'public/locales/en.json'
 const TR = 'public/locales/tr.json'
 
-describe('running VM shows a same-origin noVNC iframe (VMVIEW-01)', () => {
-	it('vm-screen.tsx renders a same-origin /vm/<id> iframe with a testid', () => {
+describe('running VM shows LivOS\'s own native RFB canvas — no iframe (VMVNC-01)', () => {
+	it('vm-screen.tsx renders a native RFB canvas via useWebAppVnc, not a dockur-page iframe', () => {
 		const src = read(SCREEN)
-		// Same-origin relative src onto the Plan-01 proxy route (no cross-subdomain).
-		// ROOT with TRAILING SLASH (verified 2026-07-22): dockur/qemus serves the
-		// viewer at `/` (not /vnc.html), and the trailing slash is required for the
-		// viewer's relative assets + getURL()-derived /vm/<id>/{websockify,status} WS.
-		expect(src).toMatch(/src=\{`\/vm\/\$\{vm\.id\}\/`\}/)
-		// The iframe src itself must NOT carry the old /vnc.html guess (the doc
-		// comment above legitimately references it, so scope the check to src=).
-		expect(src).not.toMatch(/src=\{`[^`]*vnc\.html/)
-		expect(src).toMatch(/data-testid='vm-screen-iframe'/)
-		// Gated behind the running state.
-		expect(src).toMatch(/isRunning/)
+		// The iframe (and its /vm/<id>/ page src) is GONE.
+		expect(src).not.toMatch(/<iframe/)
+		expect(src).not.toMatch(/src=\{`\/vm\/\$\{vm\.id\}\/`\}/)
+		// The screen is now the shared RFB hook, interactive (viewOnly:false),
+		// rendered into our own container ref.
+		expect(src).toMatch(/useWebAppVnc\(/)
+		expect(src).toMatch(/viewOnly:\s*false/)
+		expect(src).toMatch(/vnc\.containerRef/)
+		// The canvas mounts ONLY while running.
+		expect(src).toMatch(/isRunning[\s\S]{0,200}vnc\.containerRef/)
 	})
-	it('vm-screen.tsx uses a MINIMAL, exact sandbox token list (T-353-07 — no forms/popups/downloads)', () => {
+	it('vm-screen.tsx opens the same-origin /vm/<id>/websockify WS bridge with cookie auth (no ?token)', () => {
 		const src = read(SCREEN)
-		expect(src).toMatch(/VM_SCREEN_SANDBOX = 'allow-same-origin allow-scripts'/)
-		expect(src).not.toMatch(/allow-forms/)
-		expect(src).not.toMatch(/allow-popups/)
-		expect(src).not.toMatch(/allow-downloads/)
+		// Same-origin websockify URL (353 gate reads the session cookie).
+		expect(src).toMatch(/\/vm\/\$\{[^}]+\}\/websockify/)
+		// Cookie-only — NEVER a token query on the WS URL.
+		expect(src).not.toMatch(/websockify\?token/)
 	})
 })
 
-describe('the iframe is NEVER presented as working until it confirms a load (VMVIEW-02 / T-353-06)', () => {
-	it('vm-screen.tsx tracks onLoad/onError + a timeout, and shows a retry affordance on failure', () => {
+describe('the canvas is NEVER presented as working without a real RFB connect (VMVNC-01 / T-355-01)', () => {
+	it('vm-screen.tsx drives honest connecting/disconnected/error states off the RFB status machine', () => {
 		const src = read(SCREEN)
-		// The blank-frame heuristic: onLoad -> loaded, onError -> failed, timeout -> failed.
-		expect(src).toMatch(/onLoad=\{\(\) => setLoaded\(true\)\}/)
-		expect(src).toMatch(/onError=\{\(\) => setFailed\(true\)\}/)
-		expect(src).toMatch(/setTimeout\(\(\) => setFailed\(true\)/)
-		// Failure branch shows an honest retry, not a bare iframe.
-		expect(src).toMatch(/vm\.screen\.error\.blank-frame/)
+		// Honest states from real RFB events (replaces the retired onLoad/timeout
+		// blank-frame heuristic — strictly MORE honest).
+		expect(src).toMatch(/vnc\.status === 'connecting'/)
+		expect(src).toMatch(/vnc\.status === 'disconnected'/)
+		expect(src).toMatch(/vnc\.status === 'error'/)
+		// Disconnected/error surface an honest Reconnect affordance.
+		expect(src).toMatch(/vnc\.reconnect/)
 		expect(src).toMatch(/vm\.screen\.error\.retry/)
-		// The iframe is only rendered while running AND not failed.
-		expect(src).toMatch(/isRunning && !failed/)
 	})
 })
 
@@ -101,6 +103,33 @@ describe('open-screen is wired to the screen view — no dead placeholder (VMVIE
 		expect(src).toMatch(/VmScreen/)
 		expect(src).toMatch(/onOpenScreen/)
 		expect(src).toMatch(/setScreenVm/)
+	})
+})
+
+describe('zero user-facing VNC jargon — every vm.screen.* value is jargon-free (VMVNC-02 / T-355-02)', () => {
+	it('no vm.screen.* EN or TR locale value contains VNC/noVNC/RFB/websockify', () => {
+		const en = JSON.parse(read(EN)) as Record<string, string>
+		const tr = JSON.parse(read(TR)) as Record<string, string>
+		for (const locale of [en, tr]) {
+			for (const [k, v] of Object.entries(locale)) {
+				if (!k.startsWith('vm.screen.')) continue
+				expect(v, `jargon in ${k}: ${v}`).not.toMatch(/VNC|noVNC|RFB|websockify/i)
+			}
+		}
+	})
+	it('vm-screen.tsx never renders raw hook jargon (no \'VNC error\' literal, no vnc.errorMessage)', () => {
+		const src = read(SCREEN)
+		// The hook can set English strings like 'VNC security failure' / 'VNC
+		// error' — the VM screen must render ONLY jargon-free t() copy instead.
+		expect(src).not.toContain("'VNC error'")
+		expect(src).not.toMatch(/vnc\.errorMessage/)
+	})
+})
+
+describe('VmScreen stays 356-ready — unchanged {vm, onBack} export surface', () => {
+	it('vm-screen.tsx keeps the named VmScreen({vm, onBack}) export so 356 can host it in a window', () => {
+		const src = read(SCREEN)
+		expect(src).toMatch(/export function VmScreen\(\{vm, onBack\}/)
 	})
 })
 
