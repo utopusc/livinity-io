@@ -1333,9 +1333,19 @@ class Server {
 				// the documented e336afdd regression), so Express is the SOLE gate
 				// here (T-353-01). Steps 1-2 mirror /ws/desktop verbatim; step 3
 				// is the VmRegistry lookup. No new auth mechanism.
-				const vmWsMatch = pathname.match(/^\/vm\/([^/]+)\/websockify$/)
+				// Fix-forward 2026-07-22 (live beta finding): the dockur/qemus viewer
+				// opens MULTIPLE websockets from its root page — /websockify (VNC),
+				// /status (install-progress; its onerror does window.location.reload()
+				// → a reload LOOP if the WS is unroutable), and /audio. All three are
+				// same-origin subresources of the already-admin-gated screen, so this
+				// bridge covers the full allowlist and preserves the endpoint so the
+				// container's own nginx (novncPort=8006) routes each to its backend
+				// (websockify→5700, status→8004, audio→8003). The auth gate below is
+				// IDENTICAL for every endpoint (no per-endpoint weakening).
+				const vmWsMatch = pathname.match(/^\/vm\/([^/]+)\/(websockify|status|audio)$/)
 				if (vmWsMatch) {
 					const vmId = vmWsMatch[1]
+					const vmWsEndpoint = vmWsMatch[2]
 
 					// 1. Origin validation (Spoofing mitigation) — BEFORE the token
 					//    check, identical to /ws/desktop.
@@ -1424,7 +1434,7 @@ class Server {
 					// 4. WS-to-WS bridge to the container's loopback /websockify.
 					//    No LIV_API_KEY header — loopback, container has no auth (the
 					//    gate in front of it is THIS branch). Mirrors the voice proxy.
-					const vmUpstream = new WebSocket(`ws://127.0.0.1:${vmView.novncPort}/websockify`)
+					const vmUpstream = new WebSocket(`ws://127.0.0.1:${vmView.novncPort}/${vmWsEndpoint}`)
 					const vmProxyWss = new WebSocketServer({noServer: true})
 
 					vmUpstream.on('open', () => {

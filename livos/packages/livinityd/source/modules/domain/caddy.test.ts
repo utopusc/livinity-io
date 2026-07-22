@@ -1959,13 +1959,16 @@ describe('Phase 262-01 — /liv-family forward_auth gate (LIVOS-041/047/054)', (
 		expect(out.slice(idx, end)).not.toContain('forward_auth 127.0.0.1')
 	})
 
-	it('@vm_screen_ws matcher is a block on `path /vm/*/websockify` and emits in all three sites', () => {
+	it('@vm_screen_ws matcher is a block on the dockur WS path allowlist and emits in all three sites', () => {
+		// Fix-forward 2026-07-22: broadened from /websockify only to the full dockur
+		// viewer WS set (websockify=VNC, status=install-progress, audio) so /status
+		// (whose onerror reload-loops if unroutable) also takes the UNGATED WS leg.
 		const apex = apexOut()
 		expect(apex).toContain('@vm_screen_ws {')
-		expect(apex).toContain('path /vm/*/websockify')
+		expect(apex).toContain('path /vm/*/websockify /vm/*/status /vm/*/audio')
 		const fallback = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
 		expect(fallback).toContain('@vm_screen_ws {')
-		expect(fallback).toContain('path /vm/*/websockify')
+		expect(fallback).toContain('path /vm/*/websockify /vm/*/status /vm/*/audio')
 		const multi = generateFullCaddyfile(
 			{mainDomain: 'livinity.io', subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}]},
 			true,

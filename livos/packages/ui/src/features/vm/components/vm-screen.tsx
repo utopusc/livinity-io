@@ -9,15 +9,20 @@
 // presented as working AFTER onLoad fires. If onLoad never fires within the
 // timeout, or onError fires, we flip to an honest retry/error affordance —
 // NEVER a bare/blank iframe shown as if it were the live desktop. The iframe is
-// same-origin (`/vm/<id>/vnc.html`, remote-desktop-content.tsx precedent) to
-// avoid Cloudflare-Tunnel cross-subdomain issues.
+// same-origin (`/vm/<id>/`, remote-desktop-content.tsx precedent) to avoid
+// Cloudflare-Tunnel cross-subdomain issues.
 //
-// noVNC entry page: `vnc.html` is the RESEARCH-recommended guess for the
-// dockur/qemus container's viewer page and CANNOT be live-verified from this
-// Windows dev host — the blank-frame heuristic below is the honest backstop if
-// the guess is wrong (a wrong path degrades to the retry/error affordance, never
-// a fake-working frame). 353-HUMAN-UAT step 1 must confirm the real path on the
-// box (`curl 127.0.0.1:<novncPort>/`).
+// noVNC entry page (VERIFIED live 2026-07-22 against dockur/qemus source): the
+// dockur/qemus container serves its viewer at the ROOT `/` on port 8006 (nginx
+// `location / { root /run/shm }`, index.html with RELATIVE asset refs), NOT at
+// `/vnc.html` (the earlier RESEARCH guess 404'd on the box). The src MUST keep
+// the trailing slash so (a) index.html's relative `css/`,`js/` refs resolve
+// under `/vm/<id>/`, and (b) the viewer's `getURL()` (window.location.pathname)
+// derives the correct `/vm/<id>/websockify` + `/vm/<id>/status` WS URLs. The
+// viewer opens TWO websockets (websockify=VNC, status=install-progress); both
+// (plus /audio) are proxied by the Express /vm/:id/<endpoint> WS bridge — a
+// missing /status WS would trigger the viewer's onerror window.location.reload()
+// loop. The blank-frame heuristic below remains the honest backstop.
 import {useEffect, useRef, useState} from 'react'
 import {TbAlertTriangle, TbArrowLeft, TbDeviceDesktop, TbLoader2, TbPlayerPlay, TbRefresh} from 'react-icons/tb'
 import {toast} from 'sonner'
@@ -114,7 +119,7 @@ export function VmScreen({vm, onBack}: {vm: VmView; onBack: () => void}) {
 				{isRunning && !failed ? (
 					<iframe
 						key={attempt}
-						src={`/vm/${vm.id}/vnc.html`}
+						src={`/vm/${vm.id}/`}
 						title={t('vm.screen.title', {name: vm.name})}
 						data-testid='vm-screen-iframe'
 						className='h-full w-full border-0 bg-black'

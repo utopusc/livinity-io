@@ -26,7 +26,13 @@ describe('running VM shows a same-origin noVNC iframe (VMVIEW-01)', () => {
 	it('vm-screen.tsx renders a same-origin /vm/<id> iframe with a testid', () => {
 		const src = read(SCREEN)
 		// Same-origin relative src onto the Plan-01 proxy route (no cross-subdomain).
-		expect(src).toMatch(/src=\{`\/vm\/\$\{vm\.id\}\/vnc\.html`\}/)
+		// ROOT with TRAILING SLASH (verified 2026-07-22): dockur/qemus serves the
+		// viewer at `/` (not /vnc.html), and the trailing slash is required for the
+		// viewer's relative assets + getURL()-derived /vm/<id>/{websockify,status} WS.
+		expect(src).toMatch(/src=\{`\/vm\/\$\{vm\.id\}\/`\}/)
+		// The iframe src itself must NOT carry the old /vnc.html guess (the doc
+		// comment above legitimately references it, so scope the check to src=).
+		expect(src).not.toMatch(/src=\{`[^`]*vnc\.html/)
 		expect(src).toMatch(/data-testid='vm-screen-iframe'/)
 		// Gated behind the running state.
 		expect(src).toMatch(/isRunning/)

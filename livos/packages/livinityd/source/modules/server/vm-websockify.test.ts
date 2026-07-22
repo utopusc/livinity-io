@@ -17,9 +17,13 @@ import {join} from 'node:path'
 const serverSource = readFileSync(join(import.meta.dirname, 'index.ts'), 'utf-8')
 
 describe('/vm/:id/websockify WebSocket-to-WebSocket bridge handler (auth tripwire)', () => {
-	it('branch exists and matches /vm/<id>/websockify only', () => {
-		expect(serverSource).toContain('const vmWsMatch = pathname.match(/^\\/vm\\/([^/]+)\\/websockify$/)')
+	it('branch exists and matches the dockur WS endpoint allowlist (websockify|status|audio)', () => {
+		// Fix-forward 2026-07-22: the dockur/qemus viewer opens /websockify (VNC) AND
+		// /status (install-progress; reload-loops if unroutable) AND /audio — the
+		// bridge covers all three under the SAME admin gate, preserving the endpoint.
+		expect(serverSource).toContain('const vmWsMatch = pathname.match(/^\\/vm\\/([^/]+)\\/(websockify|status|audio)$/)')
 		expect(serverSource).toContain('if (vmWsMatch)')
+		expect(serverSource).toContain('const vmWsEndpoint = vmWsMatch[2]')
 	})
 
 	it('(a) Origin check runs BEFORE the token check', () => {
@@ -86,8 +90,9 @@ describe('/vm/:id/websockify WebSocket-to-WebSocket bridge handler (auth tripwir
 
 	it('(e) bridge target is built ONLY from vm.novncPort (registry), never request input', () => {
 		const block = extractVmWsBlock(serverSource)
-		// The upstream URL is loopback + the registry-sourced novncPort.
-		expect(block).toContain('ws://127.0.0.1:${vmView.novncPort}/websockify')
+		// The upstream URL is loopback + the registry-sourced novncPort; the endpoint
+		// (websockify|status|audio) comes from the vetted allowlist match, not raw input.
+		expect(block).toContain('ws://127.0.0.1:${vmView.novncPort}/${vmWsEndpoint}')
 		// The id is UUID-validated before the registry lookup (SSRF discipline).
 		expect(block).toMatch(/VM_ID_RE\.test\(vmId\)/)
 		// The target host is a hardcoded loopback literal — never derived from

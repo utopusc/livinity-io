@@ -836,7 +836,7 @@ ${WS_TRANSPORT_BODY}
  * forward_auth — LIVOS-041/386b33e7).
  */
 const VM_SCREEN_WS_HANDLE = `\t@vm_screen_ws {
-\t\tpath /vm/*/websockify
+\t\tpath /vm/*/websockify /vm/*/status /vm/*/audio
 \t\theader Connection *Upgrade*
 \t\theader Upgrade websocket
 \t}
