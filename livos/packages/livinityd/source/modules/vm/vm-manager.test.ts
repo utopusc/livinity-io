@@ -51,6 +51,23 @@ vi.mock('../apps/vm-preflight.js', () => {
 	}
 })
 
+// Phase 362 (VMSTATS-01): mock the dockerode live-stats read + the du directory-size
+// util so stats()/diskUsage() are fully offline. getContainerStats returns a fixed
+// live payload; the memoryLimit/memoryPercent are ABSURD sentinels the code MUST
+// ignore (a VM sets no cgroup mem_limit — allocated comes from the registry).
+vi.mock('../docker/docker.js', () => ({
+	getContainerStats: vi.fn(async () => ({
+		cpuPercent: 12.5,
+		memoryUsage: 2 * 1024 ** 3, // 2 GiB working set → 2048 MiB
+		memoryLimit: 999_999_999_999, // SENTINEL — must be IGNORED (a VM has no cgroup cap)
+		memoryPercent: 999, // SENTINEL — must be IGNORED
+		networkRx: 0,
+		networkTx: 0,
+		pids: 1,
+	})),
+}))
+vi.mock('../utilities/get-directory-size.js', () => ({default: vi.fn(async () => 21 * 1024 ** 3)}))
+
 // Mock fs-extra so delete()'s rm -rf never touches a real disk (Task 2). Phase 351
 // (VMCREATE-01 gap closure): the custom LOCAL-image path also uses fse.realpath (symlink-safe
 // containment), fse.stat (regular-file), fse.ensureDir + fse.link/copyFile (hardlink into the
@@ -84,6 +101,8 @@ const {assertKvmAvailable, assertVmResourcesSane, probeHostCapacity, vmResizeVer
 	'../apps/vm-preflight.js'
 )
 const fse = (await import('fs-extra')).default
+const {getContainerStats} = await import('../docker/docker.js')
+const getDirectorySize = (await import('../utilities/get-directory-size.js')).default
 const {vmPortAllocator, vmRdpPortAllocator} = await import('./vm-ports.js')
 const {VmRegistry} = await import('./vm-registry.js')
 const {VmManager} = await import('./vm-manager.js')
@@ -1192,5 +1211,85 @@ describe('reconcileOnBoot — boot durability (closes the cleanDockerState wipe)
 		// Only 16102 is free — allocate must pick it, never a reserved port.
 		expect(a.allocate()).toBe(16102)
 		expect(() => a.allocate()).toThrow(/exhausted/)
+	})
+})
+
+describe('stats() + diskUsage() — live per-VM usage (VMSTATS-01)', () => {
+	// A running windows VM seeded straight into the fake store. resources are the
+	// ALLOCATED source of truth (ramMiB 4096 / cpus 2 / diskGiB 40); dataDir pins
+	// the exact `${dataDir}/storage` du path the disk read must use.
+	async function seedRunning(store: ReturnType<typeof makeFakeStore>) {
+		return seed(store, {
+			kind: 'windows',
+			resources: {cpus: 2, ramMiB: 4096, diskGiB: 40},
+			id: 'st1',
+			containerName: 'vm-st1',
+			dataDir: '/fake/data/vm-data/st1',
+		})
+	}
+
+	test('running stats: pairs live cpu%/working-set RAM against registry-allocated', async () => {
+		const {vm, store} = makeManager()
+		await seedRunning(store)
+		// An earlier test in this file sets a PERSISTENT mockResolvedValue('exited'),
+		// so the running-path tests explicitly assert 'running' (mirrors :636/:657/:978).
+		vi.mocked(dockerInspectStatus).mockResolvedValueOnce('running')
+		const s = (await vm.stats('st1'))!
+		expect(s.running).toBe(true)
+		expect(s.cpuPercent).toBe(12.5)
+		expect(s.ramUsedMiB).toBe(2048) // 2 GiB working set / 1024^2
+		expect(s.ramAllocMiB).toBe(4096)
+		expect(s.cpuAllocated).toBe(2)
+	})
+
+	test('allocated RAM comes from the registry, NEVER the cgroup memoryLimit sentinel', async () => {
+		const {vm, store} = makeManager()
+		await seedRunning(store)
+		vi.mocked(dockerInspectStatus).mockResolvedValueOnce('running')
+		const s = (await vm.stats('st1'))!
+		// The mock returns an absurd memoryLimit (999_999_999_999) / memoryPercent
+		// (999); ramAllocMiB must equal the registry ramMiB, proving neither leaks in.
+		expect(s.ramAllocMiB).toBe(4096)
+	})
+
+	test('stopped stats: honest allocated-only, getContainerStats NEVER called', async () => {
+		const {vm, store} = makeManager()
+		await seedRunning(store)
+		vi.mocked(dockerInspectStatus).mockResolvedValueOnce('exited')
+		const s = (await vm.stats('st1'))!
+		expect(s.running).toBe(false)
+		expect(s.cpuPercent).toBeUndefined()
+		expect(s.ramUsedMiB).toBeUndefined()
+		expect(s.ramAllocMiB).toBe(4096)
+		expect(s.cpuAllocated).toBe(2)
+		expect(getContainerStats).not.toHaveBeenCalled()
+	})
+
+	test('running diskUsage: du of `${dataDir}/storage` paired with allocated', async () => {
+		const {vm, store} = makeManager()
+		await seedRunning(store)
+		vi.mocked(dockerInspectStatus).mockResolvedValueOnce('running')
+		const d = (await vm.diskUsage('st1'))!
+		expect(d.running).toBe(true)
+		expect(d.diskUsedBytes).toBe(21 * 1024 ** 3)
+		expect(d.diskAllocGiB).toBe(40)
+		expect(getDirectorySize).toHaveBeenCalledWith('/fake/data/vm-data/st1/storage')
+	})
+
+	test('stopped diskUsage: honest allocated-only, getDirectorySize NEVER shelled out', async () => {
+		const {vm, store} = makeManager()
+		await seedRunning(store)
+		vi.mocked(dockerInspectStatus).mockResolvedValueOnce('exited')
+		const d = (await vm.diskUsage('st1'))!
+		expect(d.running).toBe(false)
+		expect(d.diskUsedBytes).toBeUndefined()
+		expect(d.diskAllocGiB).toBe(40)
+		expect(getDirectorySize).not.toHaveBeenCalled()
+	})
+
+	test('unknown id → undefined (get() read convention, never a throw)', async () => {
+		const {vm} = makeManager()
+		await expect(vm.stats('ghost')).resolves.toBeUndefined()
+		await expect(vm.diskUsage('ghost')).resolves.toBeUndefined()
 	})
 })
