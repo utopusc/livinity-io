@@ -712,6 +712,21 @@ describe('lifecycle mutations — single-flight + graceful + ordered teardown', 
 		expect((await records(store))[0].lastIntent).toBe('running')
 	})
 
+	test('361 regression: restart() stays a plain composeRestart bounce — never composeStop/composeUp (do NOT repoint at apply)', async () => {
+		// 361 adds an "Apply now" (stop+start = composeUp) affordance in the UI to
+		// apply resource edits. The row Restart button + vm.restart MUST stay an
+		// in-place `docker compose restart` bounce (the "unstick a hung VM" case) and
+		// must NOT be repointed at the apply path — this pins that invariant forever.
+		const {vm, store} = makeManager()
+		await seed(store, {id: 'r361', containerName: 'vm-r361', lastIntent: 'running'})
+
+		await vm.restart('r361')
+
+		expect(composeRestart).toHaveBeenCalledWith('/fake/data/vm-data/seed-id/docker-compose.yml', 'vm-r361')
+		expect(composeStop).not.toHaveBeenCalled()
+		expect(composeUp).not.toHaveBeenCalled()
+	})
+
 	test('a second concurrent op on the SAME id refuses; a DIFFERENT id proceeds', async () => {
 		const {vm, store} = makeManager()
 		await seed(store, {id: 'same', containerName: 'vm-same'})
