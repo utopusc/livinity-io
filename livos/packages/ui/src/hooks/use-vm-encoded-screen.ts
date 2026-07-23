@@ -20,21 +20,27 @@
 // terminal status — so an unavailable encoder or an MSE-hostile browser degrades
 // honestly, never into a hung 'connecting'.
 //
-// This hook is VIDEO-OUT ONLY: no pointer/keyboard/RFB/@novnc reference (input
-// rides the existing 355 path until 366's hybrid input). It owns the videoRef +
-// the MediaSource/SourceBuffer/WS lifecycle; the <video> element itself is
-// rendered by the consumer (365-02).
+// VIDEO-OUT + a thin client→server input sender (367-02): the hook owns the
+// videoRef + the MediaSource/SourceBuffer/WS lifecycle and additionally
+// exposes `sendInput`, a guarded JSON send on its OWN admitted socket — the
+// 367-01 server side parses/validates/rate-limits every frame (vm-input.ts);
+// nothing here is the trust boundary. Event CAPTURE (pointer/keyboard/the
+// noVNC Keyboard class) lives in use-vm-input.ts; the <video> element itself
+// is rendered by the consumer (365-02).
 
 import {useCallback, useEffect, useRef, useState} from 'react'
 
 import {trpcReact} from '@/trpc/trpc'
 import {codecStringFromInitSegment} from '@/utils/parse-avc-codec'
+import type {VmInputMessage} from '@/utils/vm-input-coords'
 
 export type VmEncodedScreenStatus = 'idle' | 'connecting' | 'connected' | 'unavailable' | 'error'
 
 export interface UseVmEncodedScreenResult {
 	videoRef: React.RefObject<HTMLVideoElement>
 	status: VmEncodedScreenStatus
+	/** Send one input frame over the hook's OWN stream socket (no-op unless OPEN). */
+	sendInput: (msg: VmInputMessage) => void
 }
 
 // Client-side append-queue cap — a stalled decoder can't grow tab memory
@@ -492,5 +498,15 @@ export function useVmEncodedScreen(vmId: string | undefined): UseVmEncodedScreen
 		}
 	}, [vmId, connect, teardown])
 
-	return {videoRef, status}
+	// 367-02: guarded input send on the hook's OWN admitted socket (the
+	// multiplex invariant — input never opens a second socket). Deliberately
+	// NO status read here (staleness — the callback identity is stable); the
+	// CONSUMER gates on status === 'connected', and the OPEN check makes a
+	// send during connect/teardown a silent no-op, never a throw.
+	const sendInput = useCallback((msg: VmInputMessage) => {
+		const ws = wsRef.current
+		if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg))
+	}, [])
+
+	return {videoRef, status, sendInput}
 }

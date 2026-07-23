@@ -32,11 +32,12 @@
 // carries the VM name + OS icon, so a second Back/title is redundant chrome).
 // `pure` is false on the mobile in-panel path (windowId absent) so mobile keeps
 // its Back — no stranding. The {vm, onBack} core contract is otherwise intact.
-import {useEffect, useState} from 'react'
+import {useEffect, useRef, useState} from 'react'
 import {TbAlertTriangle, TbArrowLeft, TbDeviceDesktop, TbLoader2, TbPlayerPlay, TbRefresh} from 'react-icons/tb'
 import {toast} from 'sonner'
 
 import {useVmEncodedScreen} from '@/hooks/use-vm-encoded-screen'
+import {useVmInput} from '@/hooks/use-vm-input'
 import {useWebAppVnc} from '@/hooks/use-webapp-vnc'
 import {Button} from '@/shadcn-components/ui/button'
 import type {RouterOutput} from '@/trpc/trpc'
@@ -73,10 +74,13 @@ export function VmScreen({vm, onBack, pure}: {vm: VmView; onBack: () => void; pu
 	// the RFB socket only opens on fallback (`!showEncoded`), so exactly one live
 	// socket exists; the fallback decision is stored in `forcedFallback` STATE,
 	// not re-derived per render, so a status flap can never flip the surface back.
-	// The encoded surface is honestly view-only (input rides the RFB path via the
-	// switch button; full encoded input is 366). Multi-viewer: N browsers may each
-	// open the player — 2 tabs currently = 2 backend encode pairs, a documented
-	// 365-HUMAN-UAT open question, not fixed here (RFB stays functional throughout).
+	// The encoded surface takes input DIRECTLY since 367 (pointer/keyboard/wheel
+	// ride the stream socket via useVmInput); the escape-hatch button below still
+	// latches to the standard RFB view (encoder trouble / input feel / clipboard
+	// — which stays RFB-only, Latin-1 deferral). Multi-viewer: N browsers may
+	// each open the player — 2 tabs currently = 2 backend encode pairs, a
+	// documented 365-HUMAN-UAT open question, not fixed here; input from N admin
+	// viewers interleaves last-write-wins on the one shared guest connection.
 	//
 	// Cap-slot discipline: the cheap synchronous MediaSource support check gates
 	// the hook arg, so a browser that can never play the encoded stream never
@@ -100,11 +104,26 @@ export function VmScreen({vm, onBack, pure}: {vm: VmView; onBack: () => void; pu
 		setForcedFallback(false)
 	}, [vm.id, isRunning])
 
+	// 367-02: input capture for the encoded view — pointer/keyboard/wheel on the
+	// focusable wrapper below, relayed over the 365 hook's OWN stream socket
+	// (mse.sendInput; no second socket). The hook is called unconditionally
+	// (rules of hooks); `enabled` gates everything on a GENUINELY connected
+	// stream, so input is dead while connecting/latched — the honest-state
+	// invariant extends to input.
+	const encInputRef = useRef<HTMLDivElement>(null)
+	useVmInput({
+		containerRef: encInputRef,
+		videoRef: mse.videoRef,
+		sendInput: mse.sendInput,
+		enabled: showEncoded && mse.status === 'connected',
+	})
+
 	// Native RFB canvas over the 353 websockify bridge — the honest fallback.
 	// MUTUALLY EXCLUSIVE with the encoded path: the wsUrl (and thus the live WS)
 	// is gated on `!showEncoded`, so `useWebAppVnc` stays idle while the encoded
 	// path is active — never two live sockets. viewOnly:false → keyboard/mouse
-	// forwarded to the guest (this is the input path until 366).
+	// forwarded to the guest, with full clipboard (the encoded path defers
+	// clipboard — Latin-1 wire limitation, 367-01 decision).
 	const wsUrl = isRunning && !showEncoded ? buildVmWsUrl(vm.id) : undefined
 	const vnc = useWebAppVnc(wsUrl, {viewOnly: false})
 
@@ -135,14 +154,16 @@ export function VmScreen({vm, onBack, pure}: {vm: VmView; onBack: () => void; pu
 			)}
 
 			<div className='min-h-0 flex-1'>
-				{/* running (encoded): the host-hardware-encoded, VIEW-ONLY <video>.
-				    Presented as working only while the encoded status is
-				    idle/connecting/connected (an honest overlay reusing
-				    vm.screen.loading until a real playing frame); ANY terminal status
-				    latches the RFB fallback below. Mutually exclusive with the RFB
-				    branch (`showEncoded` vs `!showEncoded`). The switch button
-				    force-latches to the RFB (input) path — no "interactive" claim on
-				    the encoded surface itself. */}
+				{/* running (encoded): the host-hardware-encoded <video>, INTERACTIVE
+				    since 367 (pointer/keyboard/wheel captured on the focusable
+				    wrapper via useVmInput, riding the stream socket). Presented as
+				    working only while the encoded status is idle/connecting/connected
+				    (an honest overlay reusing vm.screen.loading until a real playing
+				    frame); ANY terminal status latches the RFB fallback below.
+				    Mutually exclusive with the RFB branch (`showEncoded` vs
+				    `!showEncoded`). The compact escape-hatch button force-latches to
+				    the standard RFB view (encoder trouble / input feel / clipboard /
+				    operator preference — honest affordance, not a dead one). */}
 				{isRunning && showEncoded ? (
 					<div className='flex h-full w-full flex-col'>
 						{mse.status !== 'connected' ? (
@@ -152,23 +173,32 @@ export function VmScreen({vm, onBack, pure}: {vm: VmView; onBack: () => void; pu
 							</div>
 						) : (
 							<div className='flex items-center gap-2 border-b border-border-default bg-black/80 px-3 py-1.5 text-caption text-white/70'>
-								<span>{t('vm.screen.state.preview-view-only')}</span>
 								<Button size='sm' variant='ghost' onClick={() => setForcedFallback(true)}>
 									<TbDeviceDesktop className='h-4 w-4' />
-									{t('vm.screen.action.switch-interactive')}
+									{t('vm.screen.action.switch-standard')}
 								</Button>
 							</div>
 						)}
-						{/* view-only encoded stream (no pointer/keyboard handler — input is 366). */}
-						<video
-							ref={mse.videoRef}
-							autoPlay
-							muted
-							playsInline
-							data-testid='vm-screen-video'
-							className='min-h-0 w-full flex-1 object-contain'
+						{/* Focusable input wrapper (tabIndex — key events need a focused
+						    target; useVmInput focuses it on pointerdown) around the
+						    encoded stream. The <video> attribute list itself is
+						    byte-identical to 365 (pinned). */}
+						<div
+							ref={encInputRef}
+							tabIndex={0}
+							className='flex min-h-0 w-full flex-1 flex-col outline-none'
 							style={{background: 'black'}}
-						/>
+						>
+							<video
+								ref={mse.videoRef}
+								autoPlay
+								muted
+								playsInline
+								data-testid='vm-screen-video'
+								className='min-h-0 w-full flex-1 object-contain'
+								style={{background: 'black'}}
+							/>
+						</div>
 					</div>
 				) : null}
 
