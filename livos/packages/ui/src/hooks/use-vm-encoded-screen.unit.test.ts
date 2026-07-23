@@ -134,6 +134,79 @@ describe('teardown releases the session and every resource', () => {
 	})
 })
 
+describe('live-edge chase — playbackRate convergence, dual drivers, deadline-inert (366, VMENC-01)', () => {
+	// Extracts the chaseLiveEdge body: connect()-scope helpers sit at two-tab
+	// indentation, so the first `\n\t\t}` after the declaration closes the arrow
+	// function itself (nested blocks close deeper). Used by the body-scoped pins.
+	const chaseBody = (src: string) => {
+		const m = src.match(/const chaseLiveEdge = \(\) => \{[\s\S]*?\n\t\t\}/)
+		expect(m, 'chaseLiveEdge arrow-function body not found in the hook source').not.toBeNull()
+		return m![0]
+	}
+
+	it('locks the four chase consts BY VALUE — these numbers ARE the latency contract this phase ships', () => {
+		const src = read(HOOK)
+		// Values pinned deliberately (unlike most tunables, which pin names only):
+		// 0.3/0.8/1.1/2.5 are the shipped 366 latency behavior. tsc/build cannot
+		// notice a drive-by retune; bumping any of these must be a conscious re-pin.
+		expect(src).toMatch(/const TARGET_LIVE_OFFSET_S = 0\.3/)
+		expect(src).toMatch(/const RATE_ENGAGE_DRIFT_S = 0\.8/)
+		expect(src).toMatch(/const CHASE_RATE = 1\.1/)
+		expect(src).toMatch(/const JUMP_DRIFT_S = 2\.5/)
+	})
+	it('the old 1.5 s hard-seek tolerance (MAX_LAG_SECONDS) is gone', () => {
+		const src = read(HOOK)
+		// The coarse seek-only-past-1.5s chase tolerated up to 1.5 s of STANDING
+		// latency forever; its const must not survive alongside the new chase
+		// (two competing live-edge mechanisms would fight over currentTime).
+		expect(src).not.toMatch(/MAX_LAG_SECONDS/)
+	})
+	it('engages CHASE_RATE guarded on !== and releases playbackRate back to 1', () => {
+		const src = read(HOOK)
+		// Engage: only assign when not already chasing (repeated playbackRate
+		// writes on every updateend (~30 Hz) would thrash the pipeline).
+		expect(src).toMatch(/playbackRate !== CHASE_RATE[\s\S]{0,80}playbackRate = CHASE_RATE/)
+		// Release: converge back to normal speed once near the hold-back —
+		// without this the player overshoots the live edge and stalls.
+		expect(src).toMatch(/playbackRate = 1\b/)
+	})
+	it('onUpdateEnd orders pump() → evict() → chaseLiveEdge() — chase runs LAST, after the append settles', () => {
+		const src = read(HOOK)
+		// Pitfall 5 ordering: the chase reads buffered AFTER the drain + eviction
+		// so it sees the settled range; running it first would chase a stale end.
+		expect(src).toMatch(/pump\(\)[\s\S]{0,80}evict\(\)[\s\S]{0,80}chaseLiveEdge\(\)/)
+	})
+	it('dual drivers: timeupdate AND the updateend path both invoke the chase', () => {
+		const src = read(HOOK)
+		// timeupdate does NOT fire while the element is stalled — an
+		// updateend-driven chase (per append, ~30 Hz) is what lets drift
+		// accumulated during a stall self-heal instead of standing forever.
+		expect(src).toMatch(/'timeupdate'[\s\S]{0,160}chaseLiveEdge/)
+		const invocations = src.match(/chaseLiveEdge\(\)/g) ?? []
+		expect(invocations.length).toBeGreaterThanOrEqual(2)
+	})
+	it('the chase is deadline-inert: never touches deadlineTimerRef, and the deadline arms exactly once', () => {
+		const src = read(HOOK)
+		// CR-01 stays dead after connect: a chase-induced seek re-fires
+		// canplay/playing (idempotent onPlaying), but the chase itself must never
+		// clear or re-arm the connect deadline.
+		expect(chaseBody(src)).not.toMatch(/deadlineTimerRef/)
+		// And the deadline can never be RE-armed anywhere: exactly one arm site.
+		const arms = src.match(/deadlineTimerRef\.current = setTimeout/g) ?? []
+		expect(arms.length).toBe(1)
+	})
+	it('initial placement / defensive jump lands INSIDE the live buffered range, never closer than the hold-back', () => {
+		const src = read(HOOK)
+		const body = chaseBody(src)
+		// A currentTime outside the live range (far-from-0 baseMediaDecodeTime,
+		// long tab-background) must be placed INTO it or playback never starts…
+		expect(body).toMatch(/buffered\.start\(buffered\.length - 1\)/)
+		// …clamped via Math.max so the jump never lands closer to the end than
+		// TARGET_LIVE_OFFSET_S (a too-close seek triggers a waiting→stall loop).
+		expect(body).toMatch(/Math\.max\(/)
+	})
+})
+
 describe('generation guard + bounded queue + falsy-vmId idle', () => {
 	it('guards stale async continuations via a generation counter', () => {
 		const src = read(HOOK)
