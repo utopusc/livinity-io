@@ -745,8 +745,8 @@ ${LIV_GATE_BODY}
 ${WS_TRANSPORT_BODY}
 \t\t}
 \t}
-\t# Reliability B4 - /ws/desktop (VNC bridge) + /ws/voice (nexus-core proxy) live on livinityd :8080; without this carve-out the @liv_ws land-grab below mis-routes them to AionUi :3020 (no such routes there).
-\t@webapp_stream_ws path /ws/stream/* /ws/docker/* /ws/docker-exec /ws/ssh-sessions /ws/desktop /ws/voice
+\t# Reliability B4 - /ws/desktop (VNC bridge) + /ws/voice (nexus-core proxy) live on livinityd :8080; without this carve-out the @liv_ws land-grab below mis-routes them to AionUi :3020 (no such routes there). Phase 364 (VMENC-01) adds /ws/vm-stream/* (hardware-encoded VM screen fan-out) to the SAME carve-out: it is a livinityd :8080 route and MUST NOT fall through to the AionUi land-grab (which returns 404/reset -> the browser MSE player fails and silently drops to the RFB fallback -- the "encoded stream never plays" bug).
+\t@webapp_stream_ws path /ws/stream/* /ws/vm-stream/* /ws/docker/* /ws/docker-exec /ws/ssh-sessions /ws/desktop /ws/voice
 \thandle @webapp_stream_ws {
 \t\treverse_proxy 127.0.0.1:8080 {
 ${WS_TRANSPORT_BODY}

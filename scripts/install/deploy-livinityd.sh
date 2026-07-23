@@ -2367,7 +2367,10 @@ _dld_update_caddy_to_livinityd() {
     }
     # Reliability B4 — /ws/desktop + /ws/voice live on livinityd :8080; without
     # this carve-out the @liv_ws land-grab below mis-routes them to :3020.
-    @webapp_stream_ws path /ws/stream/* /ws/desktop /ws/voice
+    # Phase 364 (VMENC-01) — /ws/vm-stream/* (encoded VM screen) is also a :8080
+    # route and MUST be carved out; otherwise the browser MSE player 404s and
+    # silently drops to the RFB fallback (runtime caddy.ts carries the same fix).
+    @webapp_stream_ws path /ws/stream/* /ws/vm-stream/* /ws/desktop /ws/voice
     handle @webapp_stream_ws {
         reverse_proxy 127.0.0.1:8080 {
             flush_interval -1

@@ -914,6 +914,11 @@ describe('Phase 237 — split subresource matchers (@liv_ws + @liv_api_subresour
 		expect(matcherLine).toContain('/ws/docker/*')
 		expect(matcherLine).toContain('/ws/docker-exec')
 		expect(matcherLine).toContain('/ws/ssh-sessions')
+		// Phase 364 (VMENC-01): the hardware-encoded VM screen WS must also be
+		// carved out to :8080 — without it the @liv_ws land-grab sends
+		// /ws/vm-stream/* to AionUi :3020 (404/reset) and the browser MSE player
+		// silently falls back to RFB ("encoded stream never plays" bug).
+		expect(matcherLine).toContain('/ws/vm-stream/*')
 		// And it is still emitted BEFORE the AionUi @liv_ws catch-all.
 		expect(matcherIdx).toBeLessThan(out.indexOf('@liv_ws path /ws /ws/*'))
 	})
