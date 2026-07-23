@@ -22,10 +22,13 @@
  *      vmId's session alone.
  *   7. the returned wsUrl uses the ADMIN vm-stream route prefix (/ws/vm-stream/), not the
  *      weaker member /ws/stream/ route (BLOCKER fix — kind-aware wsUrlFor).
+ *   8. Phase 366 (T-366-01): a stalled encoder sheds frames at the stdin feed — the
+ *      MAX_STDIN_QUEUED_FRAMES guard bounds writableLength instead of queuing unboundedly.
  */
 
 import {describe, it, expect} from 'vitest'
 import {EventEmitter} from 'node:events'
+import {Writable, PassThrough} from 'node:stream'
 import {spawn as nodeSpawn, type ChildProcess} from 'node:child_process'
 import {join} from 'node:path'
 import {StreamManager, StreamCapExceededError, VmEncodeUnavailableError} from './stream-manager.js'
@@ -63,6 +66,8 @@ class FakeFrameSource implements VmFrameSource {
 			height?: number
 			startRejects?: boolean
 			stopThrows?: boolean
+			/** Phase 366: skip the 15 ms auto-pump — the test drives frames via push(). */
+			manual?: boolean
 		} = {},
 	) {}
 
@@ -74,10 +79,16 @@ class FakeFrameSource implements VmFrameSource {
 
 	onFrame(cb: (f: Buffer) => void): void {
 		this.cb = cb
+		if (this.opts.manual) return
 		this.timer = setInterval(() => {
 			this.cb?.(Buffer.from([0, 0, 0, 255]))
 		}, 15)
 		this.timer.unref?.()
+	}
+
+	/** Phase 366: synchronously drive one frame through the captured onFrame cb. */
+	push(frame: Buffer): void {
+		this.cb?.(frame)
 	}
 
 	async stop(): Promise<void> {
@@ -356,5 +367,60 @@ describe('StreamManager vm-fmp4 — WR-02 atomic cap reservation', () => {
 
 		expect(mgr.listStreams({userId: 'admin'}).filter((s) => s.status === 'alive')).toHaveLength(2)
 		mgr._clearForTests()
+	}, 10_000)
+})
+
+// ── Phase 366 (VMENC-01, T-366-01): stdin drop-frame backpressure guard ─────────────────────
+//
+// The real-spawned fake-encoder.cjs cannot create CONTROLLED backpressure, so this suite
+// injects (via the existing `spawn` seam) a stub encoder whose stdin is a Writable that
+// ACCEPTS every write but never completes it (write() never calls its callback) — every
+// accepted chunk accumulates in writableLength, deterministically modelling a fully
+// stalled ffmpeg. The existing FakeFrameSource suites above are untouched: their 4-byte
+// auto-pump frames never trip a 2-frame byte guard.
+
+describe('StreamManager vm-fmp4 — Phase 366 stdin backpressure guard', () => {
+	it('Test 8: a stalled encoder sheds frames at the stdin feed (writableLength stays ≤ MAX_STDIN_QUEUED_FRAMES+1 frames)', async () => {
+		// A Writable that never drains: highWaterMark 1 so writableLength reflects every
+		// accepted byte; write() never invokes _cb, so nothing is ever flushed.
+		const stdin = new Writable({
+			highWaterMark: 1,
+			write(_c, _e, _cb) {
+				/* never call _cb → every accepted write accumulates in writableLength */
+			},
+		})
+		const stubEncoder = Object.assign(new EventEmitter(), {
+			stdin,
+			stdout: new PassThrough(),
+			stderr: new PassThrough(),
+			kill(signal?: NodeJS.Signals) {
+				setImmediate(() => this.emit('exit', null, signal ?? 'SIGTERM'))
+				return true
+			},
+		}) as unknown as ChildProcess
+
+		const source = new FakeFrameSource({manual: true})
+		const mgr = new StreamManager({
+			caps: {vaapi: true, profiles: ['VAProfileH264High']},
+			spawn: () => stubEncoder,
+			vmFrameSourceFactory: () => source,
+			stopTimeoutMs: 500,
+		})
+
+		const start = await mgr.startVmStream({userId: 'admin', vmId: 'vm-bp', vncRawPort: 16360})
+		expect(start.streamId).toBeTruthy()
+
+		// Push SIX 1024-byte frames synchronously against the never-draining stdin.
+		// With the guard (threshold > chunk.byteLength * 2):
+		//   frame1 writes (wl 0 → 1024), frame2 writes (1024 ≤ 2048 → 2048),
+		//   frame3 writes (2048 not > 2048 → 3072), frames 4–6 DROPPED.
+		for (let i = 0; i < 6; i++) {
+			source.push(Buffer.alloc(1024, i))
+		}
+		// Without the guard every write would be accepted → writableLength 6144.
+		expect(stdin.writableLength).toBe(3 * 1024)
+
+		// Clean teardown (the stub kill() emits 'exit').
+		await mgr.stopStream(start.streamId)
 	}, 10_000)
 })
