@@ -993,7 +993,8 @@ export class StreamManager extends EventEmitter {
 	 * carries arbitrary integers, and vnc-rfb-client writeUInt16BE's them unguarded (Pitfall 3);
 	 * the dims are WR-01-capped (≤8192/axis) so the clamped values are always u16-safe. A wheel
 	 * frame becomes an RFB press+release pulse (mask 8 = scroll-up for dy<0, 16 = scroll-down
-	 * for dy>0, then 0) from the no-held-buttons state (research §3 wheel note).
+	 * for dy>0) with the client's HELD mask (msg.b, parse-validated 0..31) OR'd into BOTH sides
+	 * of the pulse — a scroll mid-drag must not release the held buttons (367 review WR-02).
 	 *
 	 * Controller model: any-admin, last-write-wins — every admitted socket relays through this
 	 * one method onto the one RFB connection; no controller machinery (documented decision).
@@ -1011,8 +1012,9 @@ export class StreamManager extends EventEmitter {
 		} else {
 			const x = clampX(msg.x)
 			const y = clampY(msg.y)
-			session.frameSource.sendPointer(x, y, msg.dy < 0 ? 8 : 16)
-			session.frameSource.sendPointer(x, y, 0)
+			const held = msg.b & 0x1f
+			session.frameSource.sendPointer(x, y, held | (msg.dy < 0 ? 8 : 16))
+			session.frameSource.sendPointer(x, y, held)
 		}
 		return true
 	}

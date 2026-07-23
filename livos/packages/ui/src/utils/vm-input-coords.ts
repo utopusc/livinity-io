@@ -17,14 +17,16 @@
 /**
  * A client→server input frame for the /ws/vm-stream socket — matches the
  * backend's `VmInputMessage` (livinityd vm-input.ts) shape field-for-field:
- *   {t:'p', x, y, b}   pointer — guest coords + 5-bit RFB button mask
- *   {t:'k', k, d}      key     — X11 keysym (u32) + down flag (0|1)
- *   {t:'w', x, y, dy}  wheel   — guest coords + direction (±1)
+ *   {t:'p', x, y, b}     pointer — guest coords + 5-bit RFB button mask
+ *   {t:'k', k, d}        key     — X11 keysym (u32) + down flag (0|1)
+ *   {t:'w', x, y, dy, b} wheel   — guest coords + direction (±1) + held-buttons
+ *                        mask (WR-02: the server ORs it into both pulse masks so
+ *                        a scroll mid-drag never releases the held buttons)
  */
 export type VmInputMessage =
 	| {t: 'p'; x: number; y: number; b: number}
 	| {t: 'k'; k: number; d: 0 | 1}
-	| {t: 'w'; x: number; y: number; dy: -1 | 1}
+	| {t: 'w'; x: number; y: number; dy: -1 | 1; b: number}
 
 /**
  * DOM `MouseEvent.buttons` → RFB pointer mask (Pitfall 1). The two encodings
@@ -49,7 +51,12 @@ export function domButtonsToRfbMask(domButtons: number): number {
  *  - a pure HOVER in a bar (no buttons held) → null (drop — the guest cursor
  *    must not chase letterbox mouse travel);
  *  - a bar position with buttons HELD → clamped into range (drag-out
- *    semantics: releasing a drag outside the content must not lose the drag).
+ *    semantics: a drag continuing outside the content must not be lost);
+ *  - `forceClamp` (CR-01, release events) → ALWAYS clamped: `e.buttons` on
+ *    pointerup/pointercancel is already 0 (post-release state), so keying the
+ *    clamp off buttonsHeld alone would DROP the release frame and leave the
+ *    guest with a stuck held button. A release must reach the guest wherever
+ *    the pointer is.
  * Non-null outputs are always integers in 0..videoW-1 / 0..videoH-1 (round +
  * clamp at the edges); the server clamp remains authoritative (T-367-05).
  */
@@ -63,8 +70,9 @@ export function mapPointerToGuest(args: {
 	clientX: number
 	clientY: number
 	buttonsHeld: boolean
+	forceClamp?: boolean
 }): {x: number; y: number} | null {
-	const {rectLeft, rectTop, rectW, rectH, videoW, videoH, clientX, clientY, buttonsHeld} = args
+	const {rectLeft, rectTop, rectW, rectH, videoW, videoH, clientX, clientY, buttonsHeld, forceClamp = false} = args
 	if (videoW <= 0 || videoH <= 0 || rectW <= 0 || rectH <= 0) return null
 	const scale = Math.min(rectW / videoW, rectH / videoH)
 	const contentW = videoW * scale
@@ -73,7 +81,7 @@ export function mapPointerToGuest(args: {
 	const offY = (rectH - contentH) / 2
 	const px = clientX - rectLeft - offX
 	const py = clientY - rectTop - offY
-	if (!buttonsHeld && (px < 0 || px > contentW || py < 0 || py > contentH)) return null
+	if (!buttonsHeld && !forceClamp && (px < 0 || px > contentW || py < 0 || py > contentH)) return null
 	const clamp = (v: number, max: number) => Math.min(Math.max(v, 0), max)
 	return {
 		x: clamp(Math.round(px / scale), videoW - 1),

@@ -10,8 +10,11 @@
 // (vm-input-coords.ts, behaviorally tested), and borrow ONLY the noVNC
 // `Keyboard` class (already an installed dependency) for KeyboardEvent→keysym
 // derivation: AltGr sequences, OS key-repeat suppression, and
-// release-all-held-keys on target blur (Pitfall 4 — focus loss must never
-// leave a stuck modifier in the guest).
+// release-all-held-keys on WINDOW blur. The class watches window blur ONLY —
+// LivOS is a same-page multi-window desktop, so element-level focus loss
+// (clicking another in-page window) is covered separately by a focusout
+// ungrab()/grab() cycle below (Pitfall 4 / review WR-03 — focus loss must
+// never leave a stuck modifier in the guest).
 //
 // Controller model (documented, per 367-01): any-admin, last-write-wins —
 // every admitted viewer relays onto the one shared RFB connection; N viewers
@@ -72,8 +75,12 @@ export function useVmInput({
 
 		// Map a client point through the <video>'s object-contain letterbox to
 		// guest coords; null = drop (bar hover / no frame yet). The rect is read
-		// per event — cheap, and immune to window/layout moves.
-		const toGuest = (clientX: number, clientY: number, domButtons: number) => {
+		// per event — cheap, and immune to window/layout moves. `forceClamp`
+		// (CR-01): release events must NEVER be dropped — `e.buttons` is already
+		// 0 on pointerup/pointercancel, so without it a release over a letterbox
+		// bar (or outside the element — pointer capture keeps events coming)
+		// would be swallowed and the guest would keep the button held.
+		const toGuest = (clientX: number, clientY: number, domButtons: number, forceClamp = false) => {
 			const rect = videoEl.getBoundingClientRect()
 			return mapPointerToGuest({
 				rectLeft: rect.left,
@@ -85,13 +92,27 @@ export function useVmInput({
 				clientX,
 				clientY,
 				buttonsHeld: domButtons !== 0,
+				forceClamp,
 			})
 		}
 
-		const sendPointer = (clientX: number, clientY: number, domButtons: number) => {
-			const pt = toGuest(clientX, clientY, domButtons)
+		const sendPointer = (clientX: number, clientY: number, domButtons: number, isRelease = false) => {
+			const pt = toGuest(clientX, clientY, domButtons, isRelease)
 			if (!pt) return
 			sendInputRef.current({t: 'p', x: pt.x, y: pt.y, b: domButtonsToRfbMask(domButtons)})
+		}
+
+		// WR-01: down/up/cancel are sent IMMEDIATELY while moves are rAF-deferred
+		// — an already-queued move flushing AFTER the immediate send would replay
+		// a STALE button mask (phantom re-press after a release / phantom release
+		// after a press). Drop the pending move (never flush it — the immediate
+		// event carries fresher coordinates AND the authoritative mask).
+		const dropPendingMove = () => {
+			if (rafId !== null) {
+				cancelAnimationFrame(rafId)
+				rafId = null
+			}
+			pendingMove = null
 		}
 
 		// pointerdown: capture the pointer (drag-out keeps streaming events to
@@ -101,6 +122,7 @@ export function useVmInput({
 		containerEl.addEventListener(
 			'pointerdown',
 			(e) => {
+				dropPendingMove() // WR-01: a stale queued move must not flush after the press
 				try {
 					containerEl.setPointerCapture(e.pointerId)
 				} catch {
@@ -131,18 +153,24 @@ export function useVmInput({
 		)
 
 		// pointerup / pointercancel: send the remaining (released) mask so the
-		// guest never keeps a phantom held button.
+		// guest never keeps a phantom held button. The release flag (CR-01)
+		// forces clamp semantics — e.buttons is already 0 here, and a dropped
+		// release would leave the guest dragging forever. dropPendingMove first
+		// (WR-01): a queued move with the pre-release mask must not flush after
+		// the release and re-press the button.
 		containerEl.addEventListener(
 			'pointerup',
 			(e) => {
-				sendPointer(e.clientX, e.clientY, e.buttons)
+				dropPendingMove()
+				sendPointer(e.clientX, e.clientY, e.buttons, true)
 			},
 			{signal: ac.signal},
 		)
 		containerEl.addEventListener(
 			'pointercancel',
 			(e) => {
-				sendPointer(e.clientX, e.clientY, e.buttons)
+				dropPendingMove()
+				sendPointer(e.clientX, e.clientY, e.buttons, true)
 			},
 			{signal: ac.signal},
 		)
@@ -156,9 +184,10 @@ export function useVmInput({
 			{signal: ac.signal},
 		)
 
-		// Wheel: direction-only pulses ({t:'w'} → a server-side press+release of
-		// RFB buttons 4/5). preventDefault needs passive: false or the page
-		// scrolls behind the guest.
+		// Wheel: direction pulses ({t:'w'} → a server-side press+release of RFB
+		// buttons 4/5) CARRYING the held-button mask (WR-02: the server ORs it
+		// into both pulse masks — scrolling mid-drag must not release the drag).
+		// preventDefault needs passive: false or the page scrolls behind the guest.
 		containerEl.addEventListener(
 			'wheel',
 			(e) => {
@@ -166,15 +195,23 @@ export function useVmInput({
 				if (e.deltaY === 0) return
 				const pt = toGuest(e.clientX, e.clientY, e.buttons)
 				if (!pt) return
-				sendInputRef.current({t: 'w', x: pt.x, y: pt.y, dy: Math.sign(e.deltaY) as 1 | -1})
+				sendInputRef.current({
+					t: 'w',
+					x: pt.x,
+					y: pt.y,
+					dy: Math.sign(e.deltaY) as 1 | -1,
+					b: domButtonsToRfbMask(e.buttons),
+				})
 			},
 			{signal: ac.signal, passive: false},
 		)
 
 		// Keyboard: the noVNC Keyboard class (already installed — zero new
 		// deps) handles KeyboardEvent→keysym, AltGr sequences, key repeat, and
-		// releases all held keys on target blur (Pitfall 4). Dynamic import
-		// with a cancelled-flag guard: `enabled` may flip during the await.
+		// releases all held keys on WINDOW blur (its _allKeysUp is wired to
+		// window blur ONLY — the same-page focus-loss case is the focusout
+		// cycle below). Dynamic import with a cancelled-flag guard: `enabled`
+		// may flip during the await.
 		void (async () => {
 			// @ts-expect-error — no bundled types (the use-webapp-vnc loadRfbCtor idiom)
 			const mod = await import('@novnc/novnc/lib/input/keyboard')
@@ -190,6 +227,25 @@ export function useVmInput({
 			k.grab()
 			kbd = k
 		})()
+
+		// WR-03: same-page focus loss (clicking another in-page window / the
+		// dock / the escape-hatch strip) blurs the WRAPPER, not the window — the
+		// Keyboard class's window-blur release never fires, so a held Alt/Ctrl/
+		// Shift would stick in the guest. Cycle ungrab()/grab(): ungrab() runs
+		// _allKeysUp() (the socket is still OPEN, so the key-up frames reach the
+		// guest), grab() re-arms capture for the next focus.
+		containerEl.addEventListener(
+			'focusout',
+			() => {
+				try {
+					kbd?.ungrab()
+					kbd?.grab()
+				} catch {
+					/* best-effort — a detached target must not throw */
+				}
+			},
+			{signal: ac.signal},
+		)
 
 		return () => {
 			cancelled = true

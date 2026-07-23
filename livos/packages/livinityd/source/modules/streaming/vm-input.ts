@@ -3,9 +3,11 @@
  * for the encoded VM stream's hybrid input channel.
  *
  * Wire format (client → server TEXT frames on the ALREADY-ADMITTED /ws/vm-stream socket):
- *   {t:'p', x, y, b}   pointer — absolute guest coords + 5-bit RFB button mask (0..31)
- *   {t:'k', k, d}      key     — X11 keysym (u32, 1..0xFFFFFFFF) + down flag (0|1)
- *   {t:'w', x, y, dy}  wheel   — absolute coords + direction (sign-normalized to ±1)
+ *   {t:'p', x, y, b}     pointer — absolute guest coords + 5-bit RFB button mask (0..31)
+ *   {t:'k', k, d}        key     — X11 keysym (u32, 1..0xFFFFFFFF) + down flag (0|1)
+ *   {t:'w', x, y, dy, b} wheel   — absolute coords + direction (sign-normalized to ±1) +
+ *                        OPTIONAL held-buttons mask (0..31, ABSENT → 0; WR-02: the server
+ *                        ORs it into both pulse masks so a scroll mid-drag keeps the drag)
  *
  * This module is the LOAD-BEARING validation (research Pitfall 3): vnc-rfb-client's
  * sendPointerEvent/sendKeyEvent feed raw numbers into Buffer.writeUInt16BE/writeUInt32BE,
@@ -27,7 +29,7 @@
 export type VmInputMessage =
 	| {t: 'p'; x: number; y: number; b: number}
 	| {t: 'k'; k: number; d: 0 | 1}
-	| {t: 'w'; x: number; y: number; dy: -1 | 1}
+	| {t: 'w'; x: number; y: number; dy: -1 | 1; b: number}
 
 /** Max raw bytes per input frame. The largest legitimate frame is ~50 B of JSON; 256 B is
  *  generous headroom while capping the per-message JSON.parse work (T-367-04 DoS posture). */
@@ -78,10 +80,13 @@ export function parseVmInput(raw: string | Buffer): VmInputMessage | null {
 			return {t: 'k', k, d}
 		}
 		case 'w': {
-			const {x, y, dy} = obj
+			const {x, y, dy, b} = obj
 			if (!isInt(x) || !isInt(y)) return null
 			if (!isInt(dy) || dy === 0) return null
-			return {t: 'w', x, y, dy: dy < 0 ? -1 : 1}
+			// WR-02: optional held-buttons mask — same bounds as the pointer path.
+			// ABSENT → 0 (pre-WR-02 client compat); present-but-invalid → reject.
+			if (b !== undefined && (!isInt(b) || b < 0 || b > 31)) return null
+			return {t: 'w', x, y, dy: dy < 0 ? -1 : 1, b: b === undefined ? 0 : b}
 		}
 		default:
 			return null
