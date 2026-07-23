@@ -207,6 +207,25 @@ describe('live-edge chase — playbackRate convergence, dual drivers, deadline-i
 	})
 })
 
+describe('additive sendInput — input rides the hook\'s OWN admitted socket (367-02, T-367-01)', () => {
+	it('the hook result exposes sendInput and its body guards readyState === WebSocket.OPEN', () => {
+		const src = read(HOOK)
+		// Guarded send on the hook's own wsRef: never a throw on a closing socket,
+		// never a buffer-up on a dead one. The CONSUMER gates on status==='connected'
+		// (staleness — no status read inside the callback).
+		expect(src).toMatch(/sendInput/)
+		expect(src).toMatch(/readyState === WebSocket\.OPEN/)
+	})
+	it('the hook source contains exactly ONE `new WebSocket(` — input multiplexes, never a second socket', () => {
+		const src = read(HOOK)
+		// The multiplex invariant (T-367-01): input frames ride the already-admitted
+		// /ws/vm-stream socket; a second socket would need a second gate admission
+		// and reintroduce the drift hazard the 367-01 tripwire exists to prevent.
+		const sockets = src.match(/new WebSocket\(/g) ?? []
+		expect(sockets.length).toBe(1)
+	})
+})
+
 describe('generation guard + bounded queue + falsy-vmId idle', () => {
 	it('guards stale async continuations via a generation counter', () => {
 		const src = read(HOOK)

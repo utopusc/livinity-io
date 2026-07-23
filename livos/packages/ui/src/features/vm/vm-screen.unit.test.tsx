@@ -200,14 +200,15 @@ describe('the running screen tries the host-encoded <video> first (VMENC-01 / T-
 		// can never play the result.
 		expect(src).toMatch(/MediaSource[\s\S]{0,300}useVmEncodedScreen/)
 	})
-	it('the encoded surface is a view-only <video> with autoPlay/muted/playsInline', () => {
+	it('the encoded surface is an interactive <video> with autoPlay/muted/playsInline (input via useVmInput — 367)', () => {
 		const src = read(SCREEN)
 		// Honest playback attrs (never a stalled/black frame mistaken for live; the
 		// hook only reports connected on a real playing frame).
 		expect(src).toMatch(/<video[^>]*autoPlay/)
 		expect(src).toMatch(/<video[^>]*\bmuted\b/)
 		expect(src).toMatch(/<video[^>]*playsInline/)
-		// view-only: bound to the hook's videoRef, no pointer/keyboard handler here.
+		// Bound to the hook's videoRef (pointer/keyboard capture lives on the
+		// focusable wrapper via useVmInput, not on the element itself).
 		expect(src).toMatch(/<video[^>]*ref=\{mse\.videoRef\}/)
 	})
 })
@@ -247,10 +248,10 @@ describe('the fallback decision is LATCHED in state — no flapping (T-365-05)',
 			/mse\.status === 'unavailable' \|\| mse\.status === 'error'\) setForcedFallback\(true\)/,
 		)
 	})
-	it('the switch-to-interactive button force-latches to the RFB (input) path', () => {
+	it('the switch-standard escape hatch force-latches to the RFB fallback path (367-02 reconcile)', () => {
 		const src = read(SCREEN)
 		expect(src).toMatch(
-			/switch-interactive[\s\S]{0,200}setForcedFallback|setForcedFallback[\s\S]{0,200}switch-interactive/,
+			/switch-standard[\s\S]{0,200}setForcedFallback|setForcedFallback[\s\S]{0,200}switch-standard/,
 		)
 	})
 })
@@ -263,14 +264,51 @@ describe('no raw hook status leaks to the DOM; connecting reuses the honest copy
 		// The encoded connecting overlay reuses the existing honest loading copy.
 		expect(src).toMatch(/vm\.screen\.loading/)
 	})
-	it('the two new vm.screen.* keys exist at EN/TR parity, jargon-free', () => {
+	it('the dishonest 365 copy is DELETED and switch-standard exists at EN/TR parity, jargon-free (367-02)', () => {
 		const en = JSON.parse(read(EN)) as Record<string, string>
 		const tr = JSON.parse(read(TR)) as Record<string, string>
+		// With 367 the encoded view takes input directly — "(view only)" and
+		// "switch to control" would be dishonest copy. Both stale keys are gone
+		// from BOTH locales (parity both ways).
 		for (const k of ['vm.screen.state.preview-view-only', 'vm.screen.action.switch-interactive']) {
-			expect(en[k], `missing EN key: ${k}`).toBeTruthy()
-			expect(tr[k], `missing TR key: ${k}`).toBeTruthy()
-			expect(en[k]).not.toMatch(/VNC|noVNC|RFB|websockify|codec|MSE|encoder/i)
-			expect(tr[k]).not.toMatch(/VNC|noVNC|RFB|websockify|codec|MSE|encoder/i)
+			expect(en[k], `stale EN key must be deleted: ${k}`).toBeUndefined()
+			expect(tr[k], `stale TR key must be deleted: ${k}`).toBeUndefined()
 		}
+		// The honest escape hatch replaces them, at parity, jargon-free.
+		const key = 'vm.screen.action.switch-standard'
+		expect(en[key], `missing EN key: ${key}`).toBeTruthy()
+		expect(tr[key], `missing TR key: ${key}`).toBeTruthy()
+		expect(en[key]).not.toMatch(/VNC|noVNC|RFB|websockify|codec|MSE|encoder/i)
+		expect(tr[key]).not.toMatch(/VNC|noVNC|RFB|websockify|codec|MSE|encoder/i)
+	})
+})
+
+// ── Phase 367-02 (VMENC-03, UI half) ─────────────────────────────────────────
+// The encoded view takes input directly: pointer/keyboard/wheel ride the 365
+// hook's OWN stream socket via useVmInput. Same idiom as every pin above —
+// source shape, never runtime.
+
+describe('the encoded view takes input, gated on a genuinely connected stream (VMENC-03 / T-367-01)', () => {
+	it('vm-screen.tsx wires useVmInput with enabled gated on mse.status === \'connected\'', () => {
+		const src = read(SCREEN)
+		// Hook called unconditionally (rules of hooks); the gate lives in `enabled`
+		// — input is DEAD unless the encoded stream is genuinely playing (the
+		// honest-state invariant: no input into a surface not presented as live).
+		expect(src).toMatch(/useVmInput\(/)
+		expect(src).toMatch(/mse\.status === 'connected'/)
+	})
+	it('the encoded branch has a focusable wrapper (tabIndex={0}) so keyboard events can be captured', () => {
+		const src = read(SCREEN)
+		// The 355 RFB container relies on noVNC setting tabIndex internally; OUR
+		// wrapper must set it explicitly or key events never reach the Keyboard
+		// target (Pitfall 7).
+		expect(src).toMatch(/tabIndex=\{0\}/)
+	})
+	it('the stale 365 strings are gone from the component entirely — code AND comments', () => {
+		const src = read(SCREEN)
+		// The deleted locale keys must not survive anywhere in the file; a stale
+		// comment mention would invite re-wiring the dishonest copy later.
+		expect(src).not.toMatch(/preview-view-only/)
+		expect(src).not.toMatch(/switch-interactive/)
 	})
 })
