@@ -45,8 +45,22 @@ const MAX_QUEUE_BYTES = 8 * 1024 * 1024
 // fall back rather than spin forever (mirrors the 364-01 startTimeoutMs
 // guarantee — connect NEVER hangs).
 const CONNECT_DEADLINE_MS = 15_000
-// Live-edge catch-up threshold — jump near the buffered end if we drift behind.
-const MAX_LAG_SECONDS = 1.5
+// Live-edge chase tuning (Phase 366, VMENC-01) — the playbackRate chase is the
+// industry-standard MSE live-edge technique (hls.js maxLiveSyncPlaybackRate /
+// dash.js liveCatchup), replacing the old 1.5 s seek-only tolerance that let up
+// to 1.5 s of STANDING latency sit forever. NOTE: KEEP_SECONDS below is
+// MEMORY-only (behind the playhead) — honestly NOT a latency knob (Pitfall 6).
+//
+// Hold-back from the buffered end — decode headroom: Chromium needs ~3 decoded
+// frames (~100 ms at 30 fps) before playback starts, so 0.3 s is safe; seeking
+// closer risks a seek→waiting→stall loop.
+const TARGET_LIVE_OFFSET_S = 0.3
+// Beyond this drift, engage the gentle rate chase.
+const RATE_ENGAGE_DRIFT_S = 0.8
+// Gentle, near-invisible catch-up speed.
+const CHASE_RATE = 1.1
+// Beyond this (stall / backgrounded tab), hard-jump near the edge instead.
+const JUMP_DRIFT_S = 2.5
 // Live-window eviction (WR-02): keep only this many seconds of decoded media
 // behind the playhead. The 8 MB queue cap bounds only the PENDING append queue,
 // not the SourceBuffer's buffered range — without eviction a long live session
@@ -295,6 +309,46 @@ export function useVmEncodedScreen(vmId: string | undefined): UseVmEncodedScreen
 			}
 		}
 
+		// Live-edge chase (Phase 366, VMENC-01): converge on TARGET_LIVE_OFFSET_S
+		// behind the buffered end and STAY there. Driven from BOTH 'timeupdate'
+		// (~4 Hz, does NOT fire while stalled) and the updateend path (per append,
+		// ~30 Hz with frag_every_frame) — the updateend driver is what lets drift
+		// accumulated during a stall self-heal instead of standing forever. The
+		// per-call work is a handful of property reads — no throttle needed.
+		// No generation check needed: the listeners invoking this die with the
+		// ac.signal abort in teardown, and the function touches only element-level
+		// properties (currentTime/playbackRate) — never deadlineTimerRef (CR-01
+		// stays dead after connect; a chase-induced seek merely re-fires the
+		// idempotent onPlaying).
+		const chaseLiveEdge = () => {
+			const video = videoRef.current
+			const sb = sourceBufferRef.current
+			if (!video || !sb) return
+			const buffered = video.buffered
+			if (buffered.length === 0) return
+			const end = buffered.end(buffered.length - 1)
+			const drift = end - video.currentTime
+			// Initial placement / gross catch-up: a currentTime outside the live
+			// range (far-from-0 baseMediaDecodeTime, long tab-background) or gross
+			// drift → one jump near the edge, never closer than the hold-back.
+			if (video.currentTime < buffered.start(buffered.length - 1) || drift > JUMP_DRIFT_S) {
+				try {
+					video.currentTime = Math.max(buffered.start(buffered.length - 1), end - TARGET_LIVE_OFFSET_S)
+				} catch {
+					/* seeking can throw mid-append; harmless — retried on next driver tick */
+				}
+				return
+			}
+			// Gentle chase: speed up past RATE_ENGAGE_DRIFT_S, release back to 1x
+			// once we've converged on the hold-back (small hysteresis avoids
+			// rate-flapping around the threshold).
+			if (drift > RATE_ENGAGE_DRIFT_S) {
+				if (video.playbackRate !== CHASE_RATE) video.playbackRate = CHASE_RATE
+			} else if (video.playbackRate !== 1 && drift <= TARGET_LIVE_OFFSET_S + 0.1) {
+				video.playbackRate = 1
+			}
+		}
+
 		const enqueue = (buf: ArrayBuffer) => {
 			queueRef.current.push(buf)
 			queueBytesRef.current += buf.byteLength
@@ -345,20 +399,13 @@ export function useVmEncodedScreen(vmId: string | undefined): UseVmEncodedScreen
 				},
 				{signal: ac.signal},
 			)
-			// Live-edge catch-up — fight drift so the view stays near-live.
+			// Live-edge chase driver 1 of 2 — the second rides onUpdateEnd, which
+			// keeps chasing while the element is stalled ('timeupdate' does not fire
+			// then).
 			video.addEventListener(
 				'timeupdate',
 				() => {
-					const buffered = video.buffered
-					if (buffered.length === 0) return
-					const end = buffered.end(buffered.length - 1)
-					if (end - video.currentTime > MAX_LAG_SECONDS) {
-						try {
-							video.currentTime = end - 0.2
-						} catch {
-							/* seeking can throw mid-append; harmless */
-						}
-					}
+					chaseLiveEdge()
 				},
 				{signal: ac.signal},
 			)
@@ -381,10 +428,13 @@ export function useVmEncodedScreen(vmId: string | undefined): UseVmEncodedScreen
 					}
 					sourceBufferRef.current = sb
 					// On each completed append/remove: drain queued media, then (queue
-					// empty, not updating) reclaim the live window behind the playhead.
+					// empty, not updating) reclaim the live window behind the playhead,
+					// then chase the live edge LAST — after the append settles, so the
+					// chase reads the settled buffered range (Pitfall 5 ordering).
 					const onUpdateEnd = () => {
 						pump()
 						evict()
+						chaseLiveEdge()
 					}
 					sb.addEventListener('updateend', onUpdateEnd, {signal: ac.signal})
 					sb.addEventListener(
