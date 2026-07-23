@@ -2049,6 +2049,15 @@ Type=simple
 # starts. WS1: User= derives from ${_DLD_DESKTOP_USER} (was literal bruce).
 User=${_DLD_DESKTOP_USER}
 Group=${_DLD_DESKTOP_USER}
+# v51 VMENC (2026-07-23) — livinityd's VM screen encoder (h264_vaapi on
+# /dev/dri/renderD128) needs the iGPU render node, which is owned by group
+# 'render' (card0 by 'video'). The desktop user is NOT in those groups on a
+# fresh box, so the boot-time vainfo probe returned vaapi=false and the whole
+# encoded stream silently fell back to raw RFB (jittery). SupplementaryGroups
+# grants the service process render+video WITHOUT a system-wide usermod, and is
+# re-applied idempotently on every deploy. Missing groups on this host are
+# ignored by systemd (logged, non-fatal), so this is safe on GPU-less boxes.
+SupplementaryGroups=render video
 WorkingDirectory=${_DLD_LIVOS_DIR}
 EnvironmentFile=${_DLD_ENV_FILE}
 # Phase 173-04 — v38 vault rename: Phase 171 vault-root-resolver.ts reads LIV_VAULT_ROOT; default fallback /root/livinity-vault is now a back-compat symlink (Plan 173-01)
