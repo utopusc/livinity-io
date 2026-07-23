@@ -79,6 +79,44 @@ describe('pointerdown captures the pointer and focuses the container (Pitfall 7)
 	})
 })
 
+describe('release events force clamp semantics — a release outside the content must still reach the guest (CR-01)', () => {
+	it('pointerup/pointercancel send with the release flag (e.buttons is already 0 on release)', () => {
+		const src = read(HOOK)
+		const releases = src.match(/sendPointer\(e\.clientX, e\.clientY, e\.buttons, true\)/g) ?? []
+		expect(releases.length).toBeGreaterThanOrEqual(2)
+	})
+	it('the release flag flows into mapPointerToGuest as forceClamp', () => {
+		const src = read(HOOK)
+		expect(src).toMatch(/forceClamp/)
+	})
+})
+
+describe('down/up/cancel drop any coalesced pending move — no stale-mask flush after an immediate send (WR-01)', () => {
+	it('defines dropPendingMove (cancelAnimationFrame + pendingMove reset) and calls it in all three handlers', () => {
+		const src = read(HOOK)
+		expect(src).toMatch(/const dropPendingMove = /)
+		const calls = src.match(/dropPendingMove\(\)/g) ?? []
+		expect(calls.length).toBeGreaterThanOrEqual(3)
+	})
+})
+
+describe("wheel carries the held-button mask — scrolling mid-drag must not release the drag (WR-02)", () => {
+	it("the {t:'w'} send includes b: domButtonsToRfbMask(e.buttons)", () => {
+		const src = read(HOOK)
+		expect(src).toMatch(/t: 'w'[^}]*b: domButtonsToRfbMask\(e\.buttons\)/)
+	})
+})
+
+describe('same-page focus loss releases held keys — focusout cycles ungrab()/grab() (WR-03)', () => {
+	// The noVNC Keyboard class wires _allKeysUp to WINDOW blur only; LivOS is a same-page
+	// multi-window desktop, so element-level focus loss must also release held modifiers.
+	it('registers a focusout listener that cycles the keyboard (ungrab then grab)', () => {
+		const src = read(HOOK)
+		expect(src).toMatch(/'focusout'/)
+		expect(src).toMatch(/ungrab\(\)[\s\S]{0,120}\.grab\(\)/)
+	})
+})
+
 describe('structure — AbortController listeners + the shared pure helpers', () => {
 	it('attaches listeners with an AbortController signal (the use-vm-encoded-screen idiom)', () => {
 		const src = read(HOOK)

@@ -110,6 +110,33 @@ describe('mapPointerToGuest — pillarboxed (rect 800×800, video 1280×720 → 
 	})
 })
 
+describe('mapPointerToGuest — forceClamp: release events must NEVER be dropped (CR-01)', () => {
+	// Per the Pointer Events spec, `e.buttons` on pointerup/pointercancel reflects the
+	// state AFTER the release — 0 for a single-button drag. The release frame must still
+	// reach the guest wherever the pointer is, or the guest keeps the button held forever.
+	const base = {
+		rectLeft: 0,
+		rectTop: 0,
+		rectW: 1280,
+		rectH: 720,
+		videoW: 640,
+		videoH: 480,
+		buttonsHeld: false,
+	}
+	it('a release in a letterbox bar (buttons already 0) CLAMPS instead of dropping', () => {
+		expect(mapPointerToGuest({...base, clientX: 100, clientY: 360, forceClamp: true})).toEqual({x: 0, y: 240})
+	})
+	it('a release entirely outside the element clamps to the nearest content edge', () => {
+		expect(mapPointerToGuest({...base, clientX: -50, clientY: 9999, forceClamp: true})).toEqual({x: 0, y: 479})
+	})
+	it('forceClamp does NOT resurrect the no-frame case (videoW/videoH 0 stays null)', () => {
+		expect(mapPointerToGuest({...base, videoW: 0, videoH: 0, clientX: 100, clientY: 100, forceClamp: true})).toBeNull()
+	})
+	it('without forceClamp the bar hover still drops (the CR-01 fix must not break hover-drop)', () => {
+		expect(mapPointerToGuest({...base, clientX: 100, clientY: 360})).toBeNull()
+	})
+})
+
 describe('mapPointerToGuest — no frame yet / degenerate input', () => {
 	it('returns null while the video has no frame (videoW/videoH 0)', () => {
 		const base = {rectLeft: 0, rectTop: 0, rectW: 1280, rectH: 720, clientX: 100, clientY: 100, buttonsHeld: false}

@@ -485,25 +485,37 @@ describe('StreamManager vm-fmp4 — Phase 367 sendVmInput relay', () => {
 		await mgr.stopStream(start.streamId)
 	}, 10_000)
 
-	it('synthesizes a wheel frame as a press+release pointer pulse (mask 8 up / 16 down)', async () => {
+	it('synthesizes a wheel frame as a press+release pointer pulse (mask 8 up / 16 down), PRESERVING held buttons (WR-02)', async () => {
 		const source = new FakeFrameSource({manual: true})
 		const {mgr} = makeVmManager([source])
 		const start = await mgr.startVmStream({userId: 'admin', vmId: 'vm-in3', vncRawPort: 16372})
 
-		// dy:-1 → scroll-up (RFB button 4, mask bit3 = 8), then release.
-		expect(mgr.sendVmInput(start.streamId, {t: 'w', x: 10, y: 10, dy: -1})).toBe(true)
+		// dy:-1, nothing held → scroll-up (RFB button 4, mask bit3 = 8), then release to 0.
+		expect(mgr.sendVmInput(start.streamId, {t: 'w', x: 10, y: 10, dy: -1, b: 0})).toBe(true)
 		expect(source.sentPointers).toEqual([
 			[10, 10, 8],
 			[10, 10, 0],
 		])
 
-		// dy:1 → scroll-down (RFB button 5, mask bit4 = 16), then release.
-		expect(mgr.sendVmInput(start.streamId, {t: 'w', x: 10, y: 10, dy: 1})).toBe(true)
+		// dy:1, nothing held → scroll-down (RFB button 5, mask bit4 = 16), then release to 0.
+		expect(mgr.sendVmInput(start.streamId, {t: 'w', x: 10, y: 10, dy: 1, b: 0})).toBe(true)
 		expect(source.sentPointers).toEqual([
 			[10, 10, 8],
 			[10, 10, 0],
 			[10, 10, 16],
 			[10, 10, 0],
+		])
+
+		// WR-02: left button HELD (b=1) rides the whole pulse — press = held|wheel-bit,
+		// "release" returns to the HELD mask, never to 0 (a scroll mid-drag must not drop the drag).
+		expect(mgr.sendVmInput(start.streamId, {t: 'w', x: 10, y: 10, dy: 1, b: 1})).toBe(true)
+		expect(source.sentPointers).toEqual([
+			[10, 10, 8],
+			[10, 10, 0],
+			[10, 10, 16],
+			[10, 10, 0],
+			[10, 10, 17],
+			[10, 10, 1],
 		])
 
 		await mgr.stopStream(start.streamId)
@@ -551,7 +563,7 @@ describe('StreamManager vm-fmp4 — Phase 367 sendVmInput relay', () => {
 
 		mgr.sendVmInput(start.streamId, {t: 'p', x: 1, y: 1, b: 1})
 		mgr.sendVmInput(start.streamId, {t: 'k', k: 32, d: 1})
-		mgr.sendVmInput(start.streamId, {t: 'w', x: 1, y: 1, dy: 1})
+		mgr.sendVmInput(start.streamId, {t: 'w', x: 1, y: 1, dy: 1, b: 0})
 
 		expect(session.viewers).toBe(viewersBefore)
 		expect(session.lastViewerLeftAt).toBe(lastLeftBefore)

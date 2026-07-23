@@ -34,8 +34,14 @@ describe('parseVmInput — accepted wire shapes', () => {
 		expect(parseVmInput('{"t":"k","k":65293,"d":0}')).toEqual({t: 'k', k: 65293, d: 0})
 	})
 
-	it('accepts a wheel frame {t:"w",x,y,dy}', () => {
-		expect(parseVmInput('{"t":"w","x":312,"y":480,"dy":-1}')).toEqual({t: 'w', x: 312, y: 480, dy: -1})
+	it('accepts a wheel frame {t:"w",x,y,dy} — ABSENT b defaults to 0 (pre-WR-02 client compat)', () => {
+		expect(parseVmInput('{"t":"w","x":312,"y":480,"dy":-1}')).toEqual({t: 'w', x: 312, y: 480, dy: -1, b: 0})
+	})
+
+	it('accepts an optional held-buttons mask b on wheel at the bounds 0 and 31 (WR-02)', () => {
+		expect(parseVmInput('{"t":"w","x":1,"y":2,"dy":1,"b":0}')).toEqual({t: 'w', x: 1, y: 2, dy: 1, b: 0})
+		expect(parseVmInput('{"t":"w","x":1,"y":2,"dy":1,"b":1}')).toEqual({t: 'w', x: 1, y: 2, dy: 1, b: 1})
+		expect(parseVmInput('{"t":"w","x":1,"y":2,"dy":-1,"b":31}')).toEqual({t: 'w', x: 1, y: 2, dy: -1, b: 31})
 	})
 
 	it('accepts Buffer raw input (ws delivers Buffers regardless of binaryType)', () => {
@@ -105,6 +111,14 @@ describe('parseVmInput — every malformed input returns null (never throws)', (
 		expect(parseVmInput('{"t":"p","x":1,"y":2,"b":255}')).toBeNull()
 	})
 
+	it('rejects a PRESENT-but-invalid wheel b — same 0..31 integer bounds as the pointer path (WR-02)', () => {
+		expect(parseVmInput('{"t":"w","x":1,"y":2,"dy":1,"b":32}')).toBeNull()
+		expect(parseVmInput('{"t":"w","x":1,"y":2,"dy":1,"b":-1}')).toBeNull()
+		expect(parseVmInput('{"t":"w","x":1,"y":2,"dy":1,"b":0.5}')).toBeNull()
+		expect(parseVmInput('{"t":"w","x":1,"y":2,"dy":1,"b":"1"}')).toBeNull()
+		expect(parseVmInput('{"t":"w","x":1,"y":2,"dy":1,"b":null}')).toBeNull()
+	})
+
 	it('rejects d outside {0,1}', () => {
 		expect(parseVmInput('{"t":"k","k":65293,"d":2}')).toBeNull()
 		expect(parseVmInput('{"t":"k","k":65293,"d":-1}')).toBeNull()
@@ -127,8 +141,8 @@ describe('parseVmInput — every malformed input returns null (never throws)', (
 
 describe('parseVmInput — wheel dy normalization', () => {
 	it('normalizes any integer dy to ±1 (Math.sign)', () => {
-		expect(parseVmInput('{"t":"w","x":1,"y":2,"dy":-120}')).toEqual({t: 'w', x: 1, y: 2, dy: -1})
-		expect(parseVmInput('{"t":"w","x":1,"y":2,"dy":3}')).toEqual({t: 'w', x: 1, y: 2, dy: 1})
+		expect(parseVmInput('{"t":"w","x":1,"y":2,"dy":-120}')).toEqual({t: 'w', x: 1, y: 2, dy: -1, b: 0})
+		expect(parseVmInput('{"t":"w","x":1,"y":2,"dy":3}')).toEqual({t: 'w', x: 1, y: 2, dy: 1, b: 0})
 	})
 
 	it('rejects dy 0 (a no-direction wheel frame is meaningless)', () => {
