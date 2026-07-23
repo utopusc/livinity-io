@@ -21,6 +21,11 @@ class FakeRfbClient extends EventEmitter implements VncRfbClientLike {
 	fb: Buffer | null = null
 	connectCalls = 0
 	disconnectCalls = 0
+	/** Phase 367 (VMENC-03): recorded sendPointerEvent/sendKeyEvent arg tuples. */
+	sentPointers: unknown[][] = []
+	sentKeys: unknown[][] = []
+	/** Phase 367: script the Pitfall-2 library throw (sendData on a nulled _connection). */
+	throwOnSend = false
 	/** Test hook: invoked synchronously inside connect() to script the handshake outcome. */
 	onConnect?: (c: FakeRfbClient) => void
 
@@ -33,6 +38,14 @@ class FakeRfbClient extends EventEmitter implements VncRfbClientLike {
 	}
 	getFb(): Buffer | null {
 		return this.fb
+	}
+	sendPointerEvent(...args: unknown[]): void {
+		if (this.throwOnSend) throw new TypeError("Cannot read properties of null (reading 'write')")
+		this.sentPointers.push(args)
+	}
+	sendKeyEvent(...args: unknown[]): void {
+		if (this.throwOnSend) throw new TypeError("Cannot read properties of null (reading 'write')")
+		this.sentKeys.push(args)
 	}
 }
 
@@ -231,6 +244,90 @@ describe('VmVncFrameSource', () => {
 
 		const src = new VmVncFrameSource({port: 16300, clientFactory: () => fake})
 		await expect(src.start()).rejects.toBeInstanceOf(VmVncConnectError)
+		await src.stop()
+	})
+
+	// ── Phase 367 (VMENC-03) — guarded input relay over the ONE shared RFB connection ────────
+	it('Test 7: sendPointer decomposes the mask into 8-boolean button args on the live client', async () => {
+		const fake = new FakeRfbClient()
+		fake.clientWidth = 640
+		fake.clientHeight = 480
+		fake.fb = Buffer.alloc(16)
+		fake.onConnect = (c) => c.emit('firstFrameUpdate', c.fb)
+
+		const src = new VmVncFrameSource({port: 16300, clientFactory: () => fake})
+		await src.start()
+
+		// Mask bits 0/2/4 set (left + right + scroll-down) → booleans b1/b3/b5, b2/b4 false.
+		src.sendPointer(100, 50, 0b10101)
+		expect(fake.sentPointers).toEqual([[100, 50, true, false, true, false, true]])
+
+		await src.stop()
+	})
+
+	it('Test 7b: sendKey forwards (keysym, down) on the live client', async () => {
+		const fake = new FakeRfbClient()
+		fake.clientWidth = 640
+		fake.clientHeight = 480
+		fake.fb = Buffer.alloc(16)
+		fake.onConnect = (c) => c.emit('firstFrameUpdate', c.fb)
+
+		const src = new VmVncFrameSource({port: 16300, clientFactory: () => fake})
+		await src.start()
+
+		src.sendKey(65293, true)
+		expect(fake.sentKeys).toEqual([[65293, true]])
+
+		await src.stop()
+	})
+
+	it('Test 7c: sends after stop() are silent no-ops — no throw, zero NEW recorded calls (Pitfall 2)', async () => {
+		const fake = new FakeRfbClient()
+		fake.clientWidth = 640
+		fake.clientHeight = 480
+		fake.fb = Buffer.alloc(16)
+		fake.onConnect = (c) => c.emit('firstFrameUpdate', c.fb)
+
+		const src = new VmVncFrameSource({port: 16300, clientFactory: () => fake})
+		await src.start()
+		src.sendPointer(1, 1, 1)
+		expect(fake.sentPointers).toHaveLength(1)
+
+		await src.stop()
+		expect(() => src.sendPointer(2, 2, 0)).not.toThrow()
+		expect(() => src.sendKey(65293, false)).not.toThrow()
+		expect(fake.sentPointers).toHaveLength(1) // nothing new after stop
+		expect(fake.sentKeys).toHaveLength(0)
+	})
+
+	it('Test 7d: sends before start() settles (never connected) are silent no-ops', async () => {
+		const fake = new FakeRfbClient() // connect() never emits — start stays pending
+		const src = new VmVncFrameSource({port: 16300, clientFactory: () => fake})
+
+		const started = src.start()
+		started.catch(() => {})
+		expect(() => src.sendPointer(10, 10, 1)).not.toThrow()
+		expect(() => src.sendKey(32, true)).not.toThrow()
+		expect(fake.sentPointers).toHaveLength(0)
+		expect(fake.sentKeys).toHaveLength(0)
+
+		await src.stop() // rejects the pending start fail-closed
+	})
+
+	it('Test 7e: a THROWING library send is swallowed (sendData has no null-connection guard)', async () => {
+		const fake = new FakeRfbClient()
+		fake.clientWidth = 640
+		fake.clientHeight = 480
+		fake.fb = Buffer.alloc(16)
+		fake.onConnect = (c) => c.emit('firstFrameUpdate', c.fb)
+
+		const src = new VmVncFrameSource({port: 16300, clientFactory: () => fake})
+		await src.start()
+
+		fake.throwOnSend = true
+		expect(() => src.sendPointer(5, 5, 1)).not.toThrow()
+		expect(() => src.sendKey(65307, true)).not.toThrow()
+
 		await src.stop()
 	})
 

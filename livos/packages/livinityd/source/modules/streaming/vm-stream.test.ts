@@ -91,6 +91,16 @@ class FakeFrameSource implements VmFrameSource {
 		this.cb?.(frame)
 	}
 
+	// Phase 367 (VMENC-03): recorded input relay calls (what sendVmInput dispatched here).
+	sentPointers: Array<[number, number, number]> = []
+	sentKeys: Array<[number, boolean]> = []
+	sendPointer(x: number, y: number, buttonMask: number): void {
+		this.sentPointers.push([x, y, buttonMask])
+	}
+	sendKey(keysym: number, down: boolean): void {
+		this.sentKeys.push([keysym, down])
+	}
+
 	async stop(): Promise<void> {
 		this.stopCalls += 1
 		this.stopped = true
@@ -309,6 +319,13 @@ class DeferredFrameSource implements VmFrameSource {
 	on(): void {
 		/* no lifecycle signals needed */
 	}
+	// Phase 367 (VMENC-03): interface stubs — the cap test sends no input.
+	sendPointer(): void {
+		/* no input needed for the cap test */
+	}
+	sendKey(): void {
+		/* no input needed for the cap test */
+	}
 }
 
 describe('StreamManager vm-fmp4 — WR-02 atomic cap reservation', () => {
@@ -422,6 +439,123 @@ describe('StreamManager vm-fmp4 — Phase 366 stdin backpressure guard', () => {
 		expect(stdin.writableLength).toBe(3 * 1024)
 
 		// Clean teardown (the stub kill() emits 'exit').
+		await mgr.stopStream(start.streamId)
+	}, 10_000)
+})
+
+// ── Phase 367 (VMENC-03): sendVmInput — the manager-level input relay ───────────────────────
+//
+// The gated WS branch calls sendVmInput(streamId, msg) with an ALREADY-parseVmInput-validated
+// message; the manager kind-checks the session, clamps pointer coords SERVER-SIDE against the
+// session's guest dims (the writeUInt16BE RangeError class is structurally closed here — the
+// wire may carry any integer), synthesizes wheel press+release pulses, and dispatches to the
+// frame source's guarded sendPointer/sendKey. Input NEVER touches the reaper bookkeeping.
+
+describe('StreamManager vm-fmp4 — Phase 367 sendVmInput relay', () => {
+	it('clamps pointer coords to the session dims (dims-1 floor/ceil) before dispatch', async () => {
+		const source = new FakeFrameSource({manual: true}) // default dims 320×240
+		const {mgr} = makeVmManager([source])
+		const start = await mgr.startVmStream({userId: 'admin', vmId: 'vm-in1', vncRawPort: 16370})
+
+		expect(mgr.sendVmInput(start.streamId, {t: 'p', x: 5000, y: 5000, b: 1})).toBe(true)
+		expect(source.sentPointers).toEqual([[319, 239, 1]])
+
+		// Negative integers (parse accepts them) clamp to 0.
+		expect(mgr.sendVmInput(start.streamId, {t: 'p', x: -100000, y: -5, b: 0})).toBe(true)
+		expect(source.sentPointers).toEqual([
+			[319, 239, 1],
+			[0, 0, 0],
+		])
+
+		await mgr.stopStream(start.streamId)
+	}, 10_000)
+
+	it('relays a key frame as (keysym, down-boolean)', async () => {
+		const source = new FakeFrameSource({manual: true})
+		const {mgr} = makeVmManager([source])
+		const start = await mgr.startVmStream({userId: 'admin', vmId: 'vm-in2', vncRawPort: 16371})
+
+		expect(mgr.sendVmInput(start.streamId, {t: 'k', k: 65293, d: 1})).toBe(true)
+		expect(mgr.sendVmInput(start.streamId, {t: 'k', k: 65293, d: 0})).toBe(true)
+		expect(source.sentKeys).toEqual([
+			[65293, true],
+			[65293, false],
+		])
+
+		await mgr.stopStream(start.streamId)
+	}, 10_000)
+
+	it('synthesizes a wheel frame as a press+release pointer pulse (mask 8 up / 16 down)', async () => {
+		const source = new FakeFrameSource({manual: true})
+		const {mgr} = makeVmManager([source])
+		const start = await mgr.startVmStream({userId: 'admin', vmId: 'vm-in3', vncRawPort: 16372})
+
+		// dy:-1 → scroll-up (RFB button 4, mask bit3 = 8), then release.
+		expect(mgr.sendVmInput(start.streamId, {t: 'w', x: 10, y: 10, dy: -1})).toBe(true)
+		expect(source.sentPointers).toEqual([
+			[10, 10, 8],
+			[10, 10, 0],
+		])
+
+		// dy:1 → scroll-down (RFB button 5, mask bit4 = 16), then release.
+		expect(mgr.sendVmInput(start.streamId, {t: 'w', x: 10, y: 10, dy: 1})).toBe(true)
+		expect(source.sentPointers).toEqual([
+			[10, 10, 8],
+			[10, 10, 0],
+			[10, 10, 16],
+			[10, 10, 0],
+		])
+
+		await mgr.stopStream(start.streamId)
+	}, 10_000)
+
+	it('returns false and dispatches NOTHING for an unknown streamId (T-367-02)', async () => {
+		const source = new FakeFrameSource({manual: true})
+		const {mgr} = makeVmManager([source])
+		const start = await mgr.startVmStream({userId: 'admin', vmId: 'vm-in4', vncRawPort: 16373})
+
+		expect(mgr.sendVmInput('nonexistent-id', {t: 'p', x: 1, y: 1, b: 0})).toBe(false)
+		expect(source.sentPointers).toEqual([])
+		expect(source.sentKeys).toEqual([])
+
+		await mgr.stopStream(start.streamId)
+	}, 10_000)
+
+	it('returns false for a NON-vm-fmp4 session id (kind isolation — no member-stream crossover)', async () => {
+		const source = new FakeFrameSource({manual: true})
+		const {mgr} = makeVmManager([source])
+		const vm = await mgr.startVmStream({userId: 'admin', vmId: 'vm-in5', vncRawPort: 16374})
+
+		// A host fmp4 stream (kind 'fmp4') — input must NEVER reach it.
+		const host = mgr.startStream({
+			userId: 'admin',
+			mode: 'desktop',
+			target: {display: ':0.0', width: 320, height: 240},
+		})
+		expect(mgr.sendVmInput(host.streamId, {t: 'p', x: 1, y: 1, b: 0})).toBe(false)
+		expect(source.sentPointers).toEqual([])
+
+		await mgr.stopStream(host.streamId)
+		await mgr.stopStream(vm.streamId)
+	}, 10_000)
+
+	it('input is INERT to the idle reaper — viewers/lastViewerLeftAt untouched (T-367-07)', async () => {
+		const source = new FakeFrameSource({manual: true})
+		const {mgr} = makeVmManager([source])
+		const start = await mgr.startVmStream({userId: 'admin', vmId: 'vm-in6', vncRawPort: 16375})
+
+		const session = mgr.getSession(start.streamId)
+		if (!session || session.kind !== 'vm-fmp4') throw new Error('test: expected a vm-fmp4 session')
+		const viewersBefore = session.viewers
+		const lastLeftBefore = session.lastViewerLeftAt
+
+		mgr.sendVmInput(start.streamId, {t: 'p', x: 1, y: 1, b: 1})
+		mgr.sendVmInput(start.streamId, {t: 'k', k: 32, d: 1})
+		mgr.sendVmInput(start.streamId, {t: 'w', x: 1, y: 1, dy: 1})
+
+		expect(session.viewers).toBe(viewersBefore)
+		expect(session.lastViewerLeftAt).toBe(lastLeftBefore)
+
 		await mgr.stopStream(start.streamId)
 	}, 10_000)
 })

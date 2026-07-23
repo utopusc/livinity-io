@@ -77,6 +77,38 @@ describe('vm-stream WS branch uses the STRONG gate, never the weak one — T-364
 	})
 })
 
+// Phase 367 (VMENC-03) — the input relay rides the ALREADY-ADMITTED vm-stream socket.
+// The extension of the same tripwire: prove the ws.on('message') input handler exists
+// ONLY inside the sentinel-bracketed strong-gated branch (it inherits the gate above it),
+// that validation goes through the behaviorally-tested pure module (no inline ad-hoc
+// parse), that persistent garbage is strike-enforced in-branch, and that NO second
+// input route (which would need its own gate copy — the drift hazard) ever appears.
+describe('the vm-stream input relay lives ONLY inside the gated branch — T-367-08', () => {
+	test("the branch handles inbound frames (on('message') listener in-branch)", () => {
+		expect(branchCode).toContain("on('message'")
+	})
+
+	test('the branch validates via parseVmInput (the tested pure module, not ad-hoc parsing)', () => {
+		expect(branchCode).toContain('parseVmInput')
+	})
+
+	test('the branch relays via sendVmInput and enforces the strike limit with close(1008', () => {
+		expect(branchCode).toContain('sendVmInput')
+		expect(branchCode).toContain('close(1008')
+	})
+
+	// The relay must be callable from the gated branch ONLY. (parseVmInput legitimately
+	// appears once outside as the top-of-file import — its absence is NOT asserted.)
+	test('sendVmInput appears NOWHERE outside the sentinels (comment-stripped)', () => {
+		const outsideCode = stripComments(serverSrc.slice(0, startIdx) + serverSrc.slice(endIdx))
+		expect(outsideCode).not.toContain('sendVmInput')
+	})
+
+	test('NO /ws/vm-input route exists (no second gate copy, ever)', () => {
+		expect(serverSrc).not.toMatch(/\/ws\/vm-input/)
+	})
+})
+
 describe('the vm encode tRPC procedures are adminProcedure, never privateProcedure — T-364-12/16', () => {
 	test('startEncodedScreen is registered as adminProcedure', () => {
 		expect(routerCode).toMatch(/startEncodedScreen:\s*adminProcedure/)
