@@ -220,6 +220,15 @@ export type VmFrameSourceFactory = (opts: {
 
 const DEFAULT_STOP_TIMEOUT_MS = 2000
 
+/**
+ * Phase 366 (VMENC-01 latency, T-366-01): max frames' worth of bytes allowed to sit in the
+ * encoder's stdin write queue before the feed DROPS the next frame. A live stream must SHED
+ * frames, never queue them — each 1080p BGRA frame is ≈ 8.3 MB, so even a few queued frames
+ * mean hundreds of ms of invisible latency plus unbounded daemon RAM growth under a stalled
+ * ffmpeg (complements 364 WR-01's dimension clamp; STRIDE-D posture improvement).
+ */
+const MAX_STDIN_QUEUED_FRAMES = 2
+
 export class StreamCapExceededError extends Error {
 	code = 'STREAM_CAP_EXCEEDED'
 	constructor(public limit: number) {
@@ -632,12 +641,17 @@ export class StreamManager extends EventEmitter {
 			// framerate by the frame source, so this is one write per encode tick.
 			frameSource.onFrame((chunk: Buffer) => {
 				const stdin = encoder.stdin
-				if (stdin && stdin.writable) {
-					try {
-						stdin.write(chunk)
-					} catch (err) {
-						this.logger?.warn?.(`stream ${streamId}: encoder.stdin.write threw`, err)
-					}
+				if (!stdin || !stdin.writable) return
+				// Phase 366 (T-366-01): drop-frame backpressure guard — when ffmpeg is more than
+				// MAX_STDIN_QUEUED_FRAMES frames behind, SHED this frame instead of queuing it.
+				// Dropping stretches the count-based rawvideo timeline slightly; the 366-02
+				// browser live-edge chase absorbs that skew, and queuing is strictly worse
+				// (unbounded RAM + hundreds of ms of invisible latency).
+				if (stdin.writableLength > chunk.byteLength * MAX_STDIN_QUEUED_FRAMES) return
+				try {
+					stdin.write(chunk)
+				} catch (err) {
+					this.logger?.warn?.(`stream ${streamId}: encoder.stdin.write threw`, err)
 				}
 			})
 			// Writing to a just-exited encoder's stdin emits EPIPE on the pipe — swallow it

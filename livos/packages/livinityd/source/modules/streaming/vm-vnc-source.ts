@@ -102,6 +102,14 @@ const DEFAULT_START_TIMEOUT_MS = 15000
 const MAX_CONNECT_ATTEMPTS = 3 // total connects (mirrors vnc-bridge.ts's 3×100ms ECONNREFUSED retry)
 
 /**
+ * Phase 366 (VMENC-01 latency): RFB update-REQUEST cadence multiplier. Requesting at 2× the
+ * emit tick halves the request-slot latency (~8 ms avg at 30 fps). ONLY the library-side
+ * request rate changes — the #armThrottle emit tick AND ffmpeg's `-framerate` stay at
+ * `framerate`, so the encoder's timing source is untouched (research §2 / Pitfall 4).
+ */
+const RFB_REQUEST_FPS_MULTIPLIER = 2
+
+/**
  * Phase 364 WR-01 / audit RESIDUAL-1(b): defense-in-depth ceiling on the guest/QEMU-reported
  * framebuffer geometry. A VM guest is an UNTRUSTED workload; its ServerInit width/height flow,
  * unbounded, into (a) the vnc-rfb-client W×H×4 BGRA allocation and (b) the ffmpeg `-video_size
@@ -379,7 +387,7 @@ export class VmVncFrameSource implements VmFrameSource {
  */
 function defaultClientFactory(init: {framerate: number}): VncRfbClientLike {
 	const client = new VncRfbClient({
-		fps: init.framerate,
+		fps: init.framerate * RFB_REQUEST_FPS_MULTIPLIER, // Phase 366: 2× request cadence
 		encodings: [VncRfbClient.consts.encodings.raw],
 	})
 	return client as unknown as VncRfbClientLike
