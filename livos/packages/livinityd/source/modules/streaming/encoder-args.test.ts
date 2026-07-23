@@ -11,6 +11,9 @@
  *   7. cursor visible (D-93-05) — `-draw_mouse 1` always present
  *   8. snapshot of one full argv to lock the wire format
  *   9. pipewire-fd mode → gst-launch argv contains pipewiresrc + path=N + fdsink
+ *   V1–V3. Phase 364 vm-rawvideo branch (input clause, libx264 fallback, never-throws)
+ *   V4. Phase 366 exact-array snapshot of the vm-rawvideo+VAAPI wire format (the vm twin
+ *       of Test 8 — order matters because ffmpeg binds options to the NEXT file)
  */
 
 import {describe, it, expect} from 'vitest'
@@ -184,9 +187,29 @@ describe('encoder-args.buildFfmpegArgs', () => {
 		expect(argv).toContain('-vaapi_device')
 		expect(argv).toContain('/dev/dri/renderD128')
 		expect(argv).toContain('hwupload,scale_vaapi=format=nv12')
-		// The SHARED fMP4 muxer tail is reused verbatim, sinking to pipe:1.
+		// Phase 366 (VMENC-01): vm-scoped VAAPI low-latency knobs — no B-frame reorder
+		// delay, 1 s GOP, minimal submission pipeline.
+		expect(argv).toContain('-bf')
+		expect(argv).toContain('0')
+		expect(argv).toContain('-g')
+		expect(argv).toContain('30')
+		expect(argv).toContain('-async_depth')
+		expect(argv).toContain('1')
+		// Phase 366 (VMENC-01): per-frame fragments — a frame leaves the muxer the instant
+		// it is encoded instead of being held up to 200 ms by -frag_duration.
 		expect(argv).toContain('-movflags')
-		expect(argv).toContain('+frag_keyframe+empty_moov+default_base_moof+separate_moof')
+		expect(argv).toContain('+frag_every_frame+empty_moov+default_base_moof+separate_moof')
+		expect(argv).toContain('-flush_packets')
+		// The vm muxer tail must NOT hold frames or renumber timestamps…
+		expect(argv).not.toContain('-frag_duration')
+		expect(argv).not.toContain('-reset_timestamps')
+		// …and rawvideo never probes (research Pitfall 1: these are input-only options —
+		// after -i they'd bind to the OUTPUT and modern ffmpeg dies fatally).
+		expect(argv).not.toContain('-probesize')
+		expect(argv).not.toContain('-analyzeduration')
+		// The placement fix itself: input flags must precede -i (ffmpeg binds options
+		// to the NEXT file on the command line).
+		expect(argv.indexOf('-fflags')).toBeLessThan(argv.indexOf('-i'))
 		expect(argv[argv.length - 1]).toBe('pipe:1')
 	})
 
@@ -205,6 +228,12 @@ describe('encoder-args.buildFfmpegArgs', () => {
 		expect(argv).toContain('-preset')
 		expect(argv).toContain('ultrafast')
 		expect(argv).not.toContain('h264_vaapi')
+		// Phase 366 (VMENC-01): the vm muxer tail applies regardless of encoder branch —
+		// per-frame fragments, no muxer hold, no probing input options.
+		expect(argv).not.toContain('-frag_duration')
+		expect(argv).not.toContain('-reset_timestamps')
+		expect(argv).not.toContain('-probesize')
+		expect(argv).not.toContain('-analyzeduration')
 	})
 
 	it('Test V3: vm-rawvideo NEVER throws (contrast: vnc-window still throws)', () => {
@@ -229,7 +258,17 @@ describe('encoder-args.buildFfmpegArgs', () => {
 		})
 		// Lock the exact ordering. Drift means D-93-02 changed → re-review
 		// the latency tuning before bumping the snapshot.
+		// Phase 366 (VMENC-01) re-pin: the low-latency INPUT flags moved to the FRONT
+		// (before -i — ffmpeg binds options to the NEXT file; after -i they were output
+		// options, fatal on modern ffmpeg). The host muxer tail is byte-identical to
+		// the pre-366 pin (frag_keyframe + frag_duration + reset_timestamps kept).
 		expect(argv).toEqual([
+			'-fflags',
+			'nobuffer',
+			'-probesize',
+			'32',
+			'-analyzeduration',
+			'0',
 			'-f',
 			'x11grab',
 			'-framerate',
@@ -240,12 +279,6 @@ describe('encoder-args.buildFfmpegArgs', () => {
 			'1920x1080',
 			'-i',
 			':0.0',
-			'-fflags',
-			'nobuffer',
-			'-probesize',
-			'32',
-			'-analyzeduration',
-			'0',
 			'-c:v',
 			'libx264',
 			'-preset',
@@ -259,6 +292,53 @@ describe('encoder-args.buildFfmpegArgs', () => {
 			'-frag_duration',
 			'200000',
 			'-reset_timestamps',
+			'1',
+			'pipe:1',
+		])
+	})
+
+	it('Test V4: snapshot — vm-rawvideo + VAAPI wire format is locked (Phase 366 latency tune)', () => {
+		const argv = buildFfmpegArgs({
+			mode: 'vm-rawvideo',
+			width: 1280,
+			height: 720,
+			framerate: 30,
+			caps: HAS_VAAPI,
+		})
+		// Lock the exact ordering (ffmpeg binds options to the NEXT file — order matters).
+		// Drift means the 366 latency tune changed → re-review before bumping.
+		expect(argv).toEqual([
+			'-fflags',
+			'nobuffer',
+			'-f',
+			'rawvideo',
+			'-pix_fmt',
+			'bgra',
+			'-video_size',
+			'1280x720',
+			'-framerate',
+			'30',
+			'-i',
+			'pipe:0',
+			'-vaapi_device',
+			'/dev/dri/renderD128',
+			'-vf',
+			'hwupload,scale_vaapi=format=nv12',
+			'-c:v',
+			'h264_vaapi',
+			'-qp',
+			'23',
+			'-bf',
+			'0',
+			'-g',
+			'30',
+			'-async_depth',
+			'1',
+			'-f',
+			'mp4',
+			'-movflags',
+			'+frag_every_frame+empty_moov+default_base_moof+separate_moof',
+			'-flush_packets',
 			'1',
 			'pipe:1',
 		])
