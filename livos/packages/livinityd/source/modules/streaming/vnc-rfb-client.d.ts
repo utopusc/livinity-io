@@ -30,6 +30,22 @@ declare module 'vnc-rfb-client' {
 		disconnect(): void
 		getFb(): Buffer | null
 		changeFps(fps: number): void
+		// Phase 367 (VMENC-03) — RFB input events (vncclient.js :789 / :817). sendKeyEvent
+		// writeUInt32BE's the keysym; sendPointerEvent writeUInt16BE's x/y and rebuilds the
+		// button mask from the 8 booleans (b1=left … b4=scroll-up, b5=scroll-down).
+		sendKeyEvent(key: number, down?: boolean): void
+		sendPointerEvent(
+			x: number,
+			y: number,
+			button1?: boolean,
+			button2?: boolean,
+			button3?: boolean,
+			button4?: boolean,
+			button5?: boolean,
+			button6?: boolean,
+			button7?: boolean,
+			button8?: boolean,
+		): void
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		on(event: string, listener: (...args: any[]) => void): this
 	}

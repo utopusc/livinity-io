@@ -48,6 +48,8 @@ import {chromeSessionGate, buildCdpNewTabUrl, buildChromeLaunchArgv} from './chr
 import {makeHostAllowlistMiddleware} from './host-allowlist.js'
 import {getDesktopUser} from '../system/desktop-user.js'
 import {attachVncBridge} from '../streaming/vnc-bridge.js'
+// Phase 367 (VMENC-03) — validated input frames on the admitted vm-stream socket.
+import {MAX_INPUT_MSG_BYTES, MAX_INPUT_STRIKES, parseVmInput, VmInputRateLimiter} from '../streaming/vm-input.js'
 import {attachWsHeartbeat} from './ws-heartbeat.js'
 import {trpcExpressHandler, trpcWssHandler} from './trpc/index.js'
 import createTerminalWebSocketHandler from './terminal-socket.js'
@@ -1627,6 +1629,31 @@ class Server {
 							return
 						}
 						streamManager.attachViewer(streamId)
+						// Phase 367 (VMENC-03): inbound input frames on the ALREADY-ADMITTED socket.
+						// The gate above (Origin → verifySessionFull → admin → 'vm-fmp4') admitted this
+						// socket; the streamId→session binding IS the VM binding (wire carries no IDs —
+						// T-367-01/02 structural). Validation lives in the behaviorally-tested
+						// parseVmInput; the bucket DROPS excess (never queues — ghost-replay hazard);
+						// persistent garbage (not rate-drops) strikes toward a 1008 close.
+						const inputLimiter = new VmInputRateLimiter()
+						let inputStrikes = 0
+						ws.on('message', (data, isBinary) => {
+							if (isBinary) return
+							const raw = data as Buffer
+							if (raw.byteLength > MAX_INPUT_MSG_BYTES) {
+								inputStrikes++
+								if (inputStrikes >= MAX_INPUT_STRIKES) ws.close(1008, 'too many bad frames')
+								return
+							}
+							const msg = parseVmInput(raw)
+							if (!msg) {
+								inputStrikes++
+								if (inputStrikes >= MAX_INPUT_STRIKES) ws.close(1008, 'too many bad frames')
+								return
+							}
+							if (!inputLimiter.allow()) return // silent drop — rate excess is NOT a strike
+							streamManager.sendVmInput(streamId, msg)
+						})
 						ws.on('close', () => {
 							streamManager.detachViewer(streamId)
 							const fanout = streamManager.getFanout(streamId)

@@ -57,6 +57,11 @@ export interface VncRfbClientLike {
 	disconnect(): void
 	getFb(): Buffer | null
 	on(event: string, listener: (...args: unknown[]) => void): unknown
+	/** Phase 367 (VMENC-03): RFB KeyEvent — key is an X11 keysym (u32). */
+	sendKeyEvent(key: number, down?: boolean): void
+	/** Phase 367 (VMENC-03): RFB PointerEvent — absolute FB coords + up to 8 button booleans
+	 *  (b1=left, b2=middle, b3=right, b4=scroll-up, b5=scroll-down; the library builds the mask). */
+	sendPointerEvent(x: number, y: number, ...buttons: boolean[]): void
 }
 
 /**
@@ -75,6 +80,13 @@ export interface VmFrameSource {
 	stop(): Promise<void>
 	/** Subscribe to post-start lifecycle signals. */
 	on(event: 'error' | 'close', cb: (err?: unknown) => void): void
+	/** Phase 367 (VMENC-03): relay a pointer event (absolute guest coords, ALREADY clamped by
+	 *  the caller to the session dims + 5-bit button mask) to the guest over the ONE shared
+	 *  RFB connection. Silent no-op when stopped/unsettled/disconnected — never throws. */
+	sendPointer(x: number, y: number, buttonMask: number): void
+	/** Phase 367 (VMENC-03): relay a key event (validated u32 X11 keysym) to the guest.
+	 *  Silent no-op when stopped/unsettled/disconnected — never throws. */
+	sendKey(keysym: number, down: boolean): void
 }
 
 export type VmVncFrameSourceOpts = {
@@ -333,6 +345,38 @@ export class VmVncFrameSource implements VmFrameSource {
 	on(event: 'error' | 'close', cb: (err?: unknown) => void): void {
 		if (event === 'error') this.#errorListeners.push(cb)
 		else this.#closeListeners.push(cb)
+	}
+
+	/**
+	 * Phase 367 (VMENC-03): relay a pointer event to the guest over the shared RFB connection.
+	 * Mask decompose: bit0→b1 (left), bit1→b2 (middle), bit2→b3 (right), bit3→b4 (scroll-up),
+	 * bit4→b5 (scroll-down) — the library rebuilds the mask from the 8 boolean args.
+	 *
+	 * Pitfall 2 (MANDATORY guard): vnc-rfb-client's sendData writes to `this._connection` with
+	 * NO null guard, and resetState() nulls it on disconnect — an unguarded send racing RFB
+	 * teardown throws a TypeError with no uncaughtException net (364 RESIDUAL-1). Guard
+	 * #stopped/#client/#settled AND try/catch (copying stop()'s best-effort idiom): input
+	 * racing teardown is a silent no-op, never a daemon crash.
+	 */
+	sendPointer(x: number, y: number, buttonMask: number): void {
+		if (this.#stopped || !this.#client || !this.#settled) return
+		try {
+			const m = buttonMask
+			this.#client.sendPointerEvent(x, y, !!(m & 1), !!(m & 2), !!(m & 4), !!(m & 8), !!(m & 16))
+		} catch (err) {
+			this.#logger?.warn?.(`vm-vnc-source: sendPointerEvent threw (ignored): ${String(err)}`)
+		}
+	}
+
+	/** Phase 367 (VMENC-03): relay a key event (validated u32 keysym). Same Pitfall-2 guard
+	 *  as sendPointer — a send racing teardown is a silent no-op, never a throw. */
+	sendKey(keysym: number, down: boolean): void {
+		if (this.#stopped || !this.#client || !this.#settled) return
+		try {
+			this.#client.sendKeyEvent(keysym, down)
+		} catch (err) {
+			this.#logger?.warn?.(`vm-vnc-source: sendKeyEvent threw (ignored): ${String(err)}`)
+		}
 	}
 
 	// ── settle helpers ──────────────────────────────────────────────────────────────────

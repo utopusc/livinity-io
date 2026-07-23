@@ -38,6 +38,8 @@ import type {VaapiProbeResult} from './vaapi-probe.js'
 import {spawnVncForWindow} from './vnc-bridge.js'
 import {PortAllocator} from './port-allocator.js'
 import {VmVncFrameSource, type VmFrameSource, type VmVncLogger} from './vm-vnc-source.js'
+// Phase 367 (VMENC-03): the validated input-frame type the gated WS branch relays here.
+import type {VmInputMessage} from './vm-input.js'
 
 // Phase 101-02 (D-101-PORT-ALLOC / D-101-PORT-RANGE-EXTEND): the inline
 // Phase-99 counter that lived here has been replaced by the constructor-
@@ -172,6 +174,9 @@ type VmFmpSession = {
 	encoder: ChildProcess
 	frameSource: VmFrameSource
 	fanout: Fmp4Fanout
+	/** Phase 367 (VMENC-03): the guest framebuffer dims from frameSource.start() — the
+	 *  SERVER-SIDE clamp bound for pointer input (already ≤8192/axis via the WR-01 cap). */
+	dims: {width: number; height: number}
 	startedAt: number
 	status: StreamStatus
 	stopRequested: boolean
@@ -626,6 +631,7 @@ export class StreamManager extends EventEmitter {
 				encoder,
 				frameSource,
 				fanout,
+				dims, // Phase 367 (VMENC-03): retained as the server-side pointer clamp bound
 				startedAt: Date.now(),
 				status: 'alive',
 				stopRequested: false,
@@ -974,6 +980,40 @@ export class StreamManager extends EventEmitter {
 		// VM viewer socket → zero frames ever delivered).
 		if (!session || (session.kind !== 'fmp4' && session.kind !== 'vm-fmp4')) return false
 		session.fanout.addSubscriber(ws)
+		return true
+	}
+
+	/**
+	 * Phase 367 (VMENC-03): relay one ALREADY-VALIDATED input frame (parseVmInput ran in the
+	 * gated WS branch) to a vm-fmp4 session's frame source — the ONE shared RFB connection to
+	 * the guest. Returns false (dispatching NOTHING) for an unknown streamId or any non-vm-fmp4
+	 * kind (T-367-02 re-check: input can never cross into a member fmp4/vnc host-app session).
+	 *
+	 * Pointer/wheel coords are clamped SERVER-SIDE to the session's guest dims here — the wire
+	 * carries arbitrary integers, and vnc-rfb-client writeUInt16BE's them unguarded (Pitfall 3);
+	 * the dims are WR-01-capped (≤8192/axis) so the clamped values are always u16-safe. A wheel
+	 * frame becomes an RFB press+release pulse (mask 8 = scroll-up for dy<0, 16 = scroll-down
+	 * for dy>0, then 0) from the no-held-buttons state (research §3 wheel note).
+	 *
+	 * Controller model: any-admin, last-write-wins — every admitted socket relays through this
+	 * one method onto the one RFB connection; no controller machinery (documented decision).
+	 * MUST NOT touch viewers/lastViewerLeftAt — input is inert to the idle reaper (T-367-07).
+	 */
+	sendVmInput(streamId: string, msg: VmInputMessage): boolean {
+		const session = this.streams.get(streamId)
+		if (!session || session.kind !== 'vm-fmp4') return false
+		const clampX = (x: number) => Math.min(Math.max(x, 0), session.dims.width - 1)
+		const clampY = (y: number) => Math.min(Math.max(y, 0), session.dims.height - 1)
+		if (msg.t === 'p') {
+			session.frameSource.sendPointer(clampX(msg.x), clampY(msg.y), msg.b & 0x1f)
+		} else if (msg.t === 'k') {
+			session.frameSource.sendKey(msg.k >>> 0, msg.d === 1)
+		} else {
+			const x = clampX(msg.x)
+			const y = clampY(msg.y)
+			session.frameSource.sendPointer(x, y, msg.dy < 0 ? 8 : 16)
+			session.frameSource.sendPointer(x, y, 0)
+		}
 		return true
 	}
 
