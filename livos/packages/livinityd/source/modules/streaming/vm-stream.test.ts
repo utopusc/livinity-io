@@ -389,12 +389,13 @@ describe('StreamManager vm-fmp4 — Phase 366 stdin backpressure guard', () => {
 				/* never call _cb → every accepted write accumulates in writableLength */
 			},
 		})
-		const stubEncoder = Object.assign(new EventEmitter(), {
+		const encoderEvents = new EventEmitter()
+		const stubEncoder = Object.assign(encoderEvents, {
 			stdin,
 			stdout: new PassThrough(),
 			stderr: new PassThrough(),
 			kill(signal?: NodeJS.Signals) {
-				setImmediate(() => this.emit('exit', null, signal ?? 'SIGTERM'))
+				setImmediate(() => encoderEvents.emit('exit', null, signal ?? 'SIGTERM'))
 				return true
 			},
 		}) as unknown as ChildProcess
