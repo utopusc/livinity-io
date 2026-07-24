@@ -11,6 +11,14 @@ import randomToken from '../../modules/utilities/random-token.js'
 import {captureSystemState, DEFAULT_BACKUP_SCOPE, type BackupScope} from './system-state.js'
 import {detectEngine, installEngine, KOPIA_MINIMUM_VERSION, type EngineStatus} from './engine.js'
 import {writeTerminalRunStatus, type LastRunStatus} from './backup-preflight.js'
+import {
+	SAFETY_REPO_ID,
+	SAFETY_REPO_PATH,
+	SAFETY_PASSWORD_FILENAME,
+	retentionFlagsFor,
+	ensureSafetyRepository,
+	evaluateDiskPressure,
+} from './safety-snapshots.js'
 import {copyWithProgress} from '../utilities/copy-with-progress.js'
 
 // TODO: These should be refactored into proper livinityd modules
@@ -103,6 +111,12 @@ export default class Backups {
 			})().catch((error) => this.logger.error('Engine self-install failed', error))
 		}
 
+		// Phase 368.5 BKP-16: default-ON local safety snapshots. Non-fatal; if the
+		// engine isn't up yet the hourly interval retries once self-install lands.
+		if (this.engineStatus.available) {
+			await this.ensureSafetySnapshots().catch((error) => this.logger.error('Safety snapshots ensure failed', error))
+		}
+
 		// Fire off background backup process
 		this.backupJobPromise = this.backupOnInterval().catch((error) =>
 			this.logger.error('Error running backups on interval', error),
@@ -157,7 +171,12 @@ export default class Backups {
 			// P0 backups-v2: say how much this interval actually protects — the
 			// original line-pair ("Running…"/"…complete") looked identical whether
 			// it backed up everything or nothing, which hid a fully dead feature.
-			this.logger.log(`Backups interval: ${repositories.length} repositories configured`)
+			// Phase 368.5 BKP-16: the safety repo is not a real DESTINATION — count
+			// user destinations separately (prefix stays intact — 368 UAT greps it).
+			const userDestinations = repositories.filter((repository) => !repository.isSafety)
+			this.logger.log(
+				`Backups interval: ${repositories.length} repositories configured (${userDestinations.length} user destinations)`,
+			)
 
 			// P0 backups-v2: re-detect the engine each interval and, if it's
 			// still missing, RETRY the self-install (a box that booted offline
@@ -172,10 +191,22 @@ export default class Backups {
 			}
 			await this.syncEngineNotification().catch(() => {})
 
-			// P0 backups-v2: zero repositories = zero protection. Nag weekly
-			// instead of silently completing forever.
-			if (repositories.length === 0) {
+			// Phase 368.5 BKP-16: default-ON safety repo — (re)create once the engine is up.
+			// Idempotent ('exists' fast-path is one store read); also heals a boot that
+			// started engine-less and self-installed later.
+			if (engine.available) {
+				await this.ensureSafetySnapshots().catch((error) => this.logger.error('Safety snapshots ensure failed', error))
+			}
+			const safetyDisabled =
+				(await this.#livinityd.store.get('backups.safetySnapshotsDisabled').catch(() => undefined)) === true
+
+			// P0 backups-v2 + Phase 368.5: zero USER destinations = nag weekly. The
+			// safety repo is EXCLUDED from this count by design — it protects against
+			// mistakes, not hardware death, and must never silence the nag.
+			if (userDestinations.length === 0) {
 				await this.maybeNagNoDestination().catch((error) => this.logger.error('No-destination nag failed', error))
+			}
+			if (repositories.length === 0) {
 				this.logger.log('Backups interval complete')
 				continue
 			}
@@ -189,6 +220,16 @@ export default class Backups {
 			for (const repository of repositories) {
 				// Skip if we're shutting down
 				if (!this.running) break
+
+				// Phase 368.5 BKP-16: opt-out stops safety runs (repo left on disk; reclaim is Phase 370).
+				// `continue` also skips the 24h backups-failing alert for the disabled repo.
+				// When ENABLED, the 24h alert intentionally stays active for the safety repo —
+				// sustained disk-pressure skips >24h mean the box genuinely is not protected;
+				// never-silent wins.
+				if (repository.isSafety && safetyDisabled) {
+					this.logger.log('Safety snapshots disabled — skipping safety repo backup')
+					continue
+				}
 
 				// Skip if we already have a backup in progress
 				const isAlreadyBackingUp = this.backupsInProgress.some((progress) => progress.repositoryId === repository.id)
@@ -295,6 +336,96 @@ export default class Backups {
 		await this.#livinityd.store.getWriteLock(async ({set}) => {
 			await set('backups.noDestinationNagTime', Date.now())
 		})
+	}
+
+	// ── Safety snapshots (Phase 368.5 BKP-16) ───────────────────────────
+	// Sanctioned INTERNAL create path — deliberately bypasses addRepository's
+	// /External-/Network validation, which remains the security boundary for
+	// user-chosen destinations (D10 context). Path + id are fixed constants,
+	// never user input.
+	async getSafetySnapshotsEnabled(): Promise<boolean> {
+		return (await this.#livinityd.store.get('backups.safetySnapshotsDisabled').catch(() => undefined)) !== true
+	}
+
+	async setSafetySnapshotsEnabled(enabled: boolean): Promise<boolean> {
+		await this.#livinityd.store.getWriteLock(async ({set}) => {
+			await set('backups.safetySnapshotsDisabled', !enabled)
+		})
+		this.logger.log(`Safety snapshots ${enabled ? 'enabled' : 'disabled'} by admin`)
+		if (enabled) await this.ensureSafetySnapshots().catch((error) => this.logger.error('Safety snapshots ensure failed', error))
+		return enabled
+	}
+
+	private async ensureSafetySnapshots() {
+		if (!this.engineStatus.available) return
+		const secretsPath = nodePath.join(this.#livinityd.dataDirectory, 'secrets', SAFETY_PASSWORD_FILENAME)
+		const result = await ensureSafetyRepository({
+			isDisabled: async () =>
+				(await this.#livinityd.store.get('backups.safetySnapshotsDisabled').catch(() => undefined)) === true,
+			getRepositories: () => this.getRepositories(),
+			registerRepository: async (row) => {
+				await this.#livinityd.store.getWriteLock(async ({set}) => {
+					const repositories = await this.getRepositories()
+					if (!repositories.some((repository) => repository.id === row.id)) repositories.push(row)
+					await set('backups.repositories', repositories)
+				})
+			},
+			readPassword: async () => {
+				try {
+					return (await fse.readFile(secretsPath, 'utf8')).trim() || undefined
+				} catch {
+					return undefined
+				}
+			},
+			writePassword: async (password) => {
+				// AD-9 spirit: canonical copy under secrets/, 0600 (samba-password precedent).
+				await fse.ensureDir(nodePath.dirname(secretsPath))
+				await fse.writeFile(secretsPath, password, {mode: 0o600})
+				await fse.chmod(secretsPath, 0o600)
+			},
+			ensureRepoDir: async () => {
+				await fse.ensureDir(SAFETY_REPO_PATH)
+				await fse.chmod(SAFETY_REPO_PATH, 0o700)
+			},
+			repoDirHasRepository: async () => {
+				const entries = await fse.readdir(SAFETY_REPO_PATH).catch(() => [] as string[])
+				return entries.length > 0
+			},
+			createKopiaRepository: async (password) => {
+				// --override-hostname at CREATE time too: maintenance ownership must match
+				// the connect()-time identity or `maintenance run` silently no-ops
+				// (AD-8 root-vs-user/hostname owner trap).
+				await this.kopia([
+					'repository',
+					'create',
+					'filesystem',
+					`--path=${SAFETY_REPO_PATH}`,
+					`--config-file=/kopia/config/${SAFETY_REPO_ID}.config`,
+					`--password=${password}`,
+					'--override-hostname=livinity',
+				])
+			},
+			connectKopiaRepository: async (password) => {
+				await this.kopia([
+					'repository',
+					'connect',
+					'filesystem',
+					`--path=${SAFETY_REPO_PATH}`,
+					`--config-file=/kopia/config/${SAFETY_REPO_ID}.config`,
+					`--password=${password}`,
+					'--override-hostname=livinity',
+					'--content-cache-size-mb=2000',
+					'--metadata-cache-size-mb=1000',
+				])
+			},
+			log: (m) => this.logger.log(m),
+			error: (m, e) => this.logger.error(m, e as Error),
+		})
+		if (result === 'created') {
+			// First protection shouldn't wait up to 1h for the next tick — same
+			// fire-and-forget-first-backup pattern as the setup wizard's setupBackup.
+			void this.backup(SAFETY_REPO_ID).catch((error) => this.logger.error('Initial safety snapshot failed', error))
+		}
 	}
 
 	// Get repositories
@@ -575,7 +706,11 @@ export default class Backups {
 	private async connect(repositoryId: string) {
 		const repository = await this.getRepository(repositoryId)
 
-		const systemPath = this.#livinityd.files.virtualToSystemPathUnsafe(repository.path)
+		// Phase 368.5 BKP-16: the system-managed safety repo lives at a fixed SYSTEM path
+		// outside the virtual filesystem — every other repo still resolves virtually.
+		const systemPath = repository.isSafety
+			? repository.path
+			: this.#livinityd.files.virtualToSystemPathUnsafe(repository.path)
 		await this.kopia([
 			'repository',
 			'connect',
@@ -644,13 +779,11 @@ export default class Backups {
 			'policy',
 			'set',
 			'--global',
-			// Retention policy
-			'--keep-latest=10',
-			'--keep-hourly=24',
-			'--keep-daily=7',
-			'--keep-weekly=4',
-			'--keep-monthly=12',
-			'--keep-annual=0',
+			// Phase 368.5 BKP-16: retention is selected per-repository (safety =
+			// aggressive thinning). repository() scopes 'policy set --global' to THIS
+			// repo via its per-repo --config-file, so safety thinning can never leak
+			// onto USB/SMB repos (the backups.ts:481-498 trap).
+			...retentionFlagsFor(repository),
 			// Compression
 			'--compression=zstd-fastest',
 			// Never cross fs boundaries
@@ -659,6 +792,22 @@ export default class Backups {
 			'--max-parallel-file-reads=1',
 		])
 		this.logger.log(`Retention policy enforced`)
+
+		// Phase 368.5 BKP-16: a safety backup must never fill the system disk.
+		// <15% free ⇒ thin + maintain first; still <15% ⇒ SKIP with a logged reason
+		// (not an error state — no notification, no failed run history).
+		if (repository.isSafety) {
+			const decision = await evaluateDiskPressure({
+				getDiskUsage: () => getSystemDiskUsage(this.#livinityd),
+				runRetentionAndMaintenance: async () => {
+					await this.repository(repository.id, ['snapshot', 'expire', '--all'])
+					await this.repository(repository.id, ['maintenance', 'run', '--full'])
+				},
+				log: (m) => this.logger.log(m),
+				error: (m, e) => this.logger.error(m, e as Error),
+			})
+			if (decision === 'skip') return false
+		}
 
 		// Ensure we have the latest ignore file before backing up
 		this.logger.verbose(`Ensuring ignore file is up to date`)
@@ -721,6 +870,9 @@ export default class Backups {
 			await this.#livinityd.notifications.clear(`backups-failing:${repository.id}`).catch(() => {})
 
 			this.logger.log(`Backed up ${repository.path}`)
+
+			// Phase 368.5 BKP-16: evidence-rich, distinguishable safety-run log (BKP-07 spirit).
+			if (repository.isSafety) this.logger.log(`Safety snapshot complete (repo: ${repository.id}, kept 24h/7d)`)
 
 			// Save last backed up date
 			await this.#livinityd.store.getWriteLock(async ({set}) => {

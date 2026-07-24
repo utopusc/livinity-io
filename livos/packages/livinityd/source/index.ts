@@ -594,6 +594,9 @@ type StoreSchema = {
 			path: string
 			password: string
 			lastBackup?: number
+			// Phase 368.5 BKP-16 — system-managed local safety repo marker; type tag
+			// so Phase 370's repo-type schema lands cleanly
+			isSafety?: boolean
 		}[]
 		ignore: string[]
 		// Backup-completeness P2 — which out-of-tree stores the snapshot includes.
@@ -610,6 +613,9 @@ type StoreSchema = {
 		// history is Phase 371 scope, NOT this key's job. Shape is the canonical
 		// LastRunStatus from backup-preflight.ts (review IN-01 — no hand-kept dupe).
 		lastRunStatus?: LastRunStatus
+		// Phase 368.5 BKP-16 — explicit opt-out for the default-ON local safety repo
+		// (absent = enabled)
+		safetySnapshotsDisabled?: boolean
 	}
 	// Phase 318 POOL-02/POOL-04 (318-05, D-15) — multi-drive storage-pool config +
 	// safety state. Dedicated top-level key (NOT nested under `backups`/`storage`/
