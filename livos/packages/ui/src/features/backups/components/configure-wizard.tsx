@@ -51,8 +51,15 @@ export function BackupsConfigureWizard() {
 	const {doesHostHaveMountedShares} = useNetworkStorage()
 	const {disks} = useExternalStorage()
 
+	// Phase 368.5 WR-03: the system-managed safety repo is NOT a manageable
+	// destination — it would render as device "livos" with a permanent
+	// disconnected dot and a Forget button that silently recreates it next tick.
+	// Its only UI surface for now is the Settings AMBER card + toggle (deletion/
+	// manage UX is Phase 370). Restore/Rewind listing it stays by design.
+	const userRepositories = React.useMemo(() => (repositories ?? []).filter((repo) => repo.isSafety !== true), [repositories])
+
 	const [viewRepoId, setViewRepoId] = React.useState<string | null>(null)
-	const viewRepo = (repositories || []).find((r) => r.id === viewRepoId) || null
+	const viewRepo = userRepositories.find((r) => r.id === viewRepoId) || null
 	const isViewConnected = React.useMemo(
 		() => (viewRepo ? isRepoConnected(viewRepo.path, doesHostHaveMountedShares, disks) : false),
 		[viewRepo, doesHostHaveMountedShares, disks],
@@ -103,7 +110,7 @@ export function BackupsConfigureWizard() {
 				<>
 					<span className='mb-4 text-13 text-text-secondary'>{t('backups.schedule-description')}</span>
 					<LocationsSection
-						repositories={repositories || []}
+						repositories={userRepositories}
 						doesHostHaveMountedShares={doesHostHaveMountedShares}
 						disks={disks}
 						backupProgressByRepo={backupProgressByRepo}
