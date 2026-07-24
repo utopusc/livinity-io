@@ -356,7 +356,25 @@ export default class Backups {
 		return enabled
 	}
 
+	// IN-01: tRPC setSafetySnapshotsEnabled(true) and the interval tick can enter
+	// ensure concurrently — both could pass the repo checks, generate DIFFERENT
+	// passwords, and interleave password-file write vs `repository create`,
+	// leaving the file mismatched with the repo. One ensure in flight at a time
+	// (same idiom as #engineInstallInFlight); losers return — the next tick
+	// re-runs ensure anyway.
+	#safetyEnsureInFlight = false
+
 	private async ensureSafetySnapshots() {
+		if (this.#safetyEnsureInFlight) return
+		this.#safetyEnsureInFlight = true
+		try {
+			await this.#ensureSafetySnapshotsInner()
+		} finally {
+			this.#safetyEnsureInFlight = false
+		}
+	}
+
+	async #ensureSafetySnapshotsInner() {
 		if (!this.engineStatus.available) return
 		const secretsPath = nodePath.join(this.#livinityd.dataDirectory, 'secrets', SAFETY_PASSWORD_FILENAME)
 		const result = await ensureSafetyRepository({
