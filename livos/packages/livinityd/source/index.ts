@@ -24,7 +24,7 @@ import Dbus from './modules/dbus/dbus.js'
 import Backups from './modules/backups/backups.js'
 // Phase 368 BKP-03 — boot preflight recovering from an interrupted backup;
 // wired in start() BEFORE the Docker-state cleanup (paused-container stop-hang).
-import {runBackupPreflight} from './modules/backups/backup-preflight.js'
+import {runBackupPreflight, type LastRunStatus} from './modules/backups/backup-preflight.js'
 import {listContainers, manageContainer} from './modules/docker/docker.js'
 import Scheduler from './modules/scheduler/index.js'
 import RedisModule from './modules/redis-module.js'
@@ -607,8 +607,9 @@ type StoreSchema = {
 		// writes 'running' at start and 'success'/'failed' in its finally; the boot
 		// preflight flips a stale 'running' (process died mid-backup) to 'failed'.
 		// Minimal single-key run history by design — the browsable scheduler-style
-		// history is Phase 371 scope, NOT this key's job.
-		lastRunStatus?: {startedAt: number; status: 'running' | 'success' | 'failed'; repositoryId: string}
+		// history is Phase 371 scope, NOT this key's job. Shape is the canonical
+		// LastRunStatus from backup-preflight.ts (review IN-01 — no hand-kept dupe).
+		lastRunStatus?: LastRunStatus
 	}
 	// Phase 318 POOL-02/POOL-04 (318-05, D-15) — multi-drive storage-pool config +
 	// safety state. Dedicated top-level key (NOT nested under `backups`/`storage`/
