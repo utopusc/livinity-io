@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-24
+
+### Added
+- **Interrupted-backup recovery** — if the server crashes or restarts mid-backup,
+  boot now recovers automatically: app containers left paused by the backup are
+  unpaused (before anything else can get stuck on them), leftover temporary
+  staging files are cleaned, and the interrupted run is honestly recorded as
+  failed instead of silently vanishing.
+
+### Fixed
+- System updates no longer fail silently on fresh installations. On a box that
+  had never changed its release channel, the updater crashed with no output
+  right after "Pulling latest code" (reported by an external beta tester —
+  thank you, Andrew). The updater now tolerates the missing setting.
+- The update-failure dialog no longer shows raw terminal color codes.
+
 ## [1.0.1] - 2026-07-24
 
 ### Fixed

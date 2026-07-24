@@ -22,16 +22,18 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.0.1 (First SemVer PATCH release. Single bug fix on top
-#   of v1.0.0: the Settings "About" version label was resolved from GitHub's /tags
-#   listing, which sorts tags ALPHABETICALLY — after the SemVer migration v1.0.0
-#   sorts far below the legacy v45.x tags, falls outside the first page, and the UI
-#   fell back to showing a stale v45.31-beta.11. Fixed (4f320e6a) by reading the
-#   version from the box's own .deployed-release record — always exact — instead of
-#   guessing from GitHub tags. Cut as a STABLE, make_latest=true release. Update
-#   reachability unchanged from the v1.0.0 note: STABLE-channel boxes compare by
-#   string inequality (update.ts `release.tag_name !== deployedRelease`) so any box
-#   not on v1.0.1 sees it; BETA-channel boxes must be on the stable channel.)
+# CURRENT VALUE = refs/tags/v1.1.0 (First SemVer MINOR release — Backups v2 Phase 368
+#   BKPREANIMATE. New capability: interrupted-backup boot recovery (BKP-03) — boot
+#   preflight unpauses app containers stranded paused by a crashed backup (wired
+#   strictly BEFORE cleanDockerState, which would hang on a frozen container),
+#   sweeps stale staging, and marks the interrupted run FAILED in the new
+#   backups.lastRunStatus store record (compare-and-set terminal writes so
+#   concurrent runs never clobber each other). Also carries two field fixes from
+#   external beta testing: (a) update.sh no longer dies silently under
+#   set -euo pipefail when livinity.yaml lacks a releaseChannel key (every fresh
+#   stable box hit this right after "Pulling latest code"); (b) the update-failure
+#   dialog strips ANSI escapes. Shipping this release un-gates v47 phases
+#   314/315/321 (they waited on Backups-v2 P0). Cut as STABLE, make_latest=true.)
 #   The pin line below names the exact tag being cut in this commit (pre-tag-prep
 #   flow, step 1). release.yml verifies pin == tag and publishes. On a box the
 #   warn-only path resolves it to the tag's commit and records a self-consistent
@@ -50,4 +52,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.0.1
+refs/tags/v1.1.0
