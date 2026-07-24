@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-07-24
+
+### Fixed
+- Settings now shows the correct installed version. The version label was resolved
+  from GitHub's tag listing, which sorts alphabetically — after the SemVer
+  migration `v1.0.0` sorted below the legacy `v45.x` tags and the UI fell back to
+  a stale pre-release label. The version is now read from the box's own deployment
+  record, which is always exact.
+
 ## [1.0.0] - 2026-07-23
 
 **First stable release.** LivOS is a self-hosted AI home-server operating system:
