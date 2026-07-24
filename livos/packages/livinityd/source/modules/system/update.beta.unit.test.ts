@@ -5,10 +5,16 @@
 //
 // Phase 311 CR-01 — the CROSS-SELECTOR agreement suite (below) additionally
 // proves this TS selector and update.sh's shell selector pick the SAME tag for
-// a shared input set, closing the two-sided-consistency gap the code review
-// surfaced (the shell's tilde-mapped `sort -V` must agree with pickMaxReleaseTag
-// on the promotion case v44.1/v44.2-beta.1/v44.2 -> v44.2). See also the
-// self-contained bash proof at update.beta-selector.test.sh.
+// a shared input set. See also the self-contained bash proof at
+// update.beta-selector.test.sh.
+//
+// SemVer migration hardening (v1.1.1-beta.1 cut, 2026-07-24): the selector is
+// now STRICT — only 3-part vMAJOR.MINOR.PATCH[-prerelease] tags participate;
+// legacy 2-part tags (v45.30, v45.31-beta.11) are DROPPED, never coerced.
+// Coercion made every legacy tag outrank the entire v1.x line forever, so a
+// post-migration beta cut could never be selected and a beta-channel box would
+// re-deploy the stale legacy prerelease. update.sh's shell selector carries the
+// same rule via a grep filter (replicated in BETA_SELECTOR_PIPELINE below).
 import {spawnSync} from 'node:child_process'
 
 import {$} from 'execa'
@@ -16,21 +22,20 @@ import {describe, it, expect} from 'vitest'
 
 import {pickMaxReleaseTag} from './update.js'
 
-describe('pickMaxReleaseTag (311-01 UPDSAFE-01)', () => {
+describe('pickMaxReleaseTag (311-01 UPDSAFE-01, strict-semver since v1.1.1-beta.1)', () => {
 	it('picks the semver-max tag including a prerelease', () => {
-		expect(pickMaxReleaseTag(['v44.1', 'v44.2-beta.1', 'v44.0'])).toBe('v44.2-beta.1')
+		expect(pickMaxReleaseTag(['v1.0.1', 'v1.1.1-beta.1', 'v1.0.0'])).toBe('v1.1.1-beta.1')
 	})
 
-	it('returns the original tag string, not the coerced form', () => {
-		const result = pickMaxReleaseTag(['v44.1', 'v44.2-beta.1', 'v44.0'])
-		// retains the leading 'v' and the -beta suffix (not the coerced '44.2.0')
-		expect(result).toBe('v44.2-beta.1')
+	it('returns the original tag string (leading v + prerelease preserved)', () => {
+		const result = pickMaxReleaseTag(['v1.0.1', 'v1.1.1-beta.1', 'v1.0.0'])
+		expect(result).toBe('v1.1.1-beta.1')
 		expect(result?.startsWith('v')).toBe(true)
 		expect(result).toContain('-beta')
 	})
 
-	it('drops uncoercible tags and never throws', () => {
-		expect(pickMaxReleaseTag(['v44.1', 'not-a-version', 'v44.3'])).toBe('v44.3')
+	it('drops invalid tags and never throws', () => {
+		expect(pickMaxReleaseTag(['v1.0.1', 'not-a-version', 'v1.0.2'])).toBe('v1.0.2')
 	})
 
 	it('returns null for an empty list', () => {
@@ -38,17 +43,9 @@ describe('pickMaxReleaseTag (311-01 UPDSAFE-01)', () => {
 	})
 
 	it('returns the single tag when only one is present', () => {
-		expect(pickMaxReleaseTag(['v44.1'])).toBe('v44.1')
+		expect(pickMaxReleaseTag(['v1.0.1'])).toBe('v1.0.1')
 	})
 
-	// SemVer migration (v1.0.0 cut): the release line moves from legacy 2-part
-	// vNN.MM tags to strict 3-part MAJOR.MINOR.PATCH. semver.coerce already made
-	// the 2-part selector work; these pin that 3-part tags select correctly AND
-	// document the deliberate beta-channel consequence of restarting the MAJOR at
-	// 1: on the beta channel (which uses THIS semver-aware picker), v1.0.0 ranks
-	// BELOW the legacy v45.x — so beta boxes will NOT auto-offer v1.0.0 and must
-	// switch to the stable channel (whose picker is string-equality, update.ts:456,
-	// and DOES surface it). This is expected, not a regression.
 	it('selects the semver-max among strict 3-part tags', () => {
 		expect(pickMaxReleaseTag(['v1.0.0', 'v1.2.0', 'v1.1.9'])).toBe('v1.2.0')
 		expect(pickMaxReleaseTag(['v1.0.0', 'v1.0.1-beta.1', 'v1.0.1'])).toBe('v1.0.1')
@@ -57,26 +54,32 @@ describe('pickMaxReleaseTag (311-01 UPDSAFE-01)', () => {
 		)
 	})
 
-	it('ranks a fresh v1.0.0 BELOW the legacy 2-part v45.x on the beta picker (documented migration consequence)', () => {
-		// Beta channel uses semver precedence: 1.0.0 < 45.30.0, so a beta box on
-		// v45.x would keep the legacy tag as "max". Stable-channel boxes are
-		// unaffected — they compare by string equality and DO see v1.0.0.
-		expect(pickMaxReleaseTag(['v45.30', 'v1.0.0'])).toBe('v45.30')
-		expect(pickMaxReleaseTag(['v45.31-beta.11', 'v1.0.0'])).toBe('v45.31-beta.11')
+	// The migration pin: legacy 2-part tags are EXCLUDED from selection, so a
+	// fresh v1.x beta wins even while the legacy releases still exist on GitHub.
+	// (Before this hardening, coercion ranked 45.31.0 > 1.1.1-beta.1 and the
+	// beta channel was permanently stuck on the legacy line.)
+	it('drops legacy 2-part tags so the v1.x line wins beta selection', () => {
+		expect(pickMaxReleaseTag(['v45.30', 'v45.31-beta.11', 'v1.1.1-beta.1'])).toBe('v1.1.1-beta.1')
+		expect(pickMaxReleaseTag(['v45.30', 'v1.0.0'])).toBe('v1.0.0')
+	})
+
+	it('returns null when ONLY legacy 2-part tags exist (graceful no-update)', () => {
+		expect(pickMaxReleaseTag(['v45.30', 'v45.31-beta.11', 'v44.2'])).toBeNull()
 	})
 })
 
 // Phase 311 CR-01 — the shared input set used by BOTH the pure-TS pins and the
 // bash cross-selector comparison. Each entry pins the tag both selectors MUST
 // agree on. The first case is the headline promotion bug (a beta promoted to
-// its own final release under the same base): pickMaxReleaseTag and the shell
-// selector must BOTH resolve v44.2, never the older v44.2-beta.1.
+// its own final release under the same base): both selectors must resolve the
+// final, never the older beta. Cases use strict 3-part tags per the migration.
 const CROSS_SELECTOR_CASES: Array<{tags: string[]; expected: string}> = [
-	{tags: ['v44.1', 'v44.2-beta.1', 'v44.2'], expected: 'v44.2'}, // promotion (was the bug)
-	{tags: ['v44.2', 'v44.2-beta.1', 'v44.1'], expected: 'v44.2'}, // reversed API order
-	{tags: ['v44.1', 'v44.2-beta.1'], expected: 'v44.2-beta.1'}, // beta only -> beta wins
-	{tags: ['v44.1', 'v44.2'], expected: 'v44.2'}, // stable only, unaffected
-	{tags: ['v44.2-beta.1', 'v44.2-beta.2', 'v44.2-beta.10'], expected: 'v44.2-beta.10'}, // numeric beta order
+	{tags: ['v1.1.0', 'v1.1.1-beta.1', 'v1.1.1'], expected: 'v1.1.1'}, // promotion (was the bug)
+	{tags: ['v1.1.1', 'v1.1.1-beta.1', 'v1.1.0'], expected: 'v1.1.1'}, // reversed API order
+	{tags: ['v1.1.0', 'v1.1.1-beta.1'], expected: 'v1.1.1-beta.1'}, // beta only -> beta wins
+	{tags: ['v1.1.0', 'v1.1.1'], expected: 'v1.1.1'}, // stable only, unaffected
+	{tags: ['v1.1.1-beta.1', 'v1.1.1-beta.2', 'v1.1.1-beta.10'], expected: 'v1.1.1-beta.10'}, // numeric beta order
+	{tags: ['v45.31-beta.11', 'v45.30', 'v1.1.1-beta.1'], expected: 'v1.1.1-beta.1'}, // legacy tags dropped (migration)
 ]
 
 describe('pickMaxReleaseTag CR-01 promotion precedence (pure TS pins)', () => {
@@ -88,19 +91,20 @@ describe('pickMaxReleaseTag CR-01 promotion precedence (pure TS pins)', () => {
 	)
 
 	it('a promoted final release outranks its own beta regardless of array order', () => {
-		// The bug was an order-dependent tie: coerce() strips -beta so both sides
-		// tied at 44.2.0 and the winner depended on list order. Now v44.2 always wins.
-		expect(pickMaxReleaseTag(['v44.2-beta.1', 'v44.2'])).toBe('v44.2')
-		expect(pickMaxReleaseTag(['v44.2', 'v44.2-beta.1'])).toBe('v44.2')
+		expect(pickMaxReleaseTag(['v1.1.1-beta.1', 'v1.1.1'])).toBe('v1.1.1')
+		expect(pickMaxReleaseTag(['v1.1.1', 'v1.1.1-beta.1'])).toBe('v1.1.1')
 	})
 })
 
 // The shell side of update.sh's beta branch, replicated byte-for-byte here so a
-// drift between the two selectors is caught by CI. GNU-coreutils `sort -V` only:
-// the `~`-before-release semantics are GNU/Debian-specific, so skip on a host
-// without a GNU sort (macOS/BSD) — the pure-TS pins above + update.beta-selector.test.sh
-// (run by the 311-05 shell gate on the Ubuntu box) still lock the agreement there.
-const BETA_SELECTOR_PIPELINE = "sed 's/-/~/' | sort -V | tail -1 | sed 's/~/-/'"
+// drift between the two selectors is caught by CI. Includes the strict 3-part
+// grep filter added by the SemVer-migration hardening. GNU-coreutils `sort -V`
+// only: the `~`-before-release semantics are GNU/Debian-specific, so skip on a
+// host without a GNU sort (macOS/BSD) — the pure-TS pins above +
+// update.beta-selector.test.sh (run by the 311-05 shell gate on the Ubuntu box)
+// still lock the agreement there.
+const BETA_SELECTOR_PIPELINE =
+	"grep -E '^v?[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$' | sed 's/-/~/' | sort -V | tail -1 | sed 's/~/-/'"
 const hasGnuSort = (() => {
 	try {
 		const r = spawnSync('bash', ['-c', 'sort --version'], {encoding: 'utf8'})

@@ -1440,13 +1440,20 @@ if [[ "$_LIVOS_RELEASE_CHANNEL" == "beta" ]]; then
         -H "Accept: application/vnd.github+json" \
         "https://api.github.com/repos/utopusc/livinity-io/releases?per_page=100" 2>/dev/null || echo "")
     if [[ -n "$_REL_JSON" ]]; then
+        # SemVer migration (v1.0.0): only STRICT 3-part tags (vX.Y.Z[-pre]) may
+        # win beta selection. Without this filter the legacy patch-less tags
+        # (v45.31-beta.11) outrank the whole v1.x line under sort -V forever and
+        # a beta-channel box would re-deploy the stale legacy prerelease.
+        # Mirrors pickMaxReleaseTag's strict-semver rule in update.ts.
         if command -v jq >/dev/null 2>&1; then
             RELEASE_TAG=$(echo "$_REL_JSON" \
                 | jq -r '[.[] | select(.draft==false) | .tag_name] | .[]' 2>/dev/null \
+                | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' \
                 | sed 's/-/~/' | sort -V | tail -1 | sed 's/~/-/' || echo "")
         else
             RELEASE_TAG=$(echo "$_REL_JSON" | grep '"tag_name"' \
                 | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' \
+                | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' \
                 | sed 's/-/~/' | sort -V | tail -1 | sed 's/~/-/' || echo "")
         fi
     fi
