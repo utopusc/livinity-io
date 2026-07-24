@@ -123,6 +123,11 @@ export default router({
 	// Phase 368.5 BKP-16 — Safety Snapshots opt-out. adminProcedure (D10 posture:
 	// management surface, audit-logged). Enabling re-runs the internal ensure path
 	// so a re-enable takes effect without a reboot.
+	// IN-05 note: `ctx.livinityd!` is INTENTIONAL here (same as engineStatus/
+	// getBackupScope above) — the bare `ctx.livinityd` idiom used by the older
+	// procedures produces a TS18048 per call site that sits in the accepted tsc
+	// baseline; new handlers use `!` so they don't grow that baseline. Runtime is
+	// guaranteed by the procedure middleware either way.
 	getSafetySnapshotsEnabled: adminProcedure.query(async ({ctx}) => ctx.livinityd!.backups.getSafetySnapshotsEnabled()),
 
 	setSafetySnapshotsEnabled: adminProcedure
