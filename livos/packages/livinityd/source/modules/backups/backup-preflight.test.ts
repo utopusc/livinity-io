@@ -9,6 +9,7 @@ import {
 	recoverInterruptedRun,
 	runBackupPreflight,
 	unpauseStrandedContainers,
+	writeTerminalRunStatus,
 	type LastRunStatus,
 	type PreflightDeps,
 } from './backup-preflight.js'
@@ -140,6 +141,66 @@ test('recoverInterruptedRun leaves terminal/absent statuses untouched', async ()
 		expect(recovered).toBe(false)
 		expect(writes).toEqual([])
 	}
+})
+
+// ── writeTerminalRunStatus (MD-01 compare-and-set) ───────────────────────
+
+// Fake single shared key, mirroring `backups.lastRunStatus` under the write lock.
+function makeSharedKey(initial?: LastRunStatus) {
+	let stored = initial
+	return {
+		read: () => stored,
+		write: (status: LastRunStatus) => {
+			stored = status
+		},
+		getStored: async () => stored,
+		setStored: async (status: LastRunStatus) => {
+			stored = status
+		},
+	}
+}
+
+test('writeTerminalRunStatus: run A terminal write does NOT clobber run B running record', async () => {
+	const key = makeSharedKey()
+	const runA: LastRunStatus = {startedAt: 100, status: 'running', repositoryId: 'repo-a'}
+	const runB: LastRunStatus = {startedAt: 200, status: 'running', repositoryId: 'repo-b'}
+
+	// Run A starts, then run B overlaps and takes the shared key.
+	key.write(runA)
+	key.write(runB)
+
+	// Run A finishes — its terminal write must be skipped, not clobber B.
+	const wrote = await writeTerminalRunStatus({
+		getStored: key.getStored,
+		setStored: key.setStored,
+		run: {startedAt: 100, status: 'success', repositoryId: 'repo-a'},
+	})
+
+	expect(wrote).toBe(false)
+	expect(key.read()).toEqual(runB)
+	// So a crash mid-B still leaves 'running' for the boot preflight to flip to FAILED.
+})
+
+test('writeTerminalRunStatus writes the terminal state when the stored record is its own', async () => {
+	const key = makeSharedKey({startedAt: 100, status: 'running', repositoryId: 'repo-a'})
+	const wrote = await writeTerminalRunStatus({
+		getStored: key.getStored,
+		setStored: key.setStored,
+		run: {startedAt: 100, status: 'failed', repositoryId: 'repo-a'},
+	})
+	expect(wrote).toBe(true)
+	expect(key.read()).toEqual({startedAt: 100, status: 'failed', repositoryId: 'repo-a'})
+})
+
+test('writeTerminalRunStatus: absent stored record → no write', async () => {
+	const key = makeSharedKey()
+	const wrote = await writeTerminalRunStatus({
+		getStored: key.getStored,
+		setStored: key.setStored,
+		run: {startedAt: 100, status: 'success', repositoryId: 'repo-a'},
+	})
+	expect(wrote).toBe(false)
+	expect(key.read()).toBeUndefined()
 })
 
 // ── runBackupPreflight ───────────────────────────────────────────────────

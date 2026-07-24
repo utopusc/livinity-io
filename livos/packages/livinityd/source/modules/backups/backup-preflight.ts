@@ -123,6 +123,32 @@ export async function recoverInterruptedRun({
 }
 
 /**
+ * Writer-side counterpart to recoverInterruptedRun (MD-01): the terminal
+ * run-history write in backup()'s finally MUST be a compare-and-set.
+ * `lastRunStatus` is one shared key and backup() runs can overlap (a manual
+ * tRPC backup of repo B during the interval's backup of repo A — the
+ * isAlreadyBackingUp guard only dedupes the same repository). A finishing run
+ * may only write its terminal state while the stored record is still its OWN
+ * record — otherwise a concurrent run has since taken the key, and clobbering
+ * its 'running' record would let that run's crash silently look successful.
+ * Returns true when the terminal state was written.
+ */
+export async function writeTerminalRunStatus({
+	getStored,
+	setStored,
+	run,
+}: {
+	getStored: () => Promise<LastRunStatus | undefined>
+	setStored: (status: LastRunStatus) => Promise<unknown>
+	run: LastRunStatus
+}): Promise<boolean> {
+	const stored = await getStored()
+	if (stored?.startedAt !== run.startedAt || stored?.repositoryId !== run.repositoryId) return false
+	await setStored(run)
+	return true
+}
+
+/**
  * Run the three preflight steps in order. Every step is individually
  * fault-isolated and this orchestrator itself NEVER throws — preflight
  * problems must never block boot.

@@ -10,7 +10,7 @@ import prettyBytes from 'pretty-bytes'
 import randomToken from '../../modules/utilities/random-token.js'
 import {captureSystemState, DEFAULT_BACKUP_SCOPE, type BackupScope} from './system-state.js'
 import {detectEngine, installEngine, KOPIA_MINIMUM_VERSION, type EngineStatus} from './engine.js'
-import {type LastRunStatus} from './backup-preflight.js'
+import {writeTerminalRunStatus, type LastRunStatus} from './backup-preflight.js'
 import {copyWithProgress} from '../utilities/copy-with-progress.js'
 
 // TODO: These should be refactored into proper livinityd modules
@@ -742,14 +742,22 @@ export default class Backups {
 			this.backupsInProgress = this.backupsInProgress.filter((progress) => progress !== backupProgress)
 			this.#livinityd.eventBus.emit('backups:backup-progress', this.backupsInProgress)
 
-			// Phase 368 BKP-03 — terminal run-history state (best-effort).
+			// Phase 368 BKP-03 — terminal run-history state (best-effort). Compare-
+			// and-set (review MD-01): overlapping backup() runs share this single
+			// key, so only write the terminal state while the stored record is
+			// still THIS run's own — never clobber a concurrent run's 'running'
+			// record (a crashed concurrent run must stay recoverable as FAILED).
 			await this.#livinityd.store
-				.getWriteLock(async ({set}) => {
-					await set('backups.lastRunStatus', {
-						startedAt: runStartedAt,
-						status: runSucceeded ? 'success' : 'failed',
-						repositoryId,
-					} satisfies LastRunStatus)
+				.getWriteLock(async ({get, set}) => {
+					await writeTerminalRunStatus({
+						getStored: () => get('backups.lastRunStatus'),
+						setStored: (status) => set('backups.lastRunStatus', status),
+						run: {
+							startedAt: runStartedAt,
+							status: runSucceeded ? 'success' : 'failed',
+							repositoryId,
+						} satisfies LastRunStatus,
+					})
 				})
 				.catch(() => {})
 		}
