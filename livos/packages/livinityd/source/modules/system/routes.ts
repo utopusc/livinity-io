@@ -9,7 +9,7 @@ import stripAnsi from 'strip-ansi'
 
 import type {ProgressStatus} from '../apps/schema.js'
 import {getResetStatus, performFactoryReset, factoryResetInputSchema} from './factory-reset.js'
-import {getUpdateStatus, performUpdate, performRollback, getLatestRelease, readDeployedSha, resolveVersionLabel} from './update.js'
+import {getUpdateStatus, performUpdate, performRollback, getLatestRelease, readDeployedSha, readDeployedRelease, resolveVersionLabel} from './update.js'
 import {
 	getCpuTemperature,
 	getSystemDiskUsage,
@@ -1249,8 +1249,17 @@ export default router({
 		// locally-deployed SHA via the same git-tag-aware resolver that
 		// `checkUpdate` uses. Falls back to the legacy package.json version when
 		// `.deployed-sha` is missing (first boot, never run update.sh).
+		// Prefer the recorded release tag (.deployed-release, written by update.sh
+		// on every deploy) — it is the ground truth and immune to the GitHub /tags
+		// ALPHABETICAL ordering that buries a low-major SemVer tag (v1.0.0) past the
+		// per_page=20 window, which made resolveVersionLabel fall back to tags[0]
+		// (e.g. "v45.31-beta.11") on a box actually running v1.0.0. Fall back to the
+		// SHA-based resolver only for pre-266 boxes with no .deployed-release.
+		const deployedRelease = await readDeployedRelease()
 		const deployedSha = await readDeployedSha()
-		const versionLabel = deployedSha
+		const versionLabel = deployedRelease
+			? deployedRelease
+			: deployedSha
 			? await resolveVersionLabel(deployedSha, ctx.livinityd)
 			: ctx.livinityd.versionName
 		return {
