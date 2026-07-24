@@ -435,6 +435,7 @@
   "backups-safety-protected-description": "For protection against hardware failure, add a backup destination: USB drive · NAS",
   "backups-safety-toggle-label": "Safety snapshots",
   "backups-safety-toggle-description": "Hourly local snapshots on the internal disk — protects against mistakes, not hardware failure",
+  "backups-safety-repo-name": "Local safety backup",
   "backups-setup": "Set up",
   "backups-setup-confirm": "Finish setup",
   "backups-setup-external-description": "Back up to an external USB drive",

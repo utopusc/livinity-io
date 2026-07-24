@@ -102,7 +102,7 @@ function parseBackupNotificationId(notification: string): {repoId: string | null
  */
 function getBackupFailingContent(
 	notification: string,
-	backupRepositoriesQuery: {data?: Array<{id: string; path: string}>},
+	backupRepositoriesQuery: {data?: Array<{id: string; path: string; isSafety?: boolean}>},
 	onGoToBackups: () => void,
 	onClearNotification: () => void,
 ): NotificationContent {
@@ -111,8 +111,14 @@ function getBackupFailingContent(
 	// Find repository details if we have a repo ID
 	const repository = repoId ? backupRepositoriesQuery.data?.find((r) => r.id === repoId) : null
 
-	// Get device name from path if available
-	const deviceName = repository?.path ? getDeviceNameFromPath(repository.path) : null
+	// Get device name from path if available.
+	// Phase 368.5 IN-03: the system-managed safety repo has an internal path
+	// (/opt/livos/backups-local → "livos") — render its human name instead.
+	const deviceName = repository?.isSafety
+		? t('backups-safety-repo-name')
+		: repository?.path
+			? getDeviceNameFromPath(repository.path)
+			: null
 
 	const actionButtons = (
 		<>
