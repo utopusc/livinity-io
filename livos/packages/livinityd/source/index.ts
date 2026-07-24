@@ -22,6 +22,10 @@ import NotificationChannels from './modules/notifications/channels.js'
 import EventBus from './modules/event-bus/event-bus.js'
 import Dbus from './modules/dbus/dbus.js'
 import Backups from './modules/backups/backups.js'
+// Phase 368 BKP-03 — boot preflight recovering from an interrupted backup;
+// wired in start() BEFORE the Docker-state cleanup (paused-container stop-hang).
+import {runBackupPreflight} from './modules/backups/backup-preflight.js'
+import {listContainers, manageContainer} from './modules/docker/docker.js'
 import Scheduler from './modules/scheduler/index.js'
 import RedisModule from './modules/redis-module.js'
 import TunnelClient from './modules/platform/tunnel-client.js'
@@ -599,6 +603,12 @@ type StoreSchema = {
 		}
 		// Backups-v2 P0 — last time we nagged about having zero destinations.
 		noDestinationNagTime?: number
+		// Phase 368 BKP-03 — terminal state of the most recent backup run. backup()
+		// writes 'running' at start and 'success'/'failed' in its finally; the boot
+		// preflight flips a stale 'running' (process died mid-backup) to 'failed'.
+		// Minimal single-key run history by design — the browsable scheduler-style
+		// history is Phase 371 scope, NOT this key's job.
+		lastRunStatus?: {startedAt: number; status: 'running' | 'success' | 'failed'; repositoryId: string}
 	}
 	// Phase 318 POOL-02/POOL-04 (318-05, D-15) — multi-drive storage-pool config +
 	// safety state. Dedicated top-level key (NOT nested under `backups`/`storage`/
@@ -924,6 +934,25 @@ export default class Livinityd {
 		// It avoids race conditions where LivOS starts making network requests before
 		// the local time is set which then fail with SSL cert errors.
 		await waitForSystemTime(this, 10)
+
+		// Phase 368 BKP-03 (AD-3.4 layer a): recover from an interrupted backup
+		// BEFORE cleanDockerState() below — `docker stop` against a paused
+		// (cgroup-frozen) container can hang indefinitely (moby#41579), so a
+		// stranded paused container must be unpaused first or it stalls the ENTIRE
+		// boot, not just backups. Also flips a stale 'running' run to FAILED and
+		// sweeps stale staging .tmp (guarded no-op until Phase 369 creates the dir).
+		// Non-fatal: preflight problems must never block boot.
+		await runBackupPreflight({
+			listContainers: () => listContainers(null),
+			unpause: (name) => manageContainer(name, 'unpause'),
+			stagingDirectory: `${this.dataDirectory}/system-state/volumes`,
+			getLastRunStatus: () => this.store.get('backups.lastRunStatus'),
+			setLastRunStatus: (status) =>
+				this.store.getWriteLock(async ({set}) => {
+					await set('backups.lastRunStatus', status)
+				}),
+			logger: this.logger,
+		}).catch((error) => this.logger.error('[backup-preflight] failed (non-fatal)', error))
 
 		// We need to forcefully clean Docker state before being able to safely continue
 		// If an existing container is listening on port 80 we'll crash, if an old version
