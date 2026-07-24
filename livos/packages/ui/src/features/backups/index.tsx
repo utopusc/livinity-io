@@ -53,7 +53,10 @@ function SplitLeftContent({titleKey = 'backup'}: {titleKey?: string}) {
 
 export default function BackupsRestoreDialog() {
 	const {repositories} = useBackups()
-	const hasRepositories = (repositories?.length ?? 0) > 0
+	// Phase 368.5: close-navigation keyed to USER repositories — on a safety-only
+	// box (the universal default) closing setup must land back in Settings, not
+	// steer into the Configure wizard. Same isSafety-filter idiom as 2f4eb321.
+	const hasRepositories = (repositories ?? []).some((repo) => repo.isSafety !== true)
 	return (
 		<>
 			<Routes>
