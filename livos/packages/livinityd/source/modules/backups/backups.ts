@@ -10,6 +10,7 @@ import prettyBytes from 'pretty-bytes'
 import randomToken from '../../modules/utilities/random-token.js'
 import {captureSystemState, DEFAULT_BACKUP_SCOPE, type BackupScope} from './system-state.js'
 import {detectEngine, installEngine, KOPIA_MINIMUM_VERSION, type EngineStatus} from './engine.js'
+import {type LastRunStatus} from './backup-preflight.js'
 import {copyWithProgress} from '../utilities/copy-with-progress.js'
 
 // TODO: These should be refactored into proper livinityd modules
@@ -683,6 +684,22 @@ export default class Backups {
 		this.backupsInProgress.push(backupProgress)
 		this.#livinityd.eventBus.emit('backups:backup-progress', this.backupsInProgress)
 
+		// Phase 368 BKP-03 — run-history lifecycle. 'running' is written before the
+		// snapshot; the finally below writes the terminal state. If the process dies
+		// mid-run the key stays 'running' and the boot preflight flips it to
+		// 'failed'. Best-effort: history writes must never abort a backup.
+		const runStartedAt = Date.now()
+		let runSucceeded = false
+		await this.#livinityd.store
+			.getWriteLock(async ({set}) => {
+				await set('backups.lastRunStatus', {
+					startedAt: runStartedAt,
+					status: 'running',
+					repositoryId,
+				} satisfies LastRunStatus)
+			})
+			.catch(() => {})
+
 		try {
 			// Create the snapshot
 			// TODO: Attempt recovering from device out of space errors by deleting old snapshots
@@ -718,11 +735,23 @@ export default class Backups {
 				`${repository.path} size after backup: Used ${prettyBytes(size.used)} of ${prettyBytes(size.capacity)}`,
 			)
 
+			runSucceeded = true
 			return true
 		} finally {
 			// Remove progress tracking
 			this.backupsInProgress = this.backupsInProgress.filter((progress) => progress !== backupProgress)
 			this.#livinityd.eventBus.emit('backups:backup-progress', this.backupsInProgress)
+
+			// Phase 368 BKP-03 — terminal run-history state (best-effort).
+			await this.#livinityd.store
+				.getWriteLock(async ({set}) => {
+					await set('backups.lastRunStatus', {
+						startedAt: runStartedAt,
+						status: runSucceeded ? 'success' : 'failed',
+						repositoryId,
+					} satisfies LastRunStatus)
+				})
+				.catch(() => {})
 		}
 	}
 
