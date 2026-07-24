@@ -941,18 +941,24 @@ export default class Livinityd {
 		// stranded paused container must be unpaused first or it stalls the ENTIRE
 		// boot, not just backups. Also flips a stale 'running' run to FAILED and
 		// sweeps stale staging .tmp (guarded no-op until Phase 369 creates the dir).
-		// Non-fatal: preflight problems must never block boot.
-		await runBackupPreflight({
-			listContainers: () => listContainers(null),
-			unpause: (name) => manageContainer(name, 'unpause'),
-			stagingDirectory: `${this.dataDirectory}/system-state/volumes`,
-			getLastRunStatus: () => this.store.get('backups.lastRunStatus'),
-			setLastRunStatus: (status) =>
-				this.store.getWriteLock(async ({set}) => {
-					await set('backups.lastRunStatus', status)
-				}),
-			logger: this.logger,
-		}).catch((error) => this.logger.error('[backup-preflight] failed (non-fatal)', error))
+		// Non-fatal: preflight problems must never block boot. Gated on the SAME
+		// dev-mode condition as cleanDockerState() (review LW-01): the moby#41579
+		// hazard only exists because of the container nuke below, and in dev the
+		// unfiltered unpause would silently resume a developer's intentionally-
+		// paused unrelated containers on every source-code reload.
+		if (!this.developmentMode) {
+			await runBackupPreflight({
+				listContainers: () => listContainers(null),
+				unpause: (name) => manageContainer(name, 'unpause'),
+				stagingDirectory: `${this.dataDirectory}/system-state/volumes`,
+				getLastRunStatus: () => this.store.get('backups.lastRunStatus'),
+				setLastRunStatus: (status) =>
+					this.store.getWriteLock(async ({set}) => {
+						await set('backups.lastRunStatus', status)
+					}),
+				logger: this.logger,
+			}).catch((error) => this.logger.error('[backup-preflight] failed (non-fatal)', error))
+		}
 
 		// We need to forcefully clean Docker state before being able to safely continue
 		// If an existing container is listening on port 80 we'll crash, if an old version
