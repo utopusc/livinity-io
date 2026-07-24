@@ -11,8 +11,16 @@ import {t} from '@/utils/i18n'
 // silently (BACKLOG 999.6). Pattern: detect well-known prefixes/codes from the
 // trpc error message; fall back to the raw message so unknown failures still
 // reach the user.
+// update.sh output arrives with raw ANSI color codes (execa captures the colored
+// stderr verbatim); rendered untouched they show as "␛[0;36m" garbage in the
+// failure dialog (field-reported).
+function stripAnsi(s: string): string {
+	// eslint-disable-next-line no-control-regex
+	return s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
+}
+
 function describeUpdateError(err: unknown): string {
-	const raw = err instanceof Error ? err.message : String(err ?? 'Unknown error')
+	const raw = stripAnsi(err instanceof Error ? err.message : String(err ?? 'Unknown error'))
 	const lower = raw.toLowerCase()
 	if (lower.includes('unauthorized') || lower.includes('invalid token') || lower.includes('missing token')) {
 		return 'Session expired — refresh the page and log in again, then retry the update.'
@@ -103,7 +111,7 @@ export function UpdatingCover({onRetry}: {onRetry: () => void}) {
 			{error && (
 				<FailedLayout
 					title={t('software-update.failed')}
-					description={<>Error: {error}</>}
+					description={<>Error: {stripAnsi(error)}</>}
 					buttonText={t('software-update.failed.retry')}
 					buttonOnClick={onRetry}
 				/>

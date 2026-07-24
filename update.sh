@@ -1408,8 +1408,13 @@ rm -rf "$TEMP_DIR"
 # bash-reads-box-state idiom. js-yaml dump = 2-space indent, unquoted scalar.
 _LIVOS_RELEASE_CHANNEL="stable"
 if [[ -f /opt/livos/data/livinity.yaml ]]; then
+    # `|| true` is load-bearing: on a fresh stable box livinity.yaml EXISTS but has
+    # no releaseChannel: line (the store only writes the key on an explicit channel
+    # change), so grep exits 1 → under `set -euo pipefail` the failing command
+    # substitution killed the whole update with zero output (field-reported: every
+    # fresh stable-channel box died right after "Pulling latest code").
     _chan=$(grep -A0 -E '^\s*releaseChannel:\s*' /opt/livos/data/livinity.yaml 2>/dev/null \
-        | tail -1 | sed -E 's/^\s*releaseChannel:\s*//; s/["'\'']//g; s/\s+$//')
+        | tail -1 | sed -E 's/^\s*releaseChannel:\s*//; s/["'\'']//g; s/\s+$//' || true)
     [[ "$_chan" == "beta" ]] && _LIVOS_RELEASE_CHANNEL="beta"
 fi
 
