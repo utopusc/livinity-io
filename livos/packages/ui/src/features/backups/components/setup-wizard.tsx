@@ -148,7 +148,8 @@ export function BackupsSetupWizard() {
 
 	const {setupBackup, isSettingUpBackup, repositories, connectExistingRepository, isConnectingExisting} = useBackups()
 	const {disks} = useExternalStorage()
-	const showExclusionsStep = (repositories?.length ?? 0) === 0
+	// Phase 368.5: first USER destination — the system-managed safety repo must not hide the exclusions step
+	const showExclusionsStep = (repositories ?? []).filter((repo) => repo.isSafety !== true).length === 0
 
 	// Watches so the parent re-renders when these fields change
 	const destination = form.watch('destination')
