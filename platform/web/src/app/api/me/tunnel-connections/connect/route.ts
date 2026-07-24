@@ -52,6 +52,13 @@ export async function POST(req: NextRequest) {
     `INSERT INTO tunnel_connections
        (user_id, session_id, status, connected_at, client_version, client_ip)
      VALUES ($1, $2, 'connected', NOW(), $3, $4::inet)
+     ON CONFLICT (user_id) DO UPDATE SET
+       session_id = EXCLUDED.session_id,
+       status = 'connected',
+       connected_at = NOW(),
+       disconnected_at = NULL,
+       client_version = EXCLUDED.client_version,
+       client_ip = EXCLUDED.client_ip
      RETURNING id, connected_at`,
     [auth.userId, sessionId, body.client_version ?? null, clientIp],
   );
