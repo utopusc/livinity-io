@@ -72,16 +72,16 @@ const releasesCache = new Map<'stable' | 'beta', ReleaseCacheSlot>()
 // same input — proven by update.beta-selector.test.sh + the cross-selector
 // cases in update.beta.unit.test.ts.
 function normalizeReleaseTag(tag: string): string | null {
-	// Already a fully-valid semver (may itself carry a -prerelease)? Trust it.
-	const direct = semver.valid(tag)
-	if (direct) return direct
-	// LivOS's patch-less shape ("v44.2" / "v44.2-beta.1"): coerce the numeric
-	// base (adds the missing patch), then re-attach any prerelease suffix that
-	// coerce discarded so PRERELEASE precedence survives the max comparison.
-	const base = semver.valid(semver.coerce(tag))
-	if (!base) return null
-	const pre = tag.match(/^v?\d+(?:\.\d+)*-([0-9A-Za-z.-]+?)(?:\+[0-9A-Za-z.-]+)?$/)
-	return pre ? semver.valid(`${base}-${pre[1]}`) : base
+	// SemVer migration (v1.0.0, 2026-07-23): only STRICT 3-part semver tags
+	// (vMAJOR.MINOR.PATCH[-prerelease]) participate in beta-channel selection.
+	// The legacy patch-less tags ("v45.30", "v45.31-beta.11") used to be
+	// coerced in here — but coercion makes every legacy tag (45.x) outrank the
+	// entire v1.x line forever, so a post-migration beta cut (v1.1.1-beta.1)
+	// could NEVER be selected and a beta-channel box would re-deploy the stale
+	// legacy prerelease. Dropping non-strict tags retires the legacy line from
+	// selection without deleting its releases. semver.valid() accepts the
+	// leading "v" and preserves any -prerelease for true precedence.
+	return semver.valid(tag)
 }
 
 export function pickMaxReleaseTag(tags: string[]): string | null {

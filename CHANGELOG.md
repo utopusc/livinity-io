@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (in `v1.1.1-beta.1` prerelease, 2026-07-24)
+- **Safety Snapshots (on by default)** — the box now backs itself up to its own
+  internal disk every hour with zero setup: automatic snapshot repository,
+  aggressive thinning (a day of hourlies, a week of dailies), and a disk-space
+  guard so backups can never fill the system disk. The UI is honest about what
+  this protects against: mistakes (accidental deletion, a bad update) — not
+  hardware failure — so the "add a real backup destination" reminder stays.
+- Beta release channel now resolves versions correctly after the SemVer
+  migration: legacy `v45.x` tags no longer outrank the new `v1.x` line.
+
 ## [1.1.0] - 2026-07-24
 
 ### Added

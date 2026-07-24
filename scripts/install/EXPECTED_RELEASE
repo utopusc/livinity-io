@@ -22,7 +22,21 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.1.0 (First SemVer MINOR release — Backups v2 Phase 368
+# CURRENT VALUE = refs/tags/v1.1.1-beta.1 (PRERELEASE — Backups v2 Phase 368.5 Safety
+#   Snapshots, default ON: system-managed local kopia repo on the internal disk
+#   (/opt/livos/backups-local), hourly via the existing interval, aggressive
+#   thinning, 15%-free disk-pressure guard, honest AMBER card; safety repo is
+#   excluded from every "has destinations" count so the add-a-real-destination
+#   nag never goes silent. ALSO: beta-channel selector hardened for the SemVer
+#   migration — strict 3-part tags only (legacy v45.x no longer outranks v1.x;
+#   update.ts pickMaxReleaseTag + update.sh grep filter, cross-proven by
+#   update.beta.unit.test.ts + update.beta-selector.test.sh). Tag has "-" ⇒
+#   release.yml publishes as prerelease + NOT latest: stable-channel boxes
+#   (everyone) do NOT see it; only beta-channel boxes running the NEW selector
+#   resolve it. ⚠ A beta-channel box running an OLD update.sh would still pick
+#   legacy v45.31-beta.11 — do not flip real boxes to Beta until this ships
+#   through a stable cut. Previous line: v1.1.0 notes below.)
+# PREVIOUS = refs/tags/v1.1.0 (First SemVer MINOR release — Backups v2 Phase 368
 #   BKPREANIMATE. New capability: interrupted-backup boot recovery (BKP-03) — boot
 #   preflight unpauses app containers stranded paused by a crashed backup (wired
 #   strictly BEFORE cleanDockerState, which would hang on a frozen container),
@@ -52,4 +66,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.1.0
+refs/tags/v1.1.1-beta.1
