@@ -17,8 +17,10 @@ export default router({
 	getRepositories: privateProcedure.query(async ({ctx}) => {
 		const repositories = await ctx.livinityd.backups.getRepositories()
 
-		// Only return properties we want to expose
-		return repositories.map(({id, path, lastBackup}) => ({id, path, lastBackup}))
+		// Only return properties we want to expose (passwords never leave the store).
+		// Phase 368.5 BKP-16: isSafety is exposed so the UI can exclude the safety
+		// repo from destination counts.
+		return repositories.map(({id, path, lastBackup, isSafety}) => ({id, path, lastBackup, isSafety}))
 	}),
 
 	// Get size of a repository
@@ -117,4 +119,13 @@ export default router({
 
 	// Get status of restore operations
 	restoreStatus: publicProcedureWhenNoUserExists.query(async ({ctx}) => ctx.livinityd.backups.restoreStatus),
+
+	// Phase 368.5 BKP-16 — Safety Snapshots opt-out. adminProcedure (D10 posture:
+	// management surface, audit-logged). Enabling re-runs the internal ensure path
+	// so a re-enable takes effect without a reboot.
+	getSafetySnapshotsEnabled: adminProcedure.query(async ({ctx}) => ctx.livinityd!.backups.getSafetySnapshotsEnabled()),
+
+	setSafetySnapshotsEnabled: adminProcedure
+		.input(z.object({enabled: z.boolean()}))
+		.mutation(async ({ctx, input}) => ctx.livinityd!.backups.setSafetySnapshotsEnabled(input.enabled)),
 })
