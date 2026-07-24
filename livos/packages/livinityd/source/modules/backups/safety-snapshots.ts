@@ -64,6 +64,13 @@ export function retentionFlagsFor(repository: {isSafety?: boolean}): string[] {
 
 export type EnsureSafetyResult = 'created' | 'reconnected' | 'exists' | 'disabled' | 'error'
 
+// IN-02: tri-state dir probe. 'repository' = kopia marker present (orphan
+// reconnect path); 'empty' = safe to create; 'foreign' = non-empty WITHOUT a
+// kopia marker — a stray file (lost+found, editor droppings) must not send us
+// into an unrecoverable hourly connect-error loop, and `repository create`
+// would refuse the non-empty dir anyway. Foreign ⇒ warn + skip, NEVER delete.
+export type SafetyRepoDirState = 'repository' | 'empty' | 'foreign'
+
 export type EnsureSafetyDeps = {
 	isDisabled: () => Promise<boolean>
 	getRepositories: () => Promise<Array<{id: string; isSafety?: boolean}>>
@@ -71,7 +78,7 @@ export type EnsureSafetyDeps = {
 	readPassword: () => Promise<string | undefined>
 	writePassword: (password: string) => Promise<void>
 	ensureRepoDir: () => Promise<void>
-	repoDirHasRepository: () => Promise<boolean>
+	repoDirState: () => Promise<SafetyRepoDirState>
 	createKopiaRepository: (password: string) => Promise<void>
 	connectKopiaRepository: (password: string) => Promise<void>
 	log: (message: string) => void
@@ -104,7 +111,18 @@ export async function ensureSafetyRepository(deps: EnsureSafetyDeps): Promise<En
 		const password = existing ?? randomBytes(32).toString('hex')
 		if (!existing) await deps.writePassword(password)
 
-		const orphan = await deps.repoDirHasRepository()
+		const dirState = await deps.repoDirState()
+		if (dirState === 'foreign') {
+			// Non-destructive by contract: we never delete or overwrite unknown
+			// files. Without this guard a stray file would loop create/connect
+			// errors every hour forever with no self-heal.
+			deps.error(
+				`Safety repo dir ${SAFETY_REPO_PATH} is non-empty but contains no kopia repository marker — ` +
+					'skipping safety repo creation (never destructive); remove the foreign files to enable safety snapshots',
+			)
+			return 'error'
+		}
+		const orphan = dirState === 'repository'
 		if (orphan && !existing) {
 			deps.error(
 				'Safety repo exists on disk but its password file is missing — cannot reconnect (reclaim UX is Phase 370)',

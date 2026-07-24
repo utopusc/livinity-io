@@ -72,7 +72,7 @@ function makeEnsureDeps(overrides: Partial<EnsureSafetyDeps> = {}): {deps: Ensur
 			calls.written.push(password)
 		},
 		ensureRepoDir: async () => {},
-		repoDirHasRepository: async () => false,
+		repoDirState: async () => 'empty',
 		createKopiaRepository: async (password) => {
 			calls.created.push(password)
 		},
@@ -150,7 +150,7 @@ test('ensureSafetyRepository orphan path → connect (NOT create), registered, r
 	const existing = 'b'.repeat(64)
 	const {deps, calls} = makeEnsureDeps({
 		readPassword: async () => existing,
-		repoDirHasRepository: async () => true,
+		repoDirState: async () => 'repository',
 	})
 	const result = await ensureSafetyRepository(deps)
 	expect(result).toBe('reconnected')
@@ -163,7 +163,7 @@ test('ensureSafetyRepository orphan path → connect (NOT create), registered, r
 test('ensureSafetyRepository orphan WITHOUT password → error, not registered', async () => {
 	const {deps, calls} = makeEnsureDeps({
 		readPassword: async () => undefined,
-		repoDirHasRepository: async () => true,
+		repoDirState: async () => 'repository',
 	})
 	const result = await ensureSafetyRepository(deps)
 	expect(result).toBe('error')
@@ -171,6 +171,18 @@ test('ensureSafetyRepository orphan WITHOUT password → error, not registered',
 	expect(calls.registered).toEqual([])
 	expect(calls.connected).toEqual([])
 	expect(calls.created).toEqual([])
+})
+
+test('ensureSafetyRepository: FOREIGN dir (non-empty, no kopia marker) → error, no kopia calls, never destructive', async () => {
+	// IN-02: a stray file (lost+found, editor droppings) must not be treated as
+	// an orphan repo (hourly connect-error loop) nor be created over.
+	const {deps, calls} = makeEnsureDeps({repoDirState: async () => 'foreign'})
+	const result = await ensureSafetyRepository(deps)
+	expect(result).toBe('error')
+	expect(calls.created).toEqual([])
+	expect(calls.connected).toEqual([])
+	expect(calls.registered).toEqual([])
+	expect(calls.errors.some((message) => message.includes('no kopia repository marker'))).toBe(true)
 })
 
 test('ensureSafetyRepository: createKopiaRepository throwing → error result, never propagates', async () => {

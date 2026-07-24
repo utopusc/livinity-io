@@ -387,9 +387,16 @@ export default class Backups {
 				await fse.ensureDir(SAFETY_REPO_PATH)
 				await fse.chmod(SAFETY_REPO_PATH, 0o700)
 			},
-			repoDirHasRepository: async () => {
+			repoDirState: async () => {
 				const entries = await fse.readdir(SAFETY_REPO_PATH).catch(() => [] as string[])
-				return entries.length > 0
+				if (entries.length === 0) return 'empty'
+				// IN-02: a kopia filesystem repo stores its format blob as
+				// `kopia.repository` (filesystem storage suffixes blob files, e.g.
+				// `kopia.repository.f`). Marker present = real repo (orphan
+				// reconnect); non-empty WITHOUT it = foreign files — warn + skip
+				// upstream, never treat a stray file as a repo (hourly
+				// connect-error loop) and never delete anything.
+				return entries.some((entry) => entry.startsWith('kopia.repository')) ? 'repository' : 'foreign'
 			},
 			createKopiaRepository: async (password) => {
 				// --override-hostname at CREATE time too: maintenance ownership must match
