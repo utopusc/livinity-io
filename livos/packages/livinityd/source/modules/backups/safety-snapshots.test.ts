@@ -252,6 +252,29 @@ test('evaluateDiskPressure: disk usage probe throwing → fail-safe skip, error 
 	expect(calls.errors.length).toBeGreaterThan(0)
 })
 
+test('evaluateDiskPressure: probe RETURNING size 0 → fail-safe skip (not 100% free), error logged, no snapshot risk', async () => {
+	// IN-04: degenerate probe result must behave like a thrown probe.
+	const {deps, calls} = makePressureDeps([{size: 0, available: 0}])
+	await expect(evaluateDiskPressure(deps)).resolves.toBe('skip')
+	expect(calls.errors.some((message) => message.includes('degenerate'))).toBe(true)
+})
+
+test('evaluateDiskPressure: non-finite probe values (NaN) → fail-safe skip', async () => {
+	const {deps, calls} = makePressureDeps([{size: NaN, available: NaN}])
+	await expect(evaluateDiskPressure(deps)).resolves.toBe('skip')
+	expect(calls.errors.length).toBeGreaterThan(0)
+})
+
+test('evaluateDiskPressure: degenerate RE-probe after maintenance → fail-safe skip', async () => {
+	const {deps, calls} = makePressureDeps([
+		{size: 100, available: 10},
+		{size: 0, available: 0},
+	])
+	await expect(evaluateDiskPressure(deps)).resolves.toBe('skip')
+	expect(calls.maintenance).toBe(1)
+	expect(calls.errors.some((message) => message.includes('degenerate'))).toBe(true)
+})
+
 test('evaluateDiskPressure: maintenance throwing is caught — decision comes from the re-probe', async () => {
 	const {deps, calls} = makePressureDeps(
 		[

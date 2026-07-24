@@ -164,14 +164,23 @@ export type DiskPressureDeps = {
  * is not an error state: no notification, no RED, next interval retries.
  */
 export async function evaluateDiskPressure(deps: DiskPressureDeps): Promise<DiskPressureDecision> {
-	const freePercent = (usage: {size: number; available: number}) =>
-		usage.size > 0 ? (usage.available / usage.size) * 100 : 100
+	// IN-04: a probe that RETURNS degenerate values (size 0, NaN, Infinity) must
+	// fail SAFE exactly like a probe that throws — null ⇒ skip. Never treat an
+	// unverifiable disk as 100% free.
+	const freePercent = (usage: {size: number; available: number}): number | null =>
+		Number.isFinite(usage.size) && Number.isFinite(usage.available) && usage.size > 0
+			? (usage.available / usage.size) * 100
+			: null
 
-	let pct: number
+	let pct: number | null
 	try {
 		pct = freePercent(await deps.getDiskUsage())
 	} catch (error) {
 		deps.error('Disk usage probe failed — skipping safety snapshot (fail-safe)', error)
+		return 'skip'
+	}
+	if (pct === null) {
+		deps.error('Disk usage probe returned degenerate values — skipping safety snapshot (fail-safe)')
 		return 'skip'
 	}
 	if (pct >= SAFETY_MIN_FREE_PERCENT) return 'proceed'
@@ -183,11 +192,15 @@ export async function evaluateDiskPressure(deps: DiskPressureDeps): Promise<Disk
 		.runRetentionAndMaintenance()
 		.catch((error) => deps.error('Retention/maintenance under disk pressure failed', error))
 
-	let pct2: number
+	let pct2: number | null
 	try {
 		pct2 = freePercent(await deps.getDiskUsage())
 	} catch (error) {
 		deps.error('Disk usage probe failed — skipping safety snapshot (fail-safe)', error)
+		return 'skip'
+	}
+	if (pct2 === null) {
+		deps.error('Disk usage probe returned degenerate values — skipping safety snapshot (fail-safe)')
 		return 'skip'
 	}
 	if (pct2 >= SAFETY_MIN_FREE_PERCENT) {
