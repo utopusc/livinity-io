@@ -396,7 +396,7 @@ export default class Backups {
 				// reconnect); non-empty WITHOUT it = foreign files — warn + skip
 				// upstream, never treat a stray file as a repo (hourly
 				// connect-error loop) and never delete anything.
-				return entries.some((entry) => entry.startsWith('kopia.repository')) ? 'repository' : 'foreign'
+				return entries.some((entry) => String(entry).startsWith('kopia.repository')) ? 'repository' : 'foreign'
 			},
 			createKopiaRepository: async (password) => {
 				// --override-hostname at CREATE time too: maintenance ownership must match
