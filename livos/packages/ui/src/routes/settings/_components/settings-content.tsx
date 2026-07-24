@@ -95,6 +95,7 @@ import {
 import {AnimatedInputError, Input, PasswordInput} from '@/shadcn-components/ui/input'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/shadcn-components/ui/tabs'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/shadcn-components/ui/select'
+import {Switch} from '@/shadcn-components/ui/switch'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -1395,6 +1396,16 @@ function BackupsSection() {
 	const engineStatusQuery = trpcReact.backups.engineStatus.useQuery(undefined, {staleTime: 30_000})
 	const engineUnavailable = engineStatusQuery.data ? !engineStatusQuery.data.available : false
 
+	// Phase 368.5 BKP-16 — safety-snapshots state (adminProcedure; Backups section is adminOnly)
+	const utils = trpcReact.useUtils()
+	const safetyEnabledQuery = trpcReact.backups.getSafetySnapshotsEnabled.useQuery(undefined, {staleTime: 30_000})
+	const setSafetyMutation = trpcReact.backups.setSafetySnapshotsEnabled.useMutation({
+		onSuccess: () => {
+			utils.backups.getSafetySnapshotsEnabled.invalidate()
+			utils.backups.getRepositories.invalidate()
+		},
+	})
+
 	if (isLoadingBackups) {
 		return (
 			<div className='flex items-center justify-center py-12'>
@@ -1403,7 +1414,14 @@ function BackupsSection() {
 		)
 	}
 
-	const hasBackups = (backupRepositories?.length ?? 0) > 0
+	// Phase 368.5 BKP-16: the system-managed safety repo is EXCLUDED from every
+	// destination-count surface — it protects against mistakes, not hardware
+	// death, and must never silence the push toward a real destination.
+	const userRepositories = (backupRepositories ?? []).filter((repo) => repo.isSafety !== true)
+	const safetyRepo = (backupRepositories ?? []).find((repo) => repo.isSafety === true)
+	const hasBackups = userRepositories.length > 0
+	const safetyEnabled = safetyEnabledQuery.data !== false
+	const showSafetyCard = !hasBackups && !!safetyRepo && safetyEnabled
 
 	// Show Setup Wizard inline
 	if (showSetupWizard) {
@@ -1491,7 +1509,7 @@ function BackupsSection() {
 									<div className='flex-1'>
 										<div className='text-body font-medium text-accent-green'>Backups Configured</div>
 										<div className='text-caption text-text-secondary'>
-											{backupRepositories?.length} backup location{(backupRepositories?.length ?? 0) > 1 ? 's' : ''} configured
+											{userRepositories.length} backup location{userRepositories.length > 1 ? 's' : ''} configured
 										</div>
 									</div>
 								</div>
@@ -1499,7 +1517,7 @@ function BackupsSection() {
 
 							{/* Repository List */}
 							<div className='space-y-2'>
-								{backupRepositories?.map((repo, idx) => (
+								{userRepositories.map((repo, idx) => (
 									<div key={idx} className='rounded-radius-sm border border-border-default bg-surface-base p-3'>
 										<div className='flex items-center gap-3'>
 											<TbDatabase className='h-5 w-5 text-text-secondary' />
@@ -1517,17 +1535,46 @@ function BackupsSection() {
 						</>
 					) : (
 						<>
-							<SettingsInfoCard
-								icon={TbDatabase}
-								title='No Backups Configured'
-								description='Set up automatic backups to protect your data'
-							/>
+							{showSafetyCard ? (
+								/* Phase 368.5 BKP-16: honest AMBER — protects against mistakes, not
+								   hardware death. Never GREEN while the safety repo is the only repo. */
+								<div className='rounded-radius-md border border-amber-500/40 bg-amber-500/10 p-4'>
+									<div className='flex items-center gap-3'>
+										<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-amber-500/20'>
+											<TbShield className='h-5 w-5 text-amber-400' />
+										</div>
+										<div className='flex-1'>
+											<div className='text-body font-medium text-amber-400'>{t('backups-safety-protected-title')}</div>
+											<div className='text-caption text-text-secondary'>{t('backups-safety-protected-description')}</div>
+										</div>
+									</div>
+								</div>
+							) : (
+								<SettingsInfoCard
+									icon={TbDatabase}
+									title='No Backups Configured'
+									description='Set up automatic backups to protect your data'
+								/>
+							)}
 
 							<IconButton onClick={() => setShowSetupWizard(true)} icon={FaRegSave}>
 								{t('backups-setup')}
 							</IconButton>
 						</>
 					)}
+
+					{/* Phase 368.5 BKP-16: opt-out toggle (adminProcedure setSafetySnapshotsEnabled) */}
+					<div className='flex items-center justify-between rounded-radius-sm border border-border-default bg-surface-base p-3'>
+						<div className='min-w-0 pr-3'>
+							<div className='text-body-sm font-medium'>{t('backups-safety-toggle-label')}</div>
+							<div className='text-caption text-text-secondary'>{t('backups-safety-toggle-description')}</div>
+						</div>
+						<Switch
+							checked={safetyEnabled}
+							disabled={safetyEnabledQuery.isLoading || setSafetyMutation.isPending}
+							onCheckedChange={(checked) => setSafetyMutation.mutate({enabled: checked})}
+						/>
+					</div>
 				</TabsContent>
 
 				<TabsContent value='restore' className='space-y-4 pt-4'>

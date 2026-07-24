@@ -10,8 +10,9 @@ export const BackupsCmdkSearchProvider: React.FC<CmdkSearchProviderProps> = ({cl
 	const navigate = useNavigate()
 	const {repositories} = useBackups()
 
-	// Determine if we have existing repositories
-	const hasExistingRepositories = (repositories?.length ?? 0) > 0
+	// Phase 368.5 BKP-16: route on USER repositories only — the safety repo
+	// must not steer ⌘K away from the setup (add-a-destination) flow.
+	const hasExistingRepositories = (repositories ?? []).some((repo) => repo.isSafety !== true)
 
 	// Navigate to the appropriate route based on whether repositories exist
 	const handleSelect = () => {

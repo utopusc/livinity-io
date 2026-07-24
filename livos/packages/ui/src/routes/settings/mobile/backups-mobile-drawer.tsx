@@ -37,6 +37,10 @@ export function BackupsMobileDrawer() {
 	}
 	const {repositories: backupRepositories, isLoadingRepositories: isLoadingBackups} = useBackups()
 
+	// Phase 368.5 BKP-16: the system-managed safety repo must not flip this gate
+	// to "Configure" — the Set-up-a-real-destination nudge survives on mobile.
+	const userRepositoryCount = (backupRepositories ?? []).filter((repo) => repo.isSafety !== true).length
+
 	const goToSetup = useCallback(() => {
 		navigate('/settings/backups/setup', {preventScrollReset: true})
 	}, [navigate])
@@ -65,7 +69,7 @@ export function BackupsMobileDrawer() {
 							<Loader2 className='size-4 animate-spin' aria-hidden='true' />
 							<span className='sr-only'>{t('loading')}</span>
 						</Button>
-					) : (backupRepositories?.length ?? 0) === 0 ? (
+					) : userRepositoryCount === 0 ? (
 						<Button onClick={goToSetup} size='dialog' variant='primary'>
 							<FaRegSave className='size-4' />
 							{t('backups-setup')}
