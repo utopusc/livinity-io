@@ -22,7 +22,7 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v45.31-beta.11 (pinned for this release cut — v51 VMENC field-fix: two production blockers found on the mini PC iGPU that kept the encoded stream from EVER playing (browser silently fell back to RFB): (1) livinityd's desktop user was not in the 'render'/'video' groups so the VAAPI probe returned false and no encoder spawned; (2) the /ws/vm-stream WS route was land-grabbed by AionUi in Caddy (missing carve-out) → 404 → MSE fallback. Both fixed additively; beta-channel boxes only)
+# CURRENT VALUE = refs/tags/v1.0.0 (FIRST STABLE RELEASE — SemVer migration. The release line moves from the legacy 2-part vNN.MM tags (…v45.30, v45.31-beta.11) to strict 3-part Semantic Versioning MAJOR.MINOR.PATCH. v1.0.0 is the first stable cut under the new scheme: bug fix → 1.0.1, new feature → 1.1.0, breaking change → 2.0.0. Cut as a STABLE, make_latest=true release. NOTE on update reachability: the box update path compares tags by STRING equality (update.ts:456 `release.tag_name !== deployedRelease`) — NOT semver — so STABLE-channel boxes on v45.30 will see v1.0.0 as an update automatically even though 1.0.0 < 45.30 numerically. BETA-channel boxes use pickMaxReleaseTag (semver.gt), which treats 1.0.0 as older than 45.31 — those (few, operator-controlled) boxes must switch to the stable channel to see v1.0.0. Encoded VM streaming verified working on Ubuntu guests; Windows-guest jitter is a known guest-OS limitation, not a pipeline defect.)
 #   The pin line below names the exact tag being cut in this commit (pre-tag-prep
 #   flow, step 1). release.yml verifies pin == tag and publishes. On a box the
 #   warn-only path resolves it to the tag's commit and records a self-consistent
@@ -41,4 +41,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v45.31-beta.11
+refs/tags/v1.0.0

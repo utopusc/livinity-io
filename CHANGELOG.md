@@ -7,26 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-23
+
+**First stable release.** LivOS is a self-hosted AI home-server operating system:
+run your own apps, virtual machines, files, and AI assistant on your own hardware,
+reachable from anywhere through your own domain. This release marks the move to
+strict [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`) and
+consolidates the large feature line built since 0.9.0.
+
 ### Added
-- Comprehensive README.md with installation guide and configuration reference
-- CONTRIBUTING.md with development setup for both pnpm and npm workspaces
-- CODE_OF_CONDUCT.md based on Contributor Covenant 2.1
-- SECURITY.md with vulnerability reporting process
-- AGPL-3.0 license for open source release
-- `@livos/config` package for centralized configuration
+- **Virtual Machines** — a native "Virtual Machine" app that runs full Windows and
+  Linux guests (via dockur/qemus containers), managed programmatically by the
+  server: create, start/stop, per-VM Settings (RAM/CPU/disk-grow), live CPU/RAM/disk
+  usage, native full-window screen, desktop shortcuts, and guest username setup.
+- **Low-latency encoded VM streaming** — view a running VM's screen as a host-side
+  hardware-encoded (iGPU VAAPI H.264) browser stream: an MSE player with a
+  live-edge latency chase, honest fall-back to the standard noVNC view when no
+  encoder is available, and interactive keyboard/mouse/scroll input over the same
+  connection. Multi-viewer capable.
+- **Backups** — repository-based backup/restore of apps and data.
+- **App catalog** — 830+ self-hostable apps installable in one click, with
+  per-user Docker isolation and automatic subdomain routing.
+- **Free self-hosting** — run entirely on your own Cloudflare zone at no cost,
+  with a guided in-product setup for domain + tunnel + SSL.
+- **Livinity Desktop** — a Windows desktop app (Electron) for a zero-terminal
+  install: sign in, auto-provision the Cloudflare tunnel/DNS, and install LivOS
+  in WSL2 with tray supervision.
+- **AI assistant** — Claude-powered assistant integrated across the OS.
+- **Multi-user** — per-user isolation, admin RBAC, and per-user app installs.
+- Comprehensive README.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, and
+  AGPL-3.0 licensing for the open-source release; `@livos/config` package for
+  centralized configuration.
 
 ### Changed
-- All hardcoded paths (`/opt/livos`, `/opt/nexus`) now use environment variables
-- All hardcoded domains replaced with configurable values
-- Error handling improved with proper TypeScript typing
-- Catch blocks now use `formatErrorMessage()` helper
+- **Versioning** — adopted strict 3-part Semantic Versioning. Release tags are now
+  `vMAJOR.MINOR.PATCH` (e.g. `v1.0.0`), pre-releases `vX.Y.Z-beta.N`. Stable-channel
+  boxes update automatically; boxes on the older beta channel should switch to the
+  stable channel to receive `v1.0.0`.
+- All hardcoded paths (`/opt/livos`, `/opt/nexus`) and domains now use environment
+  variables / configurable values; error handling hardened with proper TypeScript
+  typing and a `formatErrorMessage()` helper.
 
 ### Security
-- API authentication added to memory service (port 3300)
-- API authentication added to Nexus API (port 3200)
-- `timingSafeEqual` used for API key comparison
-- Health endpoints remain public for load balancer checks
-- Secret rotation capability for GEMINI_API_KEY, JWT_SECRET, LIV_API_KEY
+- API authentication on the memory service (port 3300) and Nexus API (port 3200),
+  `timingSafeEqual` API-key comparison, and secret rotation for GEMINI_API_KEY /
+  JWT_SECRET / LIV_API_KEY. Health endpoints remain public for load-balancer checks.
+- The VM screen/stream and input surfaces are admin-gated, loopback-bound, and
+  never publicly exposed; the encoded stream added no new external attack surface.
+
+### Known limitations
+- Encoded VM streaming is verified on **Ubuntu/Linux guests**. On **Windows guests**
+  the cursor may appear jittery — this is a guest-OS/driver behaviour, not a defect
+  in the streaming pipeline; the standard view remains available as a fallback.
 
 ## [0.9.0] - 2026-02-04
 

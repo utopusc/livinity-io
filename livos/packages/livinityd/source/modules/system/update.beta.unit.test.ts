@@ -40,6 +40,30 @@ describe('pickMaxReleaseTag (311-01 UPDSAFE-01)', () => {
 	it('returns the single tag when only one is present', () => {
 		expect(pickMaxReleaseTag(['v44.1'])).toBe('v44.1')
 	})
+
+	// SemVer migration (v1.0.0 cut): the release line moves from legacy 2-part
+	// vNN.MM tags to strict 3-part MAJOR.MINOR.PATCH. semver.coerce already made
+	// the 2-part selector work; these pin that 3-part tags select correctly AND
+	// document the deliberate beta-channel consequence of restarting the MAJOR at
+	// 1: on the beta channel (which uses THIS semver-aware picker), v1.0.0 ranks
+	// BELOW the legacy v45.x — so beta boxes will NOT auto-offer v1.0.0 and must
+	// switch to the stable channel (whose picker is string-equality, update.ts:456,
+	// and DOES surface it). This is expected, not a regression.
+	it('selects the semver-max among strict 3-part tags', () => {
+		expect(pickMaxReleaseTag(['v1.0.0', 'v1.2.0', 'v1.1.9'])).toBe('v1.2.0')
+		expect(pickMaxReleaseTag(['v1.0.0', 'v1.0.1-beta.1', 'v1.0.1'])).toBe('v1.0.1')
+		expect(pickMaxReleaseTag(['v1.1.0-beta.1', 'v1.1.0-beta.2', 'v1.1.0-beta.10'])).toBe(
+			'v1.1.0-beta.10',
+		)
+	})
+
+	it('ranks a fresh v1.0.0 BELOW the legacy 2-part v45.x on the beta picker (documented migration consequence)', () => {
+		// Beta channel uses semver precedence: 1.0.0 < 45.30.0, so a beta box on
+		// v45.x would keep the legacy tag as "max". Stable-channel boxes are
+		// unaffected — they compare by string equality and DO see v1.0.0.
+		expect(pickMaxReleaseTag(['v45.30', 'v1.0.0'])).toBe('v45.30')
+		expect(pickMaxReleaseTag(['v45.31-beta.11', 'v1.0.0'])).toBe('v45.31-beta.11')
+	})
 })
 
 // Phase 311 CR-01 — the shared input set used by BOTH the pure-TS pins and the
