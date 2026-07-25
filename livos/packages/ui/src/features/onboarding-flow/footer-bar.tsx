@@ -5,6 +5,8 @@ type Props = {
 	onContinue: () => void
 	onSkip?: () => void
 	continueLabel?: string
+	/** Overridable so a step can localise it (368.7); defaults to the English label. */
+	skipLabel?: string
 	continueDisabled?: boolean
 	hint?: string
 }
@@ -18,6 +20,7 @@ export function FooterBar({
 	onContinue,
 	onSkip,
 	continueLabel = 'Continue',
+	skipLabel = 'Skip for now',
 	continueDisabled = false,
 	hint,
 }: Props) {
@@ -34,7 +37,7 @@ export function FooterBar({
 			<div className='onb-foot-actions'>
 				{onSkip && (
 					<button className='btn btn-text' onClick={onSkip}>
-						Skip for now
+						{skipLabel}
 					</button>
 				)}
 				<button className='btn btn-primary' onClick={onContinue} disabled={continueDisabled}>
