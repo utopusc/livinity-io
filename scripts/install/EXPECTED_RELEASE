@@ -22,7 +22,34 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.1.1 (STABLE, selector-fix ONLY — deliberately v1.1.0 plus
+# CURRENT VALUE = refs/tags/v1.1.12 (STABLE, first-run unblock — Phase 368.7 ONBOARD2FA.
+#   Cut from v1.1.1 plus the four 368.7 commits ONLY, NOT master, for the same reason
+#   v1.1.1 was: master still carries Phase 368.5 Safety Snapshots, whose stable gate
+#   (exclude vm-data + Chrome profile caches, mid-run/ENOSPC handling, live-box growth
+#   measurement) is still open. See the v1.1.1 note below.
+#   WHY THIS IS URGENT: every fresh DB-backed install since 4d03b2e2 (2026-07-16) has
+#   been dead-ended at the setup 2FA screen. enable2fa verifies the CORRECT code, sets
+#   totp_enabled and returns 10 recovery codes; use-2fa fires its completion callback
+#   ONLY when recoveryCodes is empty (Phase 328, for the Settings panel), which on a DB
+#   session it never is; onboarding's account-step passed onContinue as that callback and
+#   never read recoveryCodes/confirmEnrolled — so the wizard never advanced, and the
+#   sub-state rendered no FooterBar, so there was no Back, Skip or Continue. Every retry
+#   then hit the alreadyEnabled guard (thrown BEFORE the token is verified) and rendered
+#   as the same shake as a wrong code. Two external testers hit this and never saw the
+#   product. NOT a clock or TOTP bug — the crypto was cross-checked against a
+#   from-scratch RFC 6238 reference and is correct.
+#   ALSO IN THIS CUT: 2FA is now OPTIONAL at setup (operator decision 2026-07-25);
+#   recovery codes are finally enterable at login (they are 16 hex chars and every entry
+#   surface was a 6-char digits-only PinInput, so the documented anti-lockout escape was
+#   unreachable — a drifted clock meant reinstall); a rejected code now names the box's
+#   clock error instead of blaming the authenticator (new user.clockCheck; the ±300s
+#   verification window is UNCHANGED); and notp is replaced by an in-house RFC 6238
+#   implementation (its negative-substr truncation rejected ~1 in 21,475 valid codes).
+#   DOES NOT FIX ALREADY-BRICKED BOXES: an account that enrolled through the broken
+#   wizard has totp_enabled = TRUE with recovery codes that were never displayed. Those
+#   need disableUserTotp / adminResetUserTotp, or a reinstall.
+#   Cut as STABLE, make_latest=true.)
+# PREVIOUS = refs/tags/v1.1.1 (STABLE, selector-fix ONLY — deliberately v1.1.0 plus
 #   a single cherry-picked commit (a364db8b), NOT master. Fixes the beta-channel
 #   selector for the SemVer migration: both selectors (update.ts pickMaxReleaseTag
 #   and update.sh's sort -V pipeline) now accept STRICT 3-part vX.Y.Z[-pre] tags
@@ -74,4 +101,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.1.1
+refs/tags/v1.1.12
