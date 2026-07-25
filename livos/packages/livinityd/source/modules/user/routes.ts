@@ -448,6 +448,20 @@ export default router({
 		return ctx.user.is2faEnabled()
 	}),
 
+	// SKEW-01 (368.7) — diagnosis-only clock comparison. TOTP verification accepts
+	// a ±300s window around the SERVER clock (measured in totp-forensics.repro.test.ts),
+	// so a box whose clock has drifted past that rejects every code from every
+	// authenticator identically and tells the user only "Incorrect 2FA code" —
+	// which points them at their phone instead of at the box. The browser's clock
+	// is OS-synced in practice, so comparing against it measures the box's error
+	// directly. Public because the login screen (pre-auth) needs it, and it leaks
+	// nothing the HTTP Date header does not already carry. This NEVER participates
+	// in verification — it only makes a failure explainable.
+	clockCheck: publicProcedure.input(z.object({clientTime: z.number()})).query(({input}) => {
+		const serverTime = Date.now()
+		return {serverTime, skewSeconds: Math.round((serverTime - input.clientTime) / 1000)}
+	}),
+
 	// ─── Phase 323-02 (IDENT-03) — Passkey / WebAuthn ceremony routes ───────────
 	//
 	// ADDITIVE-NEVER-REPLACING (D-03): these four procedures are a NEW alternative
