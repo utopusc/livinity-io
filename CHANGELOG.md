@@ -7,15 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added (in `v1.1.1-beta.1` prerelease, 2026-07-24)
+### Added (in the `v1.1.1-beta.1` prerelease; ships next as `v1.2.0-beta.1`)
 - **Safety Snapshots (on by default)** — the box now backs itself up to its own
   internal disk every hour with zero setup: automatic snapshot repository,
   aggressive thinning (a day of hourlies, a week of dailies), and a disk-space
   guard so backups can never fill the system disk. The UI is honest about what
   this protects against: mistakes (accidental deletion, a bad update) — not
   hardware failure — so the "add a real backup destination" reminder stays.
-- Beta release channel now resolves versions correctly after the SemVer
-  migration: legacy `v45.x` tags no longer outrank the new `v1.x` line.
+
+## [1.1.1] - 2026-07-24
+
+### Fixed
+- **Beta release channel could offer a much older version.** After the move to
+  semantic versioning, the Beta channel compared the new `1.x` releases against
+  the legacy `45.x` tags numerically and picked the legacy one — so a box
+  switched to Beta was offered an outdated pre-release instead of the current
+  version. Both the in-app check and the updater now consider only proper
+  three-part version tags. Stable-channel boxes were never affected.
 
 ## [1.1.0] - 2026-07-24
 
