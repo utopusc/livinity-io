@@ -6,6 +6,7 @@ import {TbArrowLeft, TbArrowRight, TbFingerprint, TbLoader2} from 'react-icons/t
 
 import {PinInput} from '@/components/ui/pin-input'
 import {toast} from '@/components/ui/toast'
+import {getClockSkewSeconds} from '@/modules/auth/clock-skew'
 import {useAuth} from '@/modules/auth/use-auth'
 import {PasswordInput} from '@/shadcn-components/ui/input'
 import {trpcReact} from '@/trpc/trpc'
@@ -65,6 +66,7 @@ export default function MultiUserLogin() {
 	const [orbState, setOrbState] = useState<'idle' | 'pulse' | 'breathe'>('breathe')
 
 	const [passkeyPending, setPasskeyPending] = useState(false)
+	const [twoFaError, setTwoFaError] = useState('')
 
 	const {loginWithJwt} = useAuth()
 	const utils = trpcReact.useUtils()
@@ -156,14 +158,31 @@ export default function MultiUserLogin() {
 		}
 	}
 
-	const handleSubmit2fa = async (totpToken: string) => {
+	// Accepts BOTH an authenticator code and a 16-character recovery code — the
+	// server tries validateUserTotpToken then consumeUserRecoveryCode against the
+	// same field (user/routes.ts login), so this needs no second endpoint.
+	const handleSubmit2fa = async (token: string, isRecovery = false) => {
 		try {
-			await loginMut.mutateAsync({password, totpToken, username: selectedUser?.username})
+			await loginMut.mutateAsync({password, totpToken: token, username: selectedUser?.username})
 			return true
 		} catch {
 			// Wrong code (or a transient error) — return false so PinInput resets its
 			// input for another attempt. The password is preserved (see onError), so
 			// the user can immediately retry the 6-digit code.
+			if (isRecovery) {
+				setTwoFaError(t('2fa.login.recovery-rejected'))
+				return false
+			}
+			// SKEW-01: when the box's clock has drifted outside the ±300s verification
+			// window EVERY code from EVERY authenticator is rejected identically. Left
+			// unexplained that reads as "2FA is broken" and ends in a reinstall, so name
+			// the real cause and point at the recovery-code escape hatch.
+			const skew = await getClockSkewSeconds(utils)
+			setTwoFaError(
+				skew === null
+					? t('2fa.error.rejected')
+					: t('2fa.error.clock-skew', {minutes: Math.max(1, Math.round(Math.abs(skew) / 60))}),
+			)
 			return false
 		}
 	}
@@ -183,7 +202,7 @@ export default function MultiUserLogin() {
 			<LoginShell>
 				<AnimatePresence mode='wait'>
 					{step === '2fa' ? (
-						<TwoFAStep key='2fa' onSubmit={handleSubmit2fa} onBack={() => setStep('select-user')} />
+						<TwoFAStep key='2fa' onSubmit={handleSubmit2fa} onBack={() => setStep('select-user')} error={twoFaError} />
 					) : (
 						<PasswordStep
 							key='pw'
@@ -235,7 +254,7 @@ export default function MultiUserLogin() {
 					/>
 				)}
 				{step === '2fa' && (
-					<TwoFAStep key='2fa' onSubmit={handleSubmit2fa} onBack={() => setStep('password')} />
+					<TwoFAStep key='2fa' onSubmit={handleSubmit2fa} onBack={() => setStep('password')} error={twoFaError} />
 				)}
 			</AnimatePresence>
 		</LoginShell>
@@ -485,23 +504,92 @@ function PasswordStep({
 
 // ── 2FA ──────────────────────────────────────────────────────
 
-function TwoFAStep({onSubmit, onBack}: {onSubmit: (code: string) => Promise<boolean>; onBack: () => void}) {
+function TwoFAStep({
+	onSubmit,
+	onBack,
+	error,
+}: {
+	onSubmit: (code: string, isRecovery?: boolean) => Promise<boolean>
+	onBack: () => void
+	error?: string
+}) {
+	// LOCK-01 (Phase 368.7). Recovery codes are 16 hex characters
+	// (database/index.ts enableUserTotp), and the server has always accepted one in
+	// place of a TOTP code at login (user/routes.ts consumeUserRecoveryCode). But
+	// the only entry surface was PinInput — six characters long, and it deletes
+	// every non-digit on input — so the hex codes could not physically be typed in.
+	// The documented anti-lockout escape hatch was therefore unreachable, and a box
+	// whose clock drifted needed a SECOND admin to reset TOTP, which a single-user
+	// home box does not have. Reinstall was the only way out. This mode fixes that.
+	const [mode, setMode] = useState<'totp' | 'recovery'>('totp')
+	const [recoveryCode, setRecoveryCode] = useState('')
+	const [pending, setPending] = useState(false)
+
+	const submitRecovery = async (e: React.FormEvent) => {
+		e.preventDefault()
+		const code = recoveryCode.trim()
+		if (!code || pending) return
+		setPending(true)
+		await onSubmit(code, true)
+		setPending(false)
+	}
+
 	return (
 		<motion.div
 			initial={{opacity: 0, y: 20}}
 			animate={{opacity: 1, y: 0}}
 			exit={{opacity: 0, y: -20}}
 			transition={{duration: 0.3}}
-			className='flex flex-col items-center gap-6'
+			className='flex w-full max-w-[340px] flex-col items-center gap-6'
 		>
 			<div className='text-center'>
-				<h2 className='text-heading font-semibold text-text-primary -tracking-2'>{t('login-2fa.title')}</h2>
-				<p className='mt-1 text-body-sm text-text-secondary'>{t('login-2fa.subtitle')}</p>
+				<h2 className='text-heading font-semibold text-text-primary -tracking-2'>
+					{mode === 'totp' ? t('login-2fa.title') : t('2fa.login.recovery-title')}
+				</h2>
+				<p className='mt-1 text-body-sm text-text-secondary'>
+					{mode === 'totp' ? t('login-2fa.subtitle') : t('2fa.login.recovery-sub')}
+				</p>
 			</div>
-			<PinInput autoFocus length={6} onCodeCheck={onSubmit} />
-			<button type='button' onClick={onBack} className='text-body-sm text-text-tertiary transition-colors hover:text-text-secondary'>
-				{t('back')}
-			</button>
+
+			{mode === 'totp' ? (
+				<PinInput autoFocus length={6} onCodeCheck={(code) => onSubmit(code)} />
+			) : (
+				<form className='flex w-full flex-col gap-3' onSubmit={submitRecovery}>
+					<input
+						autoFocus
+						value={recoveryCode}
+						onChange={(e) => setRecoveryCode(e.target.value)}
+						placeholder={t('2fa.login.recovery-placeholder')}
+						autoComplete='one-time-code'
+						autoCapitalize='none'
+						autoCorrect='off'
+						spellCheck={false}
+						className='h-12 w-full rounded-[14px] border border-[color:var(--fg)]/12 bg-transparent px-4 text-center font-mono text-[15px] tracking-[0.08em] text-[color:var(--fg)] placeholder:font-sans placeholder:tracking-normal placeholder:text-[color:var(--fg-faint)] focus:border-[color:var(--fg)]/30 focus:outline-none'
+					/>
+					<button
+						type='submit'
+						disabled={pending || !recoveryCode.trim()}
+						className='flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-[color:var(--fg)] px-6 text-[15px] font-medium tracking-[-0.005em] text-[color:var(--bg)] transition-all duration-200 hover:opacity-90 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--fg)]/20 disabled:pointer-events-none disabled:opacity-40'
+					>
+						{pending ? <TbLoader2 className='h-4 w-4 animate-spin' /> : t('2fa.login.recovery-submit')}
+					</button>
+				</form>
+			)}
+
+			{error && <p className='max-w-[38ch] text-center text-body-sm text-destructive2'>{error}</p>}
+
+			<div className='flex flex-col items-center gap-2'>
+				<button
+					type='button'
+					onClick={() => setMode(mode === 'totp' ? 'recovery' : 'totp')}
+					className='text-body-sm text-text-secondary underline-offset-4 transition-colors hover:text-text-primary hover:underline'
+				>
+					{mode === 'totp' ? t('2fa.login.use-recovery') : t('2fa.login.use-authenticator')}
+				</button>
+				<button type='button' onClick={onBack} className='text-body-sm text-text-tertiary transition-colors hover:text-text-secondary'>
+					{t('back')}
+				</button>
+			</div>
 		</motion.div>
 	)
 }
