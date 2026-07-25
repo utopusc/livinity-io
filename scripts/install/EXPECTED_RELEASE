@@ -22,20 +22,31 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.1.1-beta.1 (PRERELEASE — Backups v2 Phase 368.5 Safety
+# CURRENT VALUE = refs/tags/v1.2.0-beta.1 (PRERELEASE — Backups v2 Phase 368.5 Safety
 #   Snapshots, default ON: system-managed local kopia repo on the internal disk
-#   (/opt/livos/backups-local), hourly via the existing interval, aggressive
-#   thinning, 15%-free disk-pressure guard, honest AMBER card; safety repo is
-#   excluded from every "has destinations" count so the add-a-real-destination
-#   nag never goes silent. ALSO: beta-channel selector hardened for the SemVer
-#   migration — strict 3-part tags only (legacy v45.x no longer outranks v1.x;
-#   update.ts pickMaxReleaseTag + update.sh grep filter, cross-proven by
-#   update.beta.unit.test.ts + update.beta-selector.test.sh). Tag has "-" ⇒
-#   release.yml publishes as prerelease + NOT latest: stable-channel boxes
-#   (everyone) do NOT see it; only beta-channel boxes running the NEW selector
-#   resolve it. ⚠ A beta-channel box running an OLD update.sh would still pick
-#   legacy v45.31-beta.11 — do not flip real boxes to Beta until this ships
-#   through a stable cut. Previous line: v1.1.0 notes below.)
+#   (/opt/livos/backups-local, OUTSIDE dataDirectory), hourly via the existing
+#   interval, per-repo aggressive thinning that cannot leak onto USB/SMB repos,
+#   15%-free disk-pressure guard, honest AMBER card; the safety repo is excluded
+#   from every "has destinations" count (7 surfaces) so the add-a-real-destination
+#   nag never goes silent, plus an admin opt-out.
+#   MINOR bump (1.1.x -> 1.2.0) because this adds a user-visible capability.
+#   Tag carries "-" ⇒ release.yml publishes prerelease + NOT latest, so stable
+#   boxes never receive it automatically.
+#   BETA CHANNEL IS NOW SAFE: the strict-semver selector shipped in v1.1.1
+#   (stable), so a box on v1.1.1+ resolves this correctly instead of the legacy
+#   v45.31-beta.11. A box still running a PRE-v1.1.1 update.sh must NOT be put on
+#   the Beta channel — its old selector would still pick the legacy tag.
+#   ⚠ BEFORE ANY STABLE PROMOTION OF THIS CONTENT (v1.2.0): snapshot scope is the
+#   WHOLE dataDirectory and does NOT exclude vm-data (VM disk images) or Chrome
+#   profile caches, and the disk guard is pre-flight-only (no mid-run/ENOSPC
+#   handling). Measure safety-repo growth on a real box (T+0 / +6h / +48h) and
+#   add the exclusions before this reaches every box on stable.
+#   Previous line: v1.1.1 notes below.)
+# PREVIOUS = refs/tags/v1.1.1 (STABLE, selector-fix ONLY — cut from release/v1.1.1
+#   = v1.1.0 + cherry-pick a364db8b, deliberately WITHOUT 368.5. Fixed the beta
+#   channel offering legacy v45.x tags — a silent multi-release downgrade — which
+#   could not be fixed via beta itself because the broken selector can never
+#   select its own fix.)
 # PREVIOUS = refs/tags/v1.1.0 (First SemVer MINOR release — Backups v2 Phase 368
 #   BKPREANIMATE. New capability: interrupted-backup boot recovery (BKP-03) — boot
 #   preflight unpauses app containers stranded paused by a crashed backup (wired
@@ -66,4 +77,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.1.1-beta.1
+refs/tags/v1.2.0-beta.1

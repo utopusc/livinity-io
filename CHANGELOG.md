@@ -7,13 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added (in the `v1.1.1-beta.1` prerelease; ships next as `v1.2.0-beta.1`)
+## [1.2.0-beta.1] - 2026-07-25
+
+_Pre-release: available on the Beta channel only. Requires v1.1.1 or newer._
+
+### Added
 - **Safety Snapshots (on by default)** — the box now backs itself up to its own
   internal disk every hour with zero setup: automatic snapshot repository,
   aggressive thinning (a day of hourlies, a week of dailies), and a disk-space
   guard so backups can never fill the system disk. The UI is honest about what
   this protects against: mistakes (accidental deletion, a bad update) — not
-  hardware failure — so the "add a real backup destination" reminder stays.
+  hardware failure — so the "add a real backup destination" reminder stays, and
+  backup health never shows green on local-only protection. Can be turned off.
 
 ## [1.1.1] - 2026-07-24
 
