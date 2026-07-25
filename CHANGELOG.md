@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.12] - 2026-07-25
+
+_Cut from 1.1.1 plus the fixes below only — it deliberately does not include the
+Safety Snapshots pre-release, which stays on the Beta channel until its snapshot
+scope and disk handling are finished._
+
+### Fixed
+- **Setup could get stuck on the two-factor screen and never reach the desktop.**
+  Entering the *correct* code switched two-factor on but did not continue, and
+  every code tried afterwards was refused — because the account was already
+  enrolled, though the screen only said the code was wrong. There was no Back,
+  Skip or Continue, so there was no way out. Two people testing LivOS hit this
+  and never got to see the product. Setup now shows your recovery codes and
+  carries on, tells you when two-factor is already on, and can always be
+  continued.
+- **Two-factor is now optional during setup.** It is still offered and still
+  recommended, but you can skip it and turn it on later from Settings → 2FA.
+- **Recovery codes can now actually be used to sign in.** The sign-in screen only
+  accepted six digits, so the recovery codes handed out when two-factor is
+  enabled — which are longer and contain letters — could not be typed in at all.
+  If you lost access to your authenticator there was no way back into your own
+  box. There is now a "Use a recovery code" option on the sign-in screen.
+- **A wrong-looking code now says when the real problem is the clock.** If the
+  server's clock has drifted more than a few minutes, no authenticator code can
+  ever match. Instead of repeating "incorrect code", LivOS now tells you the
+  clock is off and by roughly how much. (Common on virtual machines without time
+  sync.) How codes are checked is unchanged.
+- **A rare valid code is no longer rejected.** Roughly one code in twenty
+  thousand was refused because of a flaw in the library used to check them; the
+  check is now done directly and is verified against the published standard.
+
+> **If you are already locked out:** this release fixes new installations, but it
+> cannot recover an account that was enrolled through the broken screen — that
+> account has two-factor switched on with codes that were never shown. Those
+> boxes need the two-factor reset on the server, or a reinstall.
+
 ## [1.1.11-beta.1] - 2026-07-25
 
 _Pre-release: available on the Beta channel only. Requires v1.1.1 or newer._
