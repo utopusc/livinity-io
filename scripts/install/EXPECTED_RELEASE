@@ -22,20 +22,28 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.1.1-beta.1 (PRERELEASE — Backups v2 Phase 368.5 Safety
-#   Snapshots, default ON: system-managed local kopia repo on the internal disk
-#   (/opt/livos/backups-local), hourly via the existing interval, aggressive
-#   thinning, 15%-free disk-pressure guard, honest AMBER card; safety repo is
-#   excluded from every "has destinations" count so the add-a-real-destination
-#   nag never goes silent. ALSO: beta-channel selector hardened for the SemVer
-#   migration — strict 3-part tags only (legacy v45.x no longer outranks v1.x;
-#   update.ts pickMaxReleaseTag + update.sh grep filter, cross-proven by
-#   update.beta.unit.test.ts + update.beta-selector.test.sh). Tag has "-" ⇒
-#   release.yml publishes as prerelease + NOT latest: stable-channel boxes
-#   (everyone) do NOT see it; only beta-channel boxes running the NEW selector
-#   resolve it. ⚠ A beta-channel box running an OLD update.sh would still pick
-#   legacy v45.31-beta.11 — do not flip real boxes to Beta until this ships
-#   through a stable cut. Previous line: v1.1.0 notes below.)
+# CURRENT VALUE = refs/tags/v1.1.1 (STABLE, selector-fix ONLY — deliberately v1.1.0 plus
+#   a single cherry-picked commit (a364db8b), NOT master. Fixes the beta-channel
+#   selector for the SemVer migration: both selectors (update.ts pickMaxReleaseTag
+#   and update.sh's sort -V pipeline) now accept STRICT 3-part vX.Y.Z[-pre] tags
+#   only and DROP the legacy 2-part tags. Before this, coercion ranked the legacy
+#   v45.31-beta.11 above the whole v1.x line, so a box switched to the Beta channel
+#   was offered — and would have deployed — v45.31-beta.11: a silent multi-release
+#   DOWNGRADE. The fix could not reach boxes through the beta channel itself (the
+#   broken selector can never select the release that fixes it), which is why it
+#   ships as a STABLE cut: stable resolution is /releases/latest + string compare
+#   and is provably unaffected by the bug, so every box (and every fresh install,
+#   whose install.sh hands off to update.sh) self-heals on the ordinary Update.
+#   Cross-proven by update.beta.unit.test.ts (21 cases) + update.beta-selector.test.sh.
+#   DELIBERATELY EXCLUDED: Phase 368.5 Safety Snapshots (present in the
+#   v1.1.1-beta.1 prerelease and on master, NOT here) — default-ON hourly local
+#   snapshots have not had their live-box UAT, the disk-pressure guard is
+#   pre-flight-only (no mid-run/ENOSPC handling) and vm-data (VM disk images) is
+#   not excluded from snapshot scope, so shipping it to every box today could fill
+#   a small disk. It ships next as v1.2.0-beta.1 on the beta channel, which this
+#   release makes safe to use. Cut as STABLE, make_latest=true.
+#   NOTE 1.1.1 > 1.1.1-beta.1 in semver, so a box that later switches to Beta is
+#   never downgraded by this ordering.)
 # PREVIOUS = refs/tags/v1.1.0 (First SemVer MINOR release — Backups v2 Phase 368
 #   BKPREANIMATE. New capability: interrupted-backup boot recovery (BKP-03) — boot
 #   preflight unpauses app containers stranded paused by a crashed backup (wired
@@ -66,4 +74,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.1.1-beta.1
+refs/tags/v1.1.1
