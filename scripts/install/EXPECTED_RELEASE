@@ -22,14 +22,19 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.2.0-beta.1 (PRERELEASE — Backups v2 Phase 368.5 Safety
+# CURRENT VALUE = refs/tags/v1.1.11-beta.1 (PRERELEASE — Backups v2 Phase 368.5 Safety
 #   Snapshots, default ON: system-managed local kopia repo on the internal disk
 #   (/opt/livos/backups-local, OUTSIDE dataDirectory), hourly via the existing
 #   interval, per-repo aggressive thinning that cannot leak onto USB/SMB repos,
 #   15%-free disk-pressure guard, honest AMBER card; the safety repo is excluded
 #   from every "has destinations" count (7 surfaces) so the add-a-real-destination
 #   nag never goes silent, plus an admin opt-out.
-#   MINOR bump (1.1.x -> 1.2.0) because this adds a user-visible capability.
+#   VERSIONING (operator decision 2026-07-25): the release line stays on 1.1.x and
+#   increments the PATCH digit (…1.1.11, 1.1.12, …) rather than taking the SemVer
+#   MINOR bump a new capability would normally imply. A previously-published
+#   v1.2.0-beta.1 carrying this exact content was DELETED (tag + release) because
+#   1.2.0-beta.1 > 1.1.11 would have permanently shadowed the 1.1.x line in the
+#   beta selector — the same class of wrong-version-selected bug v1.1.1 just fixed.
 #   Tag carries "-" ⇒ release.yml publishes prerelease + NOT latest, so stable
 #   boxes never receive it automatically.
 #   BETA CHANNEL IS NOW SAFE: the strict-semver selector shipped in v1.1.1
@@ -77,4 +82,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.2.0-beta.1
+refs/tags/v1.1.11-beta.1

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.2.0-beta.1] - 2026-07-25
+## [1.1.11-beta.1] - 2026-07-25
 
 _Pre-release: available on the Beta channel only. Requires v1.1.1 or newer._
 
