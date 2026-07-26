@@ -222,7 +222,17 @@ _dld_install_system_packages() {
         fi
         { [[ -n "${_kopia_tmp:-}" ]] && rm -rf "$_kopia_tmp"; } || true
     fi
-    mkdir -p /kopia/config /kopia/cache
+    # ── Phase 368.8-10: the /kopia mkdir that used to live here is GONE ──
+    # It created /kopia/{config,cache} as root and nothing in this repo ever
+    # chowned them. livinityd runs unprivileged (see the systemd unit below,
+    # User=$_DLD_DESKTOP_USER), so every kopia spawn died with "permission
+    # denied" before doing any work — on every destination, including the 368.5
+    # safety snapshots. Route C again: kopia's state now lives under
+    # $_DLD_LIVOS_DIR/kopia and livinityd creates it itself
+    # (Backups#ensureKopiaStateDirs, engine.ts KOPIA_STATE_ROOT).
+    #
+    # Nothing depends on this deletion; its value is removing a booby trap, so
+    # the next reader does not "restore" a root-owned kopia state directory.
 
     # ── Phase 318 (POOL-02/POOL-04): mergerfs + snapraid storage-pooling engine ──
     # The storage-pool module shells out (via the livos-pool.sh wrapper) to `mergerfs`

@@ -712,21 +712,22 @@ LIVOS_DIR="/opt/livos"
 LIV_DIR="/opt/liv"
 REPO_URL="https://github.com/utopusc/livinity-io.git"
 
-# ── Phase 368.8 (Route C follow-through): chown /opt/livos WITHOUT walking backups ──
-# 368.8 moved INTERNAL_BACKUP_ROOT to /opt/livos/backups-internal so livinityd can
-# create it unaided (see destination-policy.ts:37-58). The bill: the two `chown -R`
-# walks below (Step 7 and the Phase 202-10 ownership hook) would re-own every kopia
-# blob in an operator's backup repository, twice per update, on a tree with no size
-# bound — the safety repo is capped by its retention policy, a "This device"
-# destination is not. Prune both backup roots and re-own the root entries themselves
-# non-recursively, so ownership still converges and the walk stays cheap.
+# ── Phase 368.8 (Route C follow-through): chown /opt/livos WITHOUT walking blob trees ──
+# 368.8 moved INTERNAL_BACKUP_ROOT to /opt/livos/backups-internal, and 368.8-10 moved
+# kopia's own state to /opt/livos/kopia, so livinityd can create both unaided (see
+# destination-policy.ts:37-58 and engine.ts KOPIA_STATE_ROOT). The bill: the two
+# `chown -R` walks below (Step 7 and the Phase 202-10 ownership hook) would re-own
+# every kopia blob, twice per update, across trees with no size bound — the safety
+# repo is capped by its retention policy, but a "This device" destination and the
+# kopia content cache are not. Prune all three roots and re-own the root entries
+# themselves non-recursively, so ownership still converges and the walk stays cheap.
 #
 # PERFORMANCE optimisation, not a correctness requirement — an unpruned walk is slow,
 # never wrong. It also lands one update late (update.sh self-replaces atomically at
 # :1884-1904 and never re-execs the fresh clone; the hazard is named in-tree at
-# :4429-4435), which is harmless: no internal repository can exist before v1.1.14, so
-# the single unpruned walk runs over an empty tree.
-_LIVOS_BACKUP_ROOTS=("$LIVOS_DIR/backups-internal" "$LIVOS_DIR/backups-local")
+# :4429-4435), which is harmless: none of these trees can hold anything before the
+# release that ships this, so the single unpruned walk runs over an empty tree.
+_LIVOS_PRUNED_ROOTS=("$LIVOS_DIR/backups-internal" "$LIVOS_DIR/backups-local" "$LIVOS_DIR/kopia")
 
 # _chown_livos_pruned <owner:group> <dir>
 # Never takes a username literal — callers pass a DERIVED owner:group
@@ -741,18 +742,19 @@ _chown_livos_pruned() {
     find "$_dir" \
         -path "$LIVOS_DIR/backups-internal" -prune -o \
         -path "$LIVOS_DIR/backups-local" -prune -o \
+        -path "$LIVOS_DIR/kopia" -prune -o \
         -exec chown -h "$_own" {} + 2>/dev/null || _rc=1
-    # -prune skips the roots entirely, so re-own the two directory ENTRIES
+    # -prune skips the roots entirely, so re-own the three directory ENTRIES
     # (non-recursive) — otherwise a root created under a different owner would
     # never be corrected.
     #
     # This loop captures the walk's status above rather than returning on it, and
     # is therefore NEVER skipped: an early `return 1` on a partial walk (one
-    # unstat-able file mid-update is enough) would leave a backup root orphaned
+    # unstat-able file mid-update is enough) would leave a pruned root orphaned
     # at the wrong owner, which is exactly the failure this loop exists to
     # prevent. The caller still sees the walk's status, so `|| true` / `|| warn`
     # behave exactly as they did before the prune.
-    for _root in "${_LIVOS_BACKUP_ROOTS[@]}"; do
+    for _root in "${_LIVOS_PRUNED_ROOTS[@]}"; do
         [[ -d "$_root" ]] && chown -h "$_own" "$_root" 2>/dev/null || true
     done
     return "$_rc"
@@ -1884,7 +1886,19 @@ else
     fi
     { [[ -n "${_kopia_tmp:-}" ]] && rm -rf "$_kopia_tmp"; } || true
 fi
-mkdir -p /kopia/config /kopia/cache 2>/dev/null || true
+# ── Phase 368.8-10: the /kopia mkdir that used to live here is GONE ──
+# It created /kopia/{config,cache} as root and nothing ever chowned them, so
+# livinityd — which runs unprivileged — could never write there and EVERY kopia
+# spawn died with "permission denied" before doing any work. Measured on the
+# operator's box 2026-07-26 (v1.1.13): both root-owned, config dir empty, i.e.
+# no repository had ever been created there. Route C again: kopia's state moved
+# to $LIVOS_DIR/kopia and livinityd creates it itself
+# (Backups#ensureKopiaStateDirs, engine.ts KOPIA_STATE_ROOT).
+#
+# This deletion has NO functional effect in the release that ships it: update.sh
+# self-replaces atomically (:1884-1904) so it first executes one update later,
+# and by then nothing depends on it. Its value is removing a booby trap — the
+# next reader must not "restore" a root-owned kopia state directory.
 
 # ── Step 2: Update LivOS source files ─────────────────────
 step "Updating LivOS source files"
