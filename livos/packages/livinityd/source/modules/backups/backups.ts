@@ -18,6 +18,7 @@ import {
 	KOPIA_CONFIG_DIR,
 	KOPIA_MINIMUM_VERSION,
 	KOPIA_STATE_ROOT,
+	LEGACY_KOPIA_CONFIG_DIR,
 	type EngineStatus,
 } from './engine.js'
 import {writeTerminalRunStatus, type LastRunStatus} from './backup-preflight.js'
@@ -741,6 +742,7 @@ export default class Backups {
 				// box where root created the tree first we may not own it, and being
 				// unable to tighten the mode is not a reason to refuse to back up.
 				await fse.chmod(KOPIA_STATE_ROOT, 0o700).catch(() => {})
+				await this.#migrateLegacyKopiaConfigs()
 				// Logged on SUCCESS so the box UAT has something to grep, the same way
 				// ensureInternalBackupRoot does. Memoised, so it appears once per boot.
 				this.logger.log(`Kopia state directories ready: ${KOPIA_STATE_ROOT}`)
@@ -755,6 +757,61 @@ export default class Backups {
 		// Cache the success, forget the failure.
 		if (!(await attempt)) this.#kopiaStateDirsReady = undefined
 		return attempt
+	}
+
+	/**
+	 * Phase 368.8-10 — one-time carry-over of kopia configs from the pre-move
+	 * location.
+	 *
+	 * On the box this defect was measured on, the legacy config directory was
+	 * EMPTY, so there is nothing to carry. But a box whose livinityd once ran as
+	 * root COULD hold working `*.config` files there, and silently orphaning those
+	 * would leave its repositories unrestorable without anyone being told — the
+	 * exact class of quiet failure this phase exists to remove.
+	 *
+	 * COPY, never move: the originals stay put as a fallback. Skipped entirely once
+	 * the new directory holds any config of its own, so a later kopia-written file
+	 * can never be shadowed by a stale one. Never throws, and never fails startup —
+	 * the worst case is that a box reconnects its repositories, which kopia does
+	 * on its own anyway.
+	 */
+	async #migrateLegacyKopiaConfigs(): Promise<void> {
+		try {
+			const isConfig = (name: string) => name.endsWith('.config')
+
+			const current = (await fse.readdir(KOPIA_CONFIG_DIR).catch(() => [] as string[])).filter((name) =>
+				isConfig(String(name)),
+			)
+			if (current.length > 0) return
+
+			const legacy = (await fse.readdir(LEGACY_KOPIA_CONFIG_DIR).catch(() => [] as string[])).filter((name) =>
+				isConfig(String(name)),
+			)
+			if (legacy.length === 0) return
+
+			const migrated: string[] = []
+			for (const name of legacy) {
+				const from = nodePath.join(LEGACY_KOPIA_CONFIG_DIR, String(name))
+				const to = nodePath.join(KOPIA_CONFIG_DIR, String(name))
+				// errorOnExist:false + overwrite:false — a concurrent kopia that just
+				// wrote its own config wins, silently and correctly.
+				const copied = await fse
+					.copy(from, to, {overwrite: false, errorOnExist: false})
+					.then(() => true)
+					.catch(() => false)
+				if (copied) migrated.push(String(name))
+			}
+
+			if (migrated.length > 0) {
+				this.logger.log(
+					`Migrated ${migrated.length} kopia config(s) from ${LEGACY_KOPIA_CONFIG_DIR} to ${KOPIA_CONFIG_DIR} (originals left in place): ${migrated.join(', ')}`,
+				)
+			}
+		} catch (error) {
+			// Non-fatal by construction: a failed carry-over costs a reconnect, and
+			// refusing to start backups over it would be strictly worse.
+			this.logger.error(`Could not migrate kopia configs from ${LEGACY_KOPIA_CONFIG_DIR}`, error)
+		}
 	}
 
 	// Create a repository
