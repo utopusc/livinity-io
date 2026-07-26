@@ -22,7 +22,57 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.1.13 (STABLE — cut from master, the first release since
+# CURRENT VALUE = refs/tags/v1.1.14-beta.1 (PRERELEASE — Phase 368.8a BKPFIXUP, the UAT
+#   build for the P0 that v1.1.13 shipped broken: the "This device" backup destination
+#   could not succeed on ANY box. Selecting it, naming a folder and pressing Continue
+#   always failed with "LivOS couldn't resolve that location."
+#
+#   ROOT CAUSE (proven, not hypothesised). probeDestination realpath'd
+#   <root>/<operator-typed-folder> — a path that by construction cannot pre-exist,
+#   because the folder name is per-repository user input. The mkdir that would have
+#   created it lived 18 lines later, inside `if (createNew)`. Worse, the root itself
+#   (/opt/livos-backups, a SIBLING of /opt/livos) was created by nothing at all: the
+#   368.6 installer one-liner was filed as a follow-up and never landed, and livinityd
+#   runs unprivileged so it could not have created a root under root-owned /opt anyway.
+#   60+ policy tests were green throughout, because the suite injected a fake realpath
+#   that could never return null. That is the defect this build exists to correct.
+#
+#   ROUTE C (operator decision 2026-07-25) — WHY THE ROOT MOVED. The obvious fix, an
+#   installer mkdir+chown, CANNOT heal an existing box on the update that ships it:
+#   update.sh self-replaces via atomic mv (:1884-1904) and never re-execs the fresh
+#   clone — the hazard already named in-tree at :4429-4435, which cost v45.05→v45.06 a
+#   no-op re-ship. So INTERNAL_BACKUP_ROOT moved to /opt/livos/backups-internal, INSIDE
+#   a tree update.sh already chowns to the run-user. livinityd now creates the root
+#   itself via ensureInternalBackupRoot(), exactly as it already creates the 368.5
+#   SAFETY_REPO_PATH, and its source is rsynced + the service restarted in the SAME
+#   update run. No installer is on the critical path, and a box heals on the FIRST
+#   update. INSTALLER-01 was withdrawn; no *.sh creates this root.
+#   ⚠ Do NOT "restore" the /opt/livos-backups sibling — it is undeliverable by
+#   construction. The rationale is recorded at destination-policy.ts alongside the
+#   constant so a future reader cannot walk back into it.
+#
+#   ALSO IN THIS BUILD. The wizard no longer offers what the server will refuse:
+#   getDestinationRoots pre-flights the root's existence, its writability (reusing the
+#   SAME canWrite proof the probe uses, so wizard and addRepository can never disagree)
+#   and the 15% free-space floor, and the "This device" row renders DISABLED with a
+#   reason — before a folder name or a password is typed. COR-05's floor is now named
+#   before the password step rather than after it. And update.sh's two recursive chown
+#   walks over /opt/livos prune both backup roots, so an update never re-owns a kopia
+#   blob tree; that one is a PERFORMANCE fix and, being inline in update.sh, it lands
+#   one update late — harmless, since the single unpruned walk runs over an empty tree.
+#
+#   WHY A PRERELEASE. `bash /opt/livos/update.sh` clones the latest RELEASE TAG
+#   (update.sh:1461-1479), so unreleased code cannot reach a box any other way. This
+#   tag exists so 368.8-04's box UAT tests the FIX rather than re-deploying v1.1.13.
+#   Tag carries "-" ⇒ release.yml publishes prerelease + NOT latest, so stable boxes
+#   never receive it. The stable cut is v1.1.14 (368.8-05), gated on that UAT.
+#   ⚠ A box must be on v1.1.1+ before being put on the Beta channel — a pre-v1.1.1
+#   selector would still pick the legacy v45.x tag. The UAT box is on v1.1.13, so it
+#   is safe; switch it back to stable when the UAT ends.
+#   ⚠ NO automated test covers the fix end to end: 140/140 pure unit tests and a
+#   zero-delta UI vitest prove only that nothing regressed. The box UAT is the ONLY
+#   evidence that "This device" works. Do not promote to stable without it.)
+# PREVIOUS = refs/tags/v1.1.13 (STABLE — cut from master, the first release since
 #   v1.1.0 that is NOT a narrow cherry-pick. It carries everything: Phase 368
 #   BKPREANIMATE, 368.5 Safety Snapshots WITH ITS STABLE GATE NOW CLOSED, 368.6
 #   BKPANYDEST, and the 368.7 first-run 2FA unblock already shipped as v1.1.12.
@@ -128,4 +178,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.1.13
+refs/tags/v1.1.14-beta.1
