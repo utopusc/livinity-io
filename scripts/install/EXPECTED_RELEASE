@@ -22,7 +22,53 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.1.11-beta.1 (PRERELEASE — Backups v2 Phase 368.5 Safety
+# CURRENT VALUE = refs/tags/v1.1.13 (STABLE — cut from master, the first release since
+#   v1.1.0 that is NOT a narrow cherry-pick. It carries everything: Phase 368
+#   BKPREANIMATE, 368.5 Safety Snapshots WITH ITS STABLE GATE NOW CLOSED, 368.6
+#   BKPANYDEST, and the 368.7 first-run 2FA unblock already shipped as v1.1.12.
+#
+#   WHY 368.5 MAY NOW SHIP TO EVERY BOX. The gate recorded below on v1.1.11-beta.1
+#   had two structural causes, both closed in `2d8302be`:
+#     (a) Snapshot scope. VM disk images (${dataDirectory}/vm-data) are tens of GB
+#         and every VM boot rewrites blocks throughout them — the single worst
+#         thing to snapshot hourly onto the same disk. Now excluded BY DEFAULT via
+#         a visible, reversible toggle beside the existing scope switches (never a
+#         hidden rule: silently dropping someone's VM from their backups would be
+#         the exact dishonesty this milestone keeps removing). Browser-profile
+#         caches under chrome-master are excluded unconditionally — pure
+#         regenerable bulk, while Cookies/Login Data/Preferences stay in. Those
+#         patterns are ANCHORED to the profile root; a depth-agnostic `Cache/`
+#         would have matched a folder a user named "Cache" among their own files.
+#     (b) Pre-flight-only disk protection. A snapshot beginning at 16% free could
+#         still write the disk to zero on the way through. A watchdog now polls
+#         during any snapshot written to the system disk and kills kopia below 5%
+#         free. Safe: kopia commits atomically, so the repo keeps its previous
+#         snapshots and simply gains no new one; the run is marked failed and the
+#         >24h alert fires. The 5% floor is deliberately BELOW the 15% pre-flight
+#         floor (crossing 15% mid-run is normal for a large first snapshot), and
+#         its failure mode is deliberately the OPPOSITE: an unreadable probe
+#         mid-run does NOT abort, because the pre-flight already proved there was
+#         room and aborting on a transient df hiccup would leave a flaky box never
+#         completing a backup.
+#   Operator decision 2026-07-25: ship stable now rather than measure growth on
+#   beta first, since both structural causes are gone and the residual risk is
+#   bounded by the 5% floor.
+#
+#   ALSO NEW — Phase 368.6 BKPANYDEST answers "a box with no USB drive and no NAS
+#   has nowhere to back up to": the storage pool and a NAMED folder on the system
+#   disk are now destinations, behind a new "This device" wizard tab. Honesty is
+#   enforced server-side — a same-disk destination can never show green and never
+#   silences the "add a drive or a NAS" reminder, though it does back up. Two live
+#   bugs died on the way: a repository created against an EMPTY /External (no
+#   drive plugged in) used to land on the OS disk inside the snapshot source,
+#   count as a real destination, and be deleted by the restore it served; and
+#   isRepoConnected reported any unrecognised root disconnected, which four call
+#   sites gate on — an internal destination would have been non-restorable.
+#   Cut as STABLE, make_latest=true.)
+# PREVIOUS = refs/tags/v1.1.12 (STABLE — Phase 368.7, the first-run 2FA dead end.
+#   Cut from v1.1.1 + four commits, deliberately without 368.5 because this gate
+#   was still open at the time.)
+# PREVIOUS = refs/tags/v1.1.11-beta.1 (PRERELEASE — Backups v2 Phase 368.5 Safety
 #   Snapshots, default ON: system-managed local kopia repo on the internal disk
 #   (/opt/livos/backups-local, OUTSIDE dataDirectory), hourly via the existing
 #   interval, per-repo aggressive thinning that cannot leak onto USB/SMB repos,
@@ -82,4 +128,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.1.11-beta.1
+refs/tags/v1.1.13

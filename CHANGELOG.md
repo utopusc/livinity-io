@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.13] - 2026-07-25
+
+### Added
+- **Back up to this device.** If you don't have a USB drive or a NAS, you can now
+  back up to the storage pool or to a folder on the box itself — there's a new
+  "This device" option when you set up a backup. You give the folder a name and
+  LivOS puts it somewhere safe; you don't have to know any paths.
+  LivOS is honest about what this protects you from: a backup on the same disk as
+  LivOS guards against mistakes, accidental deletion and a bad update, but not
+  against that disk failing. So it never shows as fully protected, and the
+  reminder to add a drive or a NAS keeps appearing. It does back up on the same
+  hourly schedule as everything else.
+- **Automatic hourly backups to the box itself, on by default.** LivOS now keeps
+  its own local snapshots with no setup at all, thinned automatically so they
+  can't grow without bound. This was previously available only on the Beta
+  channel. Two things are deliberately left out to keep it from filling your
+  disk: browser caches (which regenerate anyway — your logins and settings are
+  still backed up) and virtual-machine disk images, which are very large and
+  change constantly. VM disk images are a switch you can turn on in
+  Settings → Backups if you want them included; your VM settings are always
+  backed up either way.
+
+### Fixed
+- **A backup set up to an external drive that wasn't plugged in went to the wrong
+  place.** LivOS would create the backup on its own system disk instead — inside
+  the very data being backed up, where it counted as a real backup, stopped the
+  "no backups configured" reminder, and would have been deleted by the restore it
+  was meant to serve. LivOS now checks the drive is actually connected first.
+- **Backups can no longer fill the system disk while running.** The space check
+  only ran before a backup started, so a backup that began with room could still
+  run the disk down mid-way and take the system with it. LivOS now watches while
+  the backup runs and stops it if space gets critically low. The next hourly run
+  simply tries again.
+
 ## [1.1.12] - 2026-07-25
 
 _Cut from 1.1.1 plus the fixes below only — it deliberately does not include the
