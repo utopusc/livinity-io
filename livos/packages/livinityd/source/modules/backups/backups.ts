@@ -19,13 +19,25 @@ import {
 	ensureSafetyRepository,
 	evaluateDiskPressure,
 } from './safety-snapshots.js'
+import {
+	classifyDestination,
+	probeDestination,
+	repositoryIgnorePatterns,
+	resolveOffSystemDisk,
+	isRealDestination,
+	INTERNAL_VIRTUAL_ROOT,
+	type DestinationKind,
+	type DestinationProbeDeps,
+	type OffSystemDiskDeps,
+} from './destination-policy.js'
 import {copyWithProgress} from '../utilities/copy-with-progress.js'
+import {diskForPath, resolveOsDisks} from '../storage-pool/root-disk.js'
 
 // TODO: These should be refactored into proper livinityd modules
-import {getSystemDiskUsage} from '../system/system.js'
+import {getSystemDiskUsage, getDiskUsageByPath} from '../system/system.js'
 import {setSystemStatus} from '../system/routes.js'
 import {reboot} from '../system/system.js'
-import {BACKUP_RESTORE_FIRST_START_FLAG} from '../../constants.js'
+import {BACKUP_RESTORE_FIRST_START_FLAG, POOL_MOUNTPOINT} from '../../constants.js'
 import type Livinityd from '../../index.js'
 import type {ProgressStatus} from '../apps/schema.js'
 
@@ -173,7 +185,11 @@ export default class Backups {
 			// it backed up everything or nothing, which hid a fully dead feature.
 			// Phase 368.5 BKP-16: the safety repo is not a real DESTINATION — count
 			// user destinations separately (prefix stays intact — 368 UAT greps it).
-			const userDestinations = repositories.filter((repository) => !repository.isSafety)
+			// Phase 368.6 (D5): nor is a folder on the system disk. It is a genuine
+			// backup and it protects against every mistake, but it dies with the disk
+			// it sits on, so it must not be counted as the protection that lets the
+			// "add a drive or a NAS" reminder go quiet.
+			const userDestinations = repositories.filter((repository) => isRealDestination(repository))
 			this.logger.log(
 				`Backups interval: ${repositories.length} repositories configured (${userDestinations.length} user destinations)`,
 			)
@@ -200,9 +216,11 @@ export default class Backups {
 			const safetyDisabled =
 				(await this.#livinityd.store.get('backups.safetySnapshotsDisabled').catch(() => undefined)) === true
 
-			// P0 backups-v2 + Phase 368.5: zero USER destinations = nag weekly. The
-			// safety repo is EXCLUDED from this count by design — it protects against
-			// mistakes, not hardware death, and must never silence the nag.
+			// P0 backups-v2 + Phase 368.5 + 368.6: zero REAL destinations = nag weekly.
+			// The safety repo and any same-disk destination are EXCLUDED from this
+			// count by design — they protect against mistakes, not hardware death, and
+			// must never silence the nag. Note this gates only the NAG: the backup loop
+			// below still runs every repository, so an internal-only box is backed up.
 			if (userDestinations.length === 0) {
 				await this.maybeNagNoDestination().catch((error) => this.logger.error('No-destination nag failed', error))
 			}
@@ -516,21 +534,243 @@ export default class Backups {
 		return bypassQueue ? spawnKopiaProcess() : this.kopiaQueue.add(spawnKopiaProcess)
 	}
 
+	/**
+	 * Phase 368.6 (D9) — the destination roots the wizard may offer.
+	 *
+	 * Derived from the SAME constants and the same registration flag the backend
+	 * predicate uses, because a UI that offers a root addRepository then refuses is
+	 * a dead-end wizard: the operator picks a disk, names a folder, types a
+	 * password, and only then gets told no.
+	 *
+	 * Capacity is reported per root so the wizard can show "X free of Y" and
+	 * disable a row whose free space cannot be read (matching the fail-safe posture
+	 * of the destination probe, which refuses a degenerate df rather than assuming
+	 * the best).
+	 */
+	async getDestinationRoots(): Promise<
+		Array<{
+			root: string
+			kind: DestinationKind
+			available: boolean
+			offSystemDisk: boolean
+			unavailableReason?: string
+			size?: number
+			free?: number
+		}>
+	> {
+		const roots: Array<{
+			root: string
+			kind: DestinationKind
+			available: boolean
+			offSystemDisk: boolean
+			unavailableReason?: string
+			size?: number
+			free?: number
+		}> = []
+
+		// Storage pool — offered only when one is registered, and only counts as
+		// separate hardware when every branch is off the OS disk.
+		const poolRegistered = this.#livinityd.files.poolBaseDirRegistered
+		const poolUsage = poolRegistered
+			? await getDiskUsageByPath(POOL_MOUNTPOINT).catch(() => undefined)
+			: undefined
+		roots.push({
+			root: '/Pool',
+			kind: 'pool',
+			available: poolRegistered && poolUsage !== undefined,
+			offSystemDisk: poolRegistered
+				? await resolveOffSystemDisk({kind: 'pool', systemPath: POOL_MOUNTPOINT}, this.offSystemDiskDeps()).catch(
+						() => false,
+					)
+				: false,
+			unavailableReason: !poolRegistered ? 'no-pool' : poolUsage === undefined ? 'space-unreadable' : undefined,
+			size: poolUsage?.size,
+			free: poolUsage?.available,
+		})
+
+		// The system disk. Always offerable, never off-system — that is the whole
+		// honesty contract: it protects against mistakes, not against this disk dying.
+		const systemUsage = await getSystemDiskUsage(this.#livinityd).catch(() => undefined)
+		roots.push({
+			root: INTERNAL_VIRTUAL_ROOT,
+			kind: 'internal',
+			available: systemUsage !== undefined,
+			offSystemDisk: false,
+			unavailableReason: systemUsage === undefined ? 'space-unreadable' : undefined,
+			size: systemUsage?.size,
+			free: systemUsage?.available,
+		})
+
+		return roots
+	}
+
 	// Create a repository
 	async createRepository(virtualPath: string, password: string) {
 		const createNew = true
-		return this.addRepository(virtualPath, password, createNew)
+		// adminProcedure (routes.ts) — the Phase 368.6 destination set (storage pool,
+		// named system-disk folder) is reachable only from here.
+		return this.addRepository(virtualPath, password, createNew, {allowWidenedDestinations: true})
 	}
 
 	// Connect to existing repository
 	async connectToExistingRepository(virtualPath: string, password: string) {
 		const createNew = false
+		// D8: this is adminProcedureWhenNoUserExists — genuinely UNAUTHENTICATED
+		// while the box has no user yet, because onboarding-restore needs it. It
+		// therefore keeps the pre-368.6 predicate verbatim: /External and /Network
+		// only. Widening the destination set on an unauthenticated route would let
+		// anyone who can reach a fresh box write into the pool or the system disk.
 		return this.addRepository(virtualPath, password, createNew)
+	}
+
+	/**
+	 * Phase 368.6 (D1) — resolve a virtual destination to a proven system path.
+	 *
+	 * Every refusal is logged WITH the resolved realpath before it is thrown, so a
+	 * field report ("it just says no") can be diagnosed from the box's own log
+	 * without a second round-trip.
+	 */
+	private async resolveDestination(
+		virtualPath: string,
+		{allowWidenedDestinations}: {allowWidenedDestinations: boolean},
+	): Promise<{kind: DestinationKind; systemPath: string; offSystemDisk: boolean}> {
+		const classified = classifyDestination(virtualPath, {
+			poolRegistered: this.#livinityd.files.poolBaseDirRegistered,
+			poolMountpoint: POOL_MOUNTPOINT,
+			repositoryDirectoryName: this.backupDirectoryName,
+		})
+		if (!classified.ok) {
+			this.logger.error(`Refusing backup destination ${virtualPath}: [${classified.code}] ${classified.reason}`)
+			throw new Error(`Invalid path ${virtualPath} — ${classified.reason}`)
+		}
+
+		const widened = classified.kind === 'pool' || classified.kind === 'internal'
+		if (widened && !allowWidenedDestinations) {
+			this.logger.error(`Refusing backup destination ${virtualPath}: widened destinations are admin-only`)
+			throw new Error(`Invalid path ${virtualPath}`)
+		}
+
+		// External/Network still resolve through files.ts' per-user base-directory
+		// map; pool/internal carry their own resolved path from classification.
+		const systemPath =
+			classified.systemPath ?? (await this.#livinityd.files.virtualToSystemPath(virtualPath).catch(() => ''))
+		if (!systemPath) {
+			this.logger.error(`Refusing backup destination ${virtualPath}: could not resolve a system path`)
+			throw new Error(`Invalid path ${virtualPath}`)
+		}
+
+		const decision = await probeDestination(
+			{
+				kind: classified.kind,
+				systemPath,
+				dataDirectory: this.#livinityd.dataDirectory,
+				poolMountpoint: POOL_MOUNTPOINT,
+			},
+			this.destinationProbeDeps(),
+		)
+		if (!decision.ok) {
+			this.logger.error(`Refusing backup destination ${virtualPath} -> ${systemPath}: [${decision.code}] ${decision.reason}`)
+			// Typed bracketed code — features/backups/utils/error-messages.ts turns
+			// these into the operator-facing sentence.
+			throw new Error(`[${decision.code}] ${decision.reason}`)
+		}
+
+		const offSystemDisk = await resolveOffSystemDisk(
+			{kind: classified.kind, systemPath: decision.systemPath!},
+			this.offSystemDiskDeps(),
+		)
+		this.logger.log(
+			`Accepted backup destination ${virtualPath} -> ${decision.systemPath} (kind=${classified.kind}, offSystemDisk=${offSystemDisk})`,
+		)
+
+		return {kind: classified.kind, systemPath: decision.systemPath!, offSystemDisk}
+	}
+
+	private destinationProbeDeps(): DestinationProbeDeps {
+		return {
+			// fse.realpath's typings union in a Buffer overload; the string form is what
+			// we call, so normalise before it reaches the pure policy module.
+			realpath: async (path) => fse.realpath(path).then((resolved) => String(resolved)).catch(() => null),
+			mountpointFor: async (path) => {
+				try {
+					const {stdout} = await execa('findmnt', ['-no', 'TARGET', '--target', path])
+					const first = stdout.split('\n')[0]?.trim()
+					return first && first.length > 0 ? first : null
+				} catch {
+					return null
+				}
+			},
+			fstypeOf: async (path) => {
+				try {
+					const {stdout} = await execa('findmnt', ['-no', 'FSTYPE', '--target', path])
+					const first = stdout.split('\n')[0]?.trim()
+					return first && first.length > 0 ? first : null
+				} catch {
+					return null
+				}
+			},
+			canWrite: async (path) => {
+				// Prove it rather than trust the mode bits: a read-only remount and a
+				// full-but-writable-looking share both pass a permission check and fail
+				// the first real write.
+				const probe = nodePath.join(path, `.livinity-write-probe-${randomToken(8)}`)
+				try {
+					await fse.ensureDir(path)
+					await fse.writeFile(probe, 'livinity')
+					await fse.stat(probe)
+					return true
+				} catch {
+					return false
+				} finally {
+					await fse.remove(probe).catch(() => {})
+				}
+			},
+			freePercent: async (path) => {
+				try {
+					const {size, available} = await getDiskUsageByPath(path)
+					if (!Number.isFinite(size) || !Number.isFinite(available) || size <= 0) return null
+					return (available / size) * 100
+				} catch {
+					return null
+				}
+			},
+			existingRepositoryPaths: async () => {
+				const repositories = await this.getRepositories().catch(() => [])
+				return repositories
+					.map((repository) => repository.systemPath ?? (repository.isSafety ? repository.path : ''))
+					.filter((path): path is string => Boolean(path))
+			},
+		}
+	}
+
+	private offSystemDiskDeps(): OffSystemDiskDeps {
+		return {
+			disksForPath: (path) => diskForPath(path),
+			osDisks: () => resolveOsDisks(),
+			poolMemberDisks: async () => {
+				// Resolve from the POOL's own member list, never from findmnt on
+				// /mnt/pool — that resolves to the mergerfs FUSE source, which names no
+				// physical disk (and st_dev would lie outright).
+				const members = (await this.#livinityd.store.get('storagePool').catch(() => undefined))?.members ?? []
+				const disks = new Set<string>()
+				for (const member of members) {
+					const mountpoint = (member as {mountpoint?: string}).mountpoint
+					if (!mountpoint) continue
+					for (const disk of await diskForPath(mountpoint)) disks.add(disk)
+				}
+				return [...disks]
+			},
+		}
 	}
 
 	// Add a repository to the store and connect to it
 	// Conditionally creates a new repository if createNew is true
-	async addRepository(virtualPath: string, password: string, createNew = true) {
+	async addRepository(
+		virtualPath: string,
+		password: string,
+		createNew = true,
+		{allowWidenedDestinations = false}: {allowWidenedDestinations?: boolean} = {},
+	) {
 		// P0 backups-v2: fail with a clear typed error instead of a raw kopia
 		// ENOENT deep inside the wizard. Re-checks live so a just-installed
 		// engine is picked up without waiting for the hourly interval.
@@ -538,16 +778,18 @@ export default class Backups {
 
 		virtualPath = nodePath.join(virtualPath, this.backupDirectoryName)
 
-		// Check we have either a network share or external drive
-		const systemPath = await this.#livinityd.files.virtualToSystemPath(virtualPath).catch(() => '')
-		const isNetworkPath = systemPath.startsWith(this.#livinityd.files.getBaseDirectory('/Network'))
-		const isExternalPath = systemPath.startsWith(this.#livinityd.files.getBaseDirectory('/External'))
-		if (!isNetworkPath && !isExternalPath) throw new Error(`Invalid path ${virtualPath}`)
+		// Phase 368.6 (D1): the destination gauntlet — classification, the
+		// restore-wipe containment bound, mount proof, fstype/write/capacity and
+		// no-nesting. Defaults to the pre-368.6 /External+/Network set unless the
+		// caller is the admin-only route.
+		const {kind, systemPath, offSystemDisk} = await this.resolveDestination(virtualPath, {allowWidenedDestinations})
 
 		// TODO: We might also want to store some kind of unique identifier like filesystem uuid. Otherwise
 		// a different destination mounted at the same path could be used as the destination. Or if there
 		// are two external drives "Untitled" and "Untitled (2)" that are then mounted in different orders
-		// we won't be able to resolve the path.
+		// we won't be able to resolve the path. (368.6 closes part of this: the
+		// resolved systemPath is persisted, and a destination that is no longer
+		// mounted is now refused rather than silently landing on the OS disk.)
 
 		// Derive 128 bit hex string from password
 		// This is not key stretching, key stretching is handled internally by kopia with scrypt.
@@ -560,6 +802,15 @@ export default class Backups {
 		// Create kopia repository if we're creating a new one
 		if (createNew) {
 			this.logger.log(`Creating repository ${id}`)
+
+			// 368.6: a pool/internal destination's PARENT may not exist yet (nobody has
+			// ever written to /opt/livos-backups/<name>). Create it first, but keep the
+			// repository directory itself non-recursive — that is what makes EEXIST
+			// mean "a repository is already here" rather than silently reusing a path.
+			if (kind === 'pool' || kind === 'internal') {
+				await fse.mkdir(nodePath.dirname(systemPath), {recursive: true})
+				await this.#livinityd.files.chownSystemPath(nodePath.dirname(systemPath)).catch(() => {})
+			}
 
 			// Create the directory
 			await fse.mkdir(systemPath, {recursive: false}).catch((error) => {
@@ -592,7 +843,11 @@ export default class Backups {
 			// Sanity check to prevent dupes but this shouldn't ever happen because
 			// the repository creation should fail
 			const repositoryExists = repositories.some((existingRepository) => existingRepository.id === id)
-			if (!repositoryExists) repositories.push({id, path: virtualPath, password})
+			// 368.6 (D4): persist the resolved facts. systemPath means connect() never
+			// has to re-resolve a virtual path — which is also what makes the hourly
+			// job work in multi-user mode, where files.ts hands a context-less caller
+			// an EMPTY base-directory map and every virtual path stops resolving.
+			if (!repositoryExists) repositories.push({id, path: virtualPath, password, kind, systemPath, offSystemDisk})
 
 			await set('backups.repositories', repositories)
 		})
@@ -610,7 +865,13 @@ export default class Backups {
 
 		// P0 backups-v2: the box now has a destination — clear the weekly
 		// "backups are not set up" nag if it's showing.
-		await this.#livinityd.notifications.clear('backups-not-configured').catch(() => {})
+		// Phase 368.6 (D5): only a REAL destination may silence it. An internal
+		// folder on the system disk is a genuine and useful backup, but it does not
+		// survive that disk failing — so the "add a drive or a NAS" reminder has to
+		// keep coming. Clearing it here would also snooze it for a full week.
+		if (isRealDestination({offSystemDisk})) {
+			await this.#livinityd.notifications.clear('backups-not-configured').catch(() => {})
+		}
 
 		return id
 	}
@@ -733,9 +994,14 @@ export default class Backups {
 
 		// Phase 368.5 BKP-16: the system-managed safety repo lives at a fixed SYSTEM path
 		// outside the virtual filesystem — every other repo still resolves virtually.
-		const systemPath = repository.isSafety
-			? repository.path
-			: this.#livinityd.files.virtualToSystemPathUnsafe(repository.path)
+		// Phase 368.6 (D4): a persisted systemPath wins over both. It is resolved once,
+		// when the destination is added and proven, so pool/internal destinations (which
+		// have no virtual root to resolve) work — and so the hourly job stops depending
+		// on a virtual-path resolution that returns nothing in multi-user mode, where
+		// files.ts hands a context-less caller an EMPTY base-directory map.
+		const systemPath =
+			repository.systemPath ??
+			(repository.isSafety ? repository.path : this.#livinityd.files.virtualToSystemPathUnsafe(repository.path))
 		await this.kopia([
 			'repository',
 			'connect',
@@ -821,13 +1087,28 @@ export default class Backups {
 		// Phase 368.5 BKP-16: a safety backup must never fill the system disk.
 		// <15% free ⇒ thin + maintain first; still <15% ⇒ SKIP with a logged reason
 		// (not an error state — no notification, no failed run history).
-		if (repository.isSafety) {
+		//
+		// Phase 368.6 (D7): the same guard now covers ANY repository that shares the
+		// system disk — an internal destination can fill it just as effectively. But
+		// the relief branch is SAFETY-ONLY on purpose: it runs `snapshot expire --all`
+		// + `maintenance run --full`, which under USER_RETENTION_FLAGS (keep-monthly=12)
+		// would silently destroy a year of the operator's own snapshots to buy space
+		// they never agreed to trade. For a user repository we skip and say why; the
+		// existing >24h `backups-failing` alert still fires, so a persistently skipped
+		// destination surfaces rather than rotting quietly.
+		const sharesSystemDisk = repository.isSafety || repository.offSystemDisk !== true
+		if (sharesSystemDisk) {
 			const decision = await evaluateDiskPressure({
 				getDiskUsage: () => getSystemDiskUsage(this.#livinityd),
-				runRetentionAndMaintenance: async () => {
-					await this.repository(repository.id, ['snapshot', 'expire', '--all'])
-					await this.repository(repository.id, ['maintenance', 'run', '--full'])
-				},
+				runRetentionAndMaintenance: repository.isSafety
+					? async () => {
+							await this.repository(repository.id, ['snapshot', 'expire', '--all'])
+							await this.repository(repository.id, ['maintenance', 'run', '--full'])
+						}
+					: // Non-safety: no relief attempt at all — evaluateDiskPressure's
+						// contract is thin-then-recheck, so a no-op relief makes the second
+						// check see the same reading and take the skip branch.
+						async () => {},
 				log: (m) => this.logger.log(m),
 				error: (m, e) => this.logger.error(m, e as Error),
 			})
@@ -1047,14 +1328,32 @@ export default class Backups {
 		// the relative would match any file or directory called `app-stores` but prepending with `/`
 		// ensure it ony matches the exact path we want to ignore. Also if we use absolute system paths
 		// we won't get match because kopia is assuming `/` is the backup root not the system root.
-		ignoreFileContents = ignoreFileContents.map((path) => {
+		const toBackupRootPath = (path: string) => {
 			// If it's an absolute system path, convert it to a relative data directory path
 			if (path.startsWith(this.#livinityd.dataDirectory)) path = nodePath.relative(this.#livinityd.dataDirectory, path)
 			// All paths should now be relative to the data directory which is the backup root,
 			// prepend a `/` to make these absolute paths from from the backup root from kopia's perspective
 			if (!path.startsWith('/')) path = `/${path}`
 			return path
-		})
+		}
+		ignoreFileContents = ignoreFileContents.map(toBackupRootPath)
+
+		// Phase 368.6 (D6) — self-referential-snapshot belts. Pushed AFTER the
+		// mapping above (the mapper `/`-prefixes any entry lacking one, which would
+		// anchor the depth-agnostic name pattern at the backup root) and OUTSIDE the
+		// per-path try/catch (which swallows failures and would otherwise let a
+		// backup proceed with no protection at all).
+		ignoreFileContents.push(
+			...repositoryIgnorePatterns(await this.getRepositories(), {
+				toBackupRootPath,
+				repositoryDirectoryName: this.backupDirectoryName,
+			}),
+		)
+
+		// NOTE: /Pool is deliberately NOT added to alwaysIgnoredPaths. /mnt/pool is
+		// outside dataDirectory, so the mapper would emit a rule kopia reads as
+		// `${dataDirectory}/mnt/pool` — a silent no-op that only looks like safety.
+		// `--one-file-system=true` on the snapshot is what actually stops the walk.
 
 		// Write the file atomically
 		const temporaryIgnoreFilePath = `${ignoreFilePath}.${randomToken(32)}`

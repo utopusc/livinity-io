@@ -1,6 +1,7 @@
 import z from 'zod'
 
 import {router, privateProcedure, adminProcedure, adminProcedureWhenNoUserExists, publicProcedureWhenNoUserExists} from '../server/trpc/trpc.js'
+import {isRealDestination} from './destination-policy.js'
 
 // Backups-v2 P0 (D10): management procedures are ADMIN-gated — previously
 // every one of these was open to any authenticated user, including a full-box
@@ -20,8 +21,28 @@ export default router({
 		// Only return properties we want to expose (passwords never leave the store).
 		// Phase 368.5 BKP-16: isSafety is exposed so the UI can exclude the safety
 		// repo from destination counts.
-		return repositories.map(({id, path, lastBackup, isSafety}) => ({id, path, lastBackup, isSafety}))
+		// Phase 368.6 (D5): `kind` and `offSystemDisk` join it, plus a SERVER-DERIVED
+		// `isRealDestination` so no UI surface re-implements the rule — twelve of them
+		// count or render destinations, and a rule copied twelve times is a rule that
+		// will disagree with itself. `systemPath` is deliberately NOT exposed: this is
+		// privateProcedure (every authenticated user, not just admins), and it is the
+		// only field that can now name a raw host path.
+		return repositories.map(({id, path, lastBackup, isSafety, kind, offSystemDisk}) => ({
+			id,
+			path,
+			lastBackup,
+			isSafety,
+			kind,
+			offSystemDisk,
+			isRealDestination: isRealDestination({isSafety, offSystemDisk}),
+		}))
 	}),
+
+	// Phase 368.6 (D9) — the destination roots this box can actually accept.
+	// adminProcedure: the widened set (storage pool, system-disk folder) is
+	// admin-only, exactly like createRepository, so the wizard that offers them is
+	// gated the same way as the call that consumes them.
+	getDestinationRoots: adminProcedure.query(async ({ctx}) => ctx.livinityd!.backups.getDestinationRoots()),
 
 	// Get size of a repository
 	getRepositorySize: adminProcedure

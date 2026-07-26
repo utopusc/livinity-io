@@ -597,6 +597,22 @@ type StoreSchema = {
 			// Phase 368.5 BKP-16 — system-managed local safety repo marker; type tag
 			// so Phase 370's repo-type schema lands cleanly
 			isSafety?: boolean
+			// Phase 368.6 BKPANYDEST (D4) — all OPTIONAL, so an existing row written
+			// before this phase stays valid and its kind is derived from its path
+			// prefix. No migration.
+			kind?: 'external' | 'network' | 'pool' | 'internal'
+			// Absolute, resolved ONCE when the destination is added. connect() prefers
+			// it over re-resolving the virtual path — which is also the fix for the
+			// multi-user break, where files.ts hands the context-less hourly job an
+			// EMPTY base-directory map and every virtual path stops resolving.
+			systemPath?: string
+			// Proven to sit on a different physical disk than the data. Tri-state on
+			// purpose: `undefined` means never resolved, which is NOT `true` — an
+			// unproven destination must never earn a green health state. Computed via
+			// findmnt+lsblk disk-ancestor walk (never st_dev: /mnt/pool is a mergerfs
+			// FUSE mount and always reports a distinct device even when every branch
+			// is on the OS disk), and PERSISTED rather than recomputed per query.
+			offSystemDisk?: boolean
 		}[]
 		ignore: string[]
 		// Backup-completeness P2 — which out-of-tree stores the snapshot includes.
