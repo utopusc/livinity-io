@@ -30,6 +30,7 @@ import {
 	isRealDestination,
 	INTERNAL_BACKUP_ROOT,
 	INTERNAL_VIRTUAL_ROOT,
+	MIN_FREE_PERCENT,
 	type DestinationKind,
 	type DestinationProbeDeps,
 	type OffSystemDiskDeps,
@@ -605,15 +606,49 @@ export default class Backups {
 			free: poolUsage?.available,
 		})
 
-		// The system disk. Always offerable, never off-system — that is the whole
+		// The system disk. Always OFFERED, never off-system — that is the whole
 		// honesty contract: it protects against mistakes, not against this disk dying.
+		//
+		// Phase 368.8 (COR-04): but "offered" is not "available". Until this phase the
+		// row's `available` depended only on whether df could be read, so the wizard
+		// happily offered a root that addRepository would then refuse — the dead-end
+		// this method's own docstring above forbids, and precisely the v1.1.13 field
+		// bug. Now the three conditions addRepository will actually apply are checked
+		// HERE, before the operator types a folder name and a password.
 		const systemUsage = await getSystemDiskUsage(this.#livinityd).catch(() => undefined)
+		const internalFreePercent =
+			systemUsage && Number.isFinite(systemUsage.size) && systemUsage.size > 0
+				? (systemUsage.available / systemUsage.size) * 100
+				: undefined
+		const internalRootExists = await fse.pathExists(INTERNAL_BACKUP_ROOT).catch(() => false)
+		// Reuse the SAME write proof the probe uses, so the wizard and addRepository
+		// can never disagree about what "writable" means.
+		const internalRootWritable = internalRootExists
+			? await this.destinationProbeDeps().canWrite(INTERNAL_BACKUP_ROOT)
+			: false
+		// COR-05: the 15% floor is evaluated against the SYSTEM disk for an internal
+		// destination, so a full box is refused even after the P0 fix. Name it here
+		// rather than after the password step.
+		const internalUnavailableReason = !internalRootExists
+			? 'internal-root-missing'
+			: !internalRootWritable
+				? 'internal-root-not-writable'
+				: systemUsage === undefined || internalFreePercent === undefined || Number.isNaN(internalFreePercent)
+					? 'space-unreadable'
+					: internalFreePercent < MIN_FREE_PERCENT
+						? 'internal-too-full'
+						: undefined
+		if (internalUnavailableReason !== undefined) {
+			this.logger.error(
+				`Destination root ${INTERNAL_VIRTUAL_ROOT} unavailable: ${internalUnavailableReason} (root=${INTERNAL_BACKUP_ROOT}, exists=${internalRootExists}, writable=${internalRootWritable}, free=${internalFreePercent?.toFixed(1) ?? 'unknown'}%)`,
+			)
+		}
 		roots.push({
 			root: INTERNAL_VIRTUAL_ROOT,
 			kind: 'internal',
-			available: systemUsage !== undefined,
+			available: internalUnavailableReason === undefined,
 			offSystemDisk: false,
-			unavailableReason: systemUsage === undefined ? 'space-unreadable' : undefined,
+			unavailableReason: internalUnavailableReason,
 			size: systemUsage?.size,
 			free: systemUsage?.available,
 		})
