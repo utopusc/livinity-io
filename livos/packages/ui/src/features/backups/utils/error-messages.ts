@@ -35,6 +35,10 @@ export function getUserFriendlyErrorMessage(error: any): string {
 		['[unsupported-root]', 'backups-error.unsupported-root'],
 		['[invalid-folder-name]', 'backups-error.invalid-folder-name'],
 		['[unresolvable-path]', 'backups-error.unresolvable-path'],
+		// Phase 368.8 (ERR-01): the root livinityd creates for on-device backups is
+		// genuinely absent. Distinct from unresolvable-path so the sentence can name
+		// the fix instead of describing the failure.
+		['[internal-root-missing]', 'backups-error.internal-root-missing'],
 		['[unsupported-filesystem]', 'backups-error.unsupported-filesystem'],
 	]
 	for (const [code, key] of destinationRefusals) {

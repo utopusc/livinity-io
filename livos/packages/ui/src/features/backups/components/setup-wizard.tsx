@@ -485,6 +485,27 @@ function freeOfTotal(root?: {size?: number; free?: number}): string | null {
 	})
 }
 
+/**
+ * Phase 368.8 (COR-04/COR-05) — why "This device" cannot be chosen right now.
+ * The SERVER decides (backups.ts getDestinationRoots); this only turns the code
+ * into a sentence, so the wizard and addRepository can never disagree about what
+ * is offerable. Offering a row that will be refused is the dead-end this phase
+ * exists to remove.
+ */
+function internalUnavailableReason(root?: {available?: boolean; unavailableReason?: string}): string | null {
+	if (!root || root.available) return null
+	switch (root.unavailableReason) {
+		case 'internal-root-missing':
+			return t('backups.internal-root-missing')
+		case 'internal-root-not-writable':
+			return t('backups.internal-root-not-writable')
+		case 'internal-too-full':
+			return t('backups.internal-too-full')
+		default:
+			return t('backups.space-unreadable')
+	}
+}
+
 function DestinationStep({
 	onChangeDestination,
 	onNext,
@@ -758,9 +779,13 @@ function DestinationStep({
 									</ServerCard>
 								) : null}
 
-								{/* The system disk. Always offerable, never GREEN. */}
+								{/* The system disk. Always offerable, never GREEN.
+								    368.8 (COR-04): offered DISABLED, with a reason, when the server says
+								    the root is missing / unwritable / too full — so nobody types a folder
+								    name and a password only to be refused afterwards. */}
 								<ServerCard
 									selected={currentDest?.type === 'internal'}
+									disabled={!internalRoot?.available}
 									onClick={() => {
 										if (!internalRoot?.available) return
 										onChangeDestination({
@@ -777,8 +802,11 @@ function DestinationStep({
 										<span className='size-1.5 shrink-0 rounded-full bg-amber-500' aria-hidden='true' />
 										<span className='truncate text-[12px]'>{t('backups.internal-system-disk')}</span>
 									</div>
-									<div className='w-full truncate text-center text-[11px] text-text-tertiary'>
-										{freeOfTotal(internalRoot) ?? t('backups.space-unreadable')}
+									<div
+										className='w-full truncate text-center text-[11px] text-text-tertiary'
+										title={internalUnavailableReason(internalRoot) ?? undefined}
+									>
+										{internalUnavailableReason(internalRoot) ?? freeOfTotal(internalRoot) ?? t('backups.space-unreadable')}
 									</div>
 								</ServerCard>
 
