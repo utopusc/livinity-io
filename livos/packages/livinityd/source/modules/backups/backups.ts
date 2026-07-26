@@ -880,9 +880,13 @@ export default class Backups {
 			this.logger.log(`Creating repository ${id}`)
 
 			// 368.6: a pool/internal destination's PARENT may not exist yet (nobody has
-			// ever written to /opt/livos-backups/<name>). Create it first, but keep the
+			// ever written to <INTERNAL_BACKUP_ROOT>/<name>). Create it first, but keep the
 			// repository directory itself non-recursive — that is what makes EEXIST
 			// mean "a repository is already here" rather than silently reusing a path.
+			// 368.8: for `internal` the probe has already created that parent (PROBE-02),
+			// so this is an idempotent no-op there; it stays because it is still the only
+			// thing that creates a `pool` parent. Do NOT re-derive the old sibling root
+			// this comment used to name — see destination-policy.ts:37-58 for why.
 			if (kind === 'pool' || kind === 'internal') {
 				await fse.mkdir(nodePath.dirname(systemPath), {recursive: true})
 				await this.#livinityd.files.chownSystemPath(nodePath.dirname(systemPath)).catch(() => {})
