@@ -35,13 +35,28 @@ import nodePath from 'node:path'
 export type DestinationKind = 'external' | 'network' | 'pool' | 'internal'
 
 /**
- * Internal repositories live OUTSIDE $LIVOS_DIR on purpose. update.sh runs
- * `chown -R` over /opt/livos on every single update; a kopia repo is millions of
- * blob files, so a repo under /opt/livos would turn each update into a
- * multi-minute recursive chown. (The 368.5 safety repo at /opt/livos/backups-local
- * carries exactly that cost — filed, not fixed here.)
+ * Internal repositories live under $LIVOS_DIR, beside the 368.5 safety repo.
+ *
+ * ⚠ 368.8 REVERSED 368.6's sibling location (/opt/livos-backups) — do not "restore" it.
+ * That path sits directly under root-owned /opt, so ONLY the installer could create
+ * it. And an installer cannot reach an existing box in the same update: update.sh
+ * replaces itself with an atomic mv (update.sh:1884-1904, "Next invocation will read
+ * the new version") and never re-execs the fresh clone, a hazard named in-tree at
+ * update.sh:4429-4435. A root only root can create was therefore undeliverable
+ * without shipping a second, no-op release. Under $LIVOS_DIR livinityd creates the
+ * root itself (see Backups#ensureInternalBackupRoot), exactly as it already creates
+ * SAFETY_REPO_PATH, and the fix lands on the FIRST update.
+ *
+ * The cost 368.6 was avoiding is real and is handled separately: update.sh runs
+ * `chown -R` over /opt/livos twice per update (update.sh:2601, :4568), so 368.8-02
+ * prunes both backup roots out of those walks. That pruning is a PERFORMANCE
+ * optimisation, not a correctness requirement — see 368.8-02.
+ *
+ * Name: NOT `/opt/livos/backups` — that is taken by scripts/pre-v42-cutover-backup.sh:75.
+ * NOT `/opt/livos/backups-local` — that is the safety repo. `isAtOrUnder` is
+ * segment-wise, so `backups-internal` is not "under" either of them.
  */
-export const INTERNAL_BACKUP_ROOT = '/opt/livos-backups'
+export const INTERNAL_BACKUP_ROOT = '/opt/livos/backups-internal'
 
 /**
  * Display-only pseudo-root for internal destinations. It is deliberately NOT a
@@ -256,6 +271,17 @@ export type DestinationProbeDeps = {
 	freePercent: (path: string) => Promise<number | null>
 	/** Resolved system paths of every repository already registered. */
 	existingRepositoryPaths: () => Promise<string[]>
+	/**
+	 * Phase 368.8 (PROBE-02) — create the per-repository LEAF directory for an
+	 * `internal` destination so step 1 has a real path to resolve. The folder name
+	 * is per-request operator input, so nothing can pre-create it. The ROOT itself
+	 * is owned by Backups#ensureInternalBackupRoot, never by this call. Returns
+	 * true when the directory exists after the call.
+	 *
+	 * OPTIONAL on purpose: a caller that does not inject it keeps the pre-368.8
+	 * fail-closed behaviour, so no existing caller silently gains write behaviour.
+	 */
+	ensureLeafDirectory?: (path: string) => Promise<boolean>
 }
 
 export type ProbeInput = {

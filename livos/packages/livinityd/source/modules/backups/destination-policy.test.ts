@@ -53,11 +53,15 @@ describe('classifyDestination — accepted kinds', () => {
 		})
 	})
 
-	test('an internal destination lands under the root we own, outside $LIVOS_DIR', () => {
+	test('an internal destination lands under the root we own, inside $LIVOS_DIR', () => {
 		const decision = classifyDestination(withRepoDir(`${INTERNAL_VIRTUAL_ROOT}/Nightly`), classifyOptions)
 		expect(decision).toEqual({ok: true, kind: 'internal', systemPath: `${INTERNAL_BACKUP_ROOT}/Nightly/${REPO_DIR}`})
-		// The point of /opt/livos-backups: update.sh chown -R's /opt/livos every update.
-		expect((decision as {systemPath: string}).systemPath.startsWith('/opt/livos/')).toBe(false)
+		// 368.8 reversed 368.6: the root is now INSIDE /opt/livos, because only there can
+		// livinityd create it without an installer (see destination-policy.ts:37-44).
+		expect((decision as {systemPath: string}).systemPath.startsWith('/opt/livos/')).toBe(true)
+		// …and it is still NOT the safety repo, and still not inside dataDirectory.
+		expect((decision as {systemPath: string}).systemPath.startsWith(`${SAFETY_REPO_PATH}/`)).toBe(false)
+		expect((decision as {systemPath: string}).systemPath.startsWith(`${DATA_DIR}/`)).toBe(false)
 	})
 
 	test('the pool is not offered on a box without one', () => {
@@ -244,8 +248,150 @@ describe('probeDestination — the restore-wipe bound', () => {
 	})
 
 	test('refuses when the parent cannot be resolved at all (fail closed)', async () => {
+		// 368.8: for `internal` the refusal is now the more specific
+		// `internal-root-missing` — an all-null realpath means INTERNAL_BACKUP_ROOT is
+		// absent, which is a named, actionable condition (ensureInternalBackupRoot
+		// failed: disk full, EACCES, a race), not a mystery. Fail-closed is unchanged: nothing is
+		// accepted, and every other kind still answers `unresolvable-path`.
 		const deps = makeDeps({realpath: async () => null})
-		await expect(probeDestination(internalInput, deps)).resolves.toMatchObject({ok: false, code: 'unresolvable-path'})
+		await expect(probeDestination(internalInput, deps)).resolves.toMatchObject({
+			ok: false,
+			code: 'internal-root-missing',
+		})
+		await expect(probeDestination(poolInput, deps)).resolves.toMatchObject({ok: false, code: 'unresolvable-path'})
+	})
+})
+
+// ── Phase 368.8 (TEST-01) — the P0 that shipped in v1.1.13 ──────────────────
+//
+// The 368.6 suite injected `realpath: async (path) => path`, an identity function
+// that can never return null. Every internal test passed while the feature was
+// dead on every box: the path actually handed to realpath is
+// INTERNAL_BACKUP_ROOT/<operator-typed-folder>, which nothing can pre-create
+// because the folder name is per-request user input. These fakes model a real
+// filesystem — only paths that exist resolve.
+
+/** The normal case: livinityd has created the root, no operator leaf exists yet. */
+const boxWithRoot = () => new Set<string>(['/', '/opt', '/opt/livos', INTERNAL_BACKUP_ROOT])
+
+/** Defensive case: ensureInternalBackupRoot failed (disk full, EACCES, race). */
+const boxWithoutRoot = () => new Set<string>(['/', '/opt', '/opt/livos'])
+
+function realisticDeps(existing: Set<string>, overrides: Partial<DestinationProbeDeps> = {}): DestinationProbeDeps {
+	return makeDeps({
+		realpath: async (path) => (existing.has(normalizePath(path)) ? normalizePath(path) : null),
+		ensureLeafDirectory: async (path) => {
+			existing.add(normalizePath(path))
+			return true
+		},
+		...overrides,
+	})
+}
+
+describe('probeDestination — 368.8 PROBE-02: the internal leaf nobody can pre-create', () => {
+	test('accepts an internal destination whose <folder> does not exist yet', async () => {
+		// This is the exact v1.1.13 field failure: "LivOS couldn't resolve that location."
+		await expect(probeDestination(internalInput, realisticDeps(boxWithRoot()))).resolves.toMatchObject({
+			ok: true,
+			kind: 'internal',
+		})
+	})
+
+	test('the accepted systemPath keeps the operator folder segment', async () => {
+		// Pins against a basename-only path reconstruction: if the fix had walked up
+		// to an ancestor and rebuilt from basename alone, `Nightly` would vanish and
+		// every intended-path check (containment, denylist, nesting) would be
+		// evaluated against the wrong path.
+		await expect(probeDestination(internalInput, realisticDeps(boxWithRoot()))).resolves.toMatchObject({
+			ok: true,
+			systemPath: `${INTERNAL_BACKUP_ROOT}/Nightly/${REPO_DIR}`,
+		})
+	})
+
+	test('names the missing root instead of the generic "could not resolve"', async () => {
+		// 368.8 Route C makes this rare — livinityd creates the root itself — but it is
+		// still reachable when ensureInternalBackupRoot fails (disk full, EACCES, a race
+		// with a restore). Keeping the distinct code costs nothing and turns a mystery
+		// into a sentence.
+		await expect(probeDestination(internalInput, realisticDeps(boxWithoutRoot()))).resolves.toMatchObject({
+			ok: false,
+			code: 'internal-root-missing',
+		})
+	})
+
+	test('refuses with permission-denied when the root exists but the leaf cannot be created', async () => {
+		// A box where ensureInternalBackupRoot made the root but it is not writable —
+		// a read-only remount, or ownership skewed by a hand-run chown.
+		const deps = realisticDeps(boxWithRoot(), {ensureLeafDirectory: async () => false})
+		await expect(probeDestination(internalInput, deps)).resolves.toMatchObject({
+			ok: false,
+			code: 'permission-denied',
+		})
+	})
+
+	test('a caller that injects no ensureLeafDirectory still fails closed', async () => {
+		const existing = boxWithRoot()
+		const deps = makeDeps({realpath: async (path) => (existing.has(normalizePath(path)) ? normalizePath(path) : null)})
+		await expect(probeDestination(internalInput, deps)).resolves.toMatchObject({ok: false, code: 'permission-denied'})
+	})
+
+	test('the relaxation is scoped to internal — no other kind ever creates anything', async () => {
+		let calls = 0
+		const existing = new Set<string>(['/', '/opt', POOL])
+		const deps = makeDeps({
+			realpath: async (path) => (existing.has(normalizePath(path)) ? normalizePath(path) : null),
+			ensureLeafDirectory: async (path) => {
+				calls += 1
+				existing.add(normalizePath(path))
+				return true
+			},
+		})
+		// /mnt/pool/backups does not exist; the pool destination must still be refused.
+		await expect(probeDestination(poolInput, deps)).resolves.toMatchObject({ok: false, code: 'unresolvable-path'})
+		expect(calls).toBe(0)
+	})
+
+	test('the root itself is never auto-created by the probe — Backups#ensureInternalBackupRoot owns it', async () => {
+		let calls = 0
+		const existing = boxWithoutRoot()
+		const deps = makeDeps({
+			realpath: async (path) => (existing.has(normalizePath(path)) ? normalizePath(path) : null),
+			ensureLeafDirectory: async (path) => {
+				calls += 1
+				existing.add(normalizePath(path))
+				return true
+			},
+		})
+		// parent === INTERNAL_BACKUP_ROOT, i.e. NOT one level below it.
+		const input: ProbeInput = {
+			kind: 'internal',
+			systemPath: `${INTERNAL_BACKUP_ROOT}/${REPO_DIR}`,
+			dataDirectory: DATA_DIR,
+		}
+		await expect(probeDestination(input, deps)).resolves.toMatchObject({ok: false, code: 'unresolvable-path'})
+		expect(calls).toBe(0)
+	})
+
+	test('a created leaf that resolves INTO dataDirectory is still refused', async () => {
+		// THE security test. Rule 2 (restore-wipe containment) must bind to the
+		// RE-RESOLVED intended path, never to an ancestor. A symlinked leaf pointing
+		// inside dataDirectory is the bypass this proves does not exist.
+		const existing = boxWithRoot()
+		const deps = makeDeps({
+			realpath: async (path) => {
+				const p = normalizePath(path)
+				if (p === `${INTERNAL_BACKUP_ROOT}/Nightly`) return existing.has(p) ? `${DATA_DIR}/home/sneaky` : null
+				return existing.has(p) ? p : null
+			},
+			ensureLeafDirectory: async (path) => {
+				existing.add(normalizePath(path))
+				return true
+			},
+		})
+		await expect(probeDestination(internalInput, deps)).resolves.toMatchObject({
+			ok: false,
+			code: 'inside-data-directory',
+		})
 	})
 })
 
@@ -271,7 +417,12 @@ describe('probeDestination — resolved-path denylist', () => {
 		await expect(probeDestination(input, deps)).resolves.toMatchObject({ok: false})
 	})
 
-	test('but /opt/livos-backups is a SIBLING of /opt/livos, not a child', async () => {
+	test('the /opt/livos denylist carves out INTERNAL_BACKUP_ROOT, so the root we own is still accepted', async () => {
+		// 368.8: the internal root is now a CHILD of /opt/livos, not a sibling. The
+		// blanket "/opt/livos may not hold a repository" rule would refuse it, so the
+		// carve-out (`&& !isAtOrUnder(resolvedPath, INTERNAL_BACKUP_ROOT)`) is what makes
+		// this legal — and the two tests above it prove the blanket rule still bites
+		// everywhere else under /opt/livos.
 		await expect(probeDestination(internalInput, makeDeps())).resolves.toMatchObject({ok: true})
 	})
 
