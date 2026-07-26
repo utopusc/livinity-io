@@ -9,7 +9,17 @@ import prettyBytes from 'pretty-bytes'
 
 import randomToken from '../../modules/utilities/random-token.js'
 import {captureSystemState, DEFAULT_BACKUP_SCOPE, scopeExclusionPatterns, type BackupScope} from './system-state.js'
-import {detectEngine, installEngine, kopiaSpawnEnv, KOPIA_MINIMUM_VERSION, type EngineStatus} from './engine.js'
+import {
+	detectEngine,
+	installEngine,
+	kopiaConfigFile,
+	kopiaSpawnEnv,
+	KOPIA_CACHE_DIR,
+	KOPIA_CONFIG_DIR,
+	KOPIA_MINIMUM_VERSION,
+	KOPIA_STATE_ROOT,
+	type EngineStatus,
+} from './engine.js'
 import {writeTerminalRunStatus, type LastRunStatus} from './backup-preflight.js'
 import {
 	SAFETY_REPO_ID,
@@ -96,6 +106,8 @@ export default class Backups {
 	// moment an update (or the self-installer) puts kopia in place.
 	engineStatus: EngineStatus = {available: false, reason: 'unknown', minimumVersion: KOPIA_MINIMUM_VERSION}
 	#engineInstallInFlight = false
+	// 368.8-10: memoised result of ensureKopiaStateDirs(). Set only on SUCCESS.
+	#kopiaStateDirsReady?: Promise<boolean>
 
 	constructor(livinityd: Livinityd) {
 		this.#livinityd = livinityd
@@ -135,6 +147,12 @@ export default class Backups {
 		// created at boot and healing would silently depend on the operator opening the
 		// wizard, turning Route C's "heals on the first update" into a conditional.
 		await this.ensureInternalBackupRoot().catch(() => false)
+
+		// Phase 368.8-10: same reasoning, for the directories kopia keeps its own
+		// state in. Priming it here (rather than relying on the kopia() choke point
+		// alone) means the "Kopia state directories ready" line is in the journal
+		// from boot, so a box can be diagnosed without first attempting a backup.
+		await this.ensureKopiaStateDirs().catch(() => false)
 
 		// Phase 368.5 BKP-16: default-ON local safety snapshots. Non-fatal; if the
 		// engine isn't up yet the hourly interval retries once self-install lands.
@@ -456,7 +474,7 @@ export default class Backups {
 					'create',
 					'filesystem',
 					`--path=${SAFETY_REPO_PATH}`,
-					`--config-file=/kopia/config/${SAFETY_REPO_ID}.config`,
+					`--config-file=${kopiaConfigFile(SAFETY_REPO_ID)}`,
 					`--password=${password}`,
 					'--override-hostname=livinity',
 				])
@@ -467,7 +485,7 @@ export default class Backups {
 					'connect',
 					'filesystem',
 					`--path=${SAFETY_REPO_PATH}`,
-					`--config-file=/kopia/config/${SAFETY_REPO_ID}.config`,
+					`--config-file=${kopiaConfigFile(SAFETY_REPO_ID)}`,
 					`--password=${password}`,
 					'--override-hostname=livinity',
 					'--content-cache-size-mb=2000',
@@ -514,6 +532,13 @@ export default class Backups {
 			await this.checkEngine()
 			this.assertEngineAvailable()
 		}
+
+		// 368.8-10: this is the ONE choke point every kopia spawn passes through, so
+		// it is where the state directories are guaranteed to exist. Memoised, so
+		// this is a resolved-promise await after the first call. Deliberately not
+		// gated on the result: if it failed, kopia's own error is more informative
+		// than a refusal we invent here, and it is logged either way.
+		await this.ensureKopiaStateDirs()
 
 		const spawnKopiaProcess = async () => {
 			// Spawn process. The env (and therefore where kopia keeps its config and
@@ -682,6 +707,54 @@ export default class Backups {
 			this.logger.error(`Could not create ${INTERNAL_BACKUP_ROOT}`, error)
 			return false
 		}
+	}
+
+	/**
+	 * Phase 368.8-10 (Route C, again) — create the directories kopia keeps its OWN
+	 * state in: the per-repository `*.config` files and the content/metadata cache.
+	 *
+	 * The predecessor of these lived under the root-owned `/kopia`, which no script
+	 * in this repo ever chowned, so kopia died with "permission denied" before it
+	 * did any work — on EVERY destination, including the 368.5 safety snapshots.
+	 * See engine.ts's KOPIA_STATE_ROOT comment for the field measurement and why
+	 * the location will not be moved back.
+	 *
+	 * Runs before every kopia spawn, not just at boot: a box that got kopia from
+	 * `update.sh` while livinityd's own self-install never ran still has to reach a
+	 * writable state directory, and `start()` may have run before any of that.
+	 * Memoised so the ensureDir is not paid on each of the many spawns a single
+	 * backup run makes.
+	 *
+	 * Never throws. A failure leaves the directories absent and the next spawn
+	 * retries — a box can gain the permission mid-life, e.g. on the update that
+	 * chowns /opt/livos to the run-user.
+	 */
+	async ensureKopiaStateDirs(): Promise<boolean> {
+		if (this.#kopiaStateDirsReady) return this.#kopiaStateDirsReady
+
+		const attempt = (async () => {
+			try {
+				await fse.ensureDir(KOPIA_CONFIG_DIR)
+				await fse.ensureDir(KOPIA_CACHE_DIR)
+				// 0700, unlike INTERNAL_BACKUP_ROOT's 0755: this is livinityd's private
+				// engine state, not a place an operator ever browses. Non-fatal — on a
+				// box where root created the tree first we may not own it, and being
+				// unable to tighten the mode is not a reason to refuse to back up.
+				await fse.chmod(KOPIA_STATE_ROOT, 0o700).catch(() => {})
+				// Logged on SUCCESS so the box UAT has something to grep, the same way
+				// ensureInternalBackupRoot does. Memoised, so it appears once per boot.
+				this.logger.log(`Kopia state directories ready: ${KOPIA_STATE_ROOT}`)
+				return true
+			} catch (error) {
+				this.logger.error(`Could not create the kopia state directories under ${KOPIA_STATE_ROOT}`, error)
+				return false
+			}
+		})()
+
+		this.#kopiaStateDirsReady = attempt
+		// Cache the success, forget the failure.
+		if (!(await attempt)) this.#kopiaStateDirsReady = undefined
+		return attempt
 	}
 
 	// Create a repository
@@ -943,7 +1016,7 @@ export default class Backups {
 				// Path to local config file for this repository
 				// These don't seem to need to be persisted. If you nuke them they
 				// get recreated the next time we connect.
-				`--config-file=/kopia/config/${id}.config`,
+				`--config-file=${kopiaConfigFile(id)}`,
 				// Password for the repository
 				`--password=${password}`,
 			])
@@ -1124,7 +1197,7 @@ export default class Backups {
 			// Path to local config file for this repository
 			// These don't seem to need to be persisted. If you nuke them they
 			// get recreated the next time we connect.
-			`--config-file=/kopia/config/${repository.id}.config`,
+			`--config-file=${kopiaConfigFile(repository.id)}`,
 			// Password for the repository
 			`--password=${repository.password}`,
 			// Force the hostname to 'livinity' so backups always match the same host.
@@ -1205,7 +1278,7 @@ export default class Backups {
 		await this.connect(repositoryId)
 
 		// Run the command
-		return this.kopia([...flags, `--config-file=/kopia/config/${repositoryId}.config`], {onOutput, bypassQueue})
+		return this.kopia([...flags, `--config-file=${kopiaConfigFile(repositoryId)}`], {onOutput, bypassQueue})
 	}
 
 	// Get size of a repository

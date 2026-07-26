@@ -32,15 +32,62 @@ export const KOPIA_MINIMUM_VERSION = '0.23.1'
 const KOPIA_INSTALL_PATH = '/usr/local/bin/kopia'
 
 /**
- * Phase 368.8-10 — the environment every kopia spawn receives.
+ * Phase 368.8-10 — where kopia keeps its OWN state (not the backup data).
  *
- * kopia writes two things OUTSIDE the repository it is managing: a
- * per-repository `*.config` file and a content/metadata cache. livinityd pins
- * both to fixed directories through XDG_CONFIG_HOME / XDG_CACHE_HOME so every
- * spawn shares them regardless of which HOME the service unit happens to have.
+ * kopia writes two things outside the repository it manages: a per-repository
+ * `*.config` file and a content/metadata cache (plus its logs, under the cache).
+ * livinityd pins both to fixed directories through XDG_CONFIG_HOME /
+ * XDG_CACHE_HOME so every spawn shares them regardless of which HOME the
+ * service unit happens to have.
  *
- * Extracted into a pure function so there is exactly ONE place to assert about.
- * See engine.test.ts — "every kopia state path … is under /opt/livos".
+ * ⚠ REVERSAL — do NOT move this back to the root-owned `/kopia` tree.
+ *
+ * `/kopia` was created only by root (`update.sh` Step 1c and
+ * `scripts/install/deploy-livinityd.sh`) and **nothing in this repo ever chowned
+ * it**. livinityd runs as an unprivileged service user (systemd `User=`, Phase
+ * 192) and spawns kopia with a plain execa — no sudo, no container — so every
+ * spawn died before doing any work:
+ *
+ *   Unable to create logs directory: mkdir …/kopia: permission denied
+ *   unable to write config file: … permission denied
+ *
+ * Measured on the operator's box 2026-07-26 on v1.1.13, whose run-user is uid
+ * 1001: both directories were `root root`, and the config directory was EMPTY —
+ * i.e. no kopia repository had ever been created there. USB, NAS, pool and the
+ * 368.5 safety snapshots had all been silently failing since they shipped.
+ *
+ * `/opt/livos` is the tree livinityd already owns: `update.sh:4566-4568` chowns
+ * it to the DERIVED run-user on every update, and livinityd already creates
+ * children there itself (`SAFETY_REPO_PATH`, and `INTERNAL_BACKUP_ROOT` under
+ * Route C / OP-05 — see destination-policy.ts:37-58 for that identical
+ * reasoning). Putting kopia's state here means no installer is on the critical
+ * path, so a box heals on the FIRST update rather than the one after it
+ * (`update.sh` self-replaces via atomic mv, `:1884-1904`; hazard named in-tree
+ * at `:4429-4435`).
+ *
+ * Verified safe: `/opt/livos/kopia` is NOT inside `dataDirectory`
+ * (`/opt/livos/data`), so it is outside both the snapshot source and the
+ * restore-wipe containment bound; and every `rsync --delete` in `update.sh`
+ * targets a specific package subdirectory, never `$LIVOS_DIR` itself, so it
+ * survives updates exactly as `/opt/livos/backups-local` already does.
+ */
+export const KOPIA_STATE_ROOT = '/opt/livos/kopia'
+export const KOPIA_CONFIG_DIR = `${KOPIA_STATE_ROOT}/config`
+export const KOPIA_CACHE_DIR = `${KOPIA_STATE_ROOT}/cache`
+
+/**
+ * The pre-368.8-10 location. Read-only, and referenced from exactly one place:
+ * the one-time migration in `Backups#ensureKopiaStateDirs`. A box whose
+ * livinityd once ran as root could hold working `*.config` files here, and
+ * orphaning those would silently make its repositories unrestorable.
+ */
+export const LEGACY_KOPIA_STATE_ROOT = '/kopia'
+export const LEGACY_KOPIA_CONFIG_DIR = `${LEGACY_KOPIA_STATE_ROOT}/config`
+
+/**
+ * The environment every kopia spawn receives. Pure — extracted so there is
+ * exactly ONE place to assert about (engine.test.ts, "every kopia state path …
+ * is under /opt/livos").
  */
 export type KopiaSpawnEnv = {
 	KOPIA_CHECK_FOR_UPDATES: string
@@ -51,9 +98,20 @@ export type KopiaSpawnEnv = {
 export function kopiaSpawnEnv(): KopiaSpawnEnv {
 	return {
 		KOPIA_CHECK_FOR_UPDATES: 'false',
-		XDG_CACHE_HOME: '/kopia/cache',
-		XDG_CONFIG_HOME: '/kopia/config',
+		XDG_CACHE_HOME: KOPIA_CACHE_DIR,
+		XDG_CONFIG_HOME: KOPIA_CONFIG_DIR,
 	}
+}
+
+/**
+ * The `--config-file=` argument for one repository. Pure.
+ *
+ * These files are cheap: kopia recreates one the next time we connect. They
+ * still must live somewhere writable, because kopia refuses to run when it
+ * cannot write the config it was told to use.
+ */
+export function kopiaConfigFile(repositoryId: string): string {
+	return `${KOPIA_CONFIG_DIR}/${repositoryId}.config`
 }
 
 // sha256 of the official release tarballs (github.com/kopia/kopia v0.23.1 checksums.txt)
@@ -164,9 +222,11 @@ export async function installEngine(logger: EngineLogger): Promise<boolean> {
 		await fs.chmod(staged, 0o755)
 		await fs.rename(staged, KOPIA_INSTALL_PATH)
 
-		// The kopia() wrapper points XDG dirs at /kopia/{config,cache}
-		await fs.mkdir('/kopia/config', {recursive: true}).catch(() => {})
-		await fs.mkdir('/kopia/cache', {recursive: true}).catch(() => {})
+		// The kopia() wrapper points the XDG dirs at KOPIA_STATE_ROOT. Best-effort
+		// here (this branch only runs as root); the authoritative, unprivileged
+		// creator is Backups#ensureKopiaStateDirs, which runs before every spawn.
+		await fs.mkdir(KOPIA_CONFIG_DIR, {recursive: true}).catch(() => {})
+		await fs.mkdir(KOPIA_CACHE_DIR, {recursive: true}).catch(() => {})
 
 		logger.log(`[engine] kopia ${KOPIA_VERSION} installed at ${KOPIA_INSTALL_PATH}`)
 		return true
