@@ -22,7 +22,46 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.1.14-beta.1 (PRERELEASE — Phase 368.8a BKPFIXUP, the UAT
+# CURRENT VALUE = refs/tags/v1.1.14-beta.2 (PRERELEASE — 368.8-10, the SECOND wall the
+#   beta.1 UAT uncovered. beta.1 worked: it got the wizard all the way to
+#   `kopia repository create --path=/opt/livos/backups-internal/<folder>/…`, which proves
+#   livinityd created the root unaided, the pre-flight found it writable, and the probe
+#   accepted a not-yet-existing leaf. Route C is confirmed in the field.
+#
+#   Then it died on the SAME DEFECT CLASS one layer down:
+#     Unable to create logs directory: mkdir /kopia/cache/kopia: permission denied
+#     unable to write config file: … /kopia/config/….config…: permission denied
+#
+#   /kopia/{config,cache} were created ONLY by root (update.sh:1887,
+#   deploy-livinityd.sh:225) and NOTHING in this repo ever chowned them. livinityd runs
+#   unprivileged and spawns kopia with a plain execa pointing XDG_CACHE_HOME /
+#   XDG_CONFIG_HOME at those root-owned directories; engine.ts's mkdir could never
+#   succeed because /kopia sits at the filesystem root, and its .catch(() => {})
+#   swallowed the EACCES. Measured on the operator's box (run-user `everything`, uid
+#   1001 — not bruce, not 1000): all three root:root, and **/kopia/config EMPTY, proving
+#   no kopia repository had ever been created there.** USB, NAS, pool and the 368.5
+#   safety snapshots had all been failing on that box since they shipped. The existing
+#   sudo grant cannot repair it — sudoers.d/livinityd:30 hardcodes uid 1000.
+#
+#   FIX = Route C a second time. kopia's state moved to /opt/livos/kopia/{config,cache},
+#   inside the tree update.sh:4568 already chowns to the DERIVED run-user; livinityd
+#   creates it itself via Backups#ensureKopiaStateDirs, awaited inside kopia() — the one
+#   choke point every spawn passes through, so it also covers boxes whose kopia came from
+#   update.sh and never ran livinityd's self-install. Memoised on success, forgotten on
+#   failure, so a box that gains the permission mid-life repairs itself. Any pre-move
+#   *.config is COPIED across once (never moved, never fatal) so a box where it did work
+#   cannot be silently orphaned. Both installer mkdirs are gone, and $LIVOS_DIR/kopia
+#   joins 368.8-02's pruned chown walks — the content cache is an unbounded blob tree.
+#   Verified, not assumed: every rsync --delete targets a package subdirectory, never
+#   $LIVOS_DIR, so /opt/livos/kopia survives updates like backups-local and data do; and
+#   it is outside dataDirectory, so outside the snapshot source and the restore-wipe bound.
+#
+#   ⚠ STILL NO automated test covers the fix end to end — 142/142 pure unit tests and
+#   tsc 385 prove only that nothing regressed. The box UAT is the ONLY evidence. Do not
+#   promote to stable without it.
+#   ⚠ NOT fixed here and LIVE on that box: files.ts:224 hardcodes uid 1000, so the Files
+#   subsystem silently never starts on a uid≠1000 box. Deferred 368.6 companion defect.)
+# PREVIOUS = refs/tags/v1.1.14-beta.1 (PRERELEASE — Phase 368.8a BKPFIXUP, the UAT
 #   build for the P0 that v1.1.13 shipped broken: the "This device" backup destination
 #   could not succeed on ANY box. Selecting it, naming a folder and pressing Continue
 #   always failed with "LivOS couldn't resolve that location."
@@ -178,4 +217,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.1.14-beta.1
+refs/tags/v1.1.14-beta.2
