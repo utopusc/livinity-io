@@ -31,6 +31,31 @@ export const KOPIA_MINIMUM_VERSION = '0.23.1'
 
 const KOPIA_INSTALL_PATH = '/usr/local/bin/kopia'
 
+/**
+ * Phase 368.8-10 — the environment every kopia spawn receives.
+ *
+ * kopia writes two things OUTSIDE the repository it is managing: a
+ * per-repository `*.config` file and a content/metadata cache. livinityd pins
+ * both to fixed directories through XDG_CONFIG_HOME / XDG_CACHE_HOME so every
+ * spawn shares them regardless of which HOME the service unit happens to have.
+ *
+ * Extracted into a pure function so there is exactly ONE place to assert about.
+ * See engine.test.ts — "every kopia state path … is under /opt/livos".
+ */
+export type KopiaSpawnEnv = {
+	KOPIA_CHECK_FOR_UPDATES: string
+	XDG_CACHE_HOME: string
+	XDG_CONFIG_HOME: string
+}
+
+export function kopiaSpawnEnv(): KopiaSpawnEnv {
+	return {
+		KOPIA_CHECK_FOR_UPDATES: 'false',
+		XDG_CACHE_HOME: '/kopia/cache',
+		XDG_CONFIG_HOME: '/kopia/config',
+	}
+}
+
 // sha256 of the official release tarballs (github.com/kopia/kopia v0.23.1 checksums.txt)
 const KOPIA_SHA256: Record<string, string> = {
 	x64: '416d0f84a3dbb321a8b2d8f0997b1a0a6e915babe79ee76fa6e4d2bd1e1c5178',

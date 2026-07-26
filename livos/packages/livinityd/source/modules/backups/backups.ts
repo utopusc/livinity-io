@@ -9,7 +9,7 @@ import prettyBytes from 'pretty-bytes'
 
 import randomToken from '../../modules/utilities/random-token.js'
 import {captureSystemState, DEFAULT_BACKUP_SCOPE, scopeExclusionPatterns, type BackupScope} from './system-state.js'
-import {detectEngine, installEngine, KOPIA_MINIMUM_VERSION, type EngineStatus} from './engine.js'
+import {detectEngine, installEngine, kopiaSpawnEnv, KOPIA_MINIMUM_VERSION, type EngineStatus} from './engine.js'
 import {writeTerminalRunStatus, type LastRunStatus} from './backup-preflight.js'
 import {
 	SAFETY_REPO_ID,
@@ -516,12 +516,10 @@ export default class Backups {
 		}
 
 		const spawnKopiaProcess = async () => {
-			// Spawn process
-			const env = {
-				KOPIA_CHECK_FOR_UPDATES: 'false',
-				XDG_CACHE_HOME: '/kopia/cache',
-				XDG_CONFIG_HOME: '/kopia/config',
-			}
+			// Spawn process. The env (and therefore where kopia keeps its config and
+			// cache) is owned by engine.ts — see kopiaSpawnEnv's comment for why it is
+			// a single pure function rather than an inline literal.
+			const env = kopiaSpawnEnv()
 			const process = execa('kopia', flags, {env})
 
 			// Store reference to running process

@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import {fileURLToPath} from 'node:url'
 
 import {afterAll, afterEach, beforeEach, expect, test, vi} from 'vitest'
 
@@ -16,9 +17,8 @@ vi.mock('execa', () => ({
 	},
 }))
 
-const {detectEngine, installEngine, isVersionAtLeast, parseKopiaVersion, KOPIA_MINIMUM_VERSION} = await import(
-	'./engine.js'
-)
+const {detectEngine, installEngine, isVersionAtLeast, kopiaSpawnEnv, parseKopiaVersion, KOPIA_MINIMUM_VERSION} =
+	await import('./engine.js')
 
 const logger = {log: () => {}, error: () => {}}
 
@@ -135,6 +135,75 @@ test('installEngine aborts (no install) on sha256 mismatch', async () => {
 	// curl ran, but tar/install must never have been reached.
 	expect(calls.some((c) => c[0] === 'curl')).toBe(true)
 	expect(calls.some((c) => c[0] === 'tar')).toBe(false)
+})
+
+// ── where kopia keeps its state (368.8-10) ───────────────────────────────
+//
+// WHY this is asserted instead of merely written down.
+//
+// /kopia, /kopia/config and /kopia/cache are created ONLY by root — update.sh
+// (Step 1c, the kopia install) and scripts/install/deploy-livinityd.sh — and
+// there is not a single chown of /kopia anywhere in this repo. livinityd runs
+// as an unprivileged service user (systemd `User=`, Phase 192) and spawns kopia
+// with a plain execa, no sudo and no container. So every spawn whose XDG dirs
+// point inside /kopia dies before it does any work.
+//
+// Measured on the operator's box 2026-07-26, running v1.1.13:
+//
+//   $ kopia repository create filesystem --path=…/backups-internal/…
+//   Unable to create logs directory: mkdir /kopia/cache/kopia: permission denied
+//   unable to write config file: … open /kopia/config/190aa42e.config…: permission denied
+//
+//   drwxr-xr-x 4 root root /kopia          # run-user is `everything`, uid 1001
+//   ls -la /kopia/config/ → EMPTY          # ⇒ NO kopia repository has ever been
+//                                          #   created on this box: USB, NAS, pool
+//                                          #   and the 368.5 safety snapshots have
+//                                          #   all been failing here since they shipped
+//
+// /opt/livos, by contrast, is chowned to the DERIVED run-user on every update
+// (update.sh:4566-4568), and livinityd already creates children there itself —
+// SAFETY_REPO_PATH (/opt/livos/backups-local) and INTERNAL_BACKUP_ROOT
+// (/opt/livos/backups-internal, Route C / OP-05). Same reasoning, same answer:
+// kopia's state belongs under /opt/livos, not at the root-owned filesystem top.
+
+const KOPIA_STATE_MUST_LIVE_UNDER = '/opt/livos/'
+
+test('every kopia state path livinityd hands the engine is under /opt/livos', () => {
+	const env = kopiaSpawnEnv()
+
+	// XDG_CACHE_HOME → "Unable to create logs directory … permission denied".
+	// XDG_CONFIG_HOME → "unable to write config file … permission denied".
+	// Asserted as a filtered list rather than two booleans so that a failure
+	// PRINTS the offending path instead of "expected false to be true" — the
+	// point of this test is to name the thing that broke on the box.
+	const statePaths = [env.XDG_CACHE_HOME, env.XDG_CONFIG_HOME]
+	expect(statePaths.filter((statePath) => !statePath.startsWith(KOPIA_STATE_MUST_LIVE_UNDER))).toEqual([])
+
+	// Unchanged — pinned so the extraction cannot quietly drop it.
+	expect(env.KOPIA_CHECK_FOR_UPDATES).toBe('false')
+})
+
+test('no backups source file spells a kopia state path inline', async () => {
+	const directory = path.dirname(fileURLToPath(import.meta.url))
+	const names = (await fs.readdir(directory)).filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'))
+
+	// Regression net for the SECOND half of the same defect: the per-repository
+	// `--config-file=` flags, which do not travel through the env above. Every
+	// kopia state path must be derived from engine.ts's constants so that moving
+	// the root moves all of them at once.
+	const offenders: string[] = []
+	for (const name of names) {
+		// destination-policy.ts lists /kopia in REFUSED_SYSTEM_PREFIXES — i.e. as a
+		// FORBIDDEN backup DESTINATION. That is unrelated to where kopia keeps its
+		// own state, and it stays correct however this move turns out.
+		if (name === 'destination-policy.ts') continue
+		const source = await fs.readFile(path.join(directory, name), 'utf8')
+		for (const [index, line] of source.split('\n').entries()) {
+			if (/\/kopia\/(config|cache)/.test(line)) offenders.push(`${name}:${index + 1}`)
+		}
+	}
+
+	expect(offenders).toEqual([])
 })
 
 test('installEngine cleans up its temporary directory on failure', async () => {
