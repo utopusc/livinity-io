@@ -1419,7 +1419,16 @@ function BackupsSection() {
 	// death, and must never silence the push toward a real destination.
 	const userRepositories = (backupRepositories ?? []).filter((repo) => repo.isSafety !== true)
 	const safetyRepo = (backupRepositories ?? []).find((repo) => repo.isSafety === true)
+	// `hasBackups` drives NAVIGATION (show the destination list rather than the
+	// setup prompt), so a folder on this box counts — the operator did configure a
+	// destination and can restore from it.
 	const hasBackups = userRepositories.length > 0
+	// Phase 368.6 (D5): PROTECTION is a stricter question, and the answer comes
+	// from the server so no surface re-derives it. A destination on the system disk
+	// is a real backup against mistakes, but it dies with the disk it sits on — so
+	// it must not read as "you're covered".
+	const hasRealDestination = userRepositories.some((repo) => repo.isRealDestination === true)
+	const systemDiskOnly = hasBackups && !hasRealDestination
 	const safetyEnabled = safetyEnabledQuery.data !== false
 	const showSafetyCard = !hasBackups && !!safetyRepo && safetyEnabled
 
@@ -1500,20 +1509,43 @@ function BackupsSection() {
 				<TabsContent value='status' className='space-y-4 pt-4'>
 					{hasBackups ? (
 						<>
-							{/* Backup Status */}
-							<div className='rounded-radius-md border border-accent-green/30 bg-accent-green/10 p-4'>
-								<div className='flex items-center gap-3'>
-									<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-accent-green/20'>
-										<TbCheck className='h-5 w-5 text-accent-green' />
-									</div>
-									<div className='flex-1'>
-										<div className='text-body font-medium text-accent-green'>Backups Configured</div>
-										<div className='text-caption text-text-secondary'>
-											{userRepositories.length} backup location{userRepositories.length > 1 ? 's' : ''} configured
+							{/* Backup Status. Phase 368.6 (D5): GREEN requires a destination the
+							    server has PROVEN is off the system disk. Same-disk-only earns the
+							    same honest AMBER as the 368.5 safety card — it is a real backup
+							    against mistakes, but it dies with the disk it sits on, and saying
+							    "Backups Configured" in green there is the exact reassurance this
+							    phase exists not to give. */}
+							{systemDiskOnly ? (
+								<div className='rounded-radius-md border border-amber-500/40 bg-amber-500/10 p-4'>
+									<div className='flex items-center gap-3'>
+										<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-amber-500/20'>
+											<TbShield className='h-5 w-5 text-amber-400' />
+										</div>
+										<div className='flex-1'>
+											<div className='text-body font-medium text-amber-400'>
+												{t('backups-health-system-disk-only-title')}
+											</div>
+											<div className='text-caption text-text-secondary'>
+												{t('backups-health-system-disk-only-description')}
+											</div>
 										</div>
 									</div>
 								</div>
-							</div>
+							) : (
+								<div className='rounded-radius-md border border-accent-green/30 bg-accent-green/10 p-4'>
+									<div className='flex items-center gap-3'>
+										<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-accent-green/20'>
+											<TbCheck className='h-5 w-5 text-accent-green' />
+										</div>
+										<div className='flex-1'>
+											<div className='text-body font-medium text-accent-green'>Backups Configured</div>
+											<div className='text-caption text-text-secondary'>
+												{userRepositories.length} backup location{userRepositories.length > 1 ? 's' : ''} configured
+											</div>
+										</div>
+									</div>
+								</div>
+							)}
 
 							{/* Repository List */}
 							<div className='space-y-2'>

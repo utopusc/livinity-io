@@ -21,6 +21,27 @@ export function getUserFriendlyErrorMessage(error: any): string {
 	}
 
 	// ========================================
+	// Phase 368.6 — destination policy refusals
+	// ========================================
+	// Every one of these is a decision the operator can act on, so each gets its
+	// own sentence rather than a generic failure. The backend logs the same code
+	// alongside the resolved realpath, so a field report can be matched to a line.
+	const destinationRefusals: Array<[string, string]> = [
+		['[destination-not-mounted]', 'backups-error.destination-not-mounted'],
+		['[destination-too-full]', 'backups-error.destination-too-full'],
+		['[permission-denied]', 'backups-error.permission-denied'],
+		['[inside-data-directory]', 'backups-error.inside-data-directory'],
+		['[nested-repository]', 'backups-error.nested-repository'],
+		['[unsupported-root]', 'backups-error.unsupported-root'],
+		['[invalid-folder-name]', 'backups-error.invalid-folder-name'],
+		['[unresolvable-path]', 'backups-error.unresolvable-path'],
+		['[unsupported-filesystem]', 'backups-error.unsupported-filesystem'],
+	]
+	for (const [code, key] of destinationRefusals) {
+		if (message.includes(code)) return t(key)
+	}
+
+	// ========================================
 	// Handle Kopia errors
 	// ========================================
 	// Wrong encryption password

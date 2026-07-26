@@ -23,18 +23,28 @@ export function AddManuallyCard({onClick, label}: {onClick?: () => void; label: 
 export function ServerCard({
 	children,
 	selected = false,
+	// Phase 368.6: a row that exists but cannot be chosen (an internal disk that is
+	// not set up yet). Shown rather than hidden, so "where is my second disk?" has
+	// an answer on screen instead of an unexplained absence.
+	disabled = false,
 	onClick,
 }: {
 	children: React.ReactNode
 	selected?: boolean
+	disabled?: boolean
 	onClick?: () => void
 }) {
 	return (
 		<div
-			className={`mx-auto flex h-[110px] w-[125px] cursor-pointer flex-col items-center justify-center rounded-dash p-2 transition-colors ${
-				selected ? 'border border-brand bg-brand/15' : 'border border-border-default bg-surface-base hover:bg-surface-1'
+			aria-disabled={disabled || undefined}
+			className={`mx-auto flex h-[110px] w-[125px] flex-col items-center justify-center rounded-dash p-2 transition-colors ${
+				disabled
+					? 'cursor-not-allowed border border-border-default bg-surface-base opacity-50'
+					: selected
+						? 'cursor-pointer border border-brand bg-brand/15'
+						: 'cursor-pointer border border-border-default bg-surface-base hover:bg-surface-1'
 			}`}
-			onClick={onClick}
+			onClick={disabled ? undefined : onClick}
 		>
 			{children}
 		</div>

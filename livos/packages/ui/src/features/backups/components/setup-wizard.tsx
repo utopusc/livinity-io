@@ -6,7 +6,7 @@ import {useEffect, useMemo, useState} from 'react'
 import {FormProvider, useForm, useFormContext, type Resolver, type SubmitHandler} from 'react-hook-form'
 import {Trans} from 'react-i18next/TransWithoutContext'
 import {FaRegSave} from 'react-icons/fa'
-import {TbCloudLock, TbExternalLink, TbPassword, TbShoppingBag} from 'react-icons/tb'
+import {TbCloudLock, TbDatabase, TbDeviceDesktop, TbExternalLink, TbPassword, TbShoppingBag} from 'react-icons/tb'
 import {useNavigate} from 'react-router-dom'
 import {useCopyToClipboard} from 'react-use'
 import {z} from 'zod'
@@ -37,6 +37,7 @@ import {useQueryParams} from '@/hooks/use-query-params'
 import {systemAppsKeyed} from '@/providers/apps'
 import {useConfirmation} from '@/providers/confirmation'
 import {useWindowManagerOptional} from '@/providers/window-manager'
+import {trpcReact} from '@/trpc/trpc'
 import {Button} from '@/shadcn-components/ui/button'
 import {
 	DropdownMenu,
@@ -67,6 +68,11 @@ const encryptionSchema = encryptionObjectSchema.refine((d) => d.password === d.c
 	path: ['confirm'],
 })
 
+// Phase 368.6: mirrors the folder-name rule the server enforces
+// (destination-policy.ts isValidInternalFolderName). Kept in sync deliberately —
+// the server is the boundary, this only avoids a pointless round-trip.
+const INTERNAL_FOLDER_NAME = /^[\p{L}\p{N}][\p{L}\p{N} _-]*$/u
+
 const destinationSchema = z.discriminatedUnion('type', [
 	z.object({
 		type: z.literal('nas'),
@@ -77,6 +83,19 @@ const destinationSchema = z.discriminatedUnion('type', [
 		type: z.literal('external'),
 		mountpoint: z.string().min(1),
 	}),
+	z.object({
+		type: z.literal('pool'),
+		rootPath: z.string().min(1),
+	}),
+	z.object({
+		type: z.literal('internal'),
+		folderName: z
+			.string()
+			.trim()
+			.min(1)
+			.max(64)
+			.regex(INTERNAL_FOLDER_NAME, {message: t('backups.internal-folder-name-invalid')}),
+	}),
 ]) satisfies z.ZodType<BackupDestination>
 
 const formSchema = z.object({
@@ -86,6 +105,14 @@ const formSchema = z.object({
 })
 
 type FormValues = z.infer<typeof formSchema>
+
+/**
+ * Phase 368.6 — the display-only pseudo-root for an internal destination. It is
+ * NOT a browsable Files root: the operator names a folder and the server maps it
+ * under a root it owns. Kept in one place so the wizard, the review step and the
+ * path sent to createRepository cannot drift apart.
+ */
+const internalVirtualPath = (folderName: string) => `/ThisDevice/${folderName.trim()}`
 
 // Relaxed schema used during the wizard (destination required, others can be filled later)
 const wizardStepSchema = z.object({
@@ -166,7 +193,10 @@ export function BackupsSetupWizard() {
 
 	const canNext =
 		step === Step.Destination
-			? !!destination
+			? // 368.6: a half-typed folder name must not enable Continue — the server
+				// would refuse it, and the wizard would look broken rather than picky.
+				!!destination &&
+				(destination.type !== 'internal' || INTERNAL_FOLDER_NAME.test(destination.folderName.trim()))
 			: step === Step.Folder
 				? !!folder
 				: step === Step.Encryption
@@ -217,6 +247,9 @@ export function BackupsSetupWizard() {
 		}
 		setStep((s) => {
 			let target = Math.min(s + 1, Step.Review)
+			// 368.6: an internal destination already knows its full path, so there is
+			// nothing to browse — hop straight over the Folder step.
+			if (skipFolderStep && s === Step.Destination) target = showExclusionsStep ? Step.Exclusions : Step.Encryption
 			if (!showExclusionsStep && s === Step.Folder) target = Step.Encryption
 			return target
 		})
@@ -226,15 +259,31 @@ export function BackupsSetupWizard() {
 		setStep((s) => {
 			let target = Math.max(s - 1, Step.Destination)
 			if (!showExclusionsStep && s === Step.Encryption) target = Step.Folder
+			// …and back over it again, so Back from Exclusions/Encryption lands on the
+			// destination tab rather than a folder picker with no root to browse.
+			if (skipFolderStep && target === Step.Folder) target = Step.Destination
 			return target
 		})
 
 	// When destination changes, reset dependent fields (folder/encryption/frequency) using reset
 	const handleDestinationChange = (dest: BackupDestination) => {
+		// 368.6: an internal destination is edited a KEYSTROKE at a time (the operator
+		// types a folder name), so a full reset per change would wipe the form under
+		// them and fight the input. Only a change of destination TYPE resets.
+		if (destination?.type === dest.type) {
+			form.setValue('destination', dest, {shouldValidate: true, shouldDirty: true})
+			if (dest.type === 'internal') {
+				form.setValue('folder', internalVirtualPath(dest.folderName), {shouldValidate: true})
+			}
+			return
+		}
+
 		form.reset(
 			{
 				destination: dest,
-				folder: '',
+				// An internal destination has no folder to browse — its path is fully
+				// determined by the name, so fill it in and skip that step.
+				folder: dest.type === 'internal' ? internalVirtualPath(dest.folderName) : '',
 				encryption: {password: '', confirm: ''},
 			},
 			{
@@ -269,8 +318,25 @@ export function BackupsSetupWizard() {
 
 	const folderRootPath = React.useMemo(() => {
 		if (!destination) return undefined
-		return destination.type === 'nas' ? destination.rootPath : destination.mountpoint
+		switch (destination.type) {
+			case 'nas':
+				return destination.rootPath
+			case 'external':
+				return destination.mountpoint
+			// 368.6: the pool browses like any other mounted root.
+			case 'pool':
+				return destination.rootPath
+			// An internal destination is NOT browsable — the operator named a folder,
+			// and it lands under a root LivOS owns. There is nothing to pick.
+			case 'internal':
+				return undefined
+		}
 	}, [destination])
+
+	// 368.6: an internal destination skips the Folder step entirely — its path is
+	// already fully determined by the name typed on the destination step.
+	const skipFolderStep = destination?.type === 'internal'
+	const internalFolderPath = destination?.type === 'internal' ? `/ThisDevice/${destination.folderName.trim()}` : ''
 
 	// Clear sensitive encryption fields on unmount (defense-in-depth)
 	React.useEffect(() => {
@@ -402,8 +468,22 @@ export function BackupsSetupWizard() {
 }
 
 // ---------------------------------------------
-// Step 0 — Destination (NAS or External Drive)
+// Step 0 — Destination (NAS, External Drive, This device, Private Cloud)
 // ---------------------------------------------
+
+// Phase 368.6: "This device" is deliberately NOT called "This Livinity" — that
+// would collide with the "Livinity Private Cloud" tab sitting right beside it.
+type DestinationTab = 'nas' | 'external' | 'this-device' | 'livinity-private-cloud'
+
+/** `X free of Y`, or null when the reading is missing/degenerate (row gets disabled). */
+function freeOfTotal(root?: {size?: number; free?: number}): string | null {
+	if (!root || typeof root.size !== 'number' || typeof root.free !== 'number') return null
+	if (!Number.isFinite(root.size) || !Number.isFinite(root.free) || root.size <= 0) return null
+	return t('backups.internal-free-of-total', {
+		free: formatFilesystemSize(root.free),
+		total: formatFilesystemSize(root.size),
+	})
+}
 
 function DestinationStep({
 	onChangeDestination,
@@ -425,12 +505,14 @@ function DestinationStep({
 	const initialTabParam = params.get('backups-setup-tab')
 	const isMobile = useIsMobile()
 
-	const [tab, setTab] = useState<'nas' | 'external' | 'livinity-private-cloud'>(
+	const [tab, setTab] = useState<DestinationTab>(
 		initialTabParam === 'external'
 			? 'external'
-			: initialTabParam === 'livinity-private-cloud'
-				? 'livinity-private-cloud'
-				: 'nas',
+			: initialTabParam === 'this-device'
+				? 'this-device'
+				: initialTabParam === 'livinity-private-cloud'
+					? 'livinity-private-cloud'
+					: 'nas',
 	)
 	const [isAddNasOpen, setAddNasOpen] = useState(false)
 
@@ -440,7 +522,33 @@ function DestinationStep({
 		if (dest?.type === 'nas' || dest?.type === 'external') {
 			setTab(dest.type)
 		}
+		// 368.6: pool and internal both live on the "This device" tab. Without this,
+		// Back from the next step would bounce an internal selection to the NAS tab
+		// and the operator would think their choice was lost.
+		if (dest?.type === 'pool' || dest?.type === 'internal') {
+			setTab('this-device')
+		}
 	}, [dest?.type])
+
+	// 368.6: the roots this box can actually accept, derived server-side from the
+	// SAME constants the destination predicate uses — a tab that offers a root
+	// addRepository then refuses is a dead-end wizard.
+	const {data: destinationRoots, isLoading: isLoadingRoots} = trpcReact.backups.getDestinationRoots.useQuery(
+		undefined,
+		{staleTime: 15_000},
+	)
+	const poolRoot = destinationRoots?.find((root) => root.kind === 'pool')
+	const internalRoot = destinationRoots?.find((root) => root.kind === 'internal')
+
+	// Internal disks that exist but are not usable as a destination yet. This query
+	// THROWS by design when the OS disk cannot be resolved (root-disk.ts fails
+	// closed rather than listing every disk), so an error must render as an
+	// explicit "couldn't list drives" state, never as an empty grid that reads as
+	// "you have no other disks".
+	const {data: eligibleDrives, isError: eligibleDrivesFailed} = trpcReact.storagePool.listEligibleDrives.useQuery(
+		undefined,
+		{staleTime: 30_000, retry: false},
+	)
 
 	// NAS sources: show hosts that have at least one mounted share
 	const {shares, isLoadingShares, refetchShares} = useNetworkStorage({suppressNavigateOnAdd: true})
@@ -455,7 +563,7 @@ function DestinationStep({
 
 	const currentDest = form.watch('destination')
 
-	const switchTab = (tab: 'nas' | 'external' | 'livinity-private-cloud') => {
+	const switchTab = (tab: DestinationTab) => {
 		setTab(tab)
 		const search = addLinkSearchParams({'backups-setup-tab': tab})
 		// Update URL without navigating
@@ -475,7 +583,9 @@ function DestinationStep({
 										? t('backups-setup-livinity-or-nas')
 										: tab === 'external'
 											? t('external-drive')
-											: t('backups-setup-livinity-private-cloud')}
+											: tab === 'this-device'
+												? t('backups-setup-this-device')
+												: t('backups-setup-livinity-private-cloud')}
 								</span>
 								<ChevronDown className='h-3 w-3' />
 							</Button>
@@ -493,6 +603,12 @@ function DestinationStep({
 									<div className='text-12 text-text-tertiary'>{t('backups-setup-external-description')}</div>
 								</div>
 							</DropdownMenuItem>
+							<DropdownMenuItem onSelect={() => switchTab('this-device')}>
+								<div className='flex flex-col'>
+									<div className='text-14 font-medium'>{t('backups-setup-this-device')}</div>
+									<div className='text-12 text-text-tertiary'>{t('backups-setup-this-device-description')}</div>
+								</div>
+							</DropdownMenuItem>
 							<DropdownMenuItem onSelect={() => switchTab('livinity-private-cloud')}>
 								<div className='flex flex-col'>
 									<div className='text-14 font-medium'>{t('backups-setup-livinity-private-cloud')}</div>
@@ -507,11 +623,14 @@ function DestinationStep({
 					options={[
 						{id: 'nas', label: t('backups-setup-livinity-or-nas')},
 						{id: 'external', label: t('external-drive')},
+						// Third, never the initial tab: a destination on this box is the
+						// fallback when there is no drive and no NAS, not the default answer.
+						{id: 'this-device', label: t('backups-setup-this-device')},
 						{id: 'livinity-private-cloud', label: t('backups-setup-livinity-private-cloud')},
 					]}
 					value={tab}
 					onChange={(v) => {
-						switchTab(v as 'nas' | 'external' | 'livinity-private-cloud')
+						switchTab(v as DestinationTab)
 					}}
 				/>
 			)}
@@ -615,6 +734,111 @@ function DestinationStep({
 								})}
 						</>
 					)}
+				</div>
+			) : tab === 'this-device' ? (
+				<div className='space-y-3'>
+					<div className='grid grid-cols-[repeat(auto-fill,125px)] gap-3'>
+						{isLoadingRoots ? (
+							<LoadingCard />
+						) : (
+							<>
+								{/* Storage pool — offered only when one is registered. */}
+								{poolRoot?.available ? (
+									<ServerCard
+										selected={currentDest?.type === 'pool'}
+										onClick={() => onChangeDestination({type: 'pool', rootPath: '/Pool'})}
+									>
+										<div className='mb-2 flex h-12 w-12 items-center justify-center'>
+											<TbDatabase className='size-11 text-text-secondary' strokeWidth={1.5} />
+										</div>
+										<div className='w-full truncate text-center text-[12px]'>{t('backups.internal-pool')}</div>
+										<div className='w-full truncate text-center text-[11px] text-text-tertiary'>
+											{freeOfTotal(poolRoot) ?? t('backups.space-unreadable')}
+										</div>
+									</ServerCard>
+								) : null}
+
+								{/* The system disk. Always offerable, never GREEN. */}
+								<ServerCard
+									selected={currentDest?.type === 'internal'}
+									onClick={() => {
+										if (!internalRoot?.available) return
+										onChangeDestination({
+											type: 'internal',
+											folderName:
+												currentDest?.type === 'internal' ? currentDest.folderName : t('backups.internal-system-disk'),
+										})
+									}}
+								>
+									<div className='mb-2 flex h-12 w-12 items-center justify-center'>
+										<TbDeviceDesktop className='size-11 text-text-secondary' strokeWidth={1.5} />
+									</div>
+									<div className='flex w-full items-center justify-center gap-1'>
+										<span className='size-1.5 shrink-0 rounded-full bg-amber-500' aria-hidden='true' />
+										<span className='truncate text-[12px]'>{t('backups.internal-system-disk')}</span>
+									</div>
+									<div className='w-full truncate text-center text-[11px] text-text-tertiary'>
+										{freeOfTotal(internalRoot) ?? t('backups.space-unreadable')}
+									</div>
+								</ServerCard>
+
+								{/* Internal disks that exist but aren't usable yet — shown greyed with
+								    a reason rather than hidden, so "where is my second disk?" has an
+								    answer on screen. */}
+								{(eligibleDrives ?? []).map((drive) => (
+									<ServerCard key={`unmounted-${drive.id}`} selected={false} disabled onClick={() => {}}>
+										<div className='mb-2 flex h-12 w-12 items-center justify-center opacity-40'>
+											<TbDatabase className='size-11 text-text-tertiary' strokeWidth={1.5} />
+										</div>
+										<div className='w-full truncate text-center text-[12px] text-text-tertiary'>
+											{drive.name || t('unknown')}
+										</div>
+										<div className='w-full truncate text-center text-[11px] text-text-tertiary'>
+											{t('backups.internal-unmounted')}
+										</div>
+									</ServerCard>
+								))}
+							</>
+						)}
+					</div>
+
+					{/* listEligibleDrives fails CLOSED (it throws rather than list a disk it
+					    cannot vouch for), so say so instead of rendering an empty grid that
+					    reads as "there is nothing else here". */}
+					{eligibleDrivesFailed ? (
+						<p className='text-12 text-text-tertiary'>{t('backups.drives-unreadable')}</p>
+					) : (eligibleDrives ?? []).length > 0 ? (
+						<p className='text-12 text-text-tertiary'>{t('backups.internal-unmounted-reason')}</p>
+					) : null}
+
+					{/* Folder NAME, not a path browser: free-text host paths need privileges
+					    livinityd does not have, so the operator names a folder and the server
+					    places it under a root it owns. */}
+					{currentDest?.type === 'internal' ? (
+						<div className='space-y-2 rounded-12 border border-border-default bg-black/10 p-3'>
+							<label className='block text-13 text-text-secondary' htmlFor='backups-internal-folder-name'>
+								{t('backups.internal-folder-name-label')}
+							</label>
+							<Input
+								id='backups-internal-folder-name'
+								value={currentDest.folderName}
+								onValueChange={(value) => onChangeDestination({type: 'internal', folderName: value})}
+								autoComplete='off'
+								spellCheck={false}
+							/>
+							{currentDest.folderName.trim().length > 0 &&
+							!INTERNAL_FOLDER_NAME.test(currentDest.folderName.trim()) ? (
+								<p className='text-12 text-destructive2'>{t('backups.internal-folder-name-invalid')}</p>
+							) : null}
+							<p className='text-12 text-text-tertiary'>{t('backups.internal-system-disk-note')}</p>
+						</div>
+					) : currentDest?.type === 'pool' && poolRoot && !poolRoot.offSystemDisk ? (
+						// An all-on-the-OS-disk pool is still a destination, but it is not the
+						// separate hardware the word "pool" implies. Say so before they pick it.
+						<p className='text-12 text-text-tertiary'>{t('backups.internal-pool-same-disk-note')}</p>
+					) : currentDest?.type === 'pool' ? (
+						<p className='text-12 text-text-tertiary'>{t('backups.internal-pool-note')}</p>
+					) : null}
 				</div>
 			) : tab === 'livinity-private-cloud' ? (
 				<div className='flex flex-col items-center justify-center gap-7 rounded-20 border border border-border-default bg-black/10 px-3 pb-10 pt-8'>
@@ -808,27 +1032,48 @@ function EncryptionStep() {
 // ---------------------------------------------
 
 function ReviewStep({values}: {values: FormValues}) {
-	let pathOnly = values.folder
-	if (values.destination.type === 'nas') {
-		const hostRoot = `/Network/${values.destination.host}`
-		if (pathOnly.startsWith(hostRoot)) {
-			pathOnly = pathOnly.slice(hostRoot.length) || '/'
-			if (!pathOnly.startsWith('/')) pathOnly = `/${pathOnly}`
-		}
-	} else {
-		const mountRoot = values.destination.mountpoint
-		if (mountRoot && pathOnly.startsWith(mountRoot)) {
-			pathOnly = pathOnly.slice(mountRoot.length) || '/'
-			if (!pathOnly.startsWith('/')) pathOnly = `/${pathOnly}`
-		}
+	// 368.6: four destination kinds now, so the root each path is shown relative to
+	// is per-kind. The previous `else` branch read `.mountpoint` unconditionally,
+	// which no longer exists on every variant.
+	const stripRoot = (path: string, root: string) => {
+		if (!root || !path.startsWith(root)) return path
+		const stripped = path.slice(root.length) || '/'
+		return stripped.startsWith('/') ? stripped : `/${stripped}`
 	}
 
-	let locationCombined: string
+	let pathOnly = values.folder
+	switch (values.destination.type) {
+		case 'nas':
+			pathOnly = stripRoot(pathOnly, `/Network/${values.destination.host}`)
+			break
+		case 'external':
+			pathOnly = stripRoot(pathOnly, values.destination.mountpoint)
+			break
+		case 'pool':
+			pathOnly = stripRoot(pathOnly, values.destination.rootPath)
+			break
+		case 'internal':
+			// Nothing to strip — the operator named this folder, so show the name.
+			pathOnly = values.destination.folderName.trim()
+			break
+	}
+
 	const {deviceType} = useNetworkDeviceType(values.destination.type === 'nas' ? values.destination.rootPath : '')
-	if (values.destination.type === 'nas') {
-		locationCombined = `${deviceType === 'livinity' ? t('livinity') : t('nas')} · ${values.destination.host} · ${pathOnly}`
-	} else {
-		locationCombined = `${t('external-drive')} · ${getLastPathSegment(values.destination.mountpoint)} · ${pathOnly}`
+
+	let locationCombined: string
+	switch (values.destination.type) {
+		case 'nas':
+			locationCombined = `${deviceType === 'livinity' ? t('livinity') : t('nas')} · ${values.destination.host} · ${pathOnly}`
+			break
+		case 'external':
+			locationCombined = `${t('external-drive')} · ${getLastPathSegment(values.destination.mountpoint)} · ${pathOnly}`
+			break
+		case 'pool':
+			locationCombined = `${t('backups.internal-pool')} · ${pathOnly}`
+			break
+		case 'internal':
+			locationCombined = `${t('backups-setup-this-device')} · ${t('backups.internal-system-disk')} · ${pathOnly}`
+			break
 	}
 
 	const [showPw, setShowPw] = useState(false)

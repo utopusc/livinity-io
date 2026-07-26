@@ -9,6 +9,12 @@ import {getUserFriendlyErrorMessage} from '../utils/error-messages'
 export type BackupDestination =
 	| {type: 'nas'; host: string; rootPath: string} // e.g. /Network/<host>
 	| {type: 'external'; mountpoint: string} // partition mountpoint
+	// Phase 368.6: somewhere on this box. `pool` browses the storage pool like any
+	// other folder; `internal` does NOT browse — the operator names a folder and it
+	// lands under a root LivOS owns, because free-text host paths need privileges
+	// livinityd does not have.
+	| {type: 'pool'; rootPath: string} // /Pool
+	| {type: 'internal'; folderName: string} // /ThisDevice/<folderName>
 
 export type SetupBackupInput = {
 	destination: BackupDestination

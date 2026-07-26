@@ -1,7 +1,22 @@
 import {APPS_PATH, EXTERNAL_STORAGE_PATH, NETWORK_STORAGE_PATH} from '@/features/files/constants'
+import {POOL_ROOT, THIS_DEVICE_ROOT} from '@/features/backups/utils/backup-location-helpers'
 
 // File name used by Livinity backups within a repository directory
 export const BACKUP_FILE_NAME = 'Livinity Backup.backup'
+
+/**
+ * Phase 368.6 — virtual roots whose SECOND segment names the destination rather
+ * than being part of the path within it (`/Network/<host>`, `/External/<drive>`,
+ * `/ThisDevice/<folder>`). Previously this was a two-way check written out at
+ * three separate call sites; a destination missing from it silently formats with
+ * its root segment showing, e.g. "ThisDevice/Nightly/" instead of "Nightly/".
+ *
+ * /Pool is deliberately NOT here: the pool is the device, and everything after
+ * /Pool is genuinely a path inside it.
+ */
+const DEVICE_ROOTED_PREFIXES = [NETWORK_STORAGE_PATH, EXTERNAL_STORAGE_PATH, THIS_DEVICE_ROOT]
+
+const isDeviceRooted = (path: string) => DEVICE_ROOTED_PREFIXES.some((prefix) => path.startsWith(prefix))
 
 // Returns a display path starting from the device name up to the parent directory
 // containing the Livinity backup file, always ending with a trailing slash.
@@ -14,7 +29,7 @@ export function getDisplayRepositoryPath(path: string): string {
 
 	// For /Network/<device>/... or /External/<device>/..., the device starts at index 1
 	let startIndex = 0
-	if (path.startsWith(NETWORK_STORAGE_PATH) || path.startsWith(EXTERNAL_STORAGE_PATH)) {
+	if (isDeviceRooted(path) || path.startsWith(POOL_ROOT)) {
 		startIndex = 1
 	}
 
@@ -60,7 +75,7 @@ export function getRelativePathFromRoot(path: string, root: string): string {
 // Returns empty string if not applicable.
 export function getRepositoryDisplayName(path: string): string {
 	const segments = path.split('/').filter(Boolean)
-	if (path.startsWith(NETWORK_STORAGE_PATH) || path.startsWith(EXTERNAL_STORAGE_PATH)) {
+	if (isDeviceRooted(path)) {
 		return segments[1] || ''
 	}
 	return ''
@@ -76,8 +91,10 @@ export function getRepositoryRelativePath(path: string): string {
 
 	// Skip root and device segments when present
 	let startIndex = 0
-	if (path.startsWith(NETWORK_STORAGE_PATH) || path.startsWith(EXTERNAL_STORAGE_PATH)) {
-		startIndex = 2 // skip 'Network' or 'External' and the device name
+	if (isDeviceRooted(path)) {
+		startIndex = 2 // skip the root segment and the device name
+	} else if (path.startsWith(POOL_ROOT)) {
+		startIndex = 1 // the pool IS the device; everything after /Pool is a real path
 	}
 
 	// Cut off the backup file if present at the end

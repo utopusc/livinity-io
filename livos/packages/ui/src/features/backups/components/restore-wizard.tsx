@@ -509,8 +509,17 @@ function RepositoryStep({
 									onClick={() => {
 										// We don't allow opening the browser by clicking the input if it is blank (user must click the dropdown to choose nas/external)
 										if (!manualPath) return
-										// Default to Network if no path is set, otherwise determine from current path
-										const root = manualPath?.startsWith('/Network') ? '/Network' : '/External'
+										// Phase 368.6: four roots now, not two. A /Pool path opened at
+										// /External would browse the wrong tree entirely, and /ThisDevice
+										// is not browsable at all — the operator named that folder, there
+										// is nothing to pick, so clicking the field does nothing rather
+										// than opening an empty browser.
+										if (manualPath.startsWith('/ThisDevice')) return
+										const root = manualPath.startsWith('/Network')
+											? '/Network'
+											: manualPath.startsWith('/Pool')
+												? '/Pool'
+												: '/External'
 										setBrowserRoot(root)
 										setBrowserOpen(true)
 									}}
