@@ -443,7 +443,20 @@ export default router({
 			return ctx.user.enable2fa(input.totpUri)
 		}),
 
-	is2faEnabled: publicProcedure.query(async ({ctx}) => {
+	// Phase 368.8-11 — privateProcedure, NOT public. ctx.currentUser is populated
+	// ONLY by the isAuthenticated middleware, which runs for privateProcedure and
+	// never for a publicProcedure; createContextExpress leaves it undefined
+	// (context.ts:95). Because `user.is2faEnabled` is in httpOnlyPaths
+	// (server/trpc/common.ts:92) EVERY UI call rides HTTP, so as a publicProcedure
+	// this could never see who was asking and always answered from the legacy
+	// single-owner YAML store. Measured on the operator's box 2026-07-26: Settings
+	// showed "Disabled" while Postgres held totp_enabled=t, so Enable was offered
+	// and then rejected by enable2fa's alreadyEnabled guard before verifying the
+	// code. The two-branch body below is unchanged: on a legacy no-DB box
+	// isAuthenticated sets legacySingleUser with currentUser undefined, so the
+	// ctx.user.is2faEnabled() YAML path still runs. Pinned by
+	// routes-2fa-enabled-transport.test.ts.
+	is2faEnabled: privateProcedure.query(async ({ctx}) => {
 		if (ctx.currentUser) return isUserTotpEnabled(ctx.currentUser.id)
 		return ctx.user.is2faEnabled()
 	}),

@@ -34,7 +34,17 @@ export function use2fa(onEnableChange?: (enabled: boolean) => void) {
 		},
 	})
 
-	const is2faEndabledQ = trpcReact.user.is2faEnabled.useQuery()
+	// Phase 368.8-11 — this hook deliberately does NOT query user.is2faEnabled.
+	// It used to, ungated, which meant EVERY consumer subscribed to that read —
+	// including onboarding's account-step.tsx:100, which calls use2fa() while the
+	// box is still unauthenticated (setup-wizard-v2.tsx:56: "covers unauth steps
+	// 0-1 before AccountStep registers + logs in"). Since user.is2faEnabled is now
+	// a privateProcedure (it must be, to see WHICH user is asking), a pre-auth
+	// subscriber would 401 on every fresh-box onboarding. Only one consumer ever
+	// read the value — routes/settings/2fa.tsx — and it now queries it directly.
+	// The two invalidate() calls above are intentionally KEPT: they are correct no
+	// matter who holds the query, and without them the Settings card would show a
+	// stale enabled/disabled state right after an enrol.
 
 	// TOTP URI
 	const [totpUri, setTotpUri] = useState('')
@@ -72,7 +82,6 @@ export function use2fa(onEnableChange?: (enabled: boolean) => void) {
 	}, [onEnableChange])
 
 	return {
-		isEnabled: is2faEndabledQ.data,
 		enable,
 		disable,
 		totpUri,
