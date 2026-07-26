@@ -22,7 +22,66 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.1.14-beta.2 (PRERELEASE — 368.8-10, the SECOND wall the
+# CURRENT VALUE = refs/tags/v1.1.14-beta.3 (PRERELEASE — the 368.8a P0 is CONFIRMED FIXED
+#   in the field on beta.2; this build adds two findings the operator reported while
+#   testing it. Cut so an AUTH change is seen running once before it reaches the fleet.
+#
+#   ✅ P0 PROVEN ON HARDWARE (beta.2, operator's box, journal verbatim):
+#     Accepted backup destination /ThisDevice/System disk/… -> /opt/livos/backups-internal/…
+#     Creating repository 190aa42e → Connected → Creating snapshot
+#     Clearing notification: backups-failing:190aa42e
+#     Backed up … size after backup: Used 3.22 GB of 966 GB
+#   Route C held end to end: livinityd created /opt/livos/backups-internal AND
+#   /opt/livos/kopia unaided, no installer, one update. As a bonus the 368.5 safety
+#   repo came alive for the first time on that box (3.1 GB, local-safety.config now
+#   exists) — before 368.8-10 no kopia repository had EVER been created there, so
+#   USB / NAS / pool / safety were all silently broken too.
+#
+#   368.8-11 — THE 2FA SETTINGS LIE, and it is fleet-wide, not box-specific.
+#   Operator: "2fa çalışmıyor, enable diyorum, QR okutup kodu giriyorum, kabul etmiyor."
+#   The code was never wrong. Settings showed 2FA as Disabled while the DB had
+#   totp_enabled=t, so enable2fa threw "2FA is already enabled" (routes.ts:426-431)
+#   before verifying anything. Cause: `is2faEnabled` was a publicProcedure whose answer
+#   depends on ctx.currentUser, but currentUser is only ever populated by the
+#   isAuthenticated middleware — which never runs for a publicProcedure — and the
+#   procedure is in httpOnlyPaths (common.ts:92), so EVERY UI call rides HTTP where
+#   createContextExpress does not set it. It therefore always answered from the legacy
+#   single-owner YAML store, which returns a hard false on a DB box. **Settings has
+#   misreported 2FA as "Disabled" on every DB-backed box since Phase 328/IDENT-05.**
+#   Fix: privateProcedure, plus the is2faEnabled read moved OUT of the use2fa hook into
+#   settings/2fa.tsx — onboarding's account-step.tsx mounts that hook while still
+#   unauthenticated, so leaving the query in it would have logged four spurious
+#   UNAUTHORIZED per fresh-box install. The legacy no-DB YAML branch is untouched.
+#   ⚠ DELIBERATELY NOT FIXED HERE: createContextExpress still never populates
+#   currentUser, so the same class of bug can bite any other publicProcedure that reads
+#   it. Fixing it centrally changes behaviour for isLoggedIn (routes.ts:321, a
+#   publicProcedure that SIGNS A TOKEN at :343-344), webauthnLoginOptions (:624) and
+#   loginWithPasskey (:657). That blast radius needs its own phase and a security audit.
+#
+#   368.8-12 — the floating island now carries LivOS's own visual identity. Its radii
+#   moved onto the semantic scale in tailwind.config.ts:100-106 (minimized 22 → 20
+#   radius-xl, which a 40px-tall box already clamped to anyway; expanded 32 → 28
+#   radius-3xl). It gained a wallpaper-derived brand tint, applied as backgroundImage
+#   rather than backgroundColor because --surface-3 is rgba(0,0,0,0.12) and overwriting
+#   background-color would have dropped that panel and left a 6% wash over the bare
+#   wallpaper. The colour comes from --color-brand, which wallpaper.tsx:220-222 sets at
+#   runtime, so the island follows whatever wallpaper the operator has chosen — the same
+#   token the backups island's own progress gradient already used. Backdrop blur was
+#   added because at 12% opacity the island showed the wallpaper through it unblurred,
+#   which cost legibility on busy images. No dimension changed, so the four Files
+#   islands mounted on the same component keep one silhouette.
+#
+#   ⚠ WHY A THIRD BETA. 368.8-11 is an AUTH change with ZERO real-browser verification:
+#   tsc 385, user 33/33, stepup 19/19, backups 142/142 and an unchanged UI vitest
+#   baseline prove only that nothing regressed. Two claims need the box before stable:
+#   Settings must read "Enabled" for a user whose DB row says so, and a fresh-box
+#   onboarding must log NO "Failed to verify token" from this route. Shipping an auth
+#   patch to every box without seeing it run once is precisely the failure mode this
+#   whole phase exists to remove.
+#   ⚠ STILL LIVE, NOT FIXED: files.ts:224 hardcodes uid 1000. The operator's run-user is
+#   `everything`, uid 1001, so the Files subsystem may silently never start there.
+#   Deferred 368.6 companion defect, tracked separately.)
+# PREVIOUS = refs/tags/v1.1.14-beta.2 (PRERELEASE — 368.8-10, the SECOND wall the
 #   beta.1 UAT uncovered. beta.1 worked: it got the wizard all the way to
 #   `kopia repository create --path=/opt/livos/backups-internal/<folder>/…`, which proves
 #   livinityd created the root unaided, the pre-flight found it writable, and the probe
@@ -217,4 +276,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.1.14-beta.2
+refs/tags/v1.1.14-beta.3
