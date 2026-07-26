@@ -159,7 +159,12 @@ type BaseDirectory = '/Home' | '/Trash' | '/Apps' | '/External' | '/Backups' | '
 // /mnt/pool (the mergerfs union), NOT a {dataDir} subdir (the mounted pool IS the
 // directory). NEVER a /mnt/diskN data branch or the /mnt/parity1 parity disk — only
 // the union mountpoint is ever exposed through the Files base-dir surface (T-318-21).
-const POOL_MOUNTPOINT = '/mnt/pool'
+// Phase 368.6: moved to the leaf constants module so the backups destination
+// policy can read the SAME value without importing this file (which would drag
+// the native drivelist binding into the backups module graph). Re-exported here
+// so existing references keep working.
+export {POOL_MOUNTPOINT} from '../../constants.js'
+import {POOL_MOUNTPOINT} from '../../constants.js'
 
 type ViewPreferences = {
 	view: 'icons' | 'list'

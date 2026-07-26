@@ -97,6 +97,13 @@ export interface RootDiskDeps {
 	// `lsblk -d -n -o NAME,RM` → map of disk name → removable (RM===1). getBlockDevices
 	// does not project RM, so this is a supplementary read (D-10 gate 3).
 	listRemovableFlags(): Promise<Record<string, boolean>>
+	// Phase 368.6 (D4): `findmnt -no SOURCE --target <path>` → the source device of
+	// the filesystem GOVERNING an arbitrary path, which `findmntSource` cannot
+	// answer (it requires the path to BE a mountpoint). Backup destinations are
+	// ordinary folders inside a mount, so resolving which physical disk one lands
+	// on needs --target. OPTIONAL: absent ⇒ diskForPath() resolves nothing, which
+	// callers treat as "cannot prove a separate disk" (fail closed).
+	findmntSourceForPath?(path: string): Promise<string | null>
 }
 
 // Thrown when a disk cannot be proven safe (OS resolution failed/empty) or when
@@ -151,6 +158,17 @@ const liveDeps: RootDiskDeps = {
 			transport: device.transport,
 		}))
 	},
+	async findmntSourceForPath(path: string) {
+		try {
+			// --target resolves the mount governing an arbitrary path (unlike the
+			// bare form, which needs the argument to be a mountpoint itself).
+			const {stdout} = await $`findmnt -no SOURCE --target ${path}`
+			const first = stdout.split('\n')[0]?.trim()
+			return first && first.length > 0 ? first : null
+		} catch {
+			return null
+		}
+	},
 	async listRemovableFlags() {
 		try {
 			// -d = disks only, -n = no header, RM = removable flag (0/1).
@@ -199,6 +217,32 @@ async function diskForMount(mountpoint: string, deps: RootDiskDeps): Promise<str
 	} catch {
 		return []
 	}
+	return disksForSource(source, deps)
+}
+
+/**
+ * Phase 368.6 (D4) — the same resolution for an arbitrary PATH rather than a
+ * mountpoint, so a backup destination inside a mount can be traced to the
+ * physical disk(s) underneath it.
+ *
+ * This exists because `st_dev` is wrong exactly where it matters: /mnt/pool is a
+ * mergerfs FUSE mount and always reports a distinct device number, so an st_dev
+ * comparison would report "different disk" even when every pool branch is on the
+ * OS disk. Same fail-safe contract as diskForMount: [] contributes NOTHING, and
+ * callers treat an empty result as "cannot prove", never as "proven separate".
+ */
+export async function diskForPath(path: string, deps: RootDiskDeps = liveDeps): Promise<string[]> {
+	if (!deps.findmntSourceForPath) return []
+	let source: string | null
+	try {
+		source = await deps.findmntSourceForPath(path)
+	} catch {
+		return []
+	}
+	return disksForSource(source, deps)
+}
+
+async function disksForSource(source: string | null, deps: RootDiskDeps): Promise<string[]> {
 	if (!source) return []
 
 	let ancestors: string[]
