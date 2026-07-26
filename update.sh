@@ -712,6 +712,52 @@ LIVOS_DIR="/opt/livos"
 LIV_DIR="/opt/liv"
 REPO_URL="https://github.com/utopusc/livinity-io.git"
 
+# ── Phase 368.8 (Route C follow-through): chown /opt/livos WITHOUT walking backups ──
+# 368.8 moved INTERNAL_BACKUP_ROOT to /opt/livos/backups-internal so livinityd can
+# create it unaided (see destination-policy.ts:37-58). The bill: the two `chown -R`
+# walks below (Step 7 and the Phase 202-10 ownership hook) would re-own every kopia
+# blob in an operator's backup repository, twice per update, on a tree with no size
+# bound — the safety repo is capped by its retention policy, a "This device"
+# destination is not. Prune both backup roots and re-own the root entries themselves
+# non-recursively, so ownership still converges and the walk stays cheap.
+#
+# PERFORMANCE optimisation, not a correctness requirement — an unpruned walk is slow,
+# never wrong. It also lands one update late (update.sh self-replaces atomically at
+# :1884-1904 and never re-execs the fresh clone; the hazard is named in-tree at
+# :4429-4435), which is harmless: no internal repository can exist before v1.1.14, so
+# the single unpruned walk runs over an empty tree.
+_LIVOS_BACKUP_ROOTS=("$LIVOS_DIR/backups-internal" "$LIVOS_DIR/backups-local")
+
+# _chown_livos_pruned <owner:group> <dir>
+# Never takes a username literal — callers pass a DERIVED owner:group
+# (feedback_update_sh_bruce_hardcoded_breaks_nonbruce_box).
+_chown_livos_pruned() {
+    local _own="$1" _dir="$2" _root _rc=0
+    [[ -d "$_dir" ]] || return 0
+    if [[ "$_dir" != "$LIVOS_DIR" ]]; then
+        chown -R "$_own" "$_dir" 2>/dev/null || return 1
+        return 0
+    fi
+    find "$_dir" \
+        -path "$LIVOS_DIR/backups-internal" -prune -o \
+        -path "$LIVOS_DIR/backups-local" -prune -o \
+        -exec chown -h "$_own" {} + 2>/dev/null || _rc=1
+    # -prune skips the roots entirely, so re-own the two directory ENTRIES
+    # (non-recursive) — otherwise a root created under a different owner would
+    # never be corrected.
+    #
+    # This loop captures the walk's status above rather than returning on it, and
+    # is therefore NEVER skipped: an early `return 1` on a partial walk (one
+    # unstat-able file mid-update is enough) would leave a backup root orphaned
+    # at the wrong owner, which is exactly the failure this loop exists to
+    # prevent. The caller still sees the walk's status, so `|| true` / `|| warn`
+    # behave exactly as they did before the prune.
+    for _root in "${_LIVOS_BACKUP_ROOTS[@]}"; do
+        [[ -d "$_root" ]] && chown -h "$_own" "$_root" 2>/dev/null || true
+    done
+    return "$_rc"
+}
+
 # ── Colors ────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -2598,7 +2644,8 @@ step "Fixing permissions"
 chmod +x "$LIVOS_DIR/packages/livinityd/source/modules/apps/legacy-compat/app-script" 2>/dev/null || true
 
 # Set ownership (livos user for most, root runs the service)
-chown -R root:root "$LIVOS_DIR" 2>/dev/null || true
+# 368.8: pruned — never walks /opt/livos/backups-{internal,local}. See the helper.
+_chown_livos_pruned "root:root" "$LIVOS_DIR" || true
 chown -R root:root "$LIV_DIR" 2>/dev/null || true
 
 ok "Permissions fixed"
@@ -4565,7 +4612,8 @@ fi
 step "Fixing /opt/livos + /opt/liv ownership (LivOS desktop user)"
 _LIVOS_RUN_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1); [ -z "$_LIVOS_RUN_USER" ] && _LIVOS_RUN_USER=$(stat -c '%U' /opt/livos 2>/dev/null)
 if id "$_LIVOS_RUN_USER" >/dev/null 2>&1; then
-    chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIVOS_DIR" 2>/dev/null || warn "chown $LIVOS_DIR partial"
+    # 368.8: pruned — never walks /opt/livos/backups-{internal,local}. See the helper.
+    _chown_livos_pruned "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIVOS_DIR" || warn "chown $LIVOS_DIR partial"
     if [[ -d "$LIV_DIR" ]]; then
         chown -R "$_LIVOS_RUN_USER:$_LIVOS_RUN_USER" "$LIV_DIR" 2>/dev/null || warn "chown $LIV_DIR partial"
     fi
