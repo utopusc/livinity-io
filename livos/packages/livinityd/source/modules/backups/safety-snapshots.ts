@@ -147,6 +147,44 @@ export async function ensureSafetyRepository(deps: EnsureSafetyDeps): Promise<En
 	}
 }
 
+/**
+ * Phase 368.5 gate — the mid-run floor.
+ *
+ * evaluateDiskPressure only guards the START of a run. A snapshot that begins
+ * with 16% free can still write the disk to zero on its way through, and on this
+ * box that does not mean "the backup failed" — it means Postgres and Docker go
+ * down with it. This floor is deliberately LOWER than SAFETY_MIN_FREE_PERCENT:
+ * crossing 15% mid-run is normal for a large first snapshot, crossing 5% is an
+ * emergency.
+ */
+export const DISK_ABORT_FREE_PERCENT = 5
+
+/** Percentage free, or null when the reading is missing or degenerate. */
+export function freePercentOf(usage: {size: number; available: number}): number | null {
+	return Number.isFinite(usage.size) && Number.isFinite(usage.available) && usage.size > 0
+		? (usage.available / usage.size) * 100
+		: null
+}
+
+/**
+ * Whether an in-flight snapshot must be killed to protect the system disk.
+ *
+ * Note the ASYMMETRY with the pre-flight guard, which is deliberate: an
+ * unreadable probe BEFORE a run means "don't start" (cheap, retried next hour),
+ * but an unreadable probe DURING a run must NOT abort. The pre-flight already
+ * proved there was room, a df hiccup is usually transient, and aborting on it
+ * would make a box with a flaky probe never complete a backup at all. Unknown ⇒
+ * keep going and log it.
+ */
+export function shouldAbortForDiskPressure(
+	usage: {size: number; available: number},
+	floorPercent: number = DISK_ABORT_FREE_PERCENT,
+): boolean {
+	const percent = freePercentOf(usage)
+	if (percent === null) return false
+	return percent < floorPercent
+}
+
 export type DiskPressureDecision = 'proceed' | 'skip'
 
 export type DiskPressureDeps = {

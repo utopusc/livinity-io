@@ -35,18 +35,70 @@ export interface SystemStateLogger {
 /**
  * Positive selection of what a backup includes, chosen by the operator in
  * Settings › Backups. Files + bind-mount app data are ALWAYS in the snapshot
- * (they ARE the dataDirectory); these govern the extra out-of-tree captures.
+ * (they ARE the dataDirectory); the first two govern the extra out-of-tree
+ * captures, and `vmDiskImages` governs the one in-tree thing large enough to
+ * need its own switch.
  */
 export interface BackupScope {
 	/** livos Postgres DB — users, app instances, subdomain routing, AND Liv's memory. */
 	systemDatabase: boolean
 	/** /opt/liv-assistant/data — Liv AI chat history + skills. */
 	livAssistantData: boolean
+	/**
+	 * Phase 368.5 gate — `${dataDirectory}/vm-data/<id>`: whole virtual-machine
+	 * disk images. Default OFF, which is the only default that makes the hourly
+	 * local safety repo safe to enable on every box: the images are tens of
+	 * gigabytes, every VM boot rewrites blocks all through them, and an hourly
+	 * snapshot of that on the SAME disk fills a small system disk and takes
+	 * Postgres and Docker down with it.
+	 *
+	 * OFF by default, never silent: the toggle is rendered next to the other two
+	 * in Settings › Backups, so a VM's contents are excluded by a choice the
+	 * operator can see and reverse, not by a hidden rule.
+	 */
+	vmDiskImages: boolean
 }
 
 export const DEFAULT_BACKUP_SCOPE: BackupScope = {
 	systemDatabase: true,
 	livAssistantData: true,
+	vmDiskImages: false,
+}
+
+/** Where VM disk images live, relative to the backup root (= dataDirectory). */
+export const VM_DATA_DIRNAME = 'vm-data'
+
+/**
+ * Phase 368.5 gate — browser-profile cache directories under the master Chrome
+ * profile (`${dataDirectory}/chrome-master`). Excluded UNCONDITIONALLY and with
+ * no toggle, because there is nothing to lose: every one of these is a
+ * regenerated cache, while the parts that matter (Cookies, Login Data,
+ * Preferences) stay in the snapshot. On a box that browses regularly these
+ * account for most of the profile's size.
+ *
+ * Anchored to the profile root on purpose. A depth-agnostic `Cache/` would match
+ * any folder a user happened to name "Cache" anywhere in their own files, and
+ * silently drop it from every backup.
+ */
+export const BROWSER_CACHE_EXCLUSIONS = [
+	'/chrome-master/*/Cache',
+	'/chrome-master/*/Code Cache',
+	'/chrome-master/*/GPUCache',
+	'/chrome-master/*/Service Worker/CacheStorage',
+	'/chrome-master/*/DawnGraphiteCache',
+	'/chrome-master/*/DawnWebGPUCache',
+	'/chrome-master/ShaderCache',
+	'/chrome-master/GrShaderCache',
+]
+
+/**
+ * The backup-root-relative ignore patterns implied by a scope. Pure so the
+ * defaults can be pinned by test rather than discovered on a full disk.
+ */
+export function scopeExclusionPatterns(scope: BackupScope): string[] {
+	const patterns = [...BROWSER_CACHE_EXCLUSIONS]
+	if (!scope.vmDiskImages) patterns.push(`/${VM_DATA_DIRNAME}`)
+	return patterns
 }
 
 function systemStateDir(dataDirectory: string): string {

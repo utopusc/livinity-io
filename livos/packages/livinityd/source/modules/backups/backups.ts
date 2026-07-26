@@ -8,7 +8,7 @@ import pQueue from 'p-queue'
 import prettyBytes from 'pretty-bytes'
 
 import randomToken from '../../modules/utilities/random-token.js'
-import {captureSystemState, DEFAULT_BACKUP_SCOPE, type BackupScope} from './system-state.js'
+import {captureSystemState, DEFAULT_BACKUP_SCOPE, scopeExclusionPatterns, type BackupScope} from './system-state.js'
 import {detectEngine, installEngine, KOPIA_MINIMUM_VERSION, type EngineStatus} from './engine.js'
 import {writeTerminalRunStatus, type LastRunStatus} from './backup-preflight.js'
 import {
@@ -18,6 +18,9 @@ import {
 	retentionFlagsFor,
 	ensureSafetyRepository,
 	evaluateDiskPressure,
+	shouldAbortForDiskPressure,
+	freePercentOf,
+	DISK_ABORT_FREE_PERCENT,
 } from './safety-snapshots.js'
 import {
 	classifyDestination,
@@ -1026,6 +1029,59 @@ export default class Backups {
 		])
 	}
 
+	/**
+	 * Phase 368.5 gate — in-flight system-disk protection.
+	 *
+	 * Polls free space while a snapshot is being written to the system disk and
+	 * kills the kopia process if it crosses the emergency floor. Returns the stop
+	 * function; the caller MUST call it in a finally, or the timer outlives the run.
+	 *
+	 * Killing mid-snapshot is safe: kopia commits a snapshot atomically, so an
+	 * aborted run leaves the repository's previous snapshots intact and simply has
+	 * no new one. The existing terminal-state writer marks the run failed, and the
+	 * >24h backups-failing alert surfaces it. Losing one hourly run is a far better
+	 * outcome than a full disk.
+	 */
+	private startDiskWatchdog(repositoryId: string): () => void {
+		const POLL_MS = 20_000
+		let killed = false
+
+		const timer = setInterval(async () => {
+			if (killed) return
+			let usage: {size: number; available: number}
+			try {
+				usage = await getSystemDiskUsage(this.#livinityd)
+			} catch (error) {
+				// Deliberately NOT fatal — see shouldAbortForDiskPressure: the
+				// pre-flight already proved there was room, and aborting on a transient
+				// df failure would stop a flaky box ever completing a backup.
+				this.logger.error('Disk watchdog probe failed — letting the snapshot continue', error as Error)
+				return
+			}
+
+			if (!shouldAbortForDiskPressure(usage)) return
+
+			killed = true
+			const percent = freePercentOf(usage)
+			this.logger.error(
+				`ABORTING snapshot for repository ${repositoryId}: system disk at ${percent?.toFixed(1) ?? '?'}% free ` +
+					`(<${DISK_ABORT_FREE_PERCENT}%). Stopping the write so the box stays up; the next interval will retry.`,
+			)
+			for (const process of this.runningKopiaProcesses) {
+				try {
+					process.kill('SIGTERM')
+				} catch (error) {
+					this.logger.error('Failed to stop kopia process under disk pressure', error as Error)
+				}
+			}
+		}, POLL_MS)
+
+		// Never hold the event loop open on this timer alone.
+		timer.unref?.()
+
+		return () => clearInterval(timer)
+	}
+
 	// Wrapper for kopia commands that interact with a repository
 	async repository(
 		repositoryId: string,
@@ -1159,18 +1215,28 @@ export default class Backups {
 			// Create the snapshot
 			// TODO: Attempt recovering from device out of space errors by deleting old snapshots
 			this.logger.log(`Creating snapshot`)
-			await this.repository(repository.id, ['snapshot', 'create', this.#livinityd.dataDirectory], {
-				onOutput: (output) => {
-					// Pluck progress in brackets from output like:
-					// '/ 1 hashing, 216 hashed (1.6 GB), 21121 cached (5.4 GB), uploaded 1.4 GB, estimated 7.6 GB (91.6%) 0s left'
-					const match = output.match(/estimated.*\((\d+(?:\.\d+)?)%\).*left/)
-					if (!match) return
+			// Phase 368.5 gate: the pre-flight guard only proves there was room when
+			// the run STARTED. A snapshot writing to the system disk can still take it
+			// to zero on the way through, and on this box that is not "the backup
+			// failed" — it is Postgres and Docker going down with it. Watch the disk
+			// for the duration and kill the write if it crosses the emergency floor.
+			const stopDiskWatchdog = sharesSystemDisk ? this.startDiskWatchdog(repository.id) : undefined
+			try {
+				await this.repository(repository.id, ['snapshot', 'create', this.#livinityd.dataDirectory], {
+					onOutput: (output) => {
+						// Pluck progress in brackets from output like:
+						// '/ 1 hashing, 216 hashed (1.6 GB), 21121 cached (5.4 GB), uploaded 1.4 GB, estimated 7.6 GB (91.6%) 0s left'
+						const match = output.match(/estimated.*\((\d+(?:\.\d+)?)%\).*left/)
+						if (!match) return
 
-					// Update progress
-					backupProgress.percent = Number(match[1])
-					this.#livinityd.eventBus.emit('backups:backup-progress', this.backupsInProgress)
-				},
-			})
+						// Update progress
+						backupProgress.percent = Number(match[1])
+						this.#livinityd.eventBus.emit('backups:backup-progress', this.backupsInProgress)
+					},
+				})
+			} finally {
+				stopDiskWatchdog?.()
+			}
 
 			// Clear any backup failure notifications if we get a successful backup
 			await this.#livinityd.notifications.clear(`backups-failing:${repository.id}`).catch(() => {})
@@ -1337,6 +1403,14 @@ export default class Backups {
 			return path
 		}
 		ignoreFileContents = ignoreFileContents.map(toBackupRootPath)
+
+		// Phase 368.5 gate — the two things inside dataDirectory big enough to fill
+		// the system disk on their own. Browser caches go unconditionally (pure
+		// regenerable bulk); VM disk images follow the operator's scope toggle,
+		// default OFF. Without these an hourly local safety repo can fill a small
+		// system disk and take Postgres and Docker down with it, which is exactly
+		// why Safety Snapshots could not ship to stable before now.
+		ignoreFileContents.push(...scopeExclusionPatterns(await this.getBackupScope().catch(() => DEFAULT_BACKUP_SCOPE)))
 
 		// Phase 368.6 (D6) — self-referential-snapshot belts. Pushed AFTER the
 		// mapping above (the mapper `/`-prefixes any entry lacking one, which would

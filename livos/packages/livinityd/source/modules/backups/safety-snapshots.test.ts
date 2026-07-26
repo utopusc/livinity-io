@@ -5,6 +5,9 @@ import {
 	evaluateDiskPressure,
 	retentionFlagsFor,
 	SAFETY_MIN_FREE_PERCENT,
+	DISK_ABORT_FREE_PERCENT,
+	shouldAbortForDiskPressure,
+	freePercentOf,
 	SAFETY_REPO_ID,
 	SAFETY_REPO_PATH,
 	SAFETY_RETENTION_FLAGS,
@@ -12,6 +15,7 @@ import {
 	type DiskPressureDeps,
 	type EnsureSafetyDeps,
 } from './safety-snapshots.js'
+import {DEFAULT_BACKUP_SCOPE, scopeExclusionPatterns} from './system-state.js'
 
 // ── retentionFlagsFor (Phase 368.5 BKP-16 — the non-leak proof) ──────────
 
@@ -293,4 +297,68 @@ test('evaluateDiskPressure: maintenance throwing is caught — decision comes fr
 
 test('SAFETY_MIN_FREE_PERCENT is the locked 15% threshold', () => {
 	expect(SAFETY_MIN_FREE_PERCENT).toBe(15)
+})
+
+// ── Phase 368.5 gate — mid-run disk protection ──────────────────────────
+
+test('DISK_ABORT_FREE_PERCENT sits BELOW the pre-flight floor', () => {
+	// Crossing 15% mid-run is normal for a large first snapshot; crossing 5% is
+	// an emergency. If these were equal, every big first backup would self-abort.
+	expect(DISK_ABORT_FREE_PERCENT).toBe(5)
+	expect(DISK_ABORT_FREE_PERCENT).toBeLessThan(SAFETY_MIN_FREE_PERCENT)
+})
+
+test('shouldAbortForDiskPressure kills the run only below the emergency floor', () => {
+	expect(shouldAbortForDiskPressure({size: 100, available: 4})).toBe(true)
+	expect(shouldAbortForDiskPressure({size: 100, available: 5})).toBe(false)
+	expect(shouldAbortForDiskPressure({size: 100, available: 50})).toBe(false)
+})
+
+test('an unreadable probe DURING a run does not abort it (deliberate asymmetry)', () => {
+	// The pre-flight guard fails SAFE by skipping. Mid-run the safe direction is
+	// the opposite: it already proved there was room, a df hiccup is usually
+	// transient, and aborting on it would stop a flaky box ever finishing a backup.
+	expect(shouldAbortForDiskPressure({size: 0, available: 0})).toBe(false)
+	expect(shouldAbortForDiskPressure({size: Number.NaN, available: 10})).toBe(false)
+	expect(shouldAbortForDiskPressure({size: 100, available: Number.NaN})).toBe(false)
+	expect(shouldAbortForDiskPressure({size: Number.POSITIVE_INFINITY, available: 1})).toBe(false)
+})
+
+test('freePercentOf reports null rather than a made-up number', () => {
+	expect(freePercentOf({size: 200, available: 50})).toBe(25)
+	expect(freePercentOf({size: 0, available: 0})).toBeNull()
+	expect(freePercentOf({size: Number.NaN, available: 1})).toBeNull()
+})
+
+// ── Phase 368.5 gate — snapshot-scope exclusions ────────────────────────
+
+test('VM disk images are excluded by DEFAULT — this is what unblocked stable', () => {
+	// Tens of gigabytes, rewritten block-by-block on every VM boot. Snapshotting
+	// that hourly onto the SAME disk is what could fill a small system disk and
+	// take Postgres and Docker down with it.
+	expect(DEFAULT_BACKUP_SCOPE.vmDiskImages).toBe(false)
+	expect(scopeExclusionPatterns(DEFAULT_BACKUP_SCOPE)).toContain('/vm-data')
+})
+
+test('turning the toggle on puts VM disk images back in the snapshot', () => {
+	// Excluded by a choice the operator can see and reverse — never a hidden rule.
+	const patterns = scopeExclusionPatterns({...DEFAULT_BACKUP_SCOPE, vmDiskImages: true})
+	expect(patterns).not.toContain('/vm-data')
+})
+
+test('browser caches are always excluded, and are anchored to the profile root', () => {
+	const patterns = scopeExclusionPatterns({...DEFAULT_BACKUP_SCOPE, vmDiskImages: true})
+	expect(patterns).toContain('/chrome-master/*/Cache')
+	expect(patterns).toContain('/chrome-master/*/Code Cache')
+	// Every pattern must be anchored: a depth-agnostic `Cache/` would match a
+	// folder a user happened to name "Cache" in their own files and silently drop
+	// it from every backup.
+	for (const pattern of patterns) expect(pattern.startsWith('/')).toBe(true)
+})
+
+test('the exclusions never touch the parts of a browser profile that matter', () => {
+	const patterns = scopeExclusionPatterns(DEFAULT_BACKUP_SCOPE)
+	for (const kept of ['/chrome-master/Default/Cookies', '/chrome-master/Default/Login Data', '/chrome-master/Local State']) {
+		expect(patterns).not.toContain(kept)
+	}
 })

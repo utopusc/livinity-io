@@ -3,7 +3,7 @@
 // toggle the extra out-of-tree stores (the Postgres DB incl. Liv's memory, and
 // the Liv AI data dir). Rendered in the Backups configure wizard above the
 // exclusions ("what to skip") section.
-import {TbDatabase, TbFiles, TbMessageChatbot, TbApps} from 'react-icons/tb'
+import {TbDatabase, TbDeviceDesktop, TbFiles, TbMessageChatbot, TbApps} from 'react-icons/tb'
 
 import {useBackupScope} from '@/features/backups/hooks/use-backup-scope'
 import {Switch} from '@/shadcn-components/ui/switch'
@@ -51,6 +51,20 @@ export function BackupScope({showTitle = false}: {showTitle?: boolean}) {
 			desc: t('backups.scope.liv-ai-desc', {defaultValue: 'Your Liv AI conversations and installed skills.'}),
 			value: scope?.livAssistantData ?? true,
 			onChange: (next) => setScope({livAssistantData: next}),
+		},
+		{
+			// Phase 368.5 gate: OFF by default, and visible precisely so that being
+			// off is a choice rather than a hidden rule. VM disk images are tens of
+			// gigabytes and every VM boot rewrites blocks all through them, so
+			// including them in an hourly local backup can fill the system disk.
+			icon: TbDeviceDesktop,
+			title: t('backups.scope.vm-images', {defaultValue: 'Virtual machine disk images'}),
+			desc: t('backups.scope.vm-images-desc', {
+				defaultValue:
+					'Off by default — these are very large and change constantly, so including them can fill the disk. Your VM settings are always backed up; only the disk images are skipped.',
+			}),
+			value: scope?.vmDiskImages ?? false,
+			onChange: (next) => setScope({vmDiskImages: next}),
 		},
 	]
 
