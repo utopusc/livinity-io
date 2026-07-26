@@ -107,6 +107,7 @@ export type DestinationRefusalCode =
 	| 'unsupported-root'
 	| 'invalid-folder-name'
 	| 'unresolvable-path'
+	| 'internal-root-missing'
 	| 'inside-data-directory'
 	| 'destination-not-mounted'
 	| 'unsupported-filesystem'
@@ -304,7 +305,43 @@ export async function probeDestination(input: ProbeInput, deps: DestinationProbe
 
 	// 1. Resolve the PARENT. Fail closed: an unresolvable path is refused, never
 	//    assumed innocent (preserves addRepository's original `.catch(() => '')`).
-	const resolvedParent = await deps.realpath(parent)
+	let resolvedParent = await deps.realpath(parent)
+
+	// Phase 368.8 (PROBE-02) — the v1.1.13 P0. For `internal` ONLY, `parent` is
+	// /opt/livos/backups-internal/<operator-typed-folder>, which can never pre-exist: the
+	// folder name is per-request user input, so nothing can pre-create it. The ROOT
+	// itself is created by Backups#ensureInternalBackupRoot (368.8 Route C) — no
+	// installer is involved. Create exactly that one leaf and
+	// RE-RESOLVE, so every check below still runs on a realpath-resolved path with
+	// exactly one unresolved level. Deliberately NOT an ancestor walk: a walk would
+	// make the `basename` reconstruction on the next line drop the operator's folder
+	// segment, and the restore-wipe containment bound would then be evaluated
+	// against the wrong path.
+	if (!resolvedParent && input.kind === 'internal') {
+		const root = normalizePath(INTERNAL_BACKUP_ROOT)
+		// Bound: exactly ONE segment below the root. Never the root itself — that is
+		// Backups#ensureInternalBackupRoot's job, and keeping it out of the probe is
+		// what lets ensureLeafDirectory stay `recursive: false`. Never deeper.
+		const isLeafOfRoot = isAtOrUnder(parent, root) && segmentsOf(parent).length === segmentsOf(root).length + 1
+		if (isLeafOfRoot) {
+			if (!(await deps.realpath(root))) {
+				return refuse(
+					'internal-root-missing',
+					`${root} does not exist and LivOS could not create it — check free space and that /opt/livos is owned by the user LivOS runs as, then add the destination again`,
+				)
+			}
+			if (deps.ensureLeafDirectory && (await deps.ensureLeafDirectory(parent))) {
+				resolvedParent = await deps.realpath(parent)
+			}
+			if (!resolvedParent) {
+				return refuse(
+					'permission-denied',
+					`Could not create ${parent} — ${root} must be owned by the user LivOS runs as`,
+				)
+			}
+		}
+	}
+
 	if (!resolvedParent) {
 		return refuse('unresolvable-path', `Could not resolve ${parent}`)
 	}
