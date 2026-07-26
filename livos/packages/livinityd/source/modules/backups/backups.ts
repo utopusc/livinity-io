@@ -28,6 +28,7 @@ import {
 	repositoryIgnorePatterns,
 	resolveOffSystemDisk,
 	isRealDestination,
+	INTERNAL_BACKUP_ROOT,
 	INTERNAL_VIRTUAL_ROOT,
 	type DestinationKind,
 	type DestinationProbeDeps,
@@ -125,6 +126,14 @@ export default class Backups {
 				await this.syncEngineNotification()
 			})().catch((error) => this.logger.error('Engine self-install failed', error))
 		}
+
+		// Phase 368.8 (Route C): the internal backup root is a plain directory with no
+		// dependency on the backup engine, so it is created UNCONDITIONALLY — outside
+		// and before the engineStatus guard below. On a box whose kopia self-install is
+		// still pending, putting it inside that guard would mean the root is never
+		// created at boot and healing would silently depend on the operator opening the
+		// wizard, turning Route C's "heals on the first update" into a conditional.
+		await this.ensureInternalBackupRoot().catch(() => false)
 
 		// Phase 368.5 BKP-16: default-ON local safety snapshots. Non-fatal; if the
 		// engine isn't up yet the hourly interval retries once self-install lands.
@@ -561,6 +570,11 @@ export default class Backups {
 			free?: number
 		}>
 	> {
+		// Phase 368.8 (Route C): self-heal a box whose boot-time attempt failed, and
+		// give the 368.8-03 pre-flight a root that has just had its best chance to
+		// exist before it measures one.
+		await this.ensureInternalBackupRoot().catch(() => false)
+
 		const roots: Array<{
 			root: string
 			kind: DestinationKind
@@ -605,6 +619,36 @@ export default class Backups {
 		})
 
 		return roots
+	}
+
+	/**
+	 * Phase 368.8 (Route C) — create INTERNAL_BACKUP_ROOT.
+	 *
+	 * This is why the root moved under $LIVOS_DIR: /opt is root-owned and livinityd is
+	 * unprivileged (sudoers.d/livinityd grants no mkdir and no general chown), but
+	 * update.sh chowns /opt/livos to the run-user on every update (update.sh:4566-4568),
+	 * so we can create children here. Exactly the same mechanism that lets
+	 * ensureRepoDir create SAFETY_REPO_PATH today.
+	 *
+	 * Idempotent and never throws: a failure leaves the root absent, which
+	 * probeDestination reports as the actionable `internal-root-missing` rather than a
+	 * crash. Mode 0755, not 0700: the repositories underneath are kopia-encrypted and
+	 * this matches the surrounding /opt/livos convention.
+	 */
+	async ensureInternalBackupRoot(): Promise<boolean> {
+		try {
+			await fse.ensureDir(INTERNAL_BACKUP_ROOT)
+			await fse.chmod(INTERNAL_BACKUP_ROOT, 0o755)
+			// Logged on SUCCESS, not only on failure: the 368.8-04 box UAT and the
+			// 368.8-05 release check both gate on seeing this line in the journal, and
+			// a gate whose evidence is never emitted teaches an operator to wave gates
+			// through. Unconditional (not first-run-only) so a re-run still proves it.
+			this.logger.log(`Backup destination root ready: ${INTERNAL_BACKUP_ROOT}`)
+			return true
+		} catch (error) {
+			this.logger.error(`Could not create ${INTERNAL_BACKUP_ROOT}`, error)
+			return false
+		}
 	}
 
 	// Create a repository
@@ -662,6 +706,10 @@ export default class Backups {
 			throw new Error(`Invalid path ${virtualPath}`)
 		}
 
+		// 368.8: the probe may create the internal leaf directory (PROBE-02). Track
+		// what it made so a refusal does not litter /opt/livos/backups-internal with empty
+		// folders from abandoned wizard attempts.
+		const createdDirectories: string[] = []
 		const decision = await probeDestination(
 			{
 				kind: classified.kind,
@@ -669,9 +717,14 @@ export default class Backups {
 				dataDirectory: this.#livinityd.dataDirectory,
 				poolMountpoint: POOL_MOUNTPOINT,
 			},
-			this.destinationProbeDeps(),
+			this.destinationProbeDeps(createdDirectories),
 		)
 		if (!decision.ok) {
+			// rmdir, never remove: rmdir refuses a non-empty directory, so a folder that
+			// somehow already held data can never be deleted by a refused probe.
+			for (const directory of createdDirectories.reverse()) {
+				await fse.rmdir(directory).catch(() => {})
+			}
 			this.logger.error(`Refusing backup destination ${virtualPath} -> ${systemPath}: [${decision.code}] ${decision.reason}`)
 			// Typed bracketed code — features/backups/utils/error-messages.ts turns
 			// these into the operator-facing sentence.
@@ -689,7 +742,7 @@ export default class Backups {
 		return {kind: classified.kind, systemPath: decision.systemPath!, offSystemDisk}
 	}
 
-	private destinationProbeDeps(): DestinationProbeDeps {
+	private destinationProbeDeps(createdDirectories?: string[]): DestinationProbeDeps {
 		return {
 			// fse.realpath's typings union in a Buffer overload; the string form is what
 			// we call, so normalise before it reaches the pure policy module.
@@ -742,6 +795,26 @@ export default class Backups {
 				return repositories
 					.map((repository) => repository.systemPath ?? (repository.isSafety ? repository.path : ''))
 					.filter((path): path is string => Boolean(path))
+			},
+			// Phase 368.8 (PROBE-02): create the per-repository leaf for an internal
+			// destination so the probe has a real path to resolve. The PURE policy
+			// module decides WHETHER to call this (internal only, exactly one segment
+			// under INTERNAL_BACKUP_ROOT, root proven to exist first); this closure only
+			// performs it and records what it made so a refusal can clean up after
+			// itself. `recursive: false` is load-bearing — it keeps root creation inside
+			// ensureInternalBackupRoot, the one place that creates and logs it, instead of
+			// letting a probe conjure it as a side effect. No chown: livinityd creates this as the run-user, so
+			// ownership is already correct, and files.chownSystemPath hardcodes uid 1000
+			// (files.ts:224) which is wrong on a box whose run-user is 1001+.
+			ensureLeafDirectory: async (path) => {
+				try {
+					if (await fse.pathExists(path)) return true
+					await fse.mkdir(path, {recursive: false})
+					createdDirectories?.push(path)
+					return true
+				} catch {
+					return false
+				}
 			},
 		}
 	}
