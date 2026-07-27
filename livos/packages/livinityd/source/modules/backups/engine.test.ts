@@ -316,6 +316,49 @@ test('the snapshot write is the only kopia call that asks for a pty', async () =
 	expect(snapshotCall.slice(0, 400)).toMatch(/\bpty:\s*true/)
 })
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 368.8-16 — restoring a backup was impossible on every box.
+//
+// Reported verbatim from the field:
+//   Command failed with exit code 32: mount --bind
+//     /opt/livos/data/backup-mounts/<t>/home /opt/livos/data/backups/<t>/Home
+//   mount: …/Home: must be superuser to use mount.
+//
+// Reproduced on the box AS THE ACTUAL RUN-USER: `mount --bind` → exit 32, while
+// `kopia mount <snapshot>/home` succeeds and `umount` on it returns 0. livinityd
+// is unprivileged, so a bind mount could never have worked — and restoreBackup
+// awaited it even though it reads only the internal mountpoint.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('no backups source file shells out to a privileged mount', async () => {
+	const directory = path.dirname(fileURLToPath(import.meta.url))
+	const names = (await fs.readdir(directory)).filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'))
+
+	const offenders: string[] = []
+	for (const name of names) {
+		const source = await fs.readFile(path.join(directory, name), 'utf8')
+		for (const [index, line] of source.split('\n').entries()) {
+			if (line.trimStart().startsWith('//') || line.trimStart().startsWith('*')) continue
+			// `umount` stays legal: it succeeds unprivileged on a FUSE mount owned
+			// by the user that made it (measured rc=0). It is `mount` that cannot.
+			if (/execa\(\s*['"`]mount['"`]/.test(line) || /--bind/.test(line)) offenders.push(`${name}:${index + 1}`)
+		}
+	}
+
+	expect(offenders).toEqual([])
+})
+
+test('restoreBackup does not stand up the browse-only virtual filesystem', async () => {
+	const directory = path.dirname(fileURLToPath(import.meta.url))
+	const source = await fs.readFile(path.join(directory, 'backups.ts'), 'utf8')
+
+	// restoreBackup reads ONLY the internal mountpoint. Making it wait on the
+	// browse mounts is what let a failure in a layer it never reads kill the
+	// restore — so the call it makes must keep opting out.
+	const restore = source.slice(source.indexOf('async restoreBackup('), source.indexOf('// Connect to a repository'))
+	expect(restore).toMatch(/mountBackup\(backupId,\s*\{virtualFilesystem:\s*false\}\)/)
+})
+
 test('installEngine cleans up its temporary directory on failure', async () => {
 	vi.spyOn(process, 'platform', 'get').mockReturnValue('linux' as NodeJS.Platform)
 	vi.spyOn(process, 'arch', 'get').mockReturnValue('x64' as NodeJS.Architecture)

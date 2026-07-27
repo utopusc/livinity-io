@@ -1200,7 +1200,10 @@ export default class Backups {
 
 		try {
 			// If mount fails, finally will emit failure state that UI can handle in the restore cover
-			const backupDirectoryName = await this.mountBackup(backupId)
+			// 368.8-16: the internal mountpoint is the ONLY thing read below, so do
+			// not also stand up the browse-only virtual filesystem. A restore must
+			// not be able to fail in a layer it never reads.
+			const backupDirectoryName = await this.mountBackup(backupId, {virtualFilesystem: false})
 			const internalBackupMountpoint = nodePath.join(this.internalMountPath, backupDirectoryName)
 
 			// Copy over data dir from previous install to temp dir while preserving permissions
@@ -1783,8 +1786,69 @@ export default class Backups {
 		return ls.stdout.split('\n')
 	}
 
-	// Mount backup
-	async mountBackup(backupId: string) {
+	/**
+	 * Phase 368.8-16 — mount ONE kopia path at `mountpoint` and resolve once it
+	 * is actually mounted.
+	 *
+	 * `kopiaPath` is a snapshot id, optionally with a subdirectory appended
+	 * (`k0e…/home`) — the same addressing `listBackupFiles` already uses for
+	 * `kopia ls`. Proven on a box, running as the unprivileged run-user: kopia
+	 * mounts a subdirectory of a snapshot directly, which is what lets the
+	 * virtual filesystem exist without a single privileged call.
+	 *
+	 * Readiness comes from kopia's own "Mounted … on …" line rather than only
+	 * from the mountpoint gaining entries, because an EMPTY directory in a
+	 * snapshot is a perfectly valid mount that would otherwise never satisfy a
+	 * readdir poll and would time out after ten seconds.
+	 */
+	async #mountSnapshotPath(repositoryId: string, kopiaPath: string, mountpoint: string) {
+		await fse.mkdir(mountpoint, {recursive: true})
+
+		let mounted = false
+		let mountProcessExitCode: number | null = null
+		this.repository(repositoryId, ['mount', kopiaPath, mountpoint], {
+			bypassQueue: true,
+			onOutput: (output) => {
+				if (output.includes('Mounted')) mounted = true
+			},
+		})
+			.then((process) => (mountProcessExitCode = process.exitCode))
+			.catch((error) => {
+				this.logger.error(`Failed to mount ${kopiaPath}`, error)
+				mountProcessExitCode = (error as ExecaError).exitCode ?? 1
+			})
+
+		// Wait for the mount to complete
+		const startTime = Date.now()
+		const timeout = 10_000 // 10 seconds
+		while (true) {
+			// kopia said so
+			if (mounted) break
+
+			// Check if process has exited
+			if (mountProcessExitCode !== null) throw new Error(`Mount exited with code ${mountProcessExitCode}`)
+
+			// Check timeout
+			if (Date.now() - startTime > timeout) throw new Error(`Mount timeout after ${timeout}ms`)
+
+			// Check if mountpoint has contents
+			const contents = await fse.readdir(mountpoint).catch(() => [])
+			if (contents.length > 0) break // Mount complete
+
+			// Wait a bit before checking again
+			await setTimeout(100)
+		}
+	}
+
+	/**
+	 * Mount backup.
+	 *
+	 * `virtualFilesystem: false` mounts ONLY the internal mountpoint. Phase
+	 * 368.8-16: restoreBackup reads exclusively from that mountpoint, so making
+	 * it wait on the browse-only mounts meant a restore could be — and on the
+	 * operator's box WAS — killed by a failure in a layer it never reads.
+	 */
+	async mountBackup(backupId: string, {virtualFilesystem = true}: {virtualFilesystem?: boolean} = {}) {
 		await this.ensureEngine()
 		const {repositoryId, snapshotId} = this.parseBackupId(backupId)
 
@@ -1797,42 +1861,52 @@ export default class Backups {
 		this.logger.verbose(`Setting up internal mount`)
 		const directoryName = new Date(backup.time).toISOString()
 		const internalMountpoint = nodePath.join(this.internalMountPath, directoryName)
-		await fse.mkdir(internalMountpoint, {recursive: true})
-		let mountProcessExitCode = null
-		this.repository(repositoryId, ['mount', snapshotId, internalMountpoint], {bypassQueue: true})
-			.then((process) => (mountProcessExitCode = process.exitCode))
-			.catch((error) => {
-				this.logger.error(`Failed to mount backup ${backupId}`, error)
-				mountProcessExitCode = (error as ExecaError).exitCode
-			})
-
-		// Wait for the mount to complete
-		const startTime = Date.now()
-		const timeout = 10_000 // 10 seconds
-		while (true) {
-			// Check timeout
-			if (Date.now() - startTime > timeout) throw new Error(`Mount timeout after ${timeout}ms`)
-
-			// Check if process has exited
-			if (mountProcessExitCode !== null) throw new Error(`Mount exited with code ${mountProcessExitCode}`)
-
-			// Check if mountpoint has contents
-			const contents = await fse.readdir(internalMountpoint).catch(() => [])
-			if (contents.length > 0) break // Mount complete
-
-			// Wait a bit before checking again
-			await setTimeout(100)
-		}
+		await this.#mountSnapshotPath(repositoryId, snapshotId, internalMountpoint)
 		this.logger.verbose(`Internal mount complete`)
 
+		if (!virtualFilesystem) return directoryName
+
+		// ─────────────────────────────────────────────────────────────────────
+		// Phase 368.8-16 — this used to be two `mount --bind` calls, and they
+		// could never have worked on any box:
+		//
+		//   mount --bind …/backup-mounts/<t>/home …/backups/<t>/Home
+		//   mount: …: must be superuser to use mount.   (exit 32)
+		//
+		// livinityd runs unprivileged, and bind-mounting is root-only — measured
+		// as exit 32 on the box while running as the actual run-user. Since
+		// restoreBackup awaited this, browsing AND restoring were both dead.
+		// Same archetype as /kopia and /opt/livos-backups earlier in this phase:
+		// a privileged operation on an unprivileged service's critical path.
+		//
+		// kopia can mount a subdirectory of a snapshot itself, so the two binds
+		// become two ordinary FUSE mounts owned by the run-user — no sudo entry,
+		// no privileged helper, and `umount` on them succeeds unprivileged
+		// (measured: rc=0) because they belong to the user that mounted them.
+		// ─────────────────────────────────────────────────────────────────────
 		this.logger.verbose(`Setting up virtual filesystem mounts`)
 		const backupRoot = nodePath.join(this.backupRoot, directoryName)
-		const homeMount = nodePath.join(backupRoot, 'Home')
-		const appsMount = nodePath.join(backupRoot, 'Apps')
-		await fse.mkdir(homeMount, {recursive: true})
-		await fse.mkdir(appsMount, {recursive: true})
-		await execa('mount', ['--bind', nodePath.join(internalMountpoint, 'home'), homeMount])
-		await execa('mount', ['--bind', nodePath.join(internalMountpoint, 'app-data'), appsMount])
+
+		// A snapshot taken under a narrowed scope may legitimately not contain
+		// one of these. That must degrade to "this half is not browsable" and be
+		// SAID, never take the whole mount down with it — and never leave an
+		// empty directory standing where a browsable backup is implied.
+		await Promise.all(
+			(
+				[
+					['home', 'Home'],
+					['app-data', 'Apps'],
+				] as const
+			).map(async ([snapshotDirectory, mountName]) => {
+				const mountpoint = nodePath.join(backupRoot, mountName)
+				try {
+					await this.#mountSnapshotPath(repositoryId, `${snapshotId}/${snapshotDirectory}`, mountpoint)
+				} catch (error) {
+					this.logger.error(`Backup ${backupId} has no browsable ${mountName}`, error as Error)
+					await fse.remove(mountpoint).catch(() => {})
+				}
+			}),
+		)
 		this.logger.log(`Virtual filesystem mount complete`)
 
 		return directoryName
