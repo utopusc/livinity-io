@@ -6,7 +6,16 @@ import {useEffect, useMemo, useState} from 'react'
 import {FormProvider, useForm, useFormContext, type Resolver, type SubmitHandler} from 'react-hook-form'
 import {Trans} from 'react-i18next/TransWithoutContext'
 import {FaRegSave} from 'react-icons/fa'
-import {TbCloudLock, TbDatabase, TbDeviceDesktop, TbExternalLink, TbPassword, TbShoppingBag} from 'react-icons/tb'
+import {
+	TbCheck,
+	TbCloudLock,
+	TbDatabase,
+	TbDeviceDesktop,
+	TbExternalLink,
+	TbPassword,
+	TbShieldExclamation,
+	TbShoppingBag,
+} from 'react-icons/tb'
 import {useNavigate} from 'react-router-dom'
 import {useCopyToClipboard} from 'react-use'
 import {z} from 'zod'
@@ -131,6 +140,13 @@ enum Step {
 	Exclusions = 2,
 	Encryption = 3,
 	Review = 4,
+	// Phase 368.8-17. Reached ONLY from a successful submit, never by `next()` —
+	// which still clamps at Review. Before this step existed, "Finish setup"
+	// navigated to /settings/backups/configure, a browser route that has not
+	// existed since Settings became window-only (router.tsx: "/settings/* route
+	// REMOVED"). So the last action of the wizard was a 404, and the operator was
+	// never told the thing they had just configured had actually started.
+	Done = 5,
 }
 
 // Header meta per step (title and optional subtitle)
@@ -149,6 +165,8 @@ const headerMetaForStep = (s: Step) => {
 			return {title: t('backups.set-encryption-password'), subtitle: t('backups.set-encryption-password-description')}
 		case Step.Review:
 			return {title: t('backups.review'), subtitle: t('backups.review-description')}
+		case Step.Done:
+			return {title: t('backups.setup-complete-title'), subtitle: t('backups.setup-complete-subtitle')}
 		default:
 			return {title: '', subtitle: ''}
 	}
@@ -158,9 +176,14 @@ const headerMetaForStep = (s: Step) => {
 // MAIN COMPONENT
 // ---------------------------------------------
 
-export function BackupsSetupWizard() {
+/**
+ * @param onDone Called when the operator dismisses the wizard after a
+ *   successful setup. The wizard is rendered inline inside the Settings window,
+ *   so it cannot close itself — and it must not try to close itself by
+ *   navigating, which is what produced the 404.
+ */
+export function BackupsSetupWizard({onDone}: {onDone?: () => void} = {}) {
 	const [step, setStep] = useState<Step>(Step.Destination)
-	const navigate = useNavigate()
 	const confirm = useConfirmation()
 
 	const form = useForm<FormValues>({
@@ -309,8 +332,10 @@ export function BackupsSetupWizard() {
 					encryptionPassword: parsed.data.encryption.password,
 				})
 			}
-			// On success, close the dialog by navigating to Configure
-			navigate('/settings/backups/configure', {preventScrollReset: true})
+			// On success, say so. setupBackup has already kicked off the first
+			// backup fire-and-forget (use-backups.ts: `backupNow(repositoryId)`),
+			// so "it has started" is a statement of fact, not an encouraging guess.
+			setStep(Step.Done)
 		} catch {
 			// Error toasts are handled in the hook; remain on this step
 		}
@@ -396,16 +421,21 @@ export function BackupsSetupWizard() {
 					{step === Step.Exclusions && showExclusionsStep && <BackupsExclusions />}
 					{step === Step.Encryption && <EncryptionStep />}
 					{step === Step.Review && <ReviewStep values={form.getValues()} />}
+					{step === Step.Done && <SetupCompleteStep />}
 				</div>
 
 				{/* Footer */}
 				<div className='mt-6 flex items-center gap-2 pt-4 max-md:flex-col-reverse'>
-					{step !== Step.Destination ? (
+					{step !== Step.Destination && step !== Step.Done ? (
 						<Button size='dialog' onClick={back} className='min-w-0 max-md:w-full'>
 							{t('back')}
 						</Button>
 					) : null}
-					{step !== Step.Review ? (
+					{step === Step.Done ? (
+						<Button variant='primary' size='dialog' onClick={() => onDone?.()} className='min-w-0 max-md:w-full'>
+							{t('backups.setup-complete-dismiss')}
+						</Button>
+					) : step !== Step.Review ? (
 						<>
 							<Button
 								variant='primary'
@@ -438,7 +468,10 @@ export function BackupsSetupWizard() {
 					onClose={() => setAlreadyConfiguredOpen(false)}
 					onManage={() => {
 						setAlreadyConfiguredOpen(false)
-						navigate('/settings/backups/configure', {preventScrollReset: true})
+						// This folder is ALREADY a configured destination, so there is
+						// nothing to set up — leave the wizard rather than navigate to a
+						// route that does not exist.
+						onDone?.()
 					}}
 				/>
 				{/* Modal: shown when the chosen folder contains a backup that is not yet connected here */}
@@ -458,7 +491,7 @@ export function BackupsSetupWizard() {
 							password: connectPassword,
 						})
 						setConnectExistingOpen(false)
-						navigate('/settings/backups/configure', {preventScrollReset: true})
+						setStep(Step.Done)
 					}}
 					isConnecting={isConnectingExisting}
 				/>
@@ -843,22 +876,63 @@ function DestinationStep({
 					    livinityd does not have, so the operator names a folder and the server
 					    places it under a root it owns. */}
 					{currentDest?.type === 'internal' ? (
-						<div className='space-y-2 rounded-12 border border-border-default bg-black/10 p-3'>
-							<label className='block text-13 text-text-secondary' htmlFor='backups-internal-folder-name'>
-								{t('backups.internal-folder-name-label')}
-							</label>
-							<Input
-								id='backups-internal-folder-name'
-								value={currentDest.folderName}
-								onValueChange={(value) => onChangeDestination({type: 'internal', folderName: value})}
-								autoComplete='off'
-								spellCheck={false}
-							/>
-							{currentDest.folderName.trim().length > 0 &&
-							!INTERNAL_FOLDER_NAME.test(currentDest.folderName.trim()) ? (
-								<p className='text-12 text-destructive2'>{t('backups.internal-folder-name-invalid')}</p>
-							) : null}
-							<p className='text-12 text-text-tertiary'>{t('backups.internal-system-disk-note')}</p>
+						// ─────────────────────────────────────────────────────────────
+						// Phase 368.8-17 — this panel used to be a bare label, an input
+						// and a grey paragraph, and it left three questions unanswered:
+						// which disk was chosen, where the folder would actually land,
+						// and how serious the same-disk caveat is.
+						//
+						// Now the chosen disk is restated with its free space (the card
+						// above scrolls out of view on short windows), the destination
+						// path is shown LIVE as it is typed, and the caveat is an amber
+						// panel rather than tertiary grey — it is the one thing about
+						// this destination that is genuinely a limitation, and it should
+						// not read like a footnote.
+						// ─────────────────────────────────────────────────────────────
+						<div className='space-y-3 rounded-12 border border-border-default bg-black/10 p-4'>
+							<div className='flex items-center gap-3'>
+								<div className='flex size-10 shrink-0 items-center justify-center rounded-10 bg-surface-2'>
+									<TbDeviceDesktop className='size-6 text-text-secondary' strokeWidth={1.5} />
+								</div>
+								<div className='min-w-0 flex-1'>
+									<div className='truncate text-13 font-medium text-text-primary'>
+										{t('backups.internal-system-disk')}
+									</div>
+									<div className='truncate text-12 text-text-tertiary'>
+										{freeOfTotal(internalRoot) ?? t('backups.space-unreadable')}
+									</div>
+								</div>
+							</div>
+
+							<div className='space-y-2'>
+								<label className='block text-13 text-text-secondary' htmlFor='backups-internal-folder-name'>
+									{t('backups.internal-folder-name-label')}
+								</label>
+								<Input
+									id='backups-internal-folder-name'
+									value={currentDest.folderName}
+									onValueChange={(value) => onChangeDestination({type: 'internal', folderName: value})}
+									autoComplete='off'
+									spellCheck={false}
+								/>
+								{currentDest.folderName.trim().length > 0 &&
+								!INTERNAL_FOLDER_NAME.test(currentDest.folderName.trim()) ? (
+									<p className='text-12 text-destructive2'>{t('backups.internal-folder-name-invalid')}</p>
+								) : currentDest.folderName.trim().length > 0 ? (
+									<p className='truncate text-12 text-text-tertiary'>
+										{t('backups.internal-folder-name-preview', {
+											path: `/ThisDevice/${currentDest.folderName.trim()}`,
+										})}
+									</p>
+								) : null}
+							</div>
+
+							<div className='flex items-start gap-2.5 rounded-10 border border-amber-500/30 bg-amber-500/10 p-3'>
+								<TbShieldExclamation className='mt-px size-4 shrink-0 text-amber-400' strokeWidth={2} />
+								<p className='text-12 leading-relaxed text-text-secondary'>
+									{t('backups.internal-system-disk-note')}
+								</p>
+							</div>
 						</div>
 					) : currentDest?.type === 'pool' && poolRoot && !poolRoot.offSystemDisk ? (
 						// An all-on-the-OS-disk pool is still a destination, but it is not the
@@ -1059,6 +1133,44 @@ function EncryptionStep() {
 // Step 4 — Review (index 4)
 // ---------------------------------------------
 
+// ---------------------------------------------
+// Step 5 — Done (index 5)
+// ---------------------------------------------
+
+/**
+ * Phase 368.8-17 — what the operator sees after "Finish setup".
+ *
+ * Previously: a navigation to a dead route, i.e. a 404, with no confirmation
+ * that anything had happened. The destination WAS created and the first backup
+ * WAS already running; only the UI failed to say so.
+ *
+ * The claims here are all things that are true at this moment rather than
+ * reassurance: the destination exists (createRepository resolved), the first
+ * backup has started (backupNow was called), and it continues without this
+ * window (it is fire-and-forget on the server). The dock island is named
+ * because that is where the progress the operator can actually watch appears.
+ */
+function SetupCompleteStep() {
+	return (
+		<div className='flex flex-col items-center justify-center gap-5 rounded-20 border border-border-default bg-black/10 px-6 py-10 text-center'>
+			<div className='flex size-16 items-center justify-center rounded-full bg-accent-green/15'>
+				<TbCheck className='size-9 text-accent-green' strokeWidth={2} />
+			</div>
+			<div className='space-y-1.5'>
+				<h3 className='text-18 font-medium text-text-primary'>{t('backups.setup-complete-heading')}</h3>
+				<p className='mx-auto max-w-sm text-13 leading-relaxed text-text-secondary'>
+					{t('backups.setup-complete-body')}
+				</p>
+			</div>
+			<p className='mx-auto max-w-sm text-12 text-text-tertiary'>{t('backups.setup-complete-note')}</p>
+		</div>
+	)
+}
+
+// ---------------------------------------------
+// Step 4 — Review (index 4)
+// ---------------------------------------------
+
 function ReviewStep({values}: {values: FormValues}) {
 	// 368.6: four destination kinds now, so the root each path is shown relative to
 	// is per-kind. The previous `else` branch read `.mountpoint` unconditionally,
@@ -1100,7 +1212,13 @@ function ReviewStep({values}: {values: FormValues}) {
 			locationCombined = `${t('backups.internal-pool')} · ${pathOnly}`
 			break
 		case 'internal':
-			locationCombined = `${t('backups-setup-this-device')} · ${t('backups.internal-system-disk')} · ${pathOnly}`
+			// 368.8-17: the folder defaults to the disk's own name, so this read
+			// "This device · System disk · System disk" — three labels, one place.
+			// Collapse consecutive repeats instead of hard-coding which one to drop,
+			// because the operator can rename the folder to anything.
+			locationCombined = [t('backups-setup-this-device'), t('backups.internal-system-disk'), pathOnly]
+				.filter((part, index, parts) => part.length > 0 && part !== parts[index - 1])
+				.join(' · ')
 			break
 	}
 

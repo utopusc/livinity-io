@@ -1444,7 +1444,11 @@ function BackupsSection() {
 					Back to Backups
 				</button>
 				<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
-					<BackupSetupWizard />
+					{/* 368.8-17: the wizard is rendered inline here, so it cannot close
+					    itself. It used to try, by navigating to /settings/backups/configure
+					    — a route that stopped existing when Settings became window-only,
+					    which is why finishing setup ended on a 404. */}
+					<BackupSetupWizard onDone={() => setShowSetupWizard(false)} />
 				</Suspense>
 			</div>
 		)
