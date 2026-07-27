@@ -22,7 +22,51 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.1.14-beta.5 (PRERELEASE — the last beta before the v1.1.14
+# CURRENT VALUE = refs/tags/v1.1.14-beta.6 (PRERELEASE — beta.5 was called the last beta.
+#   It was not: putting it in front of the operator immediately surfaced that RESTORING A
+#   BACKUP HAS NEVER WORKED ON ANY BOX. beta.5's own change is confirmed good — the island
+#   percentage moves in the field, so 368.8-15 is proven.
+#
+#   368.8-16 — RESTORE WAS IMPOSSIBLE, FLEET-WIDE. Verbatim from the box:
+#     Command failed with exit code 32: mount --bind
+#       /opt/livos/data/backup-mounts/<t>/home /opt/livos/data/backups/<t>/Home
+#     mount: …/Home: must be superuser to use mount.
+#   livinityd is unprivileged and bind-mounting is root-only, so this code could never
+#   have run anywhere. It is the SAME ARCHETYPE as /kopia and /opt/livos-backups earlier
+#   in this phase — a privileged operation on an unprivileged service's critical path —
+#   which now makes three in one phase.
+#
+#   Measured on the box AS THE RUN-USER instead of reasoned about: `mount --bind` → exit
+#   32; `kopia mount <snapshot>/home` → mounts fine; `umount` on that FUSE mount → rc 0,
+#   because it belongs to the user that made it. So the two bind mounts become two
+#   ordinary FUSE mounts — kopia addresses a snapshot subdirectory the same way
+#   listBackupFiles already does for `kopia ls`. No sudoers entry, no privileged helper.
+#
+#   ⚠ A SECOND, INDEPENDENT DEFECT, and the reason a restore DIED rather than merely
+#   losing its file browser: restoreBackup reads ONLY the internal mountpoint, yet it
+#   awaited mountBackup, which also stood up the browse-only mounts. A failure in a layer
+#   the restore never reads took the whole restore down. mountBackup now accepts
+#   {virtualFilesystem: false} and restoreBackup passes it, so the two are independent.
+#
+#   368.8-17 — FINISHING SETUP ENDED ON A 404. The wizard closed itself by navigating to
+#   /settings/backups/configure, which stopped existing when Settings became window-only
+#   (router.tsx states it outright). Three call sites did it. Nothing underneath was
+#   broken — the destination was created and the first backup was already running — but
+#   the last thing the operator saw was an error page instead of a confirmation. There is
+#   now a Done step, reachable only from a successful submit, claiming only what is true
+#   at that moment. Plus two things from the same screenshot: Review printed
+#   "This device · System disk · System disk" (the folder defaults to the disk's own
+#   name), and the "This device" panel now names the chosen disk with its free space,
+#   previews the destination path live as it is typed, and raises the same-disk caveat
+#   from tertiary grey to an amber panel — it is that destination's one real limitation.
+#
+#   ⚠ STILL UNVERIFIED IN A BROWSER — and now there are two such claims, which is why
+#   this is again not the stable: 368.8-11's 2FA fix, and the restore path above. The
+#   restore fix in particular has NO automated end-to-end coverage; the box is the only
+#   evidence. Gates prove only non-regression: livinityd tsc 385 (baseline 385),
+#   engine.test.ts 23/23 with every new guard proven to FAIL against the unfixed code
+#   first, vite build exit 0, UI vitest 68/1381 inside the 68<->69 baseline.)
+# PREVIOUS = refs/tags/v1.1.14-beta.5 (PRERELEASE — the last beta before the v1.1.14
 #   stable cut. Two changes, both about the dock island, both cosmetic in the sense that
 #   no backup succeeds or fails differently because of them — and both about the island
 #   telling the truth, which is what the rest of this phase has been.
@@ -357,4 +401,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.1.14-beta.5
+refs/tags/v1.1.14-beta.6
