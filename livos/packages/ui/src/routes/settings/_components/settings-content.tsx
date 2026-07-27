@@ -1381,6 +1381,13 @@ const BackupSetupWizard = React.lazy(() =>
 const BackupRestoreWizard = React.lazy(() =>
 	import('@/features/backups/components/restore-wizard').then((m) => ({default: m.BackupsRestoreWizard})),
 )
+// Phase 368.8-06 (COR-03): the desktop tab's "Configure" button opened the SETUP
+// wizard because this import did not exist — so per-destination size / last backup /
+// Back-up-now / Remove, AND the scope + exclusions surfaces, were unreachable from
+// desktop Settings entirely. Same React.lazy + Suspense pattern as the two above.
+const BackupConfigureWizard = React.lazy(() =>
+	import('@/features/backups/components/configure-wizard').then((m) => ({default: m.BackupsConfigureWizard})),
+)
 
 // v36 sidebar consolidation 2026-05-15 — Backups now owns the Migration
 // Assistant. Third tab "Migration" hosts the 3-step transfer wizard
@@ -1390,6 +1397,7 @@ function BackupsSection() {
 	const [activeTab, setActiveTab] = useState<'status' | 'restore' | 'migration'>('status')
 	const [showSetupWizard, setShowSetupWizard] = useState(false)
 	const [showRestoreWizard, setShowRestoreWizard] = useState(false)
+	const [showConfigureWizard, setShowConfigureWizard] = useState(false)
 
 	// Backups-v2 P0: live kopia engine preflight — if the engine is missing or
 	// outdated NOTHING can back up, and that must be loud, not silent.
@@ -1467,6 +1475,37 @@ function BackupsSection() {
 				</button>
 				<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
 					<BackupRestoreWizard />
+				</Suspense>
+			</div>
+		)
+	}
+
+	// Show Configure Wizard inline (368.8-06 COR-03 / OP-04). Mirrors the two
+	// branches above exactly — same Back link, same Suspense fallback — so the tab
+	// gains a destination surface without any card being moved or restyled.
+	if (showConfigureWizard) {
+		return (
+			<div className='space-y-4'>
+				<button
+					onClick={() => setShowConfigureWizard(false)}
+					className='flex items-center gap-2 text-body-sm text-text-secondary hover:text-text-primary'
+				>
+					<TbArrowLeft className='h-4 w-4' />
+					Back to Backups
+				</button>
+				<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
+					{/* 368.8-06 deviation: the plan modified only this file, but Configure's
+					    "Add backup location" entries navigate to /settings/backups/setup —
+					    the same dead route that made "Finish setup" a 404 in 368.8-17.
+					    Making Configure reachable without this would have re-introduced that
+					    404 one click deeper, so the wizard now takes a callback and we hand
+					    it the inline Setup wizard instead of a URL. */}
+					<BackupConfigureWizard
+						onAddDestination={() => {
+							setShowConfigureWizard(false)
+							setShowSetupWizard(true)
+						}}
+					/>
 				</Suspense>
 			</div>
 		)
@@ -1565,7 +1604,7 @@ function BackupsSection() {
 								))}
 							</div>
 
-							<IconButton onClick={() => setShowSetupWizard(true)} icon={TbSettings}>
+							<IconButton onClick={() => setShowConfigureWizard(true)} icon={TbSettings}>
 								{t('backups-configure')}
 							</IconButton>
 						</>

@@ -45,7 +45,16 @@ import {t} from '@/utils/i18n'
 
 // MAIN COMPONENT
 
-export function BackupsConfigureWizard() {
+/**
+ * @param onAddDestination Phase 368.8-06. When provided, "Add backup location"
+ *   hands control back to the parent instead of navigating. The URLs below point
+ *   at `/settings/backups/setup`, which has not existed since Settings became
+ *   window-only (router.tsx: "/settings/* route REMOVED") — the same dead route
+ *   that made "Finish setup" a 404 in 368.8-17. Desktop Settings renders this
+ *   wizard inline and passes the callback; the navigate path is kept only so
+ *   nothing that still mounts this component without one changes behaviour.
+ */
+export function BackupsConfigureWizard({onAddDestination}: {onAddDestination?: (tab: string) => void} = {}) {
 	const navigate = useNavigate()
 	const {repositories, forgetRepository, isForgettingRepository} = useBackups()
 	const {doesHostHaveMountedShares} = useNetworkStorage()
@@ -86,17 +95,24 @@ export function BackupsConfigureWizard() {
 		return map
 	}, [backupProgressQ.data])
 
+	const goToSetup = React.useCallback(
+		(tab: string) => {
+			if (onAddDestination) return onAddDestination(tab)
+			navigate(`/settings/backups/setup?backups-setup-tab=${tab}`)
+		},
+		[navigate, onAddDestination],
+	)
 	const goToSetupNas = React.useCallback(
-		() => navigate(`/settings/backups/setup?backups-setup-tab=${NETWORK_STORAGE_PATH.slice(1).toLowerCase()}`),
-		[navigate],
+		() => goToSetup(NETWORK_STORAGE_PATH.slice(1).toLowerCase()),
+		[goToSetup],
 	)
 	const goToSetupExternal = React.useCallback(
-		() => navigate(`/settings/backups/setup?backups-setup-tab=${EXTERNAL_STORAGE_PATH.slice(1).toLowerCase()}`),
-		[navigate],
+		() => goToSetup(EXTERNAL_STORAGE_PATH.slice(1).toLowerCase()),
+		[goToSetup],
 	)
 	const goToSetupLivinityPrivateCloud = React.useCallback(
-		() => navigate(`/settings/backups/setup?backups-setup-tab=livinity-private-cloud`),
-		[navigate],
+		() => goToSetup('livinity-private-cloud'),
+		[goToSetup],
 	)
 
 	return (
