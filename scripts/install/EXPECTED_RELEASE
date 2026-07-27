@@ -22,7 +22,53 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.1.14 (STABLE, make_latest=true — cut from master. Phase 368.8
+# CURRENT VALUE = refs/tags/v1.1.15-beta.1 (PRERELEASE — group 368.8b, the three things the
+#   operator actually asked for at the start of this phase. 368.8a shipped as v1.1.14 and is
+#   untouched by this; the fleet's stable line stays there until the UAT below passes.
+#
+#   368.8-06 — THE BUTTON LABELLED "CONFIGURE" OPENED THE SETUP WIZARD. settings-content.tsx
+#   never imported BackupsConfigureWizard, so per-destination Last backup / Used / Available /
+#   Total backups / Status / Back up now / Remove — AND the backup scope and exclusions
+#   surfaces — could not be reached from desktop Settings at all.
+#   ⚠ Deviation from the plan, and it was not optional: Configure's own "Add backup location"
+#   entries navigated to /settings/backups/setup, the SAME dead route that made "Finish setup"
+#   a 404 in 368.8-17. Making Configure reachable without fixing that would have re-introduced
+#   the 404 one click deeper. The wizard now takes an optional onAddDestination callback.
+#   ⚠ Found, NOT fixed: the mobile drawer's three /settings/backups/* links are dead for the
+#   same reason. Desktop-only plan; tracked separately.
+#
+#   368.8-07 — THE SAFETY INTERVAL IS CONFIGURABLE. "saatlik mi yapıyor bunu ayarlayamıyor
+#   muyuz" — it was hardcoded to an hour. Now 30 min / 1 hour (default) / 6 hours / daily,
+#   persisted; absent field = 1 hour, so existing boxes need no migration.
+#   The part that actually mattered: the old loop had ONE cursor and ONE interval, and the
+#   tick is a FLOOR on resolution — offering "30 minutes" while waking hourly would have
+#   silently meant 60. So the gate wakes on min(safetyInterval, backupInterval) and each class
+#   carries its own cursor, with a per-repository gate so a safety-only wake does NOT speed up
+#   USB/NAS. backupInterval itself is untouched.
+#   ⚠ The six cadence tests exercise a MODEL of the scheduler; deleting the real gate would
+#   leave them all green while USB/NAS quietly sped up — the exact failure recorded in
+#   feedback_pure_module_tests_never_exercise_call_path. So there is ALSO a call-path test
+#   pinning the real loop, proven to fail with the gate removed.
+#
+#   368.8-08 — THE CARD SAYS WHERE, WHEN, HOW LONG AND HOW BIG. "bu snapshotlar nereye". It
+#   said only "Hourly local snapshots on the internal disk", which after 368.8-07 was also
+#   FALSE — that string is gone from en and tr. Size is fetched lazily behind a Check button
+#   because getRepositorySize shells out to kopia twice behind a concurrency:1 queue and blocks
+#   during a running backup. Retention is described from the actual flags (--keep-hourly=24
+#   --keep-daily=7). OP-02 held: the safety repo keeps its own card, is in no destination
+#   count, and gains no delete affordance. OP-03 held: Migration is byte-identical.
+#
+#   ⚠ WHY A PRERELEASE. This changes a SCHEDULER LOOP. A unit test cannot prove that a box
+#   actually takes a snapshot every 30 minutes, nor that a USB destination did not speed up —
+#   only the journal on real hardware can (feedback_milestone_uat_gate). `bash update.sh`
+#   clones the latest RELEASE TAG, so unreleased code cannot reach a box any other way. The
+#   UAT greps two new lines:
+#     Backups interval classes due: safety=<bool> user=<bool> (wake=<n>ms, …)
+#     Safety snapshot interval set to <option> (<n>ms) by admin
+#   Gates: livinityd tsc 385 (baseline 385); 5 pure backups suites 159/159 (the 2 integration
+#   suites cannot collect on this host — native bindings — and gate nothing); vite build exit
+#   0; UI vitest 68/1381, inside the 68<->69 baseline.)
+# PREVIOUS = refs/tags/v1.1.14 (STABLE, make_latest=true — cut from master. Phase 368.8
 #   BKPFIXUP in full. The fleet has been on v1.1.13 throughout; everything below is new to it.
 #
 #   ⚠ THIS CARRIES A LOGIN SECURITY FIX. 368.8-13: on every single-user DB-backed box — the
@@ -500,4 +546,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.1.14
+refs/tags/v1.1.15-beta.1
