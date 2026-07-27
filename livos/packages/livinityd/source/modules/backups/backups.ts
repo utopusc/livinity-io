@@ -1260,7 +1260,43 @@ export default class Backups {
 				this.logger.log(`Rebooting into newly recovered data`)
 				setSystemStatus('restarting')
 				await this.#livinityd.stop().catch(() => {})
-				await reboot()
+
+				// ─────────────────────────────────────────────────────────────
+				// Phase 368.8-20 — a failed reboot must not be reported as a
+				// failed restore.
+				//
+				// Observed on the operator's box, on a restore that had ALREADY
+				// succeeded — data copied to 99%, moved into `import`, the
+				// first-start flag written:
+				//
+				//   Error: Command failed with exit code 1: reboot
+				//   Call to Reboot failed: Interactive authentication required.
+				//
+				// `reboot` needs privilege livinityd does not have (system.ts
+				// runs it bare), so this throw propagated out of restoreBackup
+				// and the UI said "Restore failed". Nothing had failed: the box
+				// simply had to be restarted by hand, and every byte was already
+				// in place. Telling someone their restore failed when it did not
+				// is the worst version of the quiet lie this phase has been
+				// removing — it invites them to run it AGAIN.
+				//
+				// The reboot is the LAST act of a completed restore, so its
+				// failure is reported as what it is: restore complete, restart
+				// required. `success` is already true and stays true.
+				// ─────────────────────────────────────────────────────────────
+				try {
+					await reboot()
+				} catch (error) {
+					this.logger.error('Restore finished but the reboot was refused — restart required', error as Error)
+					setSystemStatus('running')
+					this.restoreStatus = {
+						running: false,
+						progress: 100,
+						description: 'Restore complete — restart this device to finish',
+						error: false,
+					}
+					this.#livinityd.eventBus.emit('backups:restore-progress', this.restoreStatus)
+				}
 			}
 		}
 

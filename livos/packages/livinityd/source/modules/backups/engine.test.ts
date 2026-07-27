@@ -359,6 +359,27 @@ test('restoreBackup does not stand up the browse-only virtual filesystem', async
 	expect(restore).toMatch(/mountBackup\(backupId,\s*\{virtualFilesystem:\s*false\}\)/)
 })
 
+test('a refused reboot is not reported as a failed restore (368.8-20)', async () => {
+	const directory = path.dirname(fileURLToPath(import.meta.url))
+	const source = await fs.readFile(path.join(directory, 'backups.ts'), 'utf8')
+
+	// Observed on a restore that had ALREADY succeeded — data copied, moved into
+	// `import`, first-start flag written — and then:
+	//   Error: Command failed with exit code 1: reboot
+	//   Call to Reboot failed: Interactive authentication required.
+	// The throw escaped restoreBackup and the UI said "Restore failed". Telling
+	// someone their restore failed when every byte is in place invites them to
+	// run it again.
+	const restore = source.slice(source.indexOf('async restoreBackup('), source.indexOf('// Connect to a repository'))
+
+	// The reboot must be guarded...
+	expect(restore).toMatch(/try\s*\{\s*await reboot\(\)\s*\}\s*catch/)
+	// ...and the guarded branch must still report success, not an error.
+	const rebootBranch = restore.slice(restore.indexOf('await reboot()'))
+	expect(rebootBranch).toMatch(/error:\s*false/)
+	expect(rebootBranch).not.toMatch(/error:\s*'Restore failed'/)
+})
+
 test('installEngine cleans up its temporary directory on failure', async () => {
 	vi.spyOn(process, 'platform', 'get').mockReturnValue('linux' as NodeJS.Platform)
 	vi.spyOn(process, 'arch', 'get').mockReturnValue('x64' as NodeJS.Architecture)
