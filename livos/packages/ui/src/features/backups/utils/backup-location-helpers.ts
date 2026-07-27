@@ -11,7 +11,30 @@ export type DeviceKind = 'NAS' | 'DRIVE' | 'POOL' | 'DEVICE'
 export const POOL_ROOT = '/Pool'
 export const THIS_DEVICE_ROOT = '/ThisDevice'
 
+/**
+ * Phase 368.8-21 — the safety repo is the ONE repository whose path is a real
+ * system path, not a virtual root: `SAFETY_REPO_PATH` in
+ * livinityd/modules/backups/safety-snapshots.ts. Keep the two in step.
+ *
+ * Every helper below matches on virtual roots, so this path fell through every
+ * branch and was treated as an external drive: `getDeviceType` returned 'DRIVE',
+ * `isRepoConnected` then looked for a mountpoint under `/External/livos`, found
+ * none, and reported it DISCONNECTED. Four call sites gate on that answer, so in
+ * the restore wizard the safety repo rendered as "Unknown", greyed out and
+ * non-interactive — i.e. **the one repository that was actually working on a box
+ * with no USB drive could not be restored from.** Same shape as the 368.6 bug
+ * where an unrecognised root made an internal destination non-restorable.
+ */
+export const SAFETY_REPO_PATH = '/opt/livos/backups-local'
+
+export function isSafetyRepoPath(path: string): boolean {
+	return path === SAFETY_REPO_PATH || path.startsWith(`${SAFETY_REPO_PATH}/`)
+}
+
 export function getDeviceType(path: string): DeviceKind {
+	// The safety repo lives on this box's own disk — it is a DEVICE, and it is
+	// the reason DEVICE must be decided before the external-drive fallback.
+	if (isSafetyRepoPath(path)) return 'DEVICE'
 	if (path.startsWith(NETWORK_STORAGE_PATH)) return 'NAS'
 	if (path.startsWith(`${THIS_DEVICE_ROOT}/`) || path === THIS_DEVICE_ROOT) return 'DEVICE'
 	if (path.startsWith(`${POOL_ROOT}/`) || path === POOL_ROOT) return 'POOL'
@@ -28,6 +51,9 @@ export function getDeviceType(path: string): DeviceKind {
  */
 export function getDeviceNameFromPath(path: string): string {
 	const parts = path.split('/').filter(Boolean)
+	// 368.8-21: without this the safety repo fell through to `parts[0]` and showed
+	// as "opt" — or, via getRepositoryDisplayName, as "Unknown".
+	if (isSafetyRepoPath(path)) return t('backups-safety-repo-name')
 	if (path.startsWith('/Network/')) return parts[1] || t('nas')
 	if (path.startsWith('/External/')) return parts[1] || t('external-drive')
 	// 368.6: the folder the operator named IS the device name here — there is no

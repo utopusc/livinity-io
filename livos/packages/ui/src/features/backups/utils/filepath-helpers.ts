@@ -1,5 +1,6 @@
 import {APPS_PATH, EXTERNAL_STORAGE_PATH, NETWORK_STORAGE_PATH} from '@/features/files/constants'
-import {POOL_ROOT, THIS_DEVICE_ROOT} from '@/features/backups/utils/backup-location-helpers'
+import {isSafetyRepoPath, POOL_ROOT, THIS_DEVICE_ROOT} from '@/features/backups/utils/backup-location-helpers'
+import {t} from '@/utils/i18n'
 
 // File name used by Livinity backups within a repository directory
 export const BACKUP_FILE_NAME = 'Livinity Backup.backup'
@@ -75,6 +76,9 @@ export function getRelativePathFromRoot(path: string, root: string): string {
 // Returns empty string if not applicable.
 export function getRepositoryDisplayName(path: string): string {
 	const segments = path.split('/').filter(Boolean)
+	// 368.8-21: the safety repo is the one repository on a real system path. It
+	// returned '' here, which the restore wizard rendered as "Unknown".
+	if (isSafetyRepoPath(path)) return t('backups-safety-repo-name')
 	if (isDeviceRooted(path)) {
 		return segments[1] || ''
 	}
@@ -87,6 +91,10 @@ export function getRepositoryDisplayName(path: string): string {
 //  - /Network/host/data/My Backups/Livinity Backup.backup -> /data/My Backups
 //  - /External/USB-DISK/Livinity Backup.backup -> /
 export function getRepositoryRelativePath(path: string): string {
+	// 368.8-21: the safety repo IS its own location — showing the operator
+	// "/opt/livos/backups-local" beside every other row's "/" was noise, and a
+	// host path at that.
+	if (isSafetyRepoPath(path)) return '/'
 	const segments = path.split('/').filter(Boolean)
 
 	// Skip root and device segments when present

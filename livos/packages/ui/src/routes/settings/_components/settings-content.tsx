@@ -28,6 +28,7 @@ import {
 	TbEyeOff,
 	TbKey,
 	TbDatabase,
+	TbTrash,
 	TbUser,
 	TbLoader2,
 	TbAlertCircle,
@@ -80,6 +81,9 @@ import {usePassword} from '@/hooks/use-password'
 import {useUserName} from '@/hooks/use-user-name'
 import {useBackups, useRepositorySize, useTriggerBackupForRepo} from '@/features/backups/hooks/use-backups'
 // Phase 368.8-08 SAFE-01/03 — the Safety Snapshots card's facts.
+// Phase 368.8-21 — destination rows show a name and a path, not a raw repo path.
+import {getDeviceNameFromPath} from '@/features/backups/utils/backup-location-helpers'
+import {getRepositoryRelativePath} from '@/features/backups/utils/filepath-helpers'
 import {formatFilesystemDate} from '@/features/files/utils/format-filesystem-date'
 import {formatFilesystemSize} from '@/features/files/utils/format-filesystem-size'
 import {useLanguage} from '@/hooks/use-language'
@@ -87,6 +91,17 @@ import {useApps} from '@/providers/apps'
 import {animatedWallpapers, animatedWallpaperIds, type AnimatedWallpaperId} from '@/components/animated-wallpapers'
 import {useWallpaper} from '@/providers/wallpaper'
 import {LanguageDropdownContent, LanguageDropdownTrigger} from '@/routes/settings/_components/language-dropdown'
+// 368.8-21 — confirm gate for removing a backup destination from the list.
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from '@/shadcn-components/ui/alert-dialog'
 import {Button} from '@/shadcn-components/ui/button'
 import {
 	Dialog,
@@ -1397,7 +1412,16 @@ const BackupConfigureWizard = React.lazy(() =>
 // Assistant. Third tab "Migration" hosts the 3-step transfer wizard
 // previously reached from its own top-level menu entry.
 function BackupsSection() {
-	const {repositories: backupRepositories, isLoadingRepositories: isLoadingBackups} = useBackups()
+	// 368.8-21: forgetRepository was already exported by this hook; the desktop
+	// list simply never offered it, so removing a destination meant going through
+	// Configure › the destination › Remove — and Configure itself was unreachable
+	// until 368.8-06.
+	const {
+		repositories: backupRepositories,
+		isLoadingRepositories: isLoadingBackups,
+		forgetRepository,
+		isForgettingRepository,
+	} = useBackups()
 	const [activeTab, setActiveTab] = useState<'status' | 'restore' | 'migration'>('status')
 	const [showSetupWizard, setShowSetupWizard] = useState(false)
 	const [showRestoreWizard, setShowRestoreWizard] = useState(false)
@@ -1594,17 +1618,22 @@ function BackupsSection() {
 								</div>
 							)}
 
-							{/* Repository List */}
+							{/* Repository List — Phase 368.8-21. It used to print the raw
+							    repository path ("/ThisDevice/Deneme/Livinity Backup.backup"),
+							    which repeated the same two segments on every row, carried no
+							    information, and truncated exactly where the useful part was —
+							    the operator only noticed the rows were even there after
+							    widening the window. Now: the destination's name, its path
+							    under that destination, when it last ran, and a way to remove
+							    it. */}
 							<div className='space-y-2'>
-								{userRepositories.map((repo, idx) => (
-									<div key={idx} className='rounded-radius-sm border border-border-default bg-surface-base p-3'>
-										<div className='flex items-center gap-3'>
-											<TbDatabase className='h-5 w-5 text-text-secondary' />
-											<div className='flex-1 min-w-0'>
-												<div className='text-body-sm font-medium truncate'>{repo.path || 'Backup Location'}</div>
-											</div>
-										</div>
-									</div>
+								{userRepositories.map((repo) => (
+									<BackupDestinationRow
+										key={repo.id}
+										repo={repo}
+										onForget={() => forgetRepository(repo.id)}
+										isForgetting={isForgettingRepository}
+									/>
 								))}
 							</div>
 
@@ -1664,6 +1693,89 @@ function BackupsSection() {
 					<MigrationSection />
 				</TabsContent>
 			</Tabs>
+		</div>
+	)
+}
+
+/**
+ * Phase 368.8-21 — one backup destination, as a row.
+ *
+ * Replaces a row that printed `repo.path` verbatim. On a box with several
+ * "This device" folders every row read
+ * `/ThisDevice/<name>/Livinity Backup.backup`, so the only distinguishing
+ * segment sat in the middle of an identical string and truncation cut it off.
+ *
+ * Removal lives here because the operator asked for it and the only other way to
+ * reach it was Configure › a destination › Remove. It is confirm-gated: forget
+ * discards the box's knowledge of the destination, and while kopia's data stays
+ * on disk, the repository password does not — see the dialog copy.
+ */
+function BackupDestinationRow({
+	repo,
+	onForget,
+	isForgetting,
+}: {
+	repo: {id: string; path: string; lastBackup?: number}
+	onForget: () => void
+	isForgetting: boolean
+}) {
+	const [lang] = useLanguage()
+	const [confirmOpen, setConfirmOpen] = useState(false)
+	const name = getDeviceNameFromPath(repo.path)
+	const relative = getRepositoryRelativePath(repo.path)
+
+	return (
+		<div className='rounded-radius-sm border border-border-default bg-surface-base p-3'>
+			<div className='flex items-center gap-3'>
+				<TbDatabase className='size-5 shrink-0 text-text-secondary' />
+				<div className='min-w-0 flex-1'>
+					<div className='truncate text-body-sm font-medium' title={repo.path}>
+						{name}
+					</div>
+					<div className='truncate text-caption text-text-secondary'>
+						{relative === '/' ? repo.path.replace(/\/[^/]*\.backup$/, '') : relative}
+					</div>
+				</div>
+				<div className='shrink-0 text-right text-caption text-text-secondary max-sm:hidden'>
+					{repo.lastBackup
+						? formatFilesystemDate(Number(repo.lastBackup), lang)
+						: t('backups-safety-never-run')}
+				</div>
+				<Button
+					size='sm'
+					variant='default'
+					className='shrink-0'
+					disabled={isForgetting}
+					onClick={() => setConfirmOpen(true)}
+					aria-label={t('backups-configure.remove-backup-location')}
+				>
+					<TbTrash className='size-4' />
+				</Button>
+			</div>
+
+			<AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>{t('backups-configure.remove-backup-location-confirmation')}</AlertDialogTitle>
+						<AlertDialogDescription>
+							{t('backups-configure.remove-backup-location-confirmation-description', {device: name})}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+						<AlertDialogAction
+							variant='destructive'
+							disabled={isForgetting}
+							onClick={() => {
+								setConfirmOpen(false)
+								onForget()
+							}}
+						>
+							{t('backups-configure.remove-backup-location')}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	)
 }
