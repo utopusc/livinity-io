@@ -13,7 +13,10 @@ import {
 	detectEngine,
 	installEngine,
 	kopiaConfigFile,
+	kopiaPtyArgs,
 	kopiaSpawnEnv,
+	parseKopiaProgressPercent,
+	PTY_WRAPPER_CANDIDATES,
 	KOPIA_CACHE_DIR,
 	KOPIA_CONFIG_DIR,
 	KOPIA_MINIMUM_VERSION,
@@ -516,12 +519,37 @@ export default class Backups {
 		return repository
 	}
 
+	/**
+	 * Phase 368.8-15 — locate `script(1)` once, or report there is none.
+	 *
+	 * Memoised on the promise, so concurrent backups share one probe and every
+	 * later spawn is a resolved await. Absence is deliberately NOT an error: a
+	 * box without script(1) loses the percentage, which is exactly where this
+	 * subsystem already was, and losing a backup to gain a number would be a
+	 * bad trade.
+	 */
+	#ptyWrapperPromise?: Promise<string | undefined>
+	#ptyWrapper() {
+		this.#ptyWrapperPromise ??= (async () => {
+			for (const candidate of PTY_WRAPPER_CANDIDATES) {
+				if (await fse.pathExists(candidate)) return candidate
+			}
+			this.logger.log(`No script(1) found — backups will run without a progress figure`)
+			return undefined
+		})()
+		return this.#ptyWrapperPromise
+	}
+
 	// Run a kopia command
 	// We just default to bypassing the queue to effectively disable it now. It was causing blocking problems.
 	// We can carefully re-enable it in select places in the future if we need to.
 	async kopia(
 		flags: string[] = [],
-		{onOutput, bypassQueue = true}: {onOutput?: (output: string) => void; bypassQueue?: boolean} = {},
+		{
+			onOutput,
+			bypassQueue = true,
+			pty = false,
+		}: {onOutput?: (output: string) => void; bypassQueue?: boolean; pty?: boolean} = {},
 	) {
 		// Refuse to spawn new kopia processes if we're shutting down
 		if (!this.running) throw new Error('[shutting-down] Refusing to spawn new kopia processes')
@@ -546,7 +574,13 @@ export default class Backups {
 			// cache) is owned by engine.ts — see kopiaSpawnEnv's comment for why it is
 			// a single pure function rather than an inline literal.
 			const env = kopiaSpawnEnv()
-			const process = execa('kopia', flags, {env})
+
+			// 368.8-15: only the snapshot write asks for a pty, and only because
+			// kopia reports progress nowhere else. Every other kopia call stays on a
+			// plain pipe — several of them parse `--json` off stdout, and a pty would
+			// interleave progress frames into that JSON.
+			const wrapper = pty ? await this.#ptyWrapper() : undefined
+			const process = wrapper ? execa(wrapper, kopiaPtyArgs(flags), {env}) : execa('kopia', flags, {env})
 
 			// Store reference to running process
 			this.runningKopiaProcesses.push(process)
@@ -1326,7 +1360,11 @@ export default class Backups {
 	async repository(
 		repositoryId: string,
 		flags: string[] = [],
-		{onOutput, bypassQueue = true}: {onOutput?: (output: string) => void; bypassQueue?: boolean} = {},
+		{
+			onOutput,
+			bypassQueue = true,
+			pty = false,
+		}: {onOutput?: (output: string) => void; bypassQueue?: boolean; pty?: boolean} = {},
 	) {
 		// Check we're connected to the repository
 		// We technically only need to connect once, but there's no downside to connecting
@@ -1335,7 +1373,7 @@ export default class Backups {
 		await this.connect(repositoryId)
 
 		// Run the command
-		return this.kopia([...flags, `--config-file=${kopiaConfigFile(repositoryId)}`], {onOutput, bypassQueue})
+		return this.kopia([...flags, `--config-file=${kopiaConfigFile(repositoryId)}`], {onOutput, bypassQueue, pty})
 	}
 
 	// Get size of a repository
@@ -1463,14 +1501,17 @@ export default class Backups {
 			const stopDiskWatchdog = sharesSystemDisk ? this.startDiskWatchdog(repository.id) : undefined
 			try {
 				await this.repository(repository.id, ['snapshot', 'create', this.#livinityd.dataDirectory], {
+					// 368.8-15: without a pty kopia emits no progress at all, so the
+					// island sat at 0% for the entire run. See kopiaPtyArgs.
+					pty: true,
 					onOutput: (output) => {
-						// Pluck progress in brackets from output like:
+						// Pluck progress out of output like:
 						// '/ 1 hashing, 216 hashed (1.6 GB), 21121 cached (5.4 GB), uploaded 1.4 GB, estimated 7.6 GB (91.6%) 0s left'
-						const match = output.match(/estimated.*\((\d+(?:\.\d+)?)%\).*left/)
-						if (!match) return
+						const percent = parseKopiaProgressPercent(output)
+						if (percent === undefined) return
 
 						// Update progress
-						backupProgress.percent = Number(match[1])
+						backupProgress.percent = percent
 						this.#livinityd.eventBus.emit('backups:backup-progress', this.backupsInProgress)
 					},
 				})

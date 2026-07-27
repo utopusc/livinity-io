@@ -104,6 +104,61 @@ export function kopiaSpawnEnv(): KopiaSpawnEnv {
 }
 
 /**
+ * Phase 368.8-15 — the argv that runs kopia under a pseudo-terminal.
+ *
+ * kopia only renders progress when its output is a terminal; spawned through a
+ * pipe it emits nothing at all to parse (measured on a box: zero lines matching
+ * `estimated`, zero matching `hashing`, across whole multi-minute runs). It has
+ * no flag that forces it — `--progress` is already the default and does not
+ * help, and 0.23.1 has no `--progress-interval` at the snapshot level. So the
+ * terminal has to be real, and util-linux `script(1)` is the way to get one
+ * without adding a native pty dependency.
+ *
+ * `script -qec CMD /dev/null` runs CMD on a pty, quietly, and `-e` returns
+ * CMD's own exit status — so execa still fails the way it always did.
+ *
+ * CMD is ONE string handed to a shell, which makes quoting load-bearing rather
+ * than cosmetic: repository paths contain an operator-typed folder name, so an
+ * unquoted argument here would be shell injection reachable from the setup
+ * wizard. Every argument is single-quoted with the POSIX escape, and that is
+ * what engine.test.ts asserts.
+ */
+export function posixShellQuote(argument: string): string {
+	// Close the quote, emit an escaped literal quote, reopen — the only way to
+	// get a `'` inside a single-quoted POSIX string.
+	return `'${argument.replaceAll("'", `'\\''`)}'`
+}
+
+export function kopiaPtyArgs(flags: string[]): string[] {
+	return ['-qec', ['kopia', ...flags].map(posixShellQuote).join(' '), '/dev/null']
+}
+
+/**
+ * Where `script(1)` lives, in probe order. Both are real on Debian-family
+ * boxes depending on the merged-/usr state; a box with neither simply gets no
+ * progress figure, never a failed backup.
+ */
+export const PTY_WRAPPER_CANDIDATES = ['/usr/bin/script', '/bin/script']
+
+/**
+ * The percentage out of one chunk of kopia's progress output, or undefined.
+ *
+ * A pty rewrites the progress line in place with `\r`, so a single chunk
+ * routinely carries several frames; the LAST one is the only current one.
+ * Character classes exclude `\r`/`\n` so a greedy `.` cannot span two frames
+ * and read one frame's percentage against another's `left`.
+ *
+ * kopia prints `estimating...` — with no figure — until it has an estimate,
+ * which on a first snapshot lasts a while. That yields undefined, i.e. "no
+ * news", not zero.
+ */
+export function parseKopiaProgressPercent(output: string): number | undefined {
+	const frames = [...output.matchAll(/estimated[^\r\n]*?\((\d+(?:\.\d+)?)%\)[^\r\n]*?left/g)]
+	if (frames.length === 0) return undefined
+	return Number(frames.at(-1)![1])
+}
+
+/**
  * The `--config-file=` argument for one repository. Pure.
  *
  * These files are cheap: kopia recreates one the next time we connect. They

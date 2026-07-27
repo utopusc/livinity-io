@@ -17,8 +17,17 @@ vi.mock('execa', () => ({
 	},
 }))
 
-const {detectEngine, installEngine, isVersionAtLeast, kopiaSpawnEnv, parseKopiaVersion, KOPIA_MINIMUM_VERSION} =
-	await import('./engine.js')
+const {
+	detectEngine,
+	installEngine,
+	isVersionAtLeast,
+	kopiaPtyArgs,
+	kopiaSpawnEnv,
+	parseKopiaProgressPercent,
+	parseKopiaVersion,
+	posixShellQuote,
+	KOPIA_MINIMUM_VERSION,
+} = await import('./engine.js')
 
 const logger = {log: () => {}, error: () => {}}
 
@@ -204,6 +213,107 @@ test('no backups source file spells a kopia state path inline', async () => {
 	}
 
 	expect(offenders).toEqual([])
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 368.8-15 — the dock island sat at 0% for entire runs.
+//
+// Measured on the operator's box: across whole multi-minute backups, journal
+// lines containing `estimated` = 0 and containing `hashing` = 0. kopia renders
+// progress ONLY onto a terminal, and livinityd spawns it through a pipe, so
+// there was never anything to parse. Reproduced in isolation on the same box:
+// 1.5 GB snapshot piped → 0 progress lines; identical command under script(1)
+// → progress frames within a second.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('kopiaPtyArgs runs kopia on a pty and preserves its exit status', () => {
+	const args = kopiaPtyArgs(['snapshot', 'create', '/home/data'])
+
+	// -q so script's own "Script started/done" banner never reaches the parser,
+	// -e so kopia's exit status is what execa sees (without it every failed
+	// backup would look successful), and the typescript goes to /dev/null
+	// because we consume the live stream, not a recording.
+	expect(args[0]).toBe('-qec')
+	expect(args.at(-1)).toBe('/dev/null')
+	expect(args[1]).toBe(`'kopia' 'snapshot' 'create' '/home/data'`)
+})
+
+test('kopiaPtyArgs quotes a destination name that would otherwise be shell injection', () => {
+	// The operator types the folder name in the setup wizard, and it lands in the
+	// repository path — so this string is genuinely attacker-influenced input on
+	// the one code path that now goes through a shell.
+	const args = kopiaPtyArgs(['snapshot', 'create', `/mnt/x'; touch /tmp/pwned; echo '`])
+
+	// The metacharacters must survive as literal characters INSIDE quotes; what
+	// must not survive is an unbalanced quote that lets the rest run as commands.
+	expect(args[1]).toBe(`'kopia' 'snapshot' 'create' '/mnt/x'\\''; touch /tmp/pwned; echo '\\'''`)
+	expect((args[1].match(/'/g) ?? []).length % 2).toBe(0)
+})
+
+test('posixShellQuote leaves no way out of the quotes', () => {
+	for (const hostile of [`'`, `''`, `a'b`, `$(id)`, '`id`', '\\', '\n; id']) {
+		const quoted = posixShellQuote(hostile)
+		expect(quoted.startsWith(`'`)).toBe(true)
+		expect(quoted.endsWith(`'`)).toBe(true)
+		// Every inner quote is the escaped `'\''` form, so the string never closes early.
+		expect(quoted.slice(1, -1).replaceAll(`'\\''`, '')).not.toContain(`'`)
+	}
+})
+
+test('parseKopiaProgressPercent reads the newest frame in a chunk, not the oldest', () => {
+	// A pty rewrites the line in place with \r, so one read() routinely carries
+	// several frames. Rendering the first would draw a figure that is already
+	// stale — and on a fast repo it can be several frames behind.
+	const chunk =
+		` | 1 hashing, 12 hashed (1.0 GB), estimated 7.6 GB (13.2%) 90s left\r` +
+		` / 1 hashing, 44 hashed (3.0 GB), estimated 7.6 GB (39.5%) 40s left\r` +
+		` - 1 hashing, 91 hashed (6.9 GB), estimated 7.6 GB (91.6%) 2s left`
+
+	expect(parseKopiaProgressPercent(chunk)).toBe(91.6)
+})
+
+test('parseKopiaProgressPercent never reads one frame percentage against another frame', () => {
+	// The failure this guards: a greedy `.` matches \r, so a pattern anchored on
+	// `estimated … left` could span the frame boundary and pair the percentage of
+	// the first frame with the `left` of the second. Here only the OLD frame
+	// carries a figure and the newest one is still estimating, so a parser that
+	// bridges frames would happily report a number for a frame that has none.
+	const chunk = ` - estimated 7.6 GB (91.6%) 2s left\r | 1 hashing, 0 hashed (0 B), estimating...`
+
+	expect(parseKopiaProgressPercent(chunk)).toBe(91.6)
+
+	// And the reverse order, which is what actually happens at the start of a run.
+	const startOfRun = ` | 1 hashing, 0 hashed (65.5 KB), uploaded 0 B, estimating...\r / estimated 7.6 GB (3.1%) 300s left`
+	expect(parseKopiaProgressPercent(startOfRun)).toBe(3.1)
+})
+
+test('parseKopiaProgressPercent reports no news rather than zero while kopia is still estimating', () => {
+	// Observed verbatim on the box. Returning 0 here would be indistinguishable
+	// from a stalled backup — the exact quiet lie this phase has been removing.
+	// The island's pulse carries "working" during this window instead.
+	expect(
+		parseKopiaProgressPercent(' | 1 hashing, 0 hashed (65.5 KB), 0 cached (0 B), uploaded 0 B, estimating...'),
+	).toBeUndefined()
+	expect(parseKopiaProgressPercent('Snapshotting root@box:/home/data ...')).toBeUndefined()
+	expect(parseKopiaProgressPercent('')).toBeUndefined()
+})
+
+test('the snapshot write is the only kopia call that asks for a pty', async () => {
+	const directory = path.dirname(fileURLToPath(import.meta.url))
+	const source = await fs.readFile(path.join(directory, 'backups.ts'), 'utf8')
+
+	// Two things must stay true together, and each breaks the other's value:
+	//
+	// 1. `snapshot create` must keep asking for one, or the percentage silently
+	//    goes back to a number that never moves.
+	// 2. NOTHING else may, because a pty interleaves progress frames into stdout
+	//    and several other calls parse `--json` off it (getRepositorySize reads
+	//    `repository status --json`, and would start throwing on JSON.parse).
+	const ptyRequests = source.split('\n').filter((line) => /\bpty:\s*true/.test(line)).length
+	expect(ptyRequests).toBe(1)
+
+	const snapshotCall = source.slice(source.indexOf(`['snapshot', 'create'`))
+	expect(snapshotCall.slice(0, 400)).toMatch(/\bpty:\s*true/)
 })
 
 test('installEngine cleans up its temporary directory on failure', async () => {
