@@ -81,6 +81,46 @@ describe('runMastraMigrations', () => {
 		expect(result.tablesCreated).toBe(0)
 	})
 
+	// ─────────────────────────────────────────────────────────────────────
+	// Phase 368.8-18 — the whole migration was dead on any box without pgvector.
+	//
+	// Observed on the operator's box (Postgres 16 on the host, no pgvector):
+	//   Phase 197-03 runMastraMigrations failed …: extension "vector" is not available
+	//
+	// The file is executed as ONE query, so the failing FIRST statement took
+	// every CREATE TABLE below it with it — while the caller logged the result
+	// as "non-fatal". It was not: mastra_* simply never existed on those boxes.
+	// ─────────────────────────────────────────────────────────────────────
+	test('368.8-18: the migration requires no extension, since no column uses one', async () => {
+		const {readFile} = await import('node:fs/promises')
+		const path = await import('node:path')
+		const {fileURLToPath} = await import('node:url')
+		const sqlPath = path.join(
+			path.dirname(fileURLToPath(import.meta.url)),
+			'migrations',
+			'001-mastra-tables.sql',
+		)
+		const sql = await readFile(sqlPath, 'utf8')
+		const statements = sql
+			.split('\n')
+			.filter((line) => !line.trimStart().startsWith('--'))
+			.join('\n')
+
+		expect(statements).not.toMatch(/CREATE\s+EXTENSION/i)
+
+		// Why dropping it is safe: no column here declares a pgvector type.
+		// (`TSVECTOR` elsewhere in the schema is Postgres's built-in full-text
+		// type and is unrelated.)
+		expect(statements).not.toMatch(/\b\w+\s+vector\s*\(/i)
+
+		// Still idempotent and still non-destructive — it re-runs on every boot.
+		const creates = statements.match(/CREATE\s+(TABLE|INDEX)/gi) ?? []
+		const guarded = statements.match(/CREATE\s+(TABLE|INDEX)\s+IF\s+NOT\s+EXISTS/gi) ?? []
+		expect(creates.length).toBeGreaterThan(0)
+		expect(guarded.length).toBe(creates.length)
+		expect(statements).not.toMatch(/\bDROP\b/i)
+	})
+
 	test('Test 3: connect error → thrown message has password scrubbed', async () => {
 		queryError = new Error('connect-error')
 		await expect(
