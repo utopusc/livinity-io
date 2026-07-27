@@ -22,7 +22,49 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.1.15-beta.1 (PRERELEASE — group 368.8b, the three things the
+# CURRENT VALUE = refs/tags/v1.1.15-beta.2 (PRERELEASE — beta.1 went in front of the operator
+#   and immediately paid for itself: two defects and two gaps, all four from ten minutes of
+#   real use.
+#
+#   368.8-21 — THE SAFETY REPO COULD NOT BE RESTORED FROM. In the restore wizard it rendered
+#   "Unknown · /opt/livos/backups-local", greyed out, non-interactive, while every other
+#   destination was selectable. It is the ONE repository on a real system path rather than a
+#   virtual root, so it fell through every prefix check: getDeviceType said 'DRIVE',
+#   isRepoConnected then hunted for a mountpoint under /External/livos, found none, and
+#   answered DISCONNECTED — and four call sites gate on that answer.
+#   ⚠ On a box with no USB drive and no NAS the safety repo is the ONLY backup that works, so
+#   the one usable backup was the one that could not be restored. Same shape as the 368.6
+#   defect where an unrecognised root made an internal destination non-restorable.
+#
+#   368.8-21 also — THE DESTINATION LIST WAS UNREADABLE AND HAD NO REMOVE. Every row printed
+#   repo.path verbatim, so with several "This device" folders each row read
+#   /ThisDevice/<name>/Livinity Backup.backup with the only distinguishing segment buried
+#   mid-string — and truncation cut exactly there. The operator noticed the rows carried
+#   anything at all only after widening the window. Rows now show the destination name, its
+#   path within that destination, when it last ran, and a confirm-gated Remove.
+#   forgetRepository was always exported by useBackups; the desktop list simply never offered
+#   it, and until 368.8-06 the only other route to it was unreachable.
+#
+#   368.8-22 — HOW MANY SNAPSHOTS TO KEEP IS NOW A SETTING. "atıyorum 3 tane kayıt etsin
+#   dediğimde en sonuncuyu kayıt ederken en sondakini silsin". Recent+daily (the shipped
+#   behaviour, still the default) or the last 3 / 5 / 10 / 24.
+#   ⚠ THE TRAP: kopia keeps the UNION of every rule, so --keep-latest=3 beside the shipped
+#   --keep-hourly=24 keeps TWENTY-FOUR. A numeric choice therefore zeroes every other rule,
+#   and a test asserts that for each option. The card's "How long they're kept" line follows
+#   the setting too — hardcoded, it would have gone on claiming "the last 24 hours, then one a
+#   day for a week" immediately after the operator asked for 3.
+#   SAFETY-ONLY: USER_RETENTION_FLAGS is untouched and a regression test proves the new
+#   argument cannot reach a USB/NAS destination.
+#
+#   Both new features carry CALL-PATH tests, not just pure ones — the obvious failure here is
+#   a setting that persists and displays perfectly while kopia goes on using the old flags.
+#
+#   ⚠ THE UAT FROM beta.1 IS STILL OPEN and is the gate on v1.1.15: setting 30 minutes must
+#   produce a safety snapshot every ~30 minutes on real hardware, and a USB/NAS destination
+#   must still run hourly while it does. No unit test can show either.
+#   Gates: livinityd tsc 385 (baseline 385); safety-snapshots 41/41; vite build exit 0; UI
+#   vitest 68/1390 — the same 68 failures as before, with 9 new passing tests.)
+# PREVIOUS = refs/tags/v1.1.15-beta.1 (PRERELEASE — group 368.8b, the three things the
 #   operator actually asked for at the start of this phase. 368.8a shipped as v1.1.14 and is
 #   untouched by this; the fleet's stable line stays there until the UAT below passes.
 #
@@ -546,4 +588,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.1.15-beta.1
+refs/tags/v1.1.15-beta.2
