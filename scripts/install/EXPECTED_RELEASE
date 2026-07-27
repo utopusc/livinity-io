@@ -22,7 +22,54 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.1.14-beta.4 (PRERELEASE — 368.8-13, a LOGIN fix, and the
+# CURRENT VALUE = refs/tags/v1.1.14-beta.5 (PRERELEASE — the last beta before the v1.1.14
+#   stable cut. Two changes, both about the dock island, both cosmetic in the sense that
+#   no backup succeeds or fails differently because of them — and both about the island
+#   telling the truth, which is what the rest of this phase has been.
+#
+#   368.8-15 — THE ISLAND SAT AT 0% FOR THE WHOLE BACKUP. The percentage never moved,
+#   on any run, on any destination. The parser was never wrong: measured on the
+#   operator's box across whole multi-minute backups, journal lines containing
+#   `estimated` = 0 and containing `hashing` = 0. Nothing was arriving to parse. kopia
+#   renders its progress line ONLY when its output is a terminal, and livinityd spawns
+#   it through a pipe (execa, stdout+stderr piped).
+#
+#   Reproduced in isolation on that box rather than reasoned about: a 1.5 GB snapshot
+#   piped emits zero progress lines; the identical command under script(1) emits frames
+#   within a second. No flag forces it — `--progress` is already the default and does
+#   nothing here, and 0.23.1 has no `--progress-interval` at the snapshot level (checked
+#   against the box's own --help, not assumed). So the terminal has to be real, and
+#   util-linux script(1) supplies one without adding a native pty dependency.
+#
+#   SCOPE IS ONE CALL, deliberately. Only `snapshot create` asks for a pty. Everything
+#   else stays on a plain pipe, because a pty interleaves progress frames into stdout
+#   and several calls parse `--json` off it — getRepositorySize reads
+#   `repository status --json` and would begin throwing on JSON.parse. A test asserts
+#   there is exactly ONE pty request in backups.ts, so neither half can drift.
+#
+#   ⚠ THE TWO THINGS THIS HAD TO GET RIGHT. (a) Quoting: `script -qec` takes ONE string
+#   that a shell then parses, and the repository path carries an operator-typed folder
+#   name straight from the setup wizard — so an unquoted argument would have been shell
+#   injection reachable from the UI. Every argument is single-quoted with the POSIX
+#   escape, and that is asserted directly. (b) Absence: a box without script(1) loses
+#   the percentage and keeps its backup. Losing a backup to gain a number would be a bad
+#   trade. The percentage also stays ABSENT rather than 0 while kopia is still
+#   estimating, which on a first snapshot lasts a while — a 0 that means "no news" is
+#   the same quiet lie this phase has spent itself removing, and 368.8-14's pulse
+#   already carries "working" through that window.
+#
+#   368.8-14 — the island now carries LivOS's own identity: the Livinity donut glyph
+#   drawn from currentColor (so contrast is right in both themes by construction, not by
+#   coincidence), type on the brand's numeric scale, and the mark breathing while a
+#   backup runs. Committed before beta.4 was cut but not carried by it, so this is its
+#   first build on a box.
+#
+#   ⚠ STILL UNVERIFIED IN A BROWSER, and it is why this beta exists rather than the
+#   stable: 368.8-11's 2FA fix (Settings must read the truth and a fresh enrol must be
+#   accepted) has never been seen running. Gates prove only that nothing regressed:
+#   livinityd tsc 385 (baseline 385), engine.test.ts 21/21 with the pty and quoting
+#   tests each proven to FAIL against the unfixed code before being kept.)
+# PREVIOUS = refs/tags/v1.1.14-beta.4 (PRERELEASE — 368.8-13, a LOGIN fix, and the
 #   most serious defect this phase has surfaced.
 #
 #   Reported from the field: password rejected, and after the password no 2FA prompt —
@@ -310,4 +357,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.1.14-beta.4
+refs/tags/v1.1.14-beta.5
