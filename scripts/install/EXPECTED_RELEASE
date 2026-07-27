@@ -22,7 +22,53 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.1.14-beta.6 (PRERELEASE — beta.5 was called the last beta.
+# CURRENT VALUE = refs/tags/v1.1.14-beta.7 (PRERELEASE — beta.6's restore fix is PROVEN:
+#   the operator ran a full restore on their box and it completed end to end. Boot log:
+#     [migration] Found Livinity data to import, activating...
+#     [livinityd] Detected first start after backup restore
+#     [livinityd] restored livos Postgres DB from snapshot (Liv memory + app instances…)
+#     [livinityd] restored /opt/liv-assistant/data from snapshot
+#   13 containers back up. An hour earlier the same flow died on `mount --bind`. The island
+#   percentage also moves, so 368.8-15 and 368.8-16 are both confirmed in the field.
+#
+#   That restore then surfaced three more defects, and ALL THREE were things the box had
+#   been doing wrong quietly for a long time — none were caused by the restore.
+#
+#   368.8-20 — A REFUSED REBOOT REPORTED A SUCCESSFUL RESTORE AS A FAILURE. The restore had
+#   already finished (data copied, moved into data/import, first-start flag written) when:
+#     Error: Command failed with exit code 1: reboot
+#     Call to Reboot failed: Interactive authentication required.
+#   system.ts runs `reboot` bare; livinityd is unprivileged with no session, so polkit
+#   refuses. The throw escaped restoreBackup and the UI said "Restore failed" over a restore
+#   that was one restart from done. That is the worst form of the quiet lie this phase keeps
+#   removing — it invites the operator to run the whole thing AGAIN over correct data. The
+#   reboot is now guarded and reported honestly: "Restore complete — restart this device to
+#   finish". ⚠ The privilege grant itself (polkit rule / sudoers entry) belongs in the
+#   installer and would land one release late, so it is NOT in this build: a restore still
+#   needs a manual restart at the end. The message now says so.
+#
+#   368.8-19 — THE HEARTBEAT NEVER SENT ANYTHING ON THIS BOX. The journal claimed
+#   "API key unavailable (file missing/empty/malformed)"; the file was none of those.
+#   /etc/livos/secrets/api-key is root:root 0600 and the run-user is `everything` (uid 1001)
+#   → `test -r` = NO. It was UNREADABLE, which readApiKey's single null return could not
+#   distinguish. FIFTH instance of the archetype in this phase. The key was never missing:
+#   install.sh already writes the identical value into Redis for the App Store — sha256 of
+#   both matched exactly. readApiKey now falls back to Redis when the file cannot be read,
+#   tries the file FIRST so readable boxes are unchanged, reports which source answered, and
+#   refuses a value that is not a liv_k_ key. No new secret surface: that value is already in
+#   Redis in plaintext.
+#
+#   368.8-18 — ONE UNUSED EXTENSION KILLED A WHOLE MIGRATION. `extension "vector" is not
+#   available` on a host Postgres with no pgvector. The .sql file runs as ONE query, so the
+#   failing FIRST statement took all four CREATE TABLEs with it, while the caller logged it
+#   as "non-fatal". Checked before deleting: no column in that file uses the vector type, and
+#   the only `vector` in the wider schema is `content_tsv TSVECTOR` — Postgres's built-in
+#   full-text type, unrelated to pgvector. The extension gated tables that never needed it.
+#
+#   Gates: livinityd tsc 385 (baseline 385); engine.test.ts 24/24, api-key.test.ts 17/17,
+#   migrate.test.ts 4/4, with every new guard proven to FAIL against the unfixed code first.
+#   ⚠ Still unverified in a browser: 368.8-11's 2FA fix — the one remaining gate on stable.)
+# PREVIOUS = refs/tags/v1.1.14-beta.6 (PRERELEASE — beta.5 was called the last beta.
 #   It was not: putting it in front of the operator immediately surfaced that RESTORING A
 #   BACKUP HAS NEVER WORKED ON ANY BOX. beta.5's own change is confirmed good — the island
 #   percentage moves in the field, so 368.8-15 is proven.
@@ -401,4 +447,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.1.14-beta.6
+refs/tags/v1.1.14-beta.7
