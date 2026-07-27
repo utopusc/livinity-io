@@ -22,7 +22,60 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.1.14-beta.7 (PRERELEASE — beta.6's restore fix is PROVEN:
+# CURRENT VALUE = refs/tags/v1.1.14 (STABLE, make_latest=true — cut from master. Phase 368.8
+#   BKPFIXUP in full. The fleet has been on v1.1.13 throughout; everything below is new to it.
+#
+#   ⚠ THIS CARRIES A LOGIN SECURITY FIX. 368.8-13: on every single-user DB-backed box — the
+#   normal install shape — the login form sent no username, so the server took the legacy
+#   single-owner YAML branch: it checked the password against the YAML credential instead of
+#   the account's bcrypt hash, and evaluated 2FA through a store that is a hard false on a DB
+#   box. That is a 2FA BYPASS AT LOGIN, not a UX defect. Anyone holding the legacy YAML
+#   password reached an admin session without the second factor.
+#
+#   WHAT ELSE WAS BROKEN FOR EVERYONE, and how long:
+#     · 368.8-01 "This device" as a backup destination could not succeed on ANY box (shipped
+#       broken in v1.1.13 — the P0 this phase existed for).
+#     · 368.8-10 /kopia was root-owned with no chown anywhere in the repo, so on a box whose
+#       run-user is not root NO kopia repository had ever been created — USB, NAS, pool and
+#       the 368.5 safety snapshots had all been failing silently since they shipped.
+#     · 368.8-11 Settings has misreported 2FA as "Disabled" on every DB-backed box since
+#       Phase 328, which also made enabling it impossible ("2FA is already enabled").
+#     · 368.8-16 RESTORING A BACKUP HAD NEVER WORKED ANYWHERE — it bind-mounted, and
+#       bind-mounting is root-only while livinityd is unprivileged (exit 32). Browsing a
+#       backup was dead for the same reason.
+#     · 368.8-19 the heartbeat could not read its own root-only key file, so boxes whose
+#       run-user is not root had never sent a heartbeat at all.
+#     · 368.8-18 one unused `CREATE EXTENSION vector` took four CREATE TABLEs down with it on
+#       every box without pgvector, while the log called it non-fatal.
+#     · 368.8-15 the dock island sat at 0% for entire backups (kopia renders progress only
+#       onto a terminal; livinityd spawned it through a pipe, so nothing was ever parsed).
+#     · 368.8-17 finishing the setup wizard ended on a 404 and never confirmed anything.
+#     · 368.8-20 a refused reboot reported a SUCCESSFUL restore as failed.
+#
+#   PROVEN ON HARDWARE, not just green tests — the operator ran these on their own box:
+#     · a full restore end to end (`Detected first start after backup restore`, Postgres and
+#       Liv assistant data restored, 13 containers back up)
+#     · three backup destinations plus the safety repo completing runs
+#     · the island percentage moving
+#     · mastra_* tables existing for the first time (4/4)
+#     · the heartbeat actually POSTing
+#     · Settings reading the truth about 2FA — the last gate, cleared 2026-07-27
+#
+#   ⚠ KNOWN AND DELIBERATELY NOT FIXED HERE (each needs its own phase):
+#     · A restore still needs a MANUAL RESTART at the end. `reboot` is refused for a
+#       session-less service; the polkit/sudoers grant belongs in the installer and would
+#       land one release late. 368.8-20 makes the UI say so instead of lying.
+#     · createContextExpress still never populates currentUser, so any publicProcedure that
+#       reads it can carry 368.8-11's bug class. Fixing it centrally changes isLoggedIn
+#       (which SIGNS A TOKEN), webauthnLoginOptions and loginWithPasskey — own phase plus a
+#       security audit.
+#     · files.ts:224 hardcodes uid 1000; on a box whose run-user differs the Files subsystem
+#       may silently never start.
+#
+#   Gates: livinityd tsc 385 (baseline 385); engine 24/24, api-key 17/17, migrate 4/4, with
+#   every new guard proven to FAIL against the unfixed code first; vite build exit 0; UI
+#   vitest 68/1381, inside the 68<->69 baseline.)
+# PREVIOUS = refs/tags/v1.1.14-beta.7 (PRERELEASE — beta.6's restore fix is PROVEN:
 #   the operator ran a full restore on their box and it completed end to end. Boot log:
 #     [migration] Found Livinity data to import, activating...
 #     [livinityd] Detected first start after backup restore
@@ -447,4 +500,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.1.14-beta.7
+refs/tags/v1.1.14
