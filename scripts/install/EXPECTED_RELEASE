@@ -22,7 +22,41 @@
 #   release cycle of this warn-only telemetry. Do NOT add enforcement here or in the
 #   verify function as part of Phase 311.
 #
-# CURRENT VALUE = refs/tags/v1.1.14-beta.3 (PRERELEASE — the 368.8a P0 is CONFIRMED FIXED
+# CURRENT VALUE = refs/tags/v1.1.14-beta.4 (PRERELEASE — 368.8-13, a LOGIN fix, and the
+#   most serious defect this phase has surfaced.
+#
+#   Reported from the field: password rejected, and after the password no 2FA prompt —
+#   on a box whose Settings correctly read "Enabled" and whose Postgres row had
+#   totp_enabled=t.
+#
+#   CAUSE. `setSelectedUser` is called from one place only: UserSelectStep's onSelect.
+#   A single-user box never renders UserSelectStep (login/index.tsx:199 goes straight to
+#   PasswordStep), so `selectedUser` stayed null and the submit posted {password} with NO
+#   username. `user.login` gates DB auth on that field (user/routes.ts:189). Without it
+#   the server took the legacy single-owner YAML branch (:231-246), which checked the
+#   password against the YAML credential instead of the account's bcrypt hash, and
+#   evaluated 2FA through ctx.user.is2faEnabled() — the YAML store, a hard false on a
+#   DB-backed box.
+#
+#   ⚠ So this was a 2FA BYPASS AT LOGIN, not only a UX defect: whoever held the legacy
+#   YAML password reached an admin session without the second factor, on every
+#   single-user DB box — which is the normal install shape. It also explains the
+#   rejected password: the account's real one was never the one being checked.
+#
+#   FIX: derive the target account rather than read state —
+#   `effectiveUser = selectedUser ?? (users.length === 1 ? users[0] : null)` — used by
+#   both the password and the TOTP submit. Multi-user is untouched. The bare {password}
+#   call survives only for the zero-user case, where the YAML branch is correct.
+#
+#   NOT caused by 368.8-11: that commit touched only the is2faEnabled procedure
+#   (`git show --stat`), and login/index.tsx had been untouched since d717aba9. 368.8-11
+#   simply made Settings tell the truth, which is how the operator noticed.
+#
+#   Gates: vite build exit 0. UI vitest measured on BOTH sides by stashing the one file:
+#   69 failing before, 69 after, and the failing-test SETS are identical once per-test
+#   timings are stripped. The baseline genuinely oscillates 68<->69; this run's was 69.
+#   ⚠ Still unproven in a browser — same caveat as beta.3.)
+# PREVIOUS = refs/tags/v1.1.14-beta.3 (PRERELEASE — the 368.8a P0 is CONFIRMED FIXED
 #   in the field on beta.2; this build adds two findings the operator reported while
 #   testing it. Cut so an AUTH change is seen running once before it reaches the fleet.
 #
@@ -276,4 +310,4 @@
 #   own tag. Do NOT force-move a tag (git tag -f) — the pre-tag-prep flow makes it
 #   unnecessary and it is explicitly disallowed. release.yml verifies this and
 #   refuses to publish on any tag/pin mismatch.
-refs/tags/v1.1.14-beta.3
+refs/tags/v1.1.14-beta.4
