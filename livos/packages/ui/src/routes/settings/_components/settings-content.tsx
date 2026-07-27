@@ -78,7 +78,11 @@ import {IconButton} from '@/components/ui/icon-button'
 import {IconButtonLink} from '@/components/ui/icon-button-link'
 import {usePassword} from '@/hooks/use-password'
 import {useUserName} from '@/hooks/use-user-name'
-import {useBackups} from '@/features/backups/hooks/use-backups'
+import {useBackups, useRepositorySize, useTriggerBackupForRepo} from '@/features/backups/hooks/use-backups'
+// Phase 368.8-08 SAFE-01/03 — the Safety Snapshots card's facts.
+import {formatFilesystemDate} from '@/features/files/utils/format-filesystem-date'
+import {formatFilesystemSize} from '@/features/files/utils/format-filesystem-size'
+import {useLanguage} from '@/hooks/use-language'
 import {useApps} from '@/providers/apps'
 import {animatedWallpapers, animatedWallpaperIds, type AnimatedWallpaperId} from '@/components/animated-wallpapers'
 import {useWallpaper} from '@/providers/wallpaper'
@@ -1638,18 +1642,15 @@ function BackupsSection() {
 						</>
 					)}
 
-					{/* Phase 368.5 BKP-16: opt-out toggle (adminProcedure setSafetySnapshotsEnabled) */}
-					<div className='flex items-center justify-between rounded-radius-sm border border-border-default bg-surface-base p-3'>
-						<div className='min-w-0 pr-3'>
-							<div className='text-body-sm font-medium'>{t('backups-safety-toggle-label')}</div>
-							<div className='text-caption text-text-secondary'>{t('backups-safety-toggle-description')}</div>
-						</div>
-						<Switch
-							checked={safetyEnabled}
-							disabled={safetyEnabledQuery.isLoading || setSafetyMutation.isPending}
-							onCheckedChange={(checked) => setSafetyMutation.mutate({enabled: checked})}
-						/>
-					</div>
+					{/* Phase 368.8-08 SAFE-01/02/03 — the toggle row this replaces is
+					    preserved inside the component, unchanged, plus the four facts the
+					    operator asked for and the two controls (OP-01/OP-02/OP-03). */}
+					<SafetySnapshotsCard
+						safetyRepo={safetyRepo}
+						safetyEnabled={safetyEnabled}
+						isToggleBusy={safetyEnabledQuery.isLoading || setSafetyMutation.isPending}
+						onToggle={(enabled) => setSafetyMutation.mutate({enabled})}
+					/>
 				</TabsContent>
 
 				<TabsContent value='restore' className='space-y-4 pt-4'>
@@ -1663,6 +1664,134 @@ function BackupsSection() {
 					<MigrationSection />
 				</TabsContent>
 			</Tabs>
+		</div>
+	)
+}
+
+/**
+ * Phase 368.8-08 SAFE-01/02/03 (OP-01/OP-02) — the Safety Snapshots card.
+ *
+ * The card used to say only "Hourly local snapshots on the internal disk", which
+ * answered none of what the operator asked: *"bu snapshotlar nereye"* and
+ * *"saatlik mi yapıyor bunu ayarlayamıyor muyuz"*. It now states where they are,
+ * when the last one ran, how long they are kept and how much space they use, and
+ * it carries the two controls.
+ *
+ * OP-02: the safety repo keeps its OWN card. It stays excluded from the
+ * destination list and from every count, and gains no delete or edit affordance —
+ * a Forget button here would silently recreate the repo on the next tick.
+ */
+function SafetySnapshotsCard({
+	safetyRepo,
+	safetyEnabled,
+	isToggleBusy,
+	onToggle,
+}: {
+	safetyRepo?: {id: string; path: string; lastBackup?: number}
+	safetyEnabled: boolean
+	isToggleBusy: boolean
+	onToggle: (enabled: boolean) => void
+}) {
+	const [lang] = useLanguage()
+	const utils = trpcReact.useUtils()
+
+	// SAFE-02 — persisted interval. Local state hydrated from the query, mutate on
+	// change, invalidate on success (the date-time-section idiom).
+	const intervalQuery = trpcReact.backups.getSafetySnapshotInterval.useQuery(undefined, {staleTime: 30_000})
+	const setIntervalMutation = trpcReact.backups.setSafetySnapshotInterval.useMutation({
+		onSuccess: () => utils.backups.getSafetySnapshotInterval.invalidate(),
+	})
+	const interval = intervalQuery.data ?? '1h'
+
+	// SAFE-01 — size is LAZY, and that is not a style choice. getRepositorySize
+	// shells out to kopia TWICE behind a concurrency:1 queue and blocks during a
+	// running backup, so making it a dependency of the card would stall the whole
+	// Settings tab exactly when a backup is running. The operator opts in.
+	const [showSize, setShowSize] = React.useState(false)
+	const sizeQuery = useRepositorySize(safetyRepo?.id, {enabled: showSize && !!safetyRepo})
+
+	// SAFE-03 — run now. Safe with '' : the mutation only fires on click.
+	const {triggerBackup, isPending: isRunning} = useTriggerBackupForRepo(safetyRepo?.id ?? '')
+
+	return (
+		<div className='space-y-2 rounded-radius-sm border border-border-default bg-surface-base p-3'>
+			{/* Phase 368.5 BKP-16: opt-out toggle (adminProcedure setSafetySnapshotsEnabled) */}
+			<div className='flex items-center justify-between'>
+				<div className='min-w-0 pr-3'>
+					<div className='text-body-sm font-medium'>{t('backups-safety-toggle-label')}</div>
+					<div className='text-caption text-text-secondary'>{t('backups-safety-toggle-description')}</div>
+				</div>
+				<Switch checked={safetyEnabled} disabled={isToggleBusy} onCheckedChange={onToggle} />
+			</div>
+
+			{safetyEnabled && safetyRepo ? (
+				<>
+					<div className='divide-y divide-border-subtle rounded-12'>
+						<div className='flex items-center justify-between gap-3 p-3 text-sm'>
+							<div className='shrink-0 text-text-secondary'>{t('backups-safety-location-label')}</div>
+							<div className='min-w-0 flex-1 truncate text-right' title={safetyRepo.path}>
+								{safetyRepo.path}
+							</div>
+						</div>
+						<div className='flex items-center justify-between p-3 text-sm'>
+							<div className='text-text-secondary'>{t('backups-safety-last-run-label')}</div>
+							<div className='text-right'>
+								{safetyRepo.lastBackup
+									? formatFilesystemDate(Number(safetyRepo.lastBackup), lang)
+									: t('backups-safety-never-run')}
+							</div>
+						</div>
+						<div className='flex items-center justify-between p-3 text-sm'>
+							<div className='text-text-secondary'>{t('backups-safety-retention-label')}</div>
+							<div className='text-right'>{t('backups-safety-retention-value')}</div>
+						</div>
+						<div className='flex items-center justify-between p-3 text-sm'>
+							<div className='text-text-secondary'>{t('backups-safety-size-label')}</div>
+							<div className='flex items-center justify-end text-right'>
+								{!showSize ? (
+									<Button size='sm' variant='default' onClick={() => setShowSize(true)}>
+										{t('backups-safety-show-size')}
+									</Button>
+								) : sizeQuery.data?.used !== undefined ? (
+									formatFilesystemSize(sizeQuery.data.used)
+								) : (
+									<Loader2 className='size-4 animate-spin text-text-secondary' />
+								)}
+							</div>
+						</div>
+					</div>
+
+					{/* SAFE-02 (OP-01): safety-only cadence. Four options, 1 hour default. */}
+					<div className='flex items-center justify-between gap-3 pt-1'>
+						<div className='min-w-0'>
+							<div className='text-body-sm font-medium'>{t('backups-safety-interval-label')}</div>
+							<div className='text-caption text-text-secondary'>{t('backups-safety-interval-description')}</div>
+						</div>
+						<Select
+							value={interval}
+							onValueChange={(value) => setIntervalMutation.mutate({interval: value as '30m' | '1h' | '6h' | 'daily'})}
+						>
+							<SelectTrigger className='w-[150px]' aria-label={t('backups-safety-interval-label')}>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value='30m'>{t('backups-safety-interval-30m')}</SelectItem>
+								<SelectItem value='1h'>{t('backups-safety-interval-1h')}</SelectItem>
+								<SelectItem value='6h'>{t('backups-safety-interval-6h')}</SelectItem>
+								<SelectItem value='daily'>{t('backups-safety-interval-daily')}</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
+
+					{/* SAFE-03: don't make the operator wait a whole interval to see it work. */}
+					<div className='flex justify-end pt-1'>
+						<Button size='sm' variant='default' disabled={isRunning} onClick={triggerBackup}>
+							<span className={isRunning ? 'opacity-0' : 'opacity-100'}>{t('backups-safety-run-now')}</span>
+							{isRunning && <Loader2 className='absolute h-4 w-4 animate-spin' />}
+						</Button>
+					</div>
+				</>
+			) : null}
 		</div>
 	)
 }
