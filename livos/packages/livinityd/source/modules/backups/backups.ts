@@ -35,6 +35,12 @@ import {
 	shouldAbortForDiskPressure,
 	freePercentOf,
 	DISK_ABORT_FREE_PERCENT,
+	// Phase 368.8 SAFE-02 (OP-01) — safety-only cadence.
+	DEFAULT_SAFETY_INTERVAL,
+	isSafetyIntervalOption,
+	safetyIntervalMs,
+	schedulerTickMs,
+	type SafetyIntervalOption,
 } from './safety-snapshots.js'
 import {
 	classifyDestination,
@@ -101,6 +107,9 @@ export default class Backups {
 	running = false
 	startedAt?: number
 	backupInterval = 1000 * 60 * 60 // 1 hour
+	// 368.8 SAFE-02: cached so the 100ms scheduler loop never touches the store.
+	// Seeded in backupOnInterval and refreshed by setSafetySnapshotInterval.
+	safetyBackupInterval = safetyIntervalMs(DEFAULT_SAFETY_INTERVAL)
 	backupJobPromise?: Promise<void>
 	kopiaQueue = new pQueue({concurrency: 1})
 	backupDirectoryName = 'Livinity Backup.backup'
@@ -202,15 +211,35 @@ export default class Backups {
 	// Run backups in background
 	async backupOnInterval() {
 		this.logger.log('Scheduling backups interval')
-		let lastRun = Date.now()
+		// Phase 368.8 SAFE-02 (OP-01) — TWO cursors. The outer gate now wakes on
+		// min(safetyInterval, backupInterval), because the tick is a floor on
+		// resolution: with a 1-hour tick a "30 minutes" setting would silently behave
+		// as 60. Each class advances only its OWN cursor, so a safety run never delays
+		// a user destination and a user run never skips a safety snapshot.
+		// backupInterval itself is untouched — USB/NAS cadence is exactly as before.
+		let lastUserRun = Date.now()
+		let lastSafetyRun = Date.now()
+		this.safetyBackupInterval = safetyIntervalMs(
+			await this.getSafetySnapshotInterval().catch(() => DEFAULT_SAFETY_INTERVAL),
+		)
 		while (this.running) {
 			await setTimeout(100)
 			const userExists = await this.#livinityd.user.exists()
-			const shouldRun = userExists && Date.now() - lastRun >= this.backupInterval
-			if (!shouldRun) continue
-			lastRun = Date.now()
+			if (!userExists) continue
+			const now = Date.now()
+			// Read the CACHED interval, never the store — this runs every 100 ms.
+			const wakeMs = schedulerTickMs(this.safetyBackupInterval, this.backupInterval)
+			if (now - Math.max(lastUserRun, lastSafetyRun) < 0) continue // clock went backwards; wait it out
+			const safetyDue = now - lastSafetyRun >= this.safetyBackupInterval
+			const userDue = now - lastUserRun >= this.backupInterval
+			if (!safetyDue && !userDue) continue
+			if (safetyDue) lastSafetyRun = now
+			if (userDue) lastUserRun = now
 
 			this.logger.log('Running backups interval')
+			this.logger.log(
+				`Backups interval classes due: safety=${safetyDue} user=${userDue} (wake=${wakeMs}ms, safetyInterval=${this.safetyBackupInterval}ms, backupInterval=${this.backupInterval}ms)`,
+			)
 			const repositories = await this.getRepositories().catch((error) => {
 				this.logger.error('Error getting repositories', error)
 				return []
@@ -283,6 +312,11 @@ export default class Backups {
 					this.logger.log('Safety snapshots disabled — skipping safety repo backup')
 					continue
 				}
+
+				// 368.8 SAFE-02: a tick may be a safety-only wake. Skip the class that
+				// is not due, so lowering the wake interval does NOT speed up USB/NAS
+				// backups — the regression safety-snapshots.test.ts pins.
+				if (repository.isSafety ? !safetyDue : !userDue) continue
 
 				// Skip if we already have a backup in progress
 				const isAlreadyBackingUp = this.backupsInProgress.some((progress) => progress.repositoryId === repository.id)
@@ -407,6 +441,28 @@ export default class Backups {
 		this.logger.log(`Safety snapshots ${enabled ? 'enabled' : 'disabled'} by admin`)
 		if (enabled) await this.ensureSafetySnapshots().catch((error) => this.logger.error('Safety snapshots ensure failed', error))
 		return enabled
+	}
+
+	/**
+	 * Phase 368.8 SAFE-02 (OP-01) — the operator asked "saatlik mi yapıyor bunu
+	 * ayarlayamıyor muyuz". One of four locked options; absent means the 1-hour
+	 * cadence shipped before 368.8, so existing boxes need no migration and
+	 * behave exactly as they did.
+	 */
+	async getSafetySnapshotInterval(): Promise<SafetyIntervalOption> {
+		const stored = await this.#livinityd.store.get('backups.safetySnapshotInterval').catch(() => undefined)
+		return isSafetyIntervalOption(stored) ? stored : DEFAULT_SAFETY_INTERVAL
+	}
+
+	async setSafetySnapshotInterval(interval: SafetyIntervalOption): Promise<SafetyIntervalOption> {
+		await this.#livinityd.store.getWriteLock(async ({set}) => {
+			await set('backups.safetySnapshotInterval', interval)
+		})
+		// Refresh the cached value so a change takes effect on the NEXT tick rather
+		// than after a restart.
+		this.safetyBackupInterval = safetyIntervalMs(interval)
+		this.logger.log(`Safety snapshot interval set to ${interval} (${this.safetyBackupInterval}ms) by admin`)
+		return interval
 	}
 
 	// IN-01: tRPC setSafetySnapshotsEnabled(true) and the interval tick can enter

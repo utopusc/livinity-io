@@ -2,6 +2,7 @@ import z from 'zod'
 
 import {router, privateProcedure, adminProcedure, adminProcedureWhenNoUserExists, publicProcedureWhenNoUserExists} from '../server/trpc/trpc.js'
 import {isRealDestination} from './destination-policy.js'
+import {SAFETY_INTERVAL_OPTIONS} from './safety-snapshots.js'
 
 // Backups-v2 P0 (D10): management procedures are ADMIN-gated — previously
 // every one of these was open to any authenticated user, including a full-box
@@ -154,4 +155,14 @@ export default router({
 	setSafetySnapshotsEnabled: adminProcedure
 		.input(z.object({enabled: z.boolean()}))
 		.mutation(async ({ctx, input}) => ctx.livinityd!.backups.setSafetySnapshotsEnabled(input.enabled)),
+
+	// Phase 368.8 SAFE-02 (OP-01) — safety-only cadence. z.enum over the exported
+	// constant so the wire contract can never drift from the scheduler's own option
+	// set. `ctx.livinityd!` per the IN-05 note above — new handlers must not grow the
+	// 385-error tsc baseline.
+	getSafetySnapshotInterval: adminProcedure.query(async ({ctx}) => ctx.livinityd!.backups.getSafetySnapshotInterval()),
+
+	setSafetySnapshotInterval: adminProcedure
+		.input(z.object({interval: z.enum(SAFETY_INTERVAL_OPTIONS)}))
+		.mutation(async ({ctx, input}) => ctx.livinityd!.backups.setSafetySnapshotInterval(input.interval)),
 })

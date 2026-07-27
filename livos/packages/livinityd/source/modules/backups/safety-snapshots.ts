@@ -250,3 +250,61 @@ export async function evaluateDiskPressure(deps: DiskPressureDeps): Promise<Disk
 	)
 	return 'skip'
 }
+
+// ── Phase 368.8 SAFE-02 / OP-01 — safety snapshot cadence ────────────────────
+//
+// SAFETY-ONLY. `backups.ts backupInterval` still governs every user destination
+// and must not change: a global change would silently alter USB/NAS cadence,
+// which the operator explicitly ruled out. Pure arithmetic lives here so the
+// scheduler's behaviour is unit-testable without a livinityd, a clock or a disk.
+
+export const SAFETY_INTERVAL_OPTIONS = ['30m', '1h', '6h', 'daily'] as const
+export type SafetyIntervalOption = (typeof SAFETY_INTERVAL_OPTIONS)[number]
+
+/** Absent store field = this. Byte-identical to the cadence shipped before 368.8. */
+export const DEFAULT_SAFETY_INTERVAL: SafetyIntervalOption = '1h'
+
+const MINUTE_MS = 1000 * 60
+const SAFETY_INTERVAL_MS: Record<SafetyIntervalOption, number> = {
+	'30m': 30 * MINUTE_MS,
+	'1h': 60 * MINUTE_MS,
+	'6h': 6 * 60 * MINUTE_MS,
+	daily: 24 * 60 * MINUTE_MS,
+}
+
+export function isSafetyIntervalOption(value: unknown): value is SafetyIntervalOption {
+	return typeof value === 'string' && (SAFETY_INTERVAL_OPTIONS as readonly string[]).includes(value)
+}
+
+/** Fail SAFE: anything unrecognised (absent, stale, hand-edited store) means the default. */
+export function safetyIntervalMs(value: unknown): number {
+	return SAFETY_INTERVAL_MS[isSafetyIntervalOption(value) ? value : DEFAULT_SAFETY_INTERVAL]
+}
+
+/**
+ * How often the outer scheduler must WAKE. The loop body only runs on a tick, so
+ * the tick is a floor on resolution: with a 1-hour tick a "30 minutes" setting
+ * silently behaves as 60. Never slower than backupInterval, so user destinations
+ * cannot be delayed by a long safety interval.
+ */
+export function schedulerTickMs(safetyMs: number, backupMs: number): number {
+	return Math.min(safetyMs, backupMs)
+}
+
+/**
+ * Per-CLASS due check. Two cursors: a safety run must never advance the user
+ * cursor (that would DELAY user destinations) and a user run must never advance
+ * the safety cursor (that would SKIP safety snapshots).
+ */
+export function isRepositoryDue(input: {
+	isSafety?: boolean
+	now: number
+	lastSafetyRun: number
+	lastUserRun: number
+	safetyMs: number
+	backupMs: number
+}): boolean {
+	return input.isSafety
+		? input.now - input.lastSafetyRun >= input.safetyMs
+		: input.now - input.lastUserRun >= input.backupMs
+}

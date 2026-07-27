@@ -12,6 +12,11 @@ import {
 	SAFETY_REPO_PATH,
 	SAFETY_RETENTION_FLAGS,
 	USER_RETENTION_FLAGS,
+	SAFETY_INTERVAL_OPTIONS,
+	DEFAULT_SAFETY_INTERVAL,
+	safetyIntervalMs,
+	schedulerTickMs,
+	isRepositoryDue,
 	type DiskPressureDeps,
 	type EnsureSafetyDeps,
 } from './safety-snapshots.js'
@@ -361,4 +366,113 @@ test('the exclusions never touch the parts of a browser profile that matter', ()
 	for (const kept of ['/chrome-master/Default/Cookies', '/chrome-master/Default/Login Data', '/chrome-master/Local State']) {
 		expect(patterns).not.toContain(kept)
 	}
+})
+
+// ── Phase 368.8 SAFE-02 / OP-01 — cadence ───────────────────────────────────
+
+const HOUR = 1000 * 60 * 60
+
+test('the four locked options map to the right millisecond values', () => {
+	expect(SAFETY_INTERVAL_OPTIONS).toEqual(['30m', '1h', '6h', 'daily'])
+	expect(safetyIntervalMs('30m')).toBe(30 * 60 * 1000)
+	expect(safetyIntervalMs('1h')).toBe(HOUR)
+	expect(safetyIntervalMs('6h')).toBe(6 * HOUR)
+	expect(safetyIntervalMs('daily')).toBe(24 * HOUR)
+})
+
+test('anything unrecognised falls back to the shipped 1-hour default (no migration needed)', () => {
+	expect(DEFAULT_SAFETY_INTERVAL).toBe('1h')
+	for (const bad of [undefined, null, '', 'nonsense', '45m', 42, {}]) {
+		expect(safetyIntervalMs(bad)).toBe(HOUR)
+	}
+})
+
+test('the outer tick drops to the safety interval, but never slower than backupInterval', () => {
+	expect(schedulerTickMs(30 * 60 * 1000, HOUR)).toBe(30 * 60 * 1000)
+	expect(schedulerTickMs(HOUR, HOUR)).toBe(HOUR)
+	expect(schedulerTickMs(24 * HOUR, HOUR)).toBe(HOUR)
+})
+
+/** Models backups.ts backupOnInterval exactly: two cursors, one wake gate. */
+function simulate(safetyMs: number, backupMs: number, durationMs: number) {
+	const stepMs = 60 * 1000
+	let lastSafetyRun = 0
+	let lastUserRun = 0
+	let safetyRuns = 0
+	let userRuns = 0
+	for (let now = 0; now <= durationMs; now += stepMs) {
+		const safetyDue = isRepositoryDue({isSafety: true, now, lastSafetyRun, lastUserRun, safetyMs, backupMs})
+		const userDue = isRepositoryDue({isSafety: false, now, lastSafetyRun, lastUserRun, safetyMs, backupMs})
+		if (!safetyDue && !userDue) continue
+		if (safetyDue) {
+			lastSafetyRun = now
+			safetyRuns += 1
+		}
+		if (userDue) {
+			lastUserRun = now
+			userRuns += 1
+		}
+	}
+	return {safetyRuns, userRuns}
+}
+
+test('a 30-minute safety interval really means 30 minutes', () => {
+	const {safetyRuns} = simulate(30 * 60 * 1000, HOUR, 6 * HOUR)
+	expect(safetyRuns).toBe(12)
+})
+
+test('REGRESSION (OP-01): non-safety repositories still fire on backupInterval and no more often', () => {
+	// The whole point of "safety-only". Whatever the operator picks, a USB or NAS
+	// destination must back up exactly once an hour — not twice, not half as often.
+	for (const option of SAFETY_INTERVAL_OPTIONS) {
+		const {userRuns} = simulate(safetyIntervalMs(option), HOUR, 6 * HOUR)
+		expect(userRuns, `userRuns for safety=${option}`).toBe(6)
+	}
+})
+
+test('a daily safety interval does not stall user destinations', () => {
+	const {safetyRuns, userRuns} = simulate(24 * HOUR, HOUR, 48 * HOUR)
+	expect(safetyRuns).toBe(2)
+	expect(userRuns).toBe(48)
+})
+// ── The call-path pin ────────────────────────────────────────────────────────
+//
+// Everything above tests `simulate()`, a MODEL of the scheduler. Deleting the
+// real per-class gate in backups.ts would leave every test above green while
+// USB/NAS backups quietly sped up to the safety cadence — exactly the failure
+// mode `feedback_pure_module_tests_never_exercise_call_path` records (60 green
+// tests, feature dead on every box). So pin the real loop too.
+
+test('CALL PATH: backupOnInterval actually gates each repository on its own class', async () => {
+	const {readFile} = await import('node:fs/promises')
+	const path = await import('node:path')
+	const {fileURLToPath} = await import('node:url')
+	const source = await readFile(
+		path.join(path.dirname(fileURLToPath(import.meta.url)), 'backups.ts'),
+		'utf8',
+	)
+	// Bound the slice to backupOnInterval ALONE — up to the next class method.
+	// A looser bound swept in getSafetySnapshotInterval, whose (correct) store
+	// read then tripped the "no store access in the 100ms loop" assertion below.
+	const fromLoop = source.slice(source.indexOf('async backupOnInterval('))
+	const nextMethod = fromLoop.slice(10).search(/\r?\n\t(async |#|[a-zA-Z]+\()/)
+	const loop = nextMethod === -1 ? fromLoop : fromLoop.slice(0, nextMethod + 10)
+
+	// Two cursors, advanced independently.
+	expect(loop).toMatch(/let lastUserRun = Date\.now\(\)/)
+	expect(loop).toMatch(/let lastSafetyRun = Date\.now\(\)/)
+	expect(loop).toMatch(/if \(safetyDue\) lastSafetyRun = now/)
+	expect(loop).toMatch(/if \(userDue\) lastUserRun = now/)
+
+	// The gate that keeps a safety-only wake from backing up user destinations.
+	expect(loop).toMatch(/repository\.isSafety \? !safetyDue : !userDue/)
+
+	// The single-cursor version must be gone, or a safety run would advance the
+	// user cursor and silently delay USB/NAS.
+	expect(loop).not.toMatch(/let lastRun = Date\.now\(\)/)
+
+	// backupInterval itself is untouched (OP-01) — the 100ms loop must also never
+	// read the store, which is why the interval is cached on the instance.
+	expect(source).toMatch(/backupInterval = 1000 \* 60 \* 60/)
+	expect(loop).not.toMatch(/store\.get\('backups\.safetySnapshotInterval'\)/)
 })

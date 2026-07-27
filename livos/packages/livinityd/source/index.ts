@@ -25,6 +25,9 @@ import Backups from './modules/backups/backups.js'
 // Phase 368 BKP-03 — boot preflight recovering from an interrupted backup;
 // wired in start() BEFORE the Docker-state cleanup (paused-container stop-hang).
 import {runBackupPreflight, type LastRunStatus} from './modules/backups/backup-preflight.js'
+// Phase 368.8 SAFE-02 — the store field's type comes from the scheduler's own
+// option set, so the persisted contract cannot drift from what the loop accepts.
+import {type SafetyIntervalOption} from './modules/backups/safety-snapshots.js'
 import {listContainers, manageContainer} from './modules/docker/docker.js'
 import Scheduler from './modules/scheduler/index.js'
 import RedisModule from './modules/redis-module.js'
@@ -632,6 +635,11 @@ type StoreSchema = {
 		// Phase 368.5 BKP-16 — explicit opt-out for the default-ON local safety repo
 		// (absent = enabled)
 		safetySnapshotsDisabled?: boolean
+		// Phase 368.8 SAFE-02 (OP-01) — how often the local safety repo runs. One of
+		// SAFETY_INTERVAL_OPTIONS ('30m' | '1h' | '6h' | 'daily'); absent = '1h', the
+		// cadence shipped before 368.8, so no migration is needed. SAFETY-ONLY:
+		// backupInterval and therefore USB/NAS cadence are untouched.
+		safetySnapshotInterval?: SafetyIntervalOption
 	}
 	// Phase 318 POOL-02/POOL-04 (318-05, D-15) — multi-drive storage-pool config +
 	// safety state. Dedicated top-level key (NOT nested under `backups`/`storage`/
