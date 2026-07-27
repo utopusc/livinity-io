@@ -74,6 +74,28 @@ export default function MultiUserLogin() {
 	const users = usersQ.data ?? []
 	const isMultiUser = users.length > 1
 
+	// Phase 368.8-13 — the account this submit is FOR, which is not always the one
+	// in `selectedUser`.
+	//
+	// `setSelectedUser` is called from exactly one place: UserSelectStep's onSelect
+	// (handleSelectUser). A single-user box never renders UserSelectStep — it goes
+	// straight to PasswordStep — so `selectedUser` stays null there forever, and the
+	// login was submitted WITHOUT a username.
+	//
+	// That is not cosmetic. `user.login` gates DB authentication on the username
+	// being present (user/routes.ts:189 `if (input.username && pool)`). With it
+	// absent the server takes the legacy single-owner YAML branch instead, which
+	// (a) checks the password against the YAML credential rather than the DB user's
+	// bcrypt hash, and (b) evaluates 2FA via `ctx.user.is2faEnabled()` — the YAML
+	// store, which returns a hard false on a DB-backed box. So on every single-user
+	// box the account's real password did not work and its enabled TOTP was never
+	// demanded at login. Reported from the field 2026-07-27.
+	//
+	// Derive the target instead of reading state, so the two paths cannot diverge
+	// again. Multi-user is unchanged: with >1 user the operator must still pick one,
+	// and `selectedUser` is what they picked.
+	const effectiveUser = selectedUser ?? (users.length === 1 ? users[0] : null)
+
 	// webauthnAvailable (323-02): true only when the box has an RP-ID (a real
 	// domain). On a bare-LAN-IP box it's false, so the passkey button is HIDDEN
 	// rather than surfaced as a dead path (D-02). Defaults to false until the
@@ -151,9 +173,11 @@ export default function MultiUserLogin() {
 	const handleSubmitPassword = (e: React.FormEvent) => {
 		e.preventDefault()
 		setOrbState('pulse')
-		if (selectedUser) {
-			loginMut.mutate({password, username: selectedUser.username})
+		if (effectiveUser) {
+			loginMut.mutate({password, username: effectiveUser.username})
 		} else {
+			// Only reachable with zero users — a box whose DB has no account at all.
+			// The legacy YAML branch is the correct handler for that case.
 			loginMut.mutate({password})
 		}
 	}
@@ -163,7 +187,7 @@ export default function MultiUserLogin() {
 	// same field (user/routes.ts login), so this needs no second endpoint.
 	const handleSubmit2fa = async (token: string, isRecovery = false) => {
 		try {
-			await loginMut.mutateAsync({password, totpToken: token, username: selectedUser?.username})
+			await loginMut.mutateAsync({password, totpToken: token, username: effectiveUser?.username})
 			return true
 		} catch {
 			// Wrong code (or a transient error) — return false so PinInput resets its
