@@ -1815,6 +1815,13 @@ function SafetySnapshotsCard({
 	})
 	const interval = intervalQuery.data ?? '1h'
 
+	// 368.8-22 — how many snapshots to keep. Same idiom as the interval above.
+	const retentionQuery = trpcReact.backups.getSafetySnapshotRetention.useQuery(undefined, {staleTime: 30_000})
+	const setRetentionMutation = trpcReact.backups.setSafetySnapshotRetention.useMutation({
+		onSuccess: () => utils.backups.getSafetySnapshotRetention.invalidate(),
+	})
+	const retention = retentionQuery.data ?? 'smart'
+
 	// SAFE-01 — size is LAZY, and that is not a style choice. getRepositorySize
 	// shells out to kopia TWICE behind a concurrency:1 queue and blocks during a
 	// running backup, so making it a dependency of the card would stall the whole
@@ -1855,7 +1862,15 @@ function SafetySnapshotsCard({
 						</div>
 						<div className='flex items-center justify-between p-3 text-sm'>
 							<div className='text-text-secondary'>{t('backups-safety-retention-label')}</div>
-							<div className='text-right'>{t('backups-safety-retention-value')}</div>
+							{/* 368.8-22: this line must follow the SETTING. Left hardcoded it
+							    would keep claiming "the last 24 hours, then one a day for a
+							    week" after the operator asked to keep 3 — the card would be
+							    lying about the very thing they had just changed. */}
+							<div className='text-right'>
+								{retention === 'smart'
+									? t('backups-safety-retention-value')
+									: t('backups-safety-retention-count', {count: Number(retention)})}
+							</div>
 						</div>
 						<div className='flex items-center justify-between p-3 text-sm'>
 							<div className='text-text-secondary'>{t('backups-safety-size-label')}</div>
@@ -1891,6 +1906,36 @@ function SafetySnapshotsCard({
 								<SelectItem value='1h'>{t('backups-safety-interval-1h')}</SelectItem>
 								<SelectItem value='6h'>{t('backups-safety-interval-6h')}</SelectItem>
 								<SelectItem value='daily'>{t('backups-safety-interval-daily')}</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
+
+					{/* Phase 368.8-22 — how many to keep. "smart" is the shipped
+					    behaviour; a number keeps exactly that many, because the server
+					    zeroes every other kopia rule (kopia keeps the UNION, so
+					    "keep 3" beside the default "keep 24 hourly" would keep 24). */}
+					<div className='flex items-center justify-between gap-3 pt-1'>
+						<div className='min-w-0'>
+							<div className='text-body-sm font-medium'>{t('backups-safety-retention-setting-label')}</div>
+							<div className='text-caption text-text-secondary'>
+								{t('backups-safety-retention-setting-description')}
+							</div>
+						</div>
+						<Select
+							value={retention}
+							onValueChange={(value) =>
+								setRetentionMutation.mutate({retention: value as 'smart' | '3' | '5' | '10' | '24'})
+							}
+						>
+							<SelectTrigger className='w-[150px]' aria-label={t('backups-safety-retention-setting-label')}>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value='smart'>{t('backups-safety-retention-smart')}</SelectItem>
+								<SelectItem value='3'>{t('backups-safety-retention-count', {count: 3})}</SelectItem>
+								<SelectItem value='5'>{t('backups-safety-retention-count', {count: 5})}</SelectItem>
+								<SelectItem value='10'>{t('backups-safety-retention-count', {count: 10})}</SelectItem>
+								<SelectItem value='24'>{t('backups-safety-retention-count', {count: 24})}</SelectItem>
 							</SelectContent>
 						</Select>
 					</div>

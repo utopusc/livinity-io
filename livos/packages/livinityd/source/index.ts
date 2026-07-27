@@ -27,7 +27,7 @@ import Backups from './modules/backups/backups.js'
 import {runBackupPreflight, type LastRunStatus} from './modules/backups/backup-preflight.js'
 // Phase 368.8 SAFE-02 — the store field's type comes from the scheduler's own
 // option set, so the persisted contract cannot drift from what the loop accepts.
-import {type SafetyIntervalOption} from './modules/backups/safety-snapshots.js'
+import {type SafetyIntervalOption, type SafetyRetentionOption} from './modules/backups/safety-snapshots.js'
 import {listContainers, manageContainer} from './modules/docker/docker.js'
 import Scheduler from './modules/scheduler/index.js'
 import RedisModule from './modules/redis-module.js'
@@ -640,6 +640,11 @@ type StoreSchema = {
 		// cadence shipped before 368.8, so no migration is needed. SAFETY-ONLY:
 		// backupInterval and therefore USB/NAS cadence are untouched.
 		safetySnapshotInterval?: SafetyIntervalOption
+		// Phase 368.8-22 — how many safety snapshots to keep. 'smart' (absent) is
+		// the shipped 24-hourly/7-daily thinning; a number keeps exactly that many
+		// and zeroes every other kopia rule, because kopia keeps the UNION.
+		// SAFETY-ONLY: user-destination retention is untouched.
+		safetySnapshotRetention?: SafetyRetentionOption
 	}
 	// Phase 318 POOL-02/POOL-04 (318-05, D-15) — multi-drive storage-pool config +
 	// safety state. Dedicated top-level key (NOT nested under `backups`/`storage`/

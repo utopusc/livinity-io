@@ -41,6 +41,11 @@ import {
 	safetyIntervalMs,
 	schedulerTickMs,
 	type SafetyIntervalOption,
+	// Phase 368.8-22 — how many safety snapshots to keep.
+	DEFAULT_SAFETY_RETENTION,
+	isSafetyRetentionOption,
+	safetyRetentionFlags,
+	type SafetyRetentionOption,
 } from './safety-snapshots.js'
 import {
 	classifyDestination,
@@ -463,6 +468,27 @@ export default class Backups {
 		this.safetyBackupInterval = safetyIntervalMs(interval)
 		this.logger.log(`Safety snapshot interval set to ${interval} (${this.safetyBackupInterval}ms) by admin`)
 		return interval
+	}
+
+	/**
+	 * Phase 368.8-22 — how many safety snapshots to keep. Absent = 'smart', the
+	 * behaviour shipped before, so no migration and no change on existing boxes.
+	 * Read fresh on each backup (not cached like the interval) because it is
+	 * consulted once per run, not every 100 ms.
+	 */
+	async getSafetySnapshotRetention(): Promise<SafetyRetentionOption> {
+		const stored = await this.#livinityd.store.get('backups.safetySnapshotRetention').catch(() => undefined)
+		return isSafetyRetentionOption(stored) ? stored : DEFAULT_SAFETY_RETENTION
+	}
+
+	async setSafetySnapshotRetention(retention: SafetyRetentionOption): Promise<SafetyRetentionOption> {
+		await this.#livinityd.store.getWriteLock(async ({set}) => {
+			await set('backups.safetySnapshotRetention', retention)
+		})
+		this.logger.log(
+			`Safety snapshot retention set to ${retention} (${safetyRetentionFlags(retention).join(' ')}) by admin`,
+		)
+		return retention
 	}
 
 	// IN-01: tRPC setSafetySnapshotsEnabled(true) and the interval tick can enter
@@ -1503,7 +1529,10 @@ export default class Backups {
 			// aggressive thinning). repository() scopes 'policy set --global' to THIS
 			// repo via its per-repo --config-file, so safety thinning can never leak
 			// onto USB/SMB repos (the backups.ts:481-498 trap).
-			...retentionFlagsFor(repository),
+			// 368.8-22: for the SAFETY repo only, the operator-chosen retention.
+			// Read per run (once, here) rather than cached — this is not the 100 ms
+			// loop. Non-safety repos ignore the argument entirely.
+			...retentionFlagsFor(repository, repository.isSafety ? await this.getSafetySnapshotRetention() : undefined),
 			// Compression
 			'--compression=zstd-fastest',
 			// Never cross fs boundaries

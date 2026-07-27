@@ -58,8 +58,50 @@ export const USER_RETENTION_FLAGS = [
 	'--keep-annual=0',
 ]
 
-export function retentionFlagsFor(repository: {isSafety?: boolean}): string[] {
-	return repository.isSafety ? SAFETY_RETENTION_FLAGS : USER_RETENTION_FLAGS
+// ── Phase 368.8-22 — how many safety snapshots to keep ───────────────────────
+//
+// Operator: "atıyorum 3 tane kayıt etsin dediğimde en sonuncuyu kayıt ederken
+// en sondakini silsin".
+//
+// SAFETY-ONLY, exactly like the interval. USER_RETENTION_FLAGS must not move —
+// it is regression-pinned byte-for-byte, and changing what a USB or NAS keeps
+// would be a data-retention change nobody asked for.
+//
+// 'smart' is the DEFAULT and is byte-identical to what shipped before, so an
+// absent store field changes nothing on an existing box.
+//
+// The numeric options are deliberately not just `--keep-latest=N`: kopia keeps
+// the UNION of every rule, so leaving --keep-hourly=24 in place while asking for
+// "keep 3" would keep 24. To mean three, every other rule has to be zero — and
+// saying "3" while keeping 24 is precisely the kind of quiet lie this phase has
+// spent itself removing.
+export const SAFETY_RETENTION_OPTIONS = ['smart', '3', '5', '10', '24'] as const
+export type SafetyRetentionOption = (typeof SAFETY_RETENTION_OPTIONS)[number]
+
+export const DEFAULT_SAFETY_RETENTION: SafetyRetentionOption = 'smart'
+
+export function isSafetyRetentionOption(value: unknown): value is SafetyRetentionOption {
+	return typeof value === 'string' && (SAFETY_RETENTION_OPTIONS as readonly string[]).includes(value)
+}
+
+/** Fail SAFE: anything unrecognised means 'smart', i.e. the shipped behaviour. */
+export function safetyRetentionFlags(value: unknown): string[] {
+	const option = isSafetyRetentionOption(value) ? value : DEFAULT_SAFETY_RETENTION
+	if (option === 'smart') return SAFETY_RETENTION_FLAGS
+	return [
+		`--keep-latest=${option}`,
+		'--keep-hourly=0',
+		'--keep-daily=0',
+		'--keep-weekly=0',
+		'--keep-monthly=0',
+		'--keep-annual=0',
+	]
+}
+
+export function retentionFlagsFor(repository: {isSafety?: boolean}, safetyRetention?: unknown): string[] {
+	if (!repository.isSafety) return USER_RETENTION_FLAGS
+	// Omitted argument = the shipped flags, so every existing caller is unchanged.
+	return safetyRetention === undefined ? SAFETY_RETENTION_FLAGS : safetyRetentionFlags(safetyRetention)
 }
 
 export type EnsureSafetyResult = 'created' | 'reconnected' | 'exists' | 'disabled' | 'error'

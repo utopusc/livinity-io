@@ -2,7 +2,7 @@ import z from 'zod'
 
 import {router, privateProcedure, adminProcedure, adminProcedureWhenNoUserExists, publicProcedureWhenNoUserExists} from '../server/trpc/trpc.js'
 import {isRealDestination} from './destination-policy.js'
-import {SAFETY_INTERVAL_OPTIONS} from './safety-snapshots.js'
+import {SAFETY_INTERVAL_OPTIONS, SAFETY_RETENTION_OPTIONS} from './safety-snapshots.js'
 
 // Backups-v2 P0 (D10): management procedures are ADMIN-gated — previously
 // every one of these was open to any authenticated user, including a full-box
@@ -165,4 +165,14 @@ export default router({
 	setSafetySnapshotInterval: adminProcedure
 		.input(z.object({interval: z.enum(SAFETY_INTERVAL_OPTIONS)}))
 		.mutation(async ({ctx, input}) => ctx.livinityd!.backups.setSafetySnapshotInterval(input.interval)),
+
+	// Phase 368.8-22 — how many safety snapshots to keep. Same shape and the same
+	// z.enum-over-the-exported-constant discipline as the interval pair above.
+	getSafetySnapshotRetention: adminProcedure.query(async ({ctx}) =>
+		ctx.livinityd!.backups.getSafetySnapshotRetention(),
+	),
+
+	setSafetySnapshotRetention: adminProcedure
+		.input(z.object({retention: z.enum(SAFETY_RETENTION_OPTIONS)}))
+		.mutation(async ({ctx, input}) => ctx.livinityd!.backups.setSafetySnapshotRetention(input.retention)),
 })

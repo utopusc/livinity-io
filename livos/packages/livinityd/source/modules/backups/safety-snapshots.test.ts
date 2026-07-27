@@ -17,6 +17,9 @@ import {
 	safetyIntervalMs,
 	schedulerTickMs,
 	isRepositoryDue,
+	SAFETY_RETENTION_OPTIONS,
+	DEFAULT_SAFETY_RETENTION,
+	safetyRetentionFlags,
 	type DiskPressureDeps,
 	type EnsureSafetyDeps,
 } from './safety-snapshots.js'
@@ -475,4 +478,64 @@ test('CALL PATH: backupOnInterval actually gates each repository on its own clas
 	// read the store, which is why the interval is cached on the instance.
 	expect(source).toMatch(/backupInterval = 1000 \* 60 \* 60/)
 	expect(loop).not.toMatch(/store\.get\('backups\.safetySnapshotInterval'\)/)
+})
+// ── Phase 368.8-22 — how many safety snapshots to keep ──────────────────────
+//
+// Operator: "atıyorum 3 tane kayıt etsin dediğimde en sonuncuyu kayıt ederken
+// en sondakini silsin". The trap: kopia keeps the UNION of every rule, so
+// --keep-latest=3 alongside the shipped --keep-hourly=24 keeps TWENTY-FOUR.
+// Saying "3" while keeping 24 would be exactly the quiet lie this phase exists
+// to remove, so a numeric choice must zero every other rule.
+
+test('smart is the default and is byte-identical to the shipped flags', () => {
+	expect(DEFAULT_SAFETY_RETENTION).toBe('smart')
+	expect(safetyRetentionFlags('smart')).toBe(SAFETY_RETENTION_FLAGS)
+	for (const bad of [undefined, null, '', 'nonsense', '7', 42, {}]) {
+		expect(safetyRetentionFlags(bad)).toBe(SAFETY_RETENTION_FLAGS)
+	}
+})
+
+test('choosing a number means THAT many — every other rule is zeroed', () => {
+	for (const option of ['3', '5', '10', '24'] as const) {
+		const flags = safetyRetentionFlags(option)
+		expect(flags).toContain(`--keep-latest=${option}`)
+		// The union trap: any non-zero rule here would keep more than asked.
+		for (const rule of ['hourly', 'daily', 'weekly', 'monthly', 'annual']) {
+			expect(flags, `${option} must zero --keep-${rule}`).toContain(`--keep-${rule}=0`)
+		}
+	}
+})
+
+test('the option set is exactly what the UI offers', () => {
+	expect(SAFETY_RETENTION_OPTIONS).toEqual(['smart', '3', '5', '10', '24'])
+})
+
+test('REGRESSION: retention choice is SAFETY-ONLY — user destinations never move', () => {
+	// A USB or NAS destination keeps what it always kept, whatever the operator
+	// picked for the local safety repo. USER_RETENTION_FLAGS is byte-pinned
+	// elsewhere in this file; this pins that the new argument cannot reach it.
+	for (const option of SAFETY_RETENTION_OPTIONS) {
+		expect(retentionFlagsFor({}, option)).toBe(USER_RETENTION_FLAGS)
+		expect(retentionFlagsFor({isSafety: false}, option)).toBe(USER_RETENTION_FLAGS)
+	}
+})
+
+test('an omitted retention argument leaves every existing caller unchanged', () => {
+	expect(retentionFlagsFor({isSafety: true})).toBe(SAFETY_RETENTION_FLAGS)
+	expect(retentionFlagsFor({})).toBe(USER_RETENTION_FLAGS)
+})
+
+test('CALL PATH: the safety repo actually receives the chosen retention', async () => {
+	const {readFile} = await import('node:fs/promises')
+	const path = await import('node:path')
+	const {fileURLToPath} = await import('node:url')
+	const source = await readFile(
+		path.join(path.dirname(fileURLToPath(import.meta.url)), 'backups.ts'),
+		'utf8',
+	)
+	// Without this the setting would persist and display correctly while kopia
+	// kept right on using the shipped flags — a setting that does nothing.
+	expect(source).toMatch(
+		/retentionFlagsFor\(repository,\s*repository\.isSafety \? await this\.getSafetySnapshotRetention\(\) : undefined\)/,
+	)
 })
