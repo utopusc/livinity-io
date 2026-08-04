@@ -9,7 +9,9 @@ export const RESERVED_USERNAMES = new Set([
   'admin', 'www', 'api', 'app', 'relay', 'status', 'help', 'support',
   'billing', 'dashboard', 'login', 'register', 'signup', 'signin',
   'auth', 'account', 'settings', 'profile', 'mail', 'ftp', 'ssh',
-  'root', 'test', 'demo', 'internal', 'system', 'platform', 'cdn',
+  // 'demo' is intentionally absent here and in lib/username-validator.ts —
+  // see the note on that list for the reasoning and for how to restore it.
+  'root', 'test', 'internal', 'system', 'platform', 'cdn',
   'static', 'assets', 'docs', 'blog', 'about', 'contact', 'pricing',
 ]);
 

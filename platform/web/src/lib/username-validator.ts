@@ -98,7 +98,17 @@ const RESERVED = new Set<string>([
   'livinity', 'livos', 'liv', 'livinityd', 'store', 'apps', 'app', 'marketplace',
   'dashboard', 'login', 'signup', 'register', 'logout', 'get', 'install', 'download',
   // Environments
-  'dev', 'staging', 'prod', 'test', 'demo', 'sandbox', 'beta', 'alpha', 'preview',
+  //
+  // 'demo' is intentionally absent — demo.livinity.io is a first-party account,
+  // not a name users may claim. Checked against production before removing it
+  // (2026-08-04): this list and the one in lib/auth.ts were the only things
+  // gating the name, with no `users` row, no `reserved_usernames` ledger entry
+  // and no leftover Cloudflare tunnel or CNAME behind it.
+  //
+  // Re-adding 'demo' here restores the guard and is safe at any time: neither
+  // list is consulted for a username that already exists, so it cannot affect
+  // the live account.
+  'dev', 'staging', 'prod', 'test', 'sandbox', 'beta', 'alpha', 'preview',
   // Legal / corporate
   'about', 'contact', 'privacy', 'terms', 'legal', 'careers', 'jobs', 'press',
 ]);
